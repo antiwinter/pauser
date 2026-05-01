@@ -1,0 +1,6 @@
+## Copy this file to `local.properties` (same folder as `settings.gradle.kts`) and set your Android SDK path.
+## Android Studio usually creates `local.properties` automatically when you open the project.
+#
+# sdk.dir=C\:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
+#
+# On Windows, escape backslashes as \\ in this file.
