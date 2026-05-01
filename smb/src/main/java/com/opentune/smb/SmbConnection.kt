@@ -28,11 +28,16 @@ class SmbSession private constructor(
         fun open(credentials: SmbCredentials): SmbSession {
             val client = SMBClient()
             val connection = client.connect(credentials.host)
-            val auth = AuthenticationContext(
-                credentials.username,
-                credentials.password.toCharArray(),
-                credentials.domain,
-            )
+            val auth = when {
+                credentials.username.isBlank() && credentials.password.isBlank() ->
+                    AuthenticationContext.guest()
+                else ->
+                    AuthenticationContext(
+                        credentials.username,
+                        credentials.password.toCharArray(),
+                        credentials.domain,
+                    )
+            }
             val session = connection.authenticate(auth)
             val share = session.connectShare(credentials.shareName) as DiskShare
             return SmbSession(client, share)

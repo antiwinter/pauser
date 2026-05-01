@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,6 +20,9 @@ interface EmbyServerDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(server: EmbyServerEntity): Long
+
+    @Update
+    suspend fun update(server: EmbyServerEntity)
 
     @Query("DELETE FROM emby_servers WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -64,6 +68,9 @@ interface SmbSourceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(source: SmbSourceEntity): Long
+
+    @Update
+    suspend fun update(source: SmbSourceEntity)
 
     @Query("DELETE FROM smb_sources WHERE id = :id")
     suspend fun deleteById(id: Long)

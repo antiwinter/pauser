@@ -9,12 +9,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.ui.emby.AddEmbyRoute
+import com.opentune.app.ui.emby.EditEmbyRoute
 import com.opentune.app.ui.emby.BrowseRoute
 import com.opentune.app.ui.emby.DetailRoute
 import com.opentune.app.ui.emby.LibrariesRoute
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.app.ui.player.PlayerRoute
 import com.opentune.app.ui.smb.AddSmbRoute
+import com.opentune.app.ui.smb.EditSmbRoute
 import com.opentune.app.ui.smb.SmbBrowseRoute
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -22,6 +24,8 @@ import java.nio.charset.StandardCharsets
 object Routes {
     const val HOME = "home"
     const val ADD_EMBY = "add_emby"
+    const val EDIT_EMBY = "edit_emby/{serverId}"
+    const val EDIT_SMB = "edit_smb/{sourceId}"
     const val LIBRARIES = "libraries/{serverId}"
     const val BROWSE = "browse/{serverId}/{parentId}"
     const val DETAIL = "detail/{serverId}/{itemId}"
@@ -42,6 +46,10 @@ object Routes {
 
     fun smbBrowse(sourceId: Long, path: String) =
         "smb_browse/$sourceId/${URLEncoder.encode(path, StandardCharsets.UTF_8)}"
+
+    fun editEmby(serverId: Long) = "edit_emby/$serverId"
+
+    fun editSmb(sourceId: Long) = "edit_smb/$sourceId"
 }
 
 @Composable
@@ -55,14 +63,27 @@ fun OpenTuneNavHost() {
                 database = app.database,
                 onAddEmby = { nav.navigate(Routes.ADD_EMBY) },
                 onOpenServer = { id -> nav.navigate(Routes.libraries(id)) },
+                onEditEmby = { id -> nav.navigate(Routes.editEmby(id)) },
                 onAddSmb = { nav.navigate(Routes.ADD_SMB) },
                 onOpenSmb = { sid, path -> nav.navigate(Routes.smbBrowse(sid, path)) },
+                onEditSmb = { id -> nav.navigate(Routes.editSmb(id)) },
             )
         }
         composable(Routes.ADD_EMBY) {
             AddEmbyRoute(
                 database = app.database,
                 deviceProfile = app.deviceProfile,
+                onDone = { nav.popBackStack() },
+            )
+        }
+        composable(
+            Routes.EDIT_EMBY,
+            listOf(navArgument("serverId") { type = NavType.LongType }),
+        ) {
+            val serverId = it.arguments!!.getLong("serverId")
+            EditEmbyRoute(
+                database = app.database,
+                serverId = serverId,
                 onDone = { nav.popBackStack() },
             )
         }
@@ -135,6 +156,17 @@ fun OpenTuneNavHost() {
         composable(Routes.ADD_SMB) {
             AddSmbRoute(
                 database = app.database,
+                onDone = { nav.popBackStack() },
+            )
+        }
+        composable(
+            Routes.EDIT_SMB,
+            listOf(navArgument("sourceId") { type = NavType.LongType }),
+        ) {
+            val sourceId = it.arguments!!.getLong("sourceId")
+            EditSmbRoute(
+                database = app.database,
+                sourceId = sourceId,
                 onDone = { nav.popBackStack() },
             )
         }
