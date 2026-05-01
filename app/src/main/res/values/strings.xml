@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OpenTune</string>
+    <string name="smb_audio_unsupported_banner">Audio format is not supported. Playing video only.</string>
 </resources>
