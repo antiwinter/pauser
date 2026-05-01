@@ -25,5 +25,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.datasource)
     implementation(libs.media3.exoplayer)
-    implementation(libs.smbj)
+    api(libs.smbj)
 }

@@ -49,7 +49,9 @@ fun DiskShare.listDirectory(path: String): List<SmbListEntry> {
         .map { info ->
             val name = info.fileName
             val fullPath = if (normalized.isEmpty()) name else "$normalized\\$name"
-            val isDir = (info.fileAttributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value) != 0
+            val attrs = info.fileAttributes.toLong()
+            val dirMask = FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value.toLong()
+            val isDir = (attrs and dirMask) != 0L
             SmbListEntry(
                 name = name,
                 path = fullPath.replace('\\', '/'),
