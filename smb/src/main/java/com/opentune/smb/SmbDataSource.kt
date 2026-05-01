@@ -12,8 +12,10 @@ import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.DiskShare
 import com.hierynomus.smbj.share.File as SmbFile
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.EnumSet
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.min
 
 /**
  * Media3 [androidx.media3.datasource.DataSource] that reads a file from an open SMB [DiskShare].
@@ -21,6 +23,19 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Uses offset-based SMB reads (not [java.io.InputStream.skip]) so ExoPlayer seeks and sequential
  * reads stay aligned with the file on the server.
+ *
+ * **Read-ahead (same idea as a cache of the next bytes):** The MKV extractor often calls
+ * [read] with a length of 1. SMBJ’s [com.hierynomus.smbj.share.File.read] issues **one SMB2 READ
+ * per call** using that length, so 1-byte calls mean one network round-trip each. This class
+ * keeps a fixed-size window and refills it with a single large READ, then serves small requests
+ * from memory—like [java.io.BufferedInputStream], but **seek-aware** for [DataSpec.position].
+ *
+ * **Why not only SMBJ’s buffer:** [com.hierynomus.smbj.share.File.getInputStream] uses an internal
+ * [com.hierynomus.smbj.share.FileInputStream] sized by [com.hierynomus.smbj.share.DiskShare.getReadBufferSize],
+ * but that stream is **sequential from offset 0** (async pipelined reads). ExoPlayer opens a
+ * range at arbitrary offsets and jumps; that access pattern needs random-offset reads, which
+ * stay on [File.read] and do not get SMBJ’s InputStream buffering unless we add a layer like
+ * this.
  */
 @UnstableApi
 class SmbDataSource(
@@ -36,6 +51,12 @@ class SmbDataSource(
     private var opened = false
     private var readCallCount: Int = 0
     private var totalBytesRead: Long = 0
+
+    /** File offset of [readChunkBuffer][0] when [chunkLength] &gt; 0; otherwise unused. */
+    private var chunkFileStart: Long = -1L
+
+    private var chunkLength: Int = 0
+    private val readChunkBuffer = ByteArray(SMB_READ_CHUNK_BYTES)
 
     @Throws(IOException::class)
     override fun open(dataSpec: DataSpec): Long = synchronized(this) {
@@ -72,6 +93,7 @@ class SmbDataSource(
         transferStarted(dataSpec)
         readCallCount = 0
         totalBytesRead = 0
+        clearChunkBuffer()
         Log.d(TAG, "[$sourceId] open ok fileSize=$size readFrom=$readPosition returningBytes=$bytesRemaining")
         bytesRemaining
     }
@@ -87,30 +109,83 @@ class SmbDataSource(
                 Log.w(TAG, "[$sourceId] read with smbFile=null -> END_OF_INPUT")
                 return C.RESULT_END_OF_INPUT
             }
-            val toRead = minOf(length.toLong(), bytesRemaining).toInt()
+            val toRead = min(length.toLong(), bytesRemaining).toInt()
             if (toRead == 0) return C.RESULT_END_OF_INPUT
+
             readCallCount++
-            val r = try {
-                file.read(buffer, readPosition, offset, toRead)
-            } catch (e: Exception) {
-                Log.e(TAG, "[$sourceId] read SMB error pos=$readPosition toRead=$toRead", e)
-                throw IOException(e.message, e)
+            var totalCopied = 0
+            var dstOffset = offset
+            var left = toRead
+
+            while (left > 0) {
+                if (chunkLength == 0 ||
+                    readPosition < chunkFileStart ||
+                    readPosition >= chunkFileStart + chunkLength
+                ) {
+                    val loaded = loadChunk(file, readPosition)
+                    if (!loaded) {
+                        return if (totalCopied > 0) totalCopied else C.RESULT_END_OF_INPUT
+                    }
+                }
+                val indexInChunk = (readPosition - chunkFileStart).toInt()
+                val availableInChunk = chunkLength - indexInChunk
+                val n = min(availableInChunk, left)
+                System.arraycopy(readChunkBuffer, indexInChunk, buffer, dstOffset, n)
+                dstOffset += n
+                readPosition += n.toLong()
+                bytesRemaining -= n.toLong()
+                totalBytesRead += n.toLong()
+                totalCopied += n
+                left -= n
             }
-            if (r == -1) {
-                Log.d(TAG, "[$sourceId] read EOF from server pos=$readPosition")
-                return C.RESULT_END_OF_INPUT
+
+            if (totalCopied > 0) {
+                bytesTransferred(totalCopied)
             }
-            if (r > 0) {
-                readPosition += r.toLong()
-                bytesRemaining -= r.toLong()
-                totalBytesRead += r.toLong()
-                bytesTransferred(r)
+            if (readCallCount <= 5 || readCallCount % 5000 == 0) {
+                Log.d(
+                    TAG,
+                    "[$sourceId] read#$readCallCount copied=$totalCopied pos=$readPosition remaining=$bytesRemaining total=$totalBytesRead chunk=$chunkLength",
+                )
             }
-            if (readCallCount <= 5 || readCallCount % 200 == 0) {
-                Log.d(TAG, "[$sourceId] read#$readCallCount got=$r pos=$readPosition remaining=$bytesRemaining total=$totalBytesRead")
-            }
-            return r
+            return totalCopied
         }
+    }
+
+    /**
+     * Fills [readChunkBuffer] for the byte at [fileOffset]. Returns false if EOF / empty read.
+     */
+    @Throws(IOException::class)
+    private fun loadChunk(file: SmbFile, fileOffset: Long): Boolean {
+        clearChunkBuffer()
+        val maxFromServer = min(readChunkBuffer.size.toLong(), bytesRemaining).toInt()
+        if (maxFromServer <= 0) return false
+
+        val r = try {
+            file.read(readChunkBuffer, fileOffset, 0, maxFromServer)
+        } catch (e: Exception) {
+            if (e.isInterruptedOrCausedByInterrupted() || Thread.interrupted()) {
+                Thread.currentThread().interrupt()
+                throw InterruptedIOException("SMB read interrupted").initCause(e)
+            }
+            Log.e(TAG, "[$sourceId] read SMB error pos=$fileOffset toRead=$maxFromServer", e)
+            throw IOException(e.message, e)
+        }
+        if (r == -1) {
+            Log.d(TAG, "[$sourceId] read EOF from server pos=$fileOffset")
+            return false
+        }
+        if (r == 0) {
+            return false
+        }
+        chunkFileStart = fileOffset
+        chunkLength = r
+        return true
+    }
+
+    private fun clearChunkBuffer() {
+        chunkFileStart = -1L
+        chunkLength = 0
     }
 
     override fun getUri() = null
@@ -126,6 +201,7 @@ class SmbDataSource(
             smbFile = null
             bytesRemaining = 0
             readPosition = 0
+            clearChunkBuffer()
             if (hadTransfer) {
                 transferEnded()
             }
@@ -135,5 +211,17 @@ class SmbDataSource(
     companion object {
         private const val TAG = "OpenTuneSMB"
         private val nextSourceId = AtomicInteger(1)
+
+        /** One SMB READ per chunk; balances latency vs memory (server may cap ~1 MiB). */
+        private const val SMB_READ_CHUNK_BYTES = 512 * 1024
     }
+}
+
+private fun Throwable.isInterruptedOrCausedByInterrupted(): Boolean {
+    var t: Throwable? = this
+    while (t != null) {
+        if (t is InterruptedException) return true
+        t = t.cause
+    }
+    return false
 }
