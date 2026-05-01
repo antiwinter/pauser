@@ -1,6 +1,7 @@
 package com.opentune.app.ui.smb
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -8,6 +9,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -25,6 +28,8 @@ import com.opentune.player.OpenTunePlayerView
 import com.opentune.smb.SmbDataSource
 import okhttp3.OkHttpClient
 
+private const val SMB_PLAYER_LOG_TAG = "OpenTuneSmbPlayer"
+
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun SmbVideoPlayer(
@@ -37,9 +42,50 @@ fun SmbVideoPlayer(
     val player = remember(share, pathWin) {
         val http = OkHttpClient()
         val exo = OpenTuneExoPlayer.create(context, http)
-        val factory = DataSource.Factory { SmbDataSource(share, pathWin) }
+        val factory = DataSource.Factory {
+            Log.d(SMB_PLAYER_LOG_TAG, "createDataSource for pathWin=$pathWin")
+            SmbDataSource(share, pathWin)
+        }
         val source = ProgressiveMediaSource.Factory(factory)
             .createMediaSource(MediaItem.fromUri(Uri.parse("https://local.invalid/video")))
+        exo.addListener(
+            object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    val stateName = when (playbackState) {
+                        Player.STATE_IDLE -> "IDLE"
+                        Player.STATE_BUFFERING -> "BUFFERING"
+                        Player.STATE_READY -> "READY"
+                        Player.STATE_ENDED -> "ENDED"
+                        else -> playbackState.toString()
+                    }
+                    val err = exo.playerError
+                    Log.d(
+                        SMB_PLAYER_LOG_TAG,
+                        "playbackState=$stateName playWhenReady=${exo.playWhenReady} isLoading=${exo.isLoading} error=${err?.message}",
+                    )
+                    if (err != null) {
+                        Log.e(SMB_PLAYER_LOG_TAG, "playerError detail", err)
+                    }
+                }
+
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    Log.d(SMB_PLAYER_LOG_TAG, "playWhenReady=$playWhenReady reason=$reason")
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.e(
+                        SMB_PLAYER_LOG_TAG,
+                        "onPlayerError code=${error.errorCode} msg=${error.message}",
+                        error,
+                    )
+                }
+
+                override fun onIsLoadingChanged(isLoading: Boolean) {
+                    Log.d(SMB_PLAYER_LOG_TAG, "isLoading=$isLoading")
+                }
+            },
+        )
+        Log.d(SMB_PLAYER_LOG_TAG, "prepare pathWin=$pathWin")
         exo.setMediaSource(source)
         exo.playWhenReady = true
         exo.prepare()
@@ -47,7 +93,8 @@ fun SmbVideoPlayer(
     }
 
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val p = player
+        onDispose { p.release() }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

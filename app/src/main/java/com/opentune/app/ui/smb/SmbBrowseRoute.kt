@@ -59,8 +59,11 @@ fun SmbBrowseRoute(
     }
 
     DisposableEffect(session) {
+        // Capture the share opened for this effect key; do not read `session` inside
+        // onDispose or a null→open transition closes the newly opened DiskShare.
+        val openSession = session
         onDispose {
-            session?.close()
+            openSession?.close()
         }
     }
 

@@ -19,9 +19,11 @@ import com.opentune.app.ui.smb.AddSmbRoute
 import com.opentune.app.ui.smb.EditSmbRoute
 import com.opentune.app.ui.smb.SmbBrowseRoute
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 object Routes {
+
+    /** [URLEncoder.encode] with Charset is API 33+; use charset name for older Android TV devices. */
+    private const val UrlCharset = "UTF-8"
     const val HOME = "home"
     const val ADD_EMBY = "add_emby"
     const val EDIT_EMBY = "edit_emby/{serverId}"
@@ -36,16 +38,16 @@ object Routes {
     fun libraries(serverId: Long) = "libraries/$serverId"
 
     fun browse(serverId: Long, parentId: String) =
-        "browse/$serverId/${URLEncoder.encode(parentId, StandardCharsets.UTF_8)}"
+        "browse/$serverId/${URLEncoder.encode(parentId, UrlCharset)}"
 
     fun detail(serverId: Long, itemId: String) =
-        "detail/$serverId/${URLEncoder.encode(itemId, StandardCharsets.UTF_8)}"
+        "detail/$serverId/${URLEncoder.encode(itemId, UrlCharset)}"
 
     fun player(serverId: Long, itemId: String, startMs: Long) =
-        "player/$serverId/${URLEncoder.encode(itemId, StandardCharsets.UTF_8)}/$startMs"
+        "player/$serverId/${URLEncoder.encode(itemId, UrlCharset)}/$startMs"
 
     fun smbBrowse(sourceId: Long, path: String) =
-        "smb_browse/$sourceId/${URLEncoder.encode(path, StandardCharsets.UTF_8)}"
+        "smb_browse/$sourceId/${URLEncoder.encode(path, UrlCharset)}"
 
     fun editEmby(serverId: Long) = "edit_emby/$serverId"
 
