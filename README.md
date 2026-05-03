@@ -23,4 +23,4 @@ Add a `LICENSE` file (for example Apache-2.0) before you publish the project pub
 
 # TODOs
 - [ ] sprite
-- [ ] telegram
+- [ ] telegram, auto-proxy
