@@ -19,3 +19,8 @@ With JDK 17 on `PATH` or `JAVA_HOME` set:
 ## License
 
 Add a `LICENSE` file (for example Apache-2.0) before you publish the project publicly.
+
+
+# TODOs
+- [ ] sprite
+- [ ] telegram
