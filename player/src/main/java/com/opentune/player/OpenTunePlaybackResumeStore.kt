@@ -5,12 +5,9 @@ import java.security.MessageDigest
 
 /**
  * Local **per-title** playback state for **resumption** (keyed by [resumeProgressKey]), e.g.
- * `emby_{serverId}_{itemId}` or `smb_{sourceId}_{path}`: **position** and **playback speed**.
+ * `{provider}_{sourceId}_{itemId}`: **position** and **playback speed**.
  *
  * **Speed:** per title; if none stored, defaults to **1.0**. **Position:** [readResumePosition] / [writeResumePosition].
- *
- * Emby resume position for the detail screen still comes from the app database; this store mirrors
- * position/speed locally for the player shell. SMB uses these prefs for resume.
  */
 object OpenTunePlaybackResumeStore {
     private const val PREFS_NAME = "opentune_player_playback"

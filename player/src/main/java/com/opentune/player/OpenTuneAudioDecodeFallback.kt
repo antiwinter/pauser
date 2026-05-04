@@ -28,7 +28,7 @@ fun PlaybackException.isOpenTuneAudioDecodeFailure(): Boolean {
 
 /**
  * One-shot: on audio decode / sink failure, disable audio tracks and re-prepare with the same media.
- * Works for any progressive source (SMB, Emby direct play, etc.). Call [ExoPlayer.addListener] with the return value;
+ * Works for any progressive source. Call [ExoPlayer.addListener] with the return value;
  * remove the listener in [DisposableEffect] if the player instance outlives the composable.
  */
 fun ExoPlayer.createAudioDecodeFallbackListener(

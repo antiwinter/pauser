@@ -4,7 +4,6 @@ import android.app.Application
 import com.opentune.app.drafts.AddServerDraftStore
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.deviceprofile.AndroidDeviceProfileBuilder
-import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 
@@ -22,7 +21,7 @@ class OpenTuneApplication : Application() {
     lateinit var providerRegistry: OpenTuneProviderRegistry
         private set
 
-    val deviceProfile: DeviceProfile by lazy { AndroidDeviceProfileBuilder.build() }
+    val deviceProfile by lazy { AndroidDeviceProfileBuilder.build() }
 
     override fun onCreate() {
         super.onCreate()
