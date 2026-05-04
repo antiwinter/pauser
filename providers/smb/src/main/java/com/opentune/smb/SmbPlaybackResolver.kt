@@ -13,7 +13,6 @@ import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.progressPersistenceKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 
 private const val SMB_PLAYER_LOG = "OpenTunePlayer"
 

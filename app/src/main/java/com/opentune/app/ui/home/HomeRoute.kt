@@ -61,7 +61,7 @@ fun HomeRoute(
     ) {
         Text(stringResource(R.string.home_title))
         Button(onClick = { onAddProvider(OpenTuneProviderIds.HTTP_LIBRARY) }) {
-            Text(stringResource(R.string.home_add_http_library))
+            Text(stringResource(R.string.home_add_http))
         }
         Button(onClick = { onAddProvider(OpenTuneProviderIds.FILE_SHARE) }) {
             Text(stringResource(R.string.home_add_file_share))
