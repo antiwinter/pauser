@@ -1,6 +1,10 @@
 package com.opentune.player
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,6 +24,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.opentune.playback.api.OpenTunePlaybackHooks
@@ -42,6 +47,13 @@ private const val MAX_WAIT_READY_MS = 120_000L
  * if the pipeline never reaches READY after an audio-off retry. Keep a short soft wait only.
  */
 private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -192,6 +204,25 @@ fun OpenTunePlayerScreen(
     DisposableEffect(exoPlayer) {
         onDispose {
             runBlocking { shutdown(userInitiatedExit = false) }
+        }
+    }
+
+    // MediaSession: system sees active playback. FLAG_KEEP_SCREEN_ON: whole time this screen is
+    // shown (paused or not) so ATV ambient / idle overlay does not fire while the user stays here.
+    // Registered after the shutdown effect so this onDispose runs first and releases the session
+    // before ExoPlayer.release().
+    DisposableEffect(exoPlayer) {
+        val activity = context.findActivity()
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val session =
+            if (activity != null) {
+                MediaSession.Builder(activity, exoPlayer).build()
+            } else {
+                null
+            }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            session?.release()
         }
     }
 
