@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailRoute(
+fun EmbyDetailRoute(
     app: OpenTuneApplication,
     serverId: Long,
     itemId: String,
@@ -86,7 +86,6 @@ fun DetailRoute(
         val s = server
         if (i != null && s != null) {
             Text(i.name ?: itemId)
-            // Primary actions before poster/synopsis so TV focus and first paint show Play immediately.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

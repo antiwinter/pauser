@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun LibrariesRoute(
+fun EmbyLibrariesRoute(
     app: OpenTuneApplication,
     serverId: Long,
     onBack: () -> Unit,

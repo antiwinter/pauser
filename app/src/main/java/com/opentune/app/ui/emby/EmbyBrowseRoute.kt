@@ -30,7 +30,7 @@ private const val PAGE_SIZE = 100
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun BrowseRoute(
+fun EmbyBrowseRoute(
     app: OpenTuneApplication,
     serverId: Long,
     parentId: String,

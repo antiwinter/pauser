@@ -31,12 +31,12 @@ fun SmbBrowseRoute(
     sourceId: Long,
     initialPath: String,
     onBack: () -> Unit,
+    onPlayVideo: (String) -> Unit,
 ) {
     var session by remember { mutableStateOf<SmbSession?>(null) }
     var path by remember { mutableStateOf(initialPath) }
     var entries by remember { mutableStateOf<List<SmbListEntry>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
-    var playingPath by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sourceId) {
         try {
@@ -59,8 +59,6 @@ fun SmbBrowseRoute(
     }
 
     DisposableEffect(session) {
-        // Capture the share opened for this effect key; do not read `session` inside
-        // onDispose or a null→open transition closes the newly opened DiskShare.
         val openSession = session
         onDispose {
             openSession?.close()
@@ -84,36 +82,28 @@ fun SmbBrowseRoute(
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (playingPath != null && session != null) {
-            SmbVideoPlayer(
-                share = session!!.share,
-                unixStylePath = playingPath!!,
-                onExit = { playingPath = null },
-            )
-        } else {
-            Button(onClick = onBack) { Text("Back") }
-            error?.let { Text("Error: $it") }
-            Text("Path: ${path.ifEmpty { "/" }}")
-            if (path.isNotEmpty()) {
-                Button(onClick = {
-                    val parent = path.trimEnd('/').substringBeforeLast('/', "")
-                    path = parent
-                }) {
-                    Text("Up")
-                }
+        Button(onClick = onBack) { Text("Back") }
+        error?.let { Text("Error: $it") }
+        Text("Path: ${path.ifEmpty { "/" }}")
+        if (path.isNotEmpty()) {
+            Button(onClick = {
+                val parent = path.trimEnd('/').substringBeforeLast('/', "")
+                path = parent
+            }) {
+                Text("Up")
             }
-            entries.forEach { e ->
-                Button(
-                    onClick = {
-                        if (e.isDirectory) {
-                            path = e.path
-                        } else if (isVideoFile(e.name)) {
-                            playingPath = e.path
-                        }
-                    },
-                ) {
-                    Text("${e.name}${if (e.isDirectory) "/" else ""}")
-                }
+        }
+        entries.forEach { e ->
+            Button(
+                onClick = {
+                    if (e.isDirectory) {
+                        path = e.path
+                    } else if (isVideoFile(e.name)) {
+                        onPlayVideo(e.path)
+                    }
+                },
+            ) {
+                Text("${e.name}${if (e.isDirectory) "/" else ""}")
             }
         }
     }

@@ -38,6 +38,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":playback-api"))
     implementation(project(":emby-api"))
     implementation(project(":device-profile"))
     implementation(project(":player"))

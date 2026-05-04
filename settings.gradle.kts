@@ -19,6 +19,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "OpenTune"
 include(":app")
+include(":playback-api")
 include(":emby-api")
 include(":device-profile")
 include(":player")

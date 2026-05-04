@@ -5,7 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -24,23 +24,29 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.compose.material3.Text as M3Text
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.hierynomus.smbj.share.DiskShare
 import com.opentune.app.R
 import com.opentune.player.OpenTuneExoPlayer
-import com.opentune.player.OpenTunePlayerView
+import com.opentune.player.OpenTunePlayerScreen
+import com.opentune.smb.SmbCredentials
 import com.opentune.smb.SmbDataSource
+import com.opentune.smb.SmbPlaybackHooks
+import com.opentune.smb.SmbSession
+import com.opentune.storage.OpenTuneDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
-private const val SMB_PLAYER_LOG_TAG = "OpenTuneSmbPlayer"
+private const val LOG_TAG = "OpenTuneSmbPlayer"
 
 private fun PlaybackException.isAudioDecodeFailure(): Boolean {
     val texts = sequence {
@@ -57,27 +63,59 @@ private fun PlaybackException.isAudioDecodeFailure(): Boolean {
 
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
-fun SmbVideoPlayer(
-    share: DiskShare,
-    unixStylePath: String,
+fun SmbPlayerRoute(
+    database: OpenTuneDatabase,
+    sourceId: Long,
+    filePath: String,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    val pathWin = unixStylePath.replace('/', '\\')
+    val pathWin = filePath.replace('/', '\\')
     val audioUnsupportedMessage = stringResource(R.string.smb_audio_unsupported_banner)
 
+    var session by remember { mutableStateOf<SmbSession?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
     var disableAudioTracks by remember { mutableStateOf(false) }
     var showAudioUnsupportedBanner by remember { mutableStateOf(false) }
-
-    LaunchedEffect(share, unixStylePath) {
-        disableAudioTracks = false
-        showAudioUnsupportedBanner = false
-    }
 
     val latestSkipAudio = rememberUpdatedState(disableAudioTracks)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
-    val player = remember(share, pathWin, disableAudioTracks) {
+    LaunchedEffect(sourceId) {
+        error = null
+        session = null
+        try {
+            val src = withContext(Dispatchers.IO) { database.smbSourceDao().getById(sourceId) }
+                ?: error("SMB source not found")
+            session = withContext(Dispatchers.IO) {
+                SmbSession.open(
+                    SmbCredentials(
+                        host = src.host,
+                        shareName = src.shareName,
+                        username = src.username,
+                        password = src.password,
+                        domain = src.domain,
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            error = e.message
+        }
+    }
+
+    DisposableEffect(session) {
+        val openSession = session
+        onDispose { openSession?.close() }
+    }
+
+    LaunchedEffect(session?.share, pathWin) {
+        disableAudioTracks = false
+        showAudioUnsupportedBanner = false
+    }
+
+    val share = session?.share
+    val exoPlayer = remember(share, pathWin, disableAudioTracks) {
+        val sh = share ?: return@remember null
         val http = OkHttpClient()
         val exo = OpenTuneExoPlayer.create(context, http)
         if (disableAudioTracks) {
@@ -87,8 +125,8 @@ fun SmbVideoPlayer(
                 .build()
         }
         val factory = DataSource.Factory {
-            Log.d(SMB_PLAYER_LOG_TAG, "createDataSource for pathWin=$pathWin")
-            SmbDataSource(share, pathWin)
+            Log.d(LOG_TAG, "createDataSource for pathWin=$pathWin")
+            SmbDataSource(sh, pathWin)
         }
         val source = ProgressiveMediaSource.Factory(factory)
             .createMediaSource(MediaItem.fromUri(Uri.parse("https://local.invalid/video")))
@@ -104,22 +142,22 @@ fun SmbVideoPlayer(
                     }
                     val err = exo.playerError
                     Log.d(
-                        SMB_PLAYER_LOG_TAG,
+                        LOG_TAG,
                         "playbackState=$stateName playWhenReady=${exo.playWhenReady} isLoading=${exo.isLoading} error=${err?.message}",
                     )
                     if (err != null) {
-                        Log.e(SMB_PLAYER_LOG_TAG, "playerError detail", err)
+                        Log.e(LOG_TAG, "playerError detail", err)
                     }
                 }
 
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                    Log.d(SMB_PLAYER_LOG_TAG, "playWhenReady=$playWhenReady reason=$reason")
+                    Log.d(LOG_TAG, "playWhenReady=$playWhenReady reason=$reason")
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (!latestSkipAudio.value && error.isAudioDecodeFailure()) {
                         Log.w(
-                            SMB_PLAYER_LOG_TAG,
+                            LOG_TAG,
                             "Audio decode failed; retrying with audio disabled. code=${error.errorCode}",
                             error,
                         )
@@ -131,7 +169,7 @@ fun SmbVideoPlayer(
                         }
                     } else {
                         Log.e(
-                            SMB_PLAYER_LOG_TAG,
+                            LOG_TAG,
                             "onPlayerError code=${error.errorCode} msg=${error.message}",
                             error,
                         )
@@ -139,42 +177,53 @@ fun SmbVideoPlayer(
                 }
 
                 override fun onIsLoadingChanged(isLoading: Boolean) {
-                    Log.d(SMB_PLAYER_LOG_TAG, "isLoading=$isLoading")
+                    Log.d(LOG_TAG, "isLoading=$isLoading")
                 }
             },
         )
-        Log.d(SMB_PLAYER_LOG_TAG, "prepare pathWin=$pathWin audioDisabled=$disableAudioTracks")
+        Log.d(LOG_TAG, "prepare pathWin=$pathWin audioDisabled=$disableAudioTracks")
         exo.setMediaSource(source)
         exo.playWhenReady = true
         exo.prepare()
         exo
     }
 
-    DisposableEffect(player) {
-        val p = player
-        onDispose { p.release() }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        OpenTunePlayerView(player = player, modifier = Modifier.fillMaxSize())
-        if (showAudioUnsupportedBanner) {
-            Text(
-                text = audioUnsupportedMessage,
+    when {
+        error != null -> {
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .background(Color.Black.copy(alpha = 0.72f))
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                color = Color.White,
+                    .fillMaxSize()
+                    .padding(48.dp),
+            ) {
+                Text("Error: $error")
+                Button(onClick = onExit) { Text("Back") }
+            }
+        }
+        exoPlayer != null -> {
+            OpenTunePlayerScreen(
+                exoPlayer = exoPlayer,
+                hooks = SmbPlaybackHooks,
+                startPositionMs = 0L,
+                onExit = onExit,
+                topBanner = if (showAudioUnsupportedBanner) {
+                    {
+                        M3Text(
+                            text = audioUnsupportedMessage,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(horizontal = 24.dp, vertical = 16.dp)
+                                .background(Color.Black.copy(alpha = 0.72f))
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            color = Color.White,
+                        )
+                    }
+                } else {
+                    null
+                },
             )
         }
-        Button(
-            onClick = onExit,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp),
-        ) {
-            Text("Close")
+        else -> {
+            Text("Loading…", modifier = Modifier.padding(48.dp))
         }
     }
 }
