@@ -194,6 +194,9 @@ fun OpenTunePlayerScreen(
 
     BackHandler {
         val pv = playerViewRef
+        if (pv is OpenTuneTvPlayerView && pv.dismissSettingsPopupIfShowing()) {
+            return@BackHandler
+        }
         if (pv != null && pv.isControllerFullyVisible) {
             pv.hideController()
         } else {

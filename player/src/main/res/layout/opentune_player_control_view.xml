@@ -18,25 +18,43 @@
       android:layoutDirection="ltr">
 
     <LinearLayout
-        android:id="@id/exo_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingStart="@dimen/exo_styled_bottom_bar_time_padding"
-        android:paddingEnd="@dimen/exo_styled_bottom_bar_time_padding"
-        android:paddingLeft="@dimen/exo_styled_bottom_bar_time_padding"
-        android:paddingRight="@dimen/exo_styled_bottom_bar_time_padding"
         android:layout_gravity="center_vertical|start"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:layoutDirection="ltr">
 
-      <TextView
-          android:id="@id/exo_position"
-          style="@style/ExoStyledControls.TimeText.Position" />
+      <!-- Play icon = paused; pause icon = playing (Media3 Util.shouldShowPlayButton semantics). -->
+      <ImageView
+          android:id="@+id/opentune_playback_state"
+          android:layout_width="28dp"
+          android:layout_height="28dp"
+          android:layout_marginStart="@dimen/exo_styled_bottom_bar_time_padding"
+          android:layout_marginEnd="6dp"
+          android:scaleType="fitCenter"
+          android:importantForAccessibility="yes"
+          android:src="@drawable/exo_styled_controls_play" />
 
-      <TextView style="@style/ExoStyledControls.TimeText.Separator" />
+      <LinearLayout
+          android:id="@id/exo_time"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:paddingEnd="@dimen/exo_styled_bottom_bar_time_padding"
+          android:paddingRight="@dimen/exo_styled_bottom_bar_time_padding"
+          android:layoutDirection="ltr">
 
-      <TextView
-          android:id="@id/exo_duration"
-          style="@style/ExoStyledControls.TimeText.Duration" />
+        <TextView
+            android:id="@id/exo_position"
+            style="@style/ExoStyledControls.TimeText.Position" />
+
+        <TextView style="@style/ExoStyledControls.TimeText.Separator" />
+
+        <TextView
+            android:id="@id/exo_duration"
+            style="@style/ExoStyledControls.TimeText.Duration" />
+
+      </LinearLayout>
 
     </LinearLayout>
 
@@ -63,9 +81,15 @@
           android:id="@id/exo_subtitle"
           style="@style/ExoStyledControls.Button.Bottom.CC" />
 
+      <!-- Kept for Media3 anchor + performClick(); icon hidden; open via MENU on TV. -->
       <ImageButton
           android:id="@id/exo_settings"
-          style="@style/ExoStyledControls.Button.Bottom.Settings" />
+          style="@style/ExoStyledControls.Button.Bottom.Settings"
+          android:layout_width="1dp"
+          android:layout_height="1dp"
+          android:visibility="invisible"
+          android:focusable="false"
+          android:contentDescription="@null" />
 
       <ImageButton
           android:id="@id/exo_fullscreen"

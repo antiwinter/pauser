@@ -7,18 +7,27 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.PopupWindow
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
+import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.PlayerView.ControllerVisibilityListener
 import androidx.media3.ui.R as Media3UiR
 
 /**
- * TV: Media3 [PlayerView.dispatchKeyEvent] consumes all DPAD keys when the controller is hidden
- * (shows overlay, returns true, never calls super), so [setOnKeyListener] never runs. This subclass
- * handles play/pause and ±15s seek on that path, and moves focus into the control strip when the
- * overlay opens (stock focuses play/pause, which we removed from the layout).
+ * TV: Media3 [PlayerView.dispatchKeyEvent] consumes DPAD when the controller is hidden before
+ * [setOnKeyListener] runs. This subclass handles transport (±15s, play/pause), shows the controller
+ * on those actions (5s timeout via [androidx.media3.ui.PlayerView.setControllerShowTimeoutMs]),
+ * keeps the same transport when the overlay is visible, opens the Exo settings sheet on MENU, and
+ * exposes [dismissSettingsPopupIfShowing] for Back.
+ *
+ * Focus stays on this [PlayerView] ([ViewGroup.FOCUS_BLOCK_DESCENDANTS]) so TV keys are handled
+ * here instead of being stuck on a bottom-bar [ImageButton] that stops receiving events once the
+ * controller is hidden.
  */
 @UnstableApi
 class OpenTuneTvPlayerView @JvmOverloads constructor(
@@ -28,18 +37,20 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 ) : PlayerView(context, attrs, defStyleAttr) {
 
     private var useControllerFlag: Boolean = true
+    private var playbackStateIndicatorPlayer: Player? = null
+    private var playbackStateIndicatorListener: Player.Listener? = null
 
     init {
         isFocusable = true
         isFocusableInTouchMode = true
-        descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         setControllerVisibilityListener(
             object : ControllerVisibilityListener {
                 override fun onVisibilityChanged(visibility: Int) {
                     Log.d(LOG_TAG, "controllerVisibility=$visibility")
-                    if (visibility == View.VISIBLE) {
-                        post { requestFocusOnControllerChrome() }
-                    }
+                    // Re-take focus whenever the controller shows or hides so keys keep hitting this
+                    // view (see class KDoc).
+                    post { requestFocus() }
                 }
             },
         )
@@ -48,6 +59,102 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     override fun setUseController(useController: Boolean) {
         useControllerFlag = useController
         super.setUseController(useController)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        post { requestFocus() }
+    }
+
+    override fun onDetachedFromWindow() {
+        detachPlaybackStateIndicator()
+        super.onDetachedFromWindow()
+    }
+
+    /**
+     * Keeps `opentune_playback_state` in sync with [player] (play vs pause icon).
+     * Safe to call from [OpenTunePlayerView] whenever the bound player instance changes.
+     */
+    fun updatePlaybackStateIndicatorAttachment() {
+        val p = player
+        if (p == null) {
+            detachPlaybackStateIndicator()
+            return
+        }
+        if (playbackStateIndicatorPlayer === p && playbackStateIndicatorListener != null) {
+            refreshPlaybackStateIndicator()
+            return
+        }
+        detachPlaybackStateIndicator()
+        playbackStateIndicatorPlayer = p
+        val listener =
+            object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    refreshPlaybackStateIndicator()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    refreshPlaybackStateIndicator()
+                }
+
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    refreshPlaybackStateIndicator()
+                }
+            }
+        playbackStateIndicatorListener = listener
+        p.addListener(listener)
+        refreshPlaybackStateIndicator()
+    }
+
+    private fun detachPlaybackStateIndicator() {
+        playbackStateIndicatorListener?.let { listener ->
+            playbackStateIndicatorPlayer?.removeListener(listener)
+        }
+        playbackStateIndicatorListener = null
+        playbackStateIndicatorPlayer = null
+    }
+
+    private fun refreshPlaybackStateIndicator() {
+        val p = player ?: return
+        val image = findViewById<ImageView>(R.id.opentune_playback_state) ?: return
+        val showPlay = Util.shouldShowPlayButton(p, /* showPlayButtonIfSuppressed= */ false)
+        image.setImageResource(
+            if (showPlay) {
+                Media3UiR.drawable.exo_styled_controls_play
+            } else {
+                Media3UiR.drawable.exo_styled_controls_pause
+            },
+        )
+        image.contentDescription =
+            resources.getString(
+                if (showPlay) {
+                    Media3UiR.string.exo_controls_play_description
+                } else {
+                    Media3UiR.string.exo_controls_pause_description
+                },
+            )
+    }
+
+    /**
+     * Dismisses the Exo playback settings [PopupWindow] if it is open. Used so Back closes the menu
+     * before hiding the controller or exiting.
+     */
+    fun dismissSettingsPopupIfShowing(): Boolean {
+        val control = findViewById<PlayerControlView>(Media3UiR.id.exo_controller) ?: return false
+        return try {
+            val field = PlayerControlView::class.java.getDeclaredField("settingsWindow")
+            field.isAccessible = true
+            val popup = field.get(control) as? PopupWindow
+            if (popup?.isShowing == true) {
+                popup.dismiss()
+                post { requestFocus() }
+                true
+            } else {
+                false
+            }
+        } catch (_: ReflectiveOperationException) {
+            false
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -66,54 +173,62 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         ) {
             return super.dispatchKeyEvent(event)
         }
+
+        if (useControllerFlag && event.keyCode == KeyEvent.KEYCODE_MENU) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                showController()
+                openExoSettingsMenu()
+                Log.d(LOG_TAG, "MENU -> exo settings")
+            }
+            return true
+        }
+
         val isDpad = isDpadKey(event.keyCode)
-        if (isDpad && useControllerFlag && !isControllerFullyVisible) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (p != null && event.action == KeyEvent.ACTION_DOWN) {
-                        val pos = p.currentPosition - SEEK_MS
-                        p.seekTo(pos.coerceAtLeast(0L))
-                        Log.d(LOG_TAG, "seek -${SEEK_MS}ms -> ${p.currentPosition}")
-                    }
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (p != null && event.action == KeyEvent.ACTION_DOWN) {
-                        val dur = p.duration
-                        val target = p.currentPosition + SEEK_MS
-                        val to =
-                            if (dur != C.TIME_UNSET && dur > 0) {
-                                target.coerceAtMost(dur)
+        if (isDpad && useControllerFlag) {
+            if (isTransportDpad(event.keyCode)) {
+                if (event.action == KeyEvent.ACTION_DOWN && p != null) {
+                    when (event.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            val pos = p.currentPosition - SEEK_MS
+                            p.seekTo(pos.coerceAtLeast(0L))
+                            Log.d(LOG_TAG, "seek -${SEEK_MS}ms -> ${p.currentPosition}")
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            val dur = p.duration
+                            val target = p.currentPosition + SEEK_MS
+                            val to =
+                                if (dur != C.TIME_UNSET && dur > 0) {
+                                    target.coerceAtMost(dur)
+                                } else {
+                                    target
+                                }
+                            p.seekTo(to)
+                            Log.d(LOG_TAG, "seek +${SEEK_MS}ms -> ${p.currentPosition}")
+                        }
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        -> {
+                            if (p.isPlaying) {
+                                p.pause()
+                                Log.d(LOG_TAG, "pause()")
                             } else {
-                                target
+                                p.play()
+                                Log.d(LOG_TAG, "play() playWhenReady=${p.playWhenReady}")
                             }
-                        p.seekTo(to)
-                        Log.d(LOG_TAG, "seek +${SEEK_MS}ms -> ${p.currentPosition}")
-                    }
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER,
-                KeyEvent.KEYCODE_ENTER,
-                KeyEvent.KEYCODE_NUMPAD_ENTER,
-                -> {
-                    if (p != null && event.action == KeyEvent.ACTION_DOWN) {
-                        if (p.isPlaying) {
-                            p.pause()
-                            Log.d(LOG_TAG, "pause()")
-                        } else {
-                            p.play()
-                            Log.d(LOG_TAG, "play() playWhenReady=${p.playWhenReady}")
                         }
                     }
-                    return true
-                }
-                else -> {
                     showController()
-                    Log.d(LOG_TAG, "showController() for keyCode=${event.keyCode}")
-                    return true
                 }
+                return true
+            }
+            if (!isControllerFullyVisible) {
+                showController()
+                Log.d(LOG_TAG, "showController() for keyCode=${event.keyCode}")
+                return true
             }
         }
+
         val consumed = super.dispatchKeyEvent(event)
         if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
             Log.v(LOG_TAG, "super.dispatchKeyEvent -> $consumed")
@@ -121,26 +236,18 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         return consumed
     }
 
-    private fun requestFocusOnControllerChrome() {
-        val basic = findViewById<ViewGroup>(Media3UiR.id.exo_basic_controls)
-        if (basic == null) {
-            Log.w(LOG_TAG, "requestFocusOnControllerChrome: exo_basic_controls missing")
-            return
-        }
-        for (i in basic.childCount - 1 downTo 0) {
-            val child = basic.getChildAt(i)
-            if (child.visibility == View.VISIBLE && child.isFocusable && child.isShown) {
-                val ok = child.requestFocus()
-                Log.d(
-                    LOG_TAG,
-                    "requestFocusOnControllerChrome child=${child.javaClass.simpleName} ok=$ok " +
-                        "focused=${findFocus()?.javaClass?.simpleName}",
-                )
-                return
-            }
-        }
-        Log.w(LOG_TAG, "requestFocusOnControllerChrome: no visible focusable child in bottom bar")
+    private fun openExoSettingsMenu() {
+        val control = findViewById<PlayerControlView>(Media3UiR.id.exo_controller) ?: return
+        val settings = control.findViewById<View>(Media3UiR.id.exo_settings) ?: return
+        settings.post { settings.performClick() }
     }
+
+    private fun isTransportDpad(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+            keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            keyCode == KeyEvent.KEYCODE_ENTER ||
+            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
     @SuppressLint("InlinedApi")
     private fun isDpadKey(keyCode: Int): Boolean =
