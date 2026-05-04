@@ -8,26 +8,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 @Serializable
-data class EmbyAddDraft(
-    val baseUrl: String = "",
-    val username: String = "",
-    val password: String = "",
-)
-
-@Serializable
-data class SmbAddDraft(
-    val displayName: String = "",
-    val host: String = "",
-    val shareName: String = "",
-    val username: String = "",
-    val password: String = "",
-    val domain: String = "",
-)
-
-@Serializable
 private data class DraftFile(
-    val emby: EmbyAddDraft? = null,
-    val smb: SmbAddDraft? = null,
+    val drafts: Map<String, Map<String, String>> = emptyMap(),
 )
 
 class AddServerDraftStore(context: Context) {
@@ -39,35 +21,25 @@ class AddServerDraftStore(context: Context) {
         encodeDefaults = true
     }
 
-    suspend fun loadEmby(): EmbyAddDraft? = mutex.withLock { readUnsafe().emby }
+    suspend fun load(providerId: String): Map<String, String> = mutex.withLock {
+        readUnsafe().drafts[providerId] ?: emptyMap()
+    }
 
-    suspend fun loadSmb(): SmbAddDraft? = mutex.withLock { readUnsafe().smb }
-
-    suspend fun saveEmby(draft: EmbyAddDraft) {
+    suspend fun save(providerId: String, values: Map<String, String>) {
         mutex.withLock {
             val cur = readUnsafe()
-            writeUnsafe(DraftFile(emby = draft, smb = cur.smb))
+            val next = cur.drafts.toMutableMap()
+            next[providerId] = values
+            writeUnsafe(DraftFile(drafts = next))
         }
     }
 
-    suspend fun saveSmb(draft: SmbAddDraft) {
+    suspend fun clear(providerId: String) {
         mutex.withLock {
             val cur = readUnsafe()
-            writeUnsafe(DraftFile(emby = cur.emby, smb = draft))
-        }
-    }
-
-    suspend fun clearEmby() {
-        mutex.withLock {
-            val cur = readUnsafe()
-            writeUnsafe(DraftFile(emby = null, smb = cur.smb))
-        }
-    }
-
-    suspend fun clearSmb() {
-        mutex.withLock {
-            val cur = readUnsafe()
-            writeUnsafe(DraftFile(emby = cur.emby, smb = null))
+            val next = cur.drafts.toMutableMap()
+            next.remove(providerId)
+            writeUnsafe(DraftFile(drafts = next))
         }
     }
 

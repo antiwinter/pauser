@@ -1,5 +1,7 @@
 package com.opentune.app.ui.catalog
 
+import com.opentune.provider.MediaCatalogSource
+import com.opentune.provider.MediaListItem
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

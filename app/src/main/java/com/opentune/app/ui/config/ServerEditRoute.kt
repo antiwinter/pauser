@@ -27,17 +27,13 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.OpenTuneProviderIds
-import com.opentune.app.providers.ProviderFieldSchema
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.emby.api.formatHttpExceptionForDisplay
+import com.opentune.provider.OpenTuneProviderIds
 import com.opentune.provider.ServerFieldKind
-import com.opentune.storage.OpenTuneDatabase
+import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerializationException
-import retrofit2.HttpException
 
 private const val LOG_TAG = "OpenTuneServerEdit"
 
@@ -45,12 +41,13 @@ private const val LOG_TAG = "OpenTuneServerEdit"
 @Composable
 fun ServerEditRoute(
     providerId: String,
-    database: OpenTuneDatabase,
     sourceId: Long,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerId) { ProviderFieldSchema.fieldsForEdit(providerId).sortedBy { it.order } }
+    val fields = remember(providerId) {
+        app.providerRegistry.provider(providerId).editFields().sortedBy { it.order }
+    }
     var values by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
@@ -59,7 +56,7 @@ fun ServerEditRoute(
     LaunchedEffect(providerId, sourceId) {
         loaded = false
         val initial = withContext(Dispatchers.IO) {
-            ServerConfigRepository.loadEditFields(providerId, database, sourceId)
+            ServerConfigRepository.loadEditFields(providerId, app, sourceId)
         }
         values = fields.associate { it.id to (initial[it.id] ?: "") }
         loaded = true
@@ -115,33 +112,15 @@ fun ServerEditRoute(
             onClick = {
                 scope.launch {
                     error = null
-                    try {
-                        val profile = app.deviceProfile
-                        withContext(Dispatchers.IO) {
-                            ServerConfigRepository.submitEdit(
-                                providerId = providerId,
-                                sourceId = sourceId,
-                                values = values,
-                                database = database,
-                                deviceProfile = profile,
-                            )
+                    val result = withContext(Dispatchers.IO) {
+                        ServerConfigRepository.submitEdit(providerId, sourceId, values, app)
+                    }
+                    when (result) {
+                        is SubmitResult.Success -> onDone()
+                        is SubmitResult.Error -> {
+                            Log.e(LOG_TAG, "submitEdit failed: ${result.message}")
+                            error = result.message
                         }
-                        onDone()
-                    } catch (e: HttpException) {
-                        if (providerId == OpenTuneProviderIds.HTTP_LIBRARY) {
-                            val msg = formatHttpExceptionForDisplay(e)
-                            Log.e(LOG_TAG, "submitEdit failed: $msg", e)
-                            error = msg
-                        } else {
-                            Log.e(LOG_TAG, "submitEdit failed", e)
-                            error = e.message
-                        }
-                    } catch (e: SerializationException) {
-                        Log.e(LOG_TAG, "submitEdit JSON error: ${e.message}", e)
-                        error = e.message ?: e::class.java.simpleName
-                    } catch (e: Exception) {
-                        Log.e(LOG_TAG, "submitEdit failed: ${e::class.java.simpleName} ${e.message}", e)
-                        error = e.message ?: e::class.java.simpleName
                     }
                 }
             },

@@ -21,7 +21,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":playback-api"))
+    implementation(project(":provider-api"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)

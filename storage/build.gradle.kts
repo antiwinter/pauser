@@ -18,6 +18,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":provider-api"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.room.runtime)

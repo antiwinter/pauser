@@ -17,6 +17,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":emby-api"))
+    implementation(project(":providers:emby"))
     implementation(libs.androidx.core.ktx)
 }

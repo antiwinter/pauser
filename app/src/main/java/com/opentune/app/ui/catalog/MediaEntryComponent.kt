@@ -20,6 +20,9 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.tv.material3.Surface
+import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaEntryKind
+import com.opentune.provider.MediaListItem
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

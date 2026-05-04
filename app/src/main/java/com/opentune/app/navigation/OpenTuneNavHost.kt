@@ -8,7 +8,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opentune.app.OpenTuneApplication
-import com.opentune.app.providers.OpenTuneProviderIds
 import com.opentune.app.ui.catalog.BrowseRoute
 import com.opentune.app.ui.catalog.CatalogNav
 import com.opentune.app.ui.catalog.DetailRoute
@@ -17,6 +16,7 @@ import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.config.ServerAddRoute
 import com.opentune.app.ui.config.ServerEditRoute
 import com.opentune.app.ui.home.HomeRoute
+import com.opentune.provider.OpenTuneProviderIds
 import java.net.URLEncoder
 
 object Routes {
@@ -56,7 +56,6 @@ fun OpenTuneNavHost() {
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeRoute(
-                database = app.database,
                 onAddProvider = { pid -> nav.navigate(Routes.providerAdd(pid)) },
                 onOpenBrowse = { pid, id, path ->
                     nav.navigate(Routes.browse(pid, id, path))
@@ -71,7 +70,6 @@ fun OpenTuneNavHost() {
             val providerId = it.arguments!!.getString("providerId")!!
             ServerAddRoute(
                 providerId = providerId,
-                database = app.database,
                 onDone = { nav.popBackStack() },
             )
         }
@@ -86,7 +84,6 @@ fun OpenTuneNavHost() {
             val sourceId = it.arguments!!.getLong("sourceId")
             ServerEditRoute(
                 providerId = providerId,
-                database = app.database,
                 sourceId = sourceId,
                 onDone = { nav.popBackStack() },
             )
@@ -106,7 +103,6 @@ fun OpenTuneNavHost() {
             BrowseRoute(
                 nav = nav,
                 app = app,
-                database = app.database,
                 providerId = providerId,
                 sourceId = sourceId,
                 locationEncoded = location,
@@ -127,7 +123,6 @@ fun OpenTuneNavHost() {
             DetailRoute(
                 nav = nav,
                 app = app,
-                database = app.database,
                 providerId = providerId,
                 sourceId = sourceId,
                 itemRefEncoded = itemRef,
@@ -148,7 +143,6 @@ fun OpenTuneNavHost() {
             SearchRoute(
                 nav = nav,
                 app = app,
-                database = app.database,
                 providerId = providerId,
                 sourceId = sourceId,
                 scopeLocationEncoded = scope,
@@ -171,7 +165,6 @@ fun OpenTuneNavHost() {
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
             PlayerRoute(
                 app = app,
-                database = app.database,
                 providerId = providerId,
                 sourceId = sourceId,
                 itemRefDecoded = itemRefDecoded,

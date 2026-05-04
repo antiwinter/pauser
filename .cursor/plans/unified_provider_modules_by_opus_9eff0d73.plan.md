@@ -4,25 +4,25 @@ overview: Move all Emby/SMB protocol logic out of `:app` into `:emby-api` and `:
 todos:
   - id: expand-provider-api
     content: Expand :provider-api with catalog models, CatalogBindingPlugin, OpenTunePlaybackHooks (from :playback-api), PlaybackSpec, ProviderConfigBackend, ServerStore/FavoritesStore/ProgressStore, OpenTuneProvider umbrella, OpenTuneProviderIds; delete :playback-api module.
-    status: pending
+    status: completed
   - id: generic-storage
     content: Replace EmbyServerEntity + SmbSourceEntity with generic ServerEntity + ServerDao in :storage; re-key FavoriteEntity / PlaybackProgressEntity by (providerId, sourceId, itemRef); add StorageBindings adapters that implement :provider-api stores.
-    status: pending
+    status: completed
   - id: move-emby-into-emby-api
     content: Move EmbyRepository + EmbyPlaybackHooks into :emby-api; add EmbyCredentials parser, EmbyCatalogBindingPlugin, EmbyPlaybackResolver returning PlaybackSpec, EmbyConfigBackend, EmbyProvider umbrella with bootstrap().
-    status: pending
+    status: completed
   - id: move-smb-into-smb
     content: Add SmbCatalogBindingPlugin, SmbPlaybackResolver, SmbConfigBackend, SmbProvider umbrella in :smb using existing SmbConnection / SmbDataSource / SmbPlaybackHooks.
-    status: pending
+    status: completed
   - id: headless-player
     content: Make :player consume a fully built Media3 MediaSource produced by the provider. :player does no Emby/SMB-specific wiring (no URL-scheme branching, no OkHttp/SmbDataSource selection); it only plays whatever MediaSource the provider returns.
-    status: pending
+    status: completed
   - id: thin-app
     content: Rewrite OpenTuneApplication to register Emby/Smb providers; reduce OpenTuneProviderRegistry to Map<id, OpenTuneProvider>; replace ProviderFieldSchema, ServerConfigRepository, AddServerDraftStore, HomeRoute with neutral versions; delete app/providers/emby, app/providers/smb, app/playback/EmbyPlaybackHooks, app/playback/PlaybackPreparer.
-    status: pending
+    status: completed
   - id: docs-and-grep-gates
     content: Rewrite AGENTS.md for new module layout; verify zero hits in :app for com.opentune.emby.api / com.opentune.smb / Emby* / Smb*; verify :emby-api and :smb do not import com.opentune.app.* or com.opentune.storage.*; compile :app:compileDebugKotlin (run with JAVA_HOME set).
-    status: pending
+    status: completed
 isProject: false
 ---
 

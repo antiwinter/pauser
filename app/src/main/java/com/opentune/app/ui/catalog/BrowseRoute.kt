@@ -10,7 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.storage.OpenTuneDatabase
+import com.opentune.provider.CatalogScreenBindingState
+import com.opentune.provider.toScreenState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 
@@ -19,7 +20,6 @@ import androidx.tv.material3.Text
 fun BrowseRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
-    database: OpenTuneDatabase,
     providerId: String,
     sourceId: Long,
     locationEncoded: String,
@@ -27,9 +27,9 @@ fun BrowseRoute(
     val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
     var state by remember { mutableStateOf<CatalogScreenBindingState>(CatalogScreenBindingState.Loading) }
 
-    LaunchedEffect(app, database, providerId, sourceId, locationDecoded) {
+    LaunchedEffect(app, providerId, sourceId, locationDecoded) {
         state = CatalogScreenBindingState.Loading
-        state = resolveBrowseBinding(app, database, providerId, sourceId, locationDecoded).toScreenState()
+        state = resolveBrowseBinding(app, providerId, sourceId, locationDecoded).toScreenState()
     }
 
     DisposableEffect(state) {

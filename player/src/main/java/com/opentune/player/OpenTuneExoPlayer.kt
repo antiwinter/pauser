@@ -51,4 +51,15 @@ object OpenTuneExoPlayer {
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
     }
+
+    /**
+     * ExoPlayer for provider-supplied [androidx.media3.exoplayer.source.MediaSource] instances
+     * (each source bundles its own [androidx.media3.datasource.DataSource]).
+     */
+    fun createForBundledSources(context: Context): ExoPlayer {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setMediaCodecSelector(preferHardwareDecodersFirst)
+            .setEnableDecoderFallback(true)
+        return ExoPlayer.Builder(context, renderersFactory).build()
+    }
 }

@@ -19,6 +19,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
+import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaDetailModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

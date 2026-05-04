@@ -18,30 +18,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.OpenTuneProviderIds
-import com.opentune.app.providers.ProviderFieldSchema
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.emby.api.formatHttpExceptionForDisplay
+import com.opentune.provider.OpenTuneProviderIds
 import com.opentune.provider.ServerFieldKind
-import com.opentune.storage.OpenTuneDatabase
+import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerializationException
-import retrofit2.HttpException
 
 private const val LOG_TAG = "OpenTuneServerAdd"
 
@@ -49,11 +45,12 @@ private const val LOG_TAG = "OpenTuneServerAdd"
 @Composable
 fun ServerAddRoute(
     providerId: String,
-    database: OpenTuneDatabase,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerId) { ProviderFieldSchema.fieldsForAdd(providerId).sortedBy { it.order } }
+    val fields = remember(providerId) {
+        app.providerRegistry.provider(providerId).addFields().sortedBy { it.order }
+    }
     var values by remember {
         mutableStateOf(fields.associate { it.id to "" })
     }
@@ -116,33 +113,20 @@ fun ServerAddRoute(
             onClick = {
                 scope.launch {
                     error = null
-                    try {
-                        withContext(Dispatchers.IO) {
-                            ServerConfigRepository.submitAdd(
-                                providerId = providerId,
-                                values = values,
-                                app = app,
-                                database = database,
-                                deviceProfile = app.deviceProfile,
-                            )
-                            ServerConfigRepository.clearAddDraft(providerId, app)
+                    val result = withContext(Dispatchers.IO) {
+                        ServerConfigRepository.submitAdd(providerId, values, app)
+                    }
+                    when (result) {
+                        is SubmitResult.Success -> {
+                            withContext(Dispatchers.IO) {
+                                ServerConfigRepository.clearAddDraft(providerId, app)
+                            }
+                            onDone()
                         }
-                        onDone()
-                    } catch (e: HttpException) {
-                        if (providerId == OpenTuneProviderIds.HTTP_LIBRARY) {
-                            val msg = formatHttpExceptionForDisplay(e)
-                            Log.e(LOG_TAG, "submitAdd failed: $msg", e)
-                            error = msg
-                        } else {
-                            Log.e(LOG_TAG, "submitAdd failed", e)
-                            error = e.message
+                        is SubmitResult.Error -> {
+                            Log.e(LOG_TAG, "submitAdd failed: ${result.message}")
+                            error = result.message
                         }
-                    } catch (e: SerializationException) {
-                        Log.e(LOG_TAG, "submitAdd JSON error: ${e.message}", e)
-                        error = e.message ?: e::class.java.simpleName
-                    } catch (e: Exception) {
-                        Log.e(LOG_TAG, "submitAdd failed: ${e::class.java.simpleName} ${e.message}", e)
-                        error = e.message ?: e::class.java.simpleName
                     }
                 }
             },

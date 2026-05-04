@@ -3,12 +3,17 @@ package com.opentune.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,16 +23,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import com.opentune.playback.api.OpenTunePlaybackHooks
+import com.opentune.provider.PlaybackSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -39,13 +46,8 @@ import kotlin.math.abs
 
 private const val LOG_TAG = "OpenTunePlayerShell"
 
-/** Emby (session hooks): wait for READY up to this long. */
 private const val MAX_WAIT_READY_MS = 120_000L
 
-/**
- * SMB / no progress hooks: old SMB player never blocked on READY; strict wait can hang forever
- * if the pipeline never reaches READY after an audio-off retry. Keep a short soft wait only.
- */
 private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
 
 private tailrec fun Context.findActivity(): Activity? =
@@ -58,22 +60,21 @@ private tailrec fun Context.findActivity(): Activity? =
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun OpenTunePlayerScreen(
-    exoPlayer: ExoPlayer,
-    hooks: OpenTunePlaybackHooks,
-    startPositionMs: Long,
+    spec: PlaybackSpec,
     onExit: () -> Unit,
-    /** When non-null, current playback position is mirrored locally for resumption. */
-    resumeProgressKey: String? = null,
-    topBanner: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val hooksState = rememberUpdatedState(hooks)
+    val specState = rememberUpdatedState(spec)
     val onExitState = rememberUpdatedState(onExit)
-    val released = remember(exoPlayer) { AtomicBoolean(false) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val exo = remember(spec.resumeKey) { OpenTuneExoPlayer.createForBundledSources(context) }
+    val released = remember(spec.resumeKey) { AtomicBoolean(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var showAudioUnsupportedBanner by remember { mutableStateOf(false) }
 
     suspend fun shutdown(userInitiatedExit: Boolean) {
+        val s = specState.value
         Log.d(LOG_TAG, "shutdown userInitiated=$userInitiatedExit alreadyReleased=${released.get()}")
         if (!released.compareAndSet(false, true)) {
             if (userInitiatedExit) {
@@ -81,52 +82,52 @@ fun OpenTunePlayerScreen(
             }
             return
         }
-        val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
-        val rk = resumeProgressKey
-        if (rk != null) {
-            OpenTunePlaybackResumeStore.writeResumePosition(context.applicationContext, rk, pos)
-        }
-        hooksState.value.onStop(pos)
-        withContext(Dispatchers.Main) { exoPlayer.release() }
+        val pos = withContext(Dispatchers.Main) { exo.currentPosition }
+        OpenTunePlaybackResumeStore.writeResumePosition(context.applicationContext, s.resumeKey, pos)
+        s.hooks.onStop(pos)
+        withContext(Dispatchers.Main) { exo.release() }
+        s.onPlaybackDispose()
         if (userInitiatedExit) {
             withContext(Dispatchers.Main) { onExitState.value() }
         }
     }
 
-    fun playbackRate(): Float = exoPlayer.playbackParameters.speed
+    fun playbackRate(): Float = exo.playbackParameters.speed
 
-    DisposableEffect(exoPlayer, context, resumeProgressKey) {
-        val appContext = context.applicationContext
-        val rk = resumeProgressKey
-        val listener = object : Player.Listener {
-            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
-                if (rk != null) {
-                    OpenTunePlaybackResumeStore.writeSpeed(appContext, rk, parameters.speed)
-                }
-            }
+    val hooksState = rememberUpdatedState(spec.hooks)
+
+    LaunchedEffect(spec.resumeKey) {
+        val s = spec
+        released.set(false)
+        showAudioUnsupportedBanner = false
+        withContext(Dispatchers.Main) {
+            exo.playbackParameters = PlaybackParameters(
+                OpenTunePlaybackResumeStore.readSpeed(context.applicationContext, s.resumeKey),
+            )
+            exo.stop()
+            exo.setMediaSource(s.mediaSourceFactory.create())
+            exo.playWhenReady = true
+            exo.prepare()
         }
-        exoPlayer.addListener(listener)
-        onDispose { exoPlayer.removeListener(listener) }
-    }
 
-    LaunchedEffect(exoPlayer, hooks, startPositionMs) {
+        val hooks = s.hooks
         Log.d(
             LOG_TAG,
-            "readyEffect start startPositionMs=$startPositionMs progressIntervalMs=${hooks.progressIntervalMs()}",
+            "readyEffect start initialPositionMs=${s.initialPositionMs} progressIntervalMs=${hooks.progressIntervalMs()}",
         )
-        val strictReadyWait = hooks.progressIntervalMs() > 0L || startPositionMs > 0L
+        val strictReadyWait = hooks.progressIntervalMs() > 0L || s.initialPositionMs > 0L
         val maxReadyMs = if (strictReadyWait) MAX_WAIT_READY_MS else MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS
         if (!strictReadyWait) {
             Log.d(LOG_TAG, "readyEffect soft READY wait (no progress hooks / typical SMB)")
         }
         var waitedReadyMs = 0L
-        while (exoPlayer.playbackState != Player.STATE_READY && isActive) {
+        while (exo.playbackState != Player.STATE_READY && isActive) {
             if (strictReadyWait && waitedReadyMs % 2000L < 32L) {
-                val err = withContext(Dispatchers.Main) { exoPlayer.playerError }
+                val err = withContext(Dispatchers.Main) { exo.playerError }
                 Log.i(
                     LOG_TAG,
-                    "waiting STATE_READY waitedMs=$waitedReadyMs playbackState=${exoPlayer.playbackState} " +
-                        "isLoading=${exoPlayer.isLoading} playWhenReady=${exoPlayer.playWhenReady} err=${err?.message}",
+                    "waiting STATE_READY waitedMs=$waitedReadyMs playbackState=${exo.playbackState} " +
+                        "isLoading=${exo.isLoading} playWhenReady=${exo.playWhenReady} err=${err?.message}",
                 )
             }
             delay(32)
@@ -135,7 +136,7 @@ fun OpenTunePlayerScreen(
                 Log.w(
                     LOG_TAG,
                     "timeout waiting STATE_READY after ${waitedReadyMs}ms (strict=$strictReadyWait) " +
-                        "state=${exoPlayer.playbackState} err=${exoPlayer.playerError?.message}",
+                        "state=${exo.playbackState} err=${exo.playerError?.message}",
                 )
                 break
             }
@@ -144,49 +145,82 @@ fun OpenTunePlayerScreen(
             Log.d(LOG_TAG, "readyEffect cancelled before seek")
             return@LaunchedEffect
         }
-        if (startPositionMs > 0) {
-            Log.d(LOG_TAG, "seekTo startPositionMs=$startPositionMs")
-            withContext(Dispatchers.Main) { exoPlayer.seekTo(startPositionMs) }
+        if (s.initialPositionMs > 0) {
+            Log.d(LOG_TAG, "seekTo initialPositionMs=${s.initialPositionMs}")
+            withContext(Dispatchers.Main) { exo.seekTo(s.initialPositionMs) }
             var n = 0
             while (isActive && n++ < 200) {
-                val cur = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
-                if (abs(cur - startPositionMs) < 1500) break
+                val cur = withContext(Dispatchers.Main) { exo.currentPosition }
+                if (abs(cur - s.initialPositionMs) < 1500) break
                 delay(32)
             }
-            Log.d(LOG_TAG, "after seek loop iterations=$n position=${exoPlayer.currentPosition}")
+            Log.d(LOG_TAG, "after seek loop iterations=$n position=${exo.currentPosition}")
         }
         if (!isActive) return@LaunchedEffect
         if (released.get()) {
             Log.d(LOG_TAG, "readyEffect skip onPlaybackReady: already released")
             return@LaunchedEffect
         }
-        val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
+        val pos = withContext(Dispatchers.Main) { exo.currentPosition }
         val rate = withContext(Dispatchers.Main) { playbackRate() }
         Log.d(LOG_TAG, "onPlaybackReady positionMs=$pos rate=$rate")
         hooks.onPlaybackReady(pos, rate)
     }
 
-    LaunchedEffect(exoPlayer, hooks, resumeProgressKey) {
-        val interval = hooks.progressIntervalMs()
-        val rk = resumeProgressKey
+    DisposableEffect(exo, spec.resumeKey) {
+        val appContext = context.applicationContext
+        val rk = spec.resumeKey
+        val listener = object : Player.Listener {
+            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
+                OpenTunePlaybackResumeStore.writeSpeed(appContext, rk, parameters.speed)
+            }
+        }
+        exo.addListener(listener)
+        onDispose { exo.removeListener(listener) }
+    }
+
+    DisposableEffect(exo, spec) {
+        val s = spec
+        val fb = s.audioFallbackFactory
+        if (s.audioFallbackOnly && fb != null) {
+            val fallbackSource = fb.create()
+            val listener = exo.createAudioDecodeFallbackListener(
+                logTag = OPEN_TUNE_PLAYER_LOG,
+                mainHandler = mainHandler,
+                media = AudioFallbackMedia.MediaSourcePayload(fallbackSource),
+                onAudioDisabled = {
+                    if (!s.audioDecodeUnsupportedBanner.isNullOrBlank()) {
+                        showAudioUnsupportedBanner = true
+                    }
+                },
+            )
+            exo.addListener(listener)
+            onDispose { exo.removeListener(listener) }
+        } else {
+            onDispose { }
+        }
+    }
+
+    LaunchedEffect(exo, spec.resumeKey, spec.hooks) {
+        val s = spec
+        val interval = s.hooks.progressIntervalMs()
+        val rk = s.resumeKey
         val appCtx = context.applicationContext
         if (interval > 0L) {
             while (isActive) {
                 delay(interval)
-                if (!exoPlayer.isPlaying) continue
+                if (!exo.isPlaying) continue
                 if (released.get()) break
-                val pos = exoPlayer.currentPosition
+                val pos = exo.currentPosition
                 hooksState.value.onProgressTick(pos, playbackRate())
-                if (rk != null) {
-                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, pos)
-                }
+                OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, pos)
             }
-        } else if (rk != null) {
+        } else {
             while (isActive) {
                 delay(10_000L)
                 if (released.get()) break
-                if (exoPlayer.isPlaying) {
-                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, exoPlayer.currentPosition)
+                if (exo.isPlaying) {
+                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, exo.currentPosition)
                 }
             }
         }
@@ -204,22 +238,18 @@ fun OpenTunePlayerScreen(
         }
     }
 
-    DisposableEffect(exoPlayer) {
+    DisposableEffect(exo) {
         onDispose {
             runBlocking { shutdown(userInitiatedExit = false) }
         }
     }
 
-    // MediaSession: system sees active playback. FLAG_KEEP_SCREEN_ON: whole time this screen is
-    // shown (paused or not) so ATV ambient / idle overlay does not fire while the user stays here.
-    // Registered after the shutdown effect so this onDispose runs first and releases the session
-    // before ExoPlayer.release().
-    DisposableEffect(exoPlayer) {
+    DisposableEffect(exo) {
         val activity = context.findActivity()
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val session =
             if (activity != null) {
-                MediaSession.Builder(activity, exoPlayer).build()
+                MediaSession.Builder(activity, exo).build()
             } else {
                 null
             }
@@ -229,9 +259,27 @@ fun OpenTunePlayerScreen(
         }
     }
 
+    val bannerText = spec.audioDecodeUnsupportedBanner
+    val topBanner: (@Composable BoxScope.() -> Unit)? =
+        if (showAudioUnsupportedBanner && !bannerText.isNullOrBlank()) {
+            {
+                M3Text(
+                    text = bannerText,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    color = Color.White,
+                )
+            }
+        } else {
+            null
+        }
+
     Box(modifier = Modifier.fillMaxSize()) {
         OpenTunePlayerView(
-            player = exoPlayer,
+            player = exo,
             modifier = Modifier.fillMaxSize(),
             onPlayerViewBound = { playerViewRef = it },
         )

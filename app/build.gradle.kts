@@ -38,13 +38,12 @@ android {
 }
 
 dependencies {
-    implementation(project(":playback-api"))
     implementation(project(":provider-api"))
-    implementation(project(":emby-api"))
+    implementation(project(":providers:emby"))
     implementation(project(":device-profile"))
     implementation(project(":player"))
     implementation(project(":storage"))
-    implementation(project(":smb"))
+    implementation(project(":providers:smb"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

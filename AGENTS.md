@@ -13,21 +13,24 @@ When something changes, **update call sites and schema directly** and delete the
 
 ## Providers (catalog + playback + server config)
 
-- **Registry:** [`OpenTuneProviderRegistry`](app/src/main/java/com/opentune/app/providers/OpenTuneProviderRegistry.kt) on [`OpenTuneApplication`](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) maps **`OpenTuneProviderIds`** (`HTTP_LIBRARY`, `FILE_SHARE`) to **`CatalogBindingPlugin`** + **`PlaybackPreparer`**. Register new backends there only.
-- **Implementations** live under **`app/.../providers/emby`** and **`app/.../providers/smb`** (catalog factories, playback preparers, HTTP/SMB specifics). **Do not** put protocol types or `Emby*` / `Smb*` **Kotlin identifiers** under **`ui/catalog`** or **`ui/home`**.
-- **Server add/edit UI** is neutral: [`ServerAddRoute`](app/src/main/java/com/opentune/app/ui/config/ServerAddRoute.kt) / [`ServerEditRoute`](app/src/main/java/com/opentune/app/ui/config/ServerEditRoute.kt) under **`ui/config`**, driven by [`ServerFieldSpec`](provider-api/src/main/java/com/opentune/provider/ServerFieldSpec.kt) from **`:provider-api`** via [`EmbyServerFields`](emby-api/src/main/java/com/opentune/emby/api/EmbyServerFields.kt) / [`SmbServerFields`](smb/src/main/java/com/opentune/smb/SmbServerFields.kt). Field copy resolves through **`strings.xml`** + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
+- **Contracts:** [`:provider-api`](provider-api/src/main/java/com/opentune/provider/) holds **`OpenTuneProvider`**, **`OpenTuneProviderIds`**, **`CatalogBindingPlugin`**, **`MediaCatalogSource`**, media models, **`PlaybackSpec`** (provider-built Media3 `MediaSource`), **`OpenTunePlaybackHooks`**, **`ServerStore`** / **`FavoritesStore`** / **`ProgressStore`**, **`ProviderConfigBackend`**, and **`ServerFieldSpec`**. There is **no** `:playback-api` module (hooks live in `:provider-api`).
+- **Registry:** [`OpenTuneProviderRegistry`](app/src/main/java/com/opentune/app/providers/OpenTuneProviderRegistry.kt) on [`OpenTuneApplication`](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) maps **`OpenTuneProviderIds`** (`HTTP_LIBRARY`, `FILE_SHARE`) to **`OpenTuneProvider`** instances. Register new backends there only.
+- **Implementations:** HTTP-library code lives in **`:providers:emby`** ([`EmbyProvider`](providers/emby/src/main/java/com/opentune/emby/api/EmbyProvider.kt), catalog binding, playback resolver, config backend, `EmbyRepository`, `EmbyPlaybackHooks`). File-share code lives in **`:providers:smb`** ([`SmbProvider`](providers/smb/src/main/java/com/opentune/smb/SmbProvider.kt), catalog binding, playback resolver, config backend). **Do not** put protocol types or `Emby*` / `Smb*` **Kotlin identifiers** under **`ui/catalog`**, **`ui/home`**, or **`app/.../providers/*`** (only neutral registry + [`ServerConfigRepository`](app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt) dispatcher remain in `app`).
+- **Persistence:** [`:storage`](storage/src/main/java/com/opentune/storage/) holds generic **`ServerEntity`** + **`ServerDao`**, favorites, progress, and [`OpenTuneStorageBindings`](storage/src/main/java/com/opentune/storage/StorageBindings.kt) implementing the `:provider-api` store interfaces. Providers never import `:storage`.
+- **Server add/edit UI** is neutral: [`ServerAddRoute`](app/src/main/java/com/opentune/app/ui/config/ServerAddRoute.kt) / [`ServerEditRoute`](app/src/main/java/com/opentune/app/ui/config/ServerEditRoute.kt) under **`ui/config`**, driven by each provider’s **`addFields()`** / **`editFields()`** and **`ServerFieldSpec`**. Field copy resolves through **`strings.xml`** + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
 
 ## Symmetry (parallel providers)
 
-Keep **parallel** layout per provider under **`providers/{emby,smb}`**: same *roles* (catalog factory, playback preparer), same naming pattern with **source prefix on types** allowed **only** under `providers/*`, not in `ui/catalog` or `ui/home`.
+Keep **parallel** roles per provider in **`:providers:emby`** vs **`:providers:smb`**: catalog binding plugin, playback resolver (`PlaybackSpec`), config backend, and an umbrella **`OpenTuneProvider`**. **Source-prefixed type names** (`Emby*`, `Smb*`) are allowed **only** inside those modules, not in `ui/catalog` or `ui/home`.
 
 ## Shared catalog UI
 
-- Cross-source TV shells (`BrowseScreen`, `DetailScreen`, `SearchScreen`, `MediaEntryComponent`, `BrowseRoute` / `DetailRoute` / `PlayerRoute` / `SearchRoute`) live under **`app/.../ui/catalog`**. They depend on **`MediaCatalogSource`** and **`OpenTuneApplication.providerRegistry`** via [`MediaCatalogBinding`](app/src/main/java/com/opentune/app/ui/catalog/MediaCatalogBinding.kt), not on protocol APIs directly.
+- Cross-source TV shells (`BrowseScreen`, `DetailScreen`, `SearchScreen`, `MediaEntryComponent`, `BrowseRoute` / `DetailRoute` / `PlayerRoute` / `SearchRoute`) live under **`app/.../ui/catalog`**. They depend on **`:provider-api`** types and **`OpenTuneApplication.providerRegistry`** + **`catalogBindingDeps()`** via [`MediaCatalogBinding`](app/src/main/java/com/opentune/app/ui/catalog/MediaCatalogBinding.kt), not on protocol APIs directly.
+- **Player shell:** [`OpenTunePlayerScreen`](player/src/main/java/com/opentune/player/OpenTunePlayerScreen.kt) in **`:player`** takes a **`PlaybackSpec`** only (no Emby/SMB branching).
 
 ## Navigation route strings
 
-**Unified catalog flows** (`provider` segment = registry id, e.g. values in [`OpenTuneProviderIds`](app/src/main/java/com/opentune/app/providers/OpenTuneProviderIds.kt)):
+**Unified catalog flows** (`provider` segment = registry id, e.g. values in [`OpenTuneProviderIds`](provider-api/src/main/java/com/opentune/provider/OpenTuneProviderIds.kt)):
 
 - `browse/{provider}/{sourceId}/{location}` — URL-encoded `location` (opaque to Nav; decode in `CatalogNav` / binding plugins).
 - `detail/{provider}/{sourceId}/{itemRef}` — encoded item key.
@@ -39,12 +42,12 @@ Keep **parallel** layout per provider under **`providers/{emby,smb}`**: same *ro
 - `provider_add/{providerId}` — [`Routes.providerAdd`](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt)
 - `provider_edit/{providerId}/{sourceId}` — [`Routes.providerEdit`](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt)
 
-Encode/decode route segments in **`Routes`** and/or **`CatalogNav`** — avoid scattering magic location strings. Libraries root token: **`CatalogNav.LIBRARIES_ROOT_SEGMENT`**.
+Encode/decode route segments in **`Routes`** and/or **`CatalogNav`** — avoid scattering magic location strings. Libraries root token: **`CatalogNav.LIBRARIES_ROOT_SEGMENT`** (same value as [`CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT`](provider-api/src/main/java/com/opentune/provider/CatalogRouteTokens.kt)).
 
 ## Composables and files
 
 - **Server config UI:** **`ServerAddRoute`**, **`ServerEditRoute`** under **`ui/config`**.
-- **Home:** **`HomeRoute`** under **`ui/home`** — uses `OpenTuneProviderIds` + string resources only.
+- **Home:** **`HomeRoute`** under **`ui/home`** — uses `OpenTuneProviderIds` + string resources only; observes **`ServerStore`** via **`OpenTuneApplication.storageBindings`**.
 - **Catalog routes:** under **`ui/catalog`** as above.
 
 ## `Routes` helpers
@@ -54,8 +57,8 @@ Encode/decode route segments in **`Routes`** and/or **`CatalogNav`** — avoid s
 ## Log tags
 
 - Catalog binding plugins may use per-implementation tags (e.g. existing browse/detail log tags) for protocol diagnostics.
-- **Unified catalog player** (`PlayerRoute` / `PlaybackPreparer`): use the single tag **`OpenTunePlayer`** from [`OPEN_TUNE_PLAYER_LOG`](player/src/main/java/com/opentune/player/OpenTuneAudioDecodeFallback.kt); optional provider hints in log **messages** when needed.
+- **Unified catalog player:** use the single tag **`OpenTunePlayer`** from [`OPEN_TUNE_PLAYER_LOG`](player/src/main/java/com/opentune/player/OpenTuneAudioDecodeFallback.kt); optional provider hints in log **messages** when needed.
 
 ## Playback hooks
 
-- Implement **`OpenTunePlaybackHooks`** from `:playback-api`. HTTP-library: **`EmbyPlaybackHooks`** in `app` (`playback` package). File-share: **`SmbPlaybackHooks`** in `:smb`.
+- Implement **`OpenTunePlaybackHooks`** from **`:provider-api`**. HTTP-library: **`EmbyPlaybackHooks`** in **`:providers:emby`**. File-share: **`SmbPlaybackHooks`** in **`:providers:smb`**.
