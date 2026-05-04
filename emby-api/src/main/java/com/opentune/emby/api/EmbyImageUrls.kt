@@ -16,4 +16,12 @@ object EmbyImageUrls {
         val key = accessToken?.takeIf { it.isNotBlank() }?.let { "&api_key=${it}" } ?: ""
         return "$base/Items/$id/Images/Primary?maxHeight=$maxHeight&tag=$tag$key"
     }
+
+    /** Smaller Primary image for grid cells. */
+    fun primaryThumb(
+        baseUrl: String,
+        item: BaseItemDto,
+        accessToken: String? = null,
+        maxHeight: Int = 220,
+    ): String? = primaryPoster(baseUrl, item, accessToken, maxHeight)
 }

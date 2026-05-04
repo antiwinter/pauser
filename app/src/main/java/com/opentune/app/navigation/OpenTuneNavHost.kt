@@ -8,17 +8,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.opentune.app.OpenTuneApplication
-import com.opentune.app.ui.emby.EmbyAddRoute
-import com.opentune.app.ui.emby.EmbyBrowseRoute
-import com.opentune.app.ui.emby.EmbyDetailRoute
-import com.opentune.app.ui.emby.EmbyEditRoute
-import com.opentune.app.ui.emby.EmbyLibrariesRoute
-import com.opentune.app.ui.emby.EmbyPlayerRoute
+import com.opentune.app.providers.OpenTuneProviderIds
+import com.opentune.app.ui.catalog.BrowseRoute
+import com.opentune.app.ui.catalog.CatalogNav
+import com.opentune.app.ui.catalog.DetailRoute
+import com.opentune.app.ui.catalog.PlayerRoute
+import com.opentune.app.ui.catalog.SearchRoute
+import com.opentune.app.ui.config.ServerAddRoute
+import com.opentune.app.ui.config.ServerEditRoute
 import com.opentune.app.ui.home.HomeRoute
-import com.opentune.app.ui.smb.SmbAddRoute
-import com.opentune.app.ui.smb.SmbBrowseRoute
-import com.opentune.app.ui.smb.SmbEditRoute
-import com.opentune.app.ui.smb.SmbPlayerRoute
 import java.net.URLEncoder
 
 object Routes {
@@ -26,37 +24,28 @@ object Routes {
     /** [URLEncoder.encode] with Charset is API 33+; use charset name for older Android TV devices. */
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
-    const val EMBY_ADD = "emby_add"
-    const val EMBY_EDIT = "emby_edit/{serverId}"
-    const val EMBY_LIBRARIES = "emby_libraries/{serverId}"
-    const val EMBY_BROWSE = "emby_browse/{serverId}/{parentId}"
-    const val EMBY_DETAIL = "emby_detail/{serverId}/{itemId}"
-    const val EMBY_PLAYER = "emby_player/{serverId}/{itemId}/{startMs}"
-    const val SMB_ADD = "smb_add"
-    const val SMB_EDIT = "smb_edit/{sourceId}"
-    const val SMB_BROWSE = "smb_browse/{sourceId}/{path}"
-    const val SMB_PLAYER = "smb_player/{sourceId}/{path}"
+    const val BROWSE = "browse/{provider}/{sourceId}/{location}"
+    const val DETAIL = "detail/{provider}/{sourceId}/{itemRef}"
+    const val PLAYER = "player/{provider}/{sourceId}/{itemRef}/{startMs}"
+    const val SEARCH = "search/{provider}/{sourceId}/{scopeLocation}"
+    const val PROVIDER_ADD = "provider_add/{providerId}"
+    const val PROVIDER_EDIT = "provider_edit/{providerId}/{sourceId}"
 
-    fun embyLibraries(serverId: Long) = "emby_libraries/$serverId"
+    fun providerAdd(providerId: String) = "provider_add/$providerId"
 
-    fun embyBrowse(serverId: Long, parentId: String) =
-        "emby_browse/$serverId/${URLEncoder.encode(parentId, UrlCharset)}"
+    fun providerEdit(providerId: String, sourceId: Long) = "provider_edit/$providerId/$sourceId"
 
-    fun embyDetail(serverId: Long, itemId: String) =
-        "emby_detail/$serverId/${URLEncoder.encode(itemId, UrlCharset)}"
+    fun browse(providerId: String, sourceId: Long, locationRaw: String) =
+        "browse/$providerId/$sourceId/${URLEncoder.encode(locationRaw, UrlCharset)}"
 
-    fun embyPlayer(serverId: Long, itemId: String, startMs: Long) =
-        "emby_player/$serverId/${URLEncoder.encode(itemId, UrlCharset)}/$startMs"
+    fun detail(providerId: String, sourceId: Long, itemRefRaw: String) =
+        "detail/$providerId/$sourceId/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 
-    fun embyEdit(serverId: Long) = "emby_edit/$serverId"
+    fun player(providerId: String, sourceId: Long, itemRefRaw: String, startMs: Long) =
+        "player/$providerId/$sourceId/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
 
-    fun smbBrowse(sourceId: Long, path: String) =
-        "smb_browse/$sourceId/${URLEncoder.encode(path, UrlCharset)}"
-
-    fun smbPlayer(sourceId: Long, path: String) =
-        "smb_player/$sourceId/${URLEncoder.encode(path, UrlCharset)}"
-
-    fun smbEdit(sourceId: Long) = "smb_edit/$sourceId"
+    fun search(providerId: String, sourceId: Long, scopeLocationRaw: String) =
+        "search/$providerId/$sourceId/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
 }
 
 @Composable
@@ -68,147 +57,125 @@ fun OpenTuneNavHost() {
         composable(Routes.HOME) {
             HomeRoute(
                 database = app.database,
-                onAddEmby = { nav.navigate(Routes.EMBY_ADD) },
-                onOpenServer = { id -> nav.navigate(Routes.embyLibraries(id)) },
-                onEditEmby = { id -> nav.navigate(Routes.embyEdit(id)) },
-                onAddSmb = { nav.navigate(Routes.SMB_ADD) },
-                onOpenSmb = { sid, path -> nav.navigate(Routes.smbBrowse(sid, path)) },
-                onEditSmb = { id -> nav.navigate(Routes.smbEdit(id)) },
+                onAddProvider = { pid -> nav.navigate(Routes.providerAdd(pid)) },
+                onOpenBrowse = { pid, id, path ->
+                    nav.navigate(Routes.browse(pid, id, path))
+                },
+                onEditProvider = { pid, id -> nav.navigate(Routes.providerEdit(pid, id)) },
             )
         }
-        composable(Routes.EMBY_ADD) {
-            EmbyAddRoute(
+        composable(
+            Routes.PROVIDER_ADD,
+            listOf(navArgument("providerId") { type = NavType.StringType }),
+        ) {
+            val providerId = it.arguments!!.getString("providerId")!!
+            ServerAddRoute(
+                providerId = providerId,
                 database = app.database,
-                deviceProfile = app.deviceProfile,
                 onDone = { nav.popBackStack() },
             )
         }
         composable(
-            Routes.EMBY_EDIT,
-            listOf(navArgument("serverId") { type = NavType.LongType }),
+            Routes.PROVIDER_EDIT,
+            listOf(
+                navArgument("providerId") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.LongType },
+            ),
         ) {
-            val serverId = it.arguments!!.getLong("serverId")
-            EmbyEditRoute(
+            val providerId = it.arguments!!.getString("providerId")!!
+            val sourceId = it.arguments!!.getLong("sourceId")
+            ServerEditRoute(
+                providerId = providerId,
                 database = app.database,
-                serverId = serverId,
+                sourceId = sourceId,
                 onDone = { nav.popBackStack() },
             )
         }
         composable(
-            Routes.EMBY_LIBRARIES,
-            listOf(navArgument("serverId") { type = NavType.LongType }),
-        ) {
-            val serverId = it.arguments!!.getLong("serverId")
-            EmbyLibrariesRoute(
-                app = app,
-                serverId = serverId,
-                onBack = { nav.popBackStack() },
-                onOpenLibrary = { pid -> nav.navigate(Routes.embyBrowse(serverId, pid)) },
-            )
-        }
-        composable(
-            Routes.EMBY_BROWSE,
+            Routes.BROWSE,
             listOf(
-                navArgument("serverId") { type = NavType.LongType },
-                navArgument("parentId") { type = NavType.StringType },
+                navArgument("provider") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("location") { type = NavType.StringType },
             ),
         ) {
-            val serverId = it.arguments!!.getLong("serverId")
-            val parentId = it.arguments!!.getString("parentId")!!
-            EmbyBrowseRoute(
+            val providerId = it.arguments!!.getString("provider")!!
+            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
+            val sourceId = it.arguments!!.getLong("sourceId")
+            val location = it.arguments!!.getString("location")!!
+            BrowseRoute(
+                nav = nav,
                 app = app,
-                serverId = serverId,
-                parentId = parentId,
-                onBack = { nav.popBackStack() },
-                onOpenFolder = { childId -> nav.navigate(Routes.embyBrowse(serverId, childId)) },
-                onOpenDetail = { itemId -> nav.navigate(Routes.embyDetail(serverId, itemId)) },
+                database = app.database,
+                providerId = providerId,
+                sourceId = sourceId,
+                locationEncoded = location,
             )
         }
         composable(
-            Routes.EMBY_DETAIL,
+            Routes.DETAIL,
             listOf(
-                navArgument("serverId") { type = NavType.LongType },
-                navArgument("itemId") { type = NavType.StringType },
+                navArgument("provider") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("itemRef") { type = NavType.StringType },
             ),
         ) {
-            val serverId = it.arguments!!.getLong("serverId")
-            val itemId = it.arguments!!.getString("itemId")!!
-            EmbyDetailRoute(
+            val providerId = it.arguments!!.getString("provider")!!
+            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
+            val sourceId = it.arguments!!.getLong("sourceId")
+            val itemRef = it.arguments!!.getString("itemRef")!!
+            DetailRoute(
+                nav = nav,
                 app = app,
-                serverId = serverId,
-                itemId = itemId,
-                onBack = { nav.popBackStack() },
-                onPlay = { startMs -> nav.navigate(Routes.embyPlayer(serverId, itemId, startMs)) },
+                database = app.database,
+                providerId = providerId,
+                sourceId = sourceId,
+                itemRefEncoded = itemRef,
             )
         }
         composable(
-            Routes.EMBY_PLAYER,
+            Routes.SEARCH,
             listOf(
-                navArgument("serverId") { type = NavType.LongType },
-                navArgument("itemId") { type = NavType.StringType },
+                navArgument("provider") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("scopeLocation") { type = NavType.StringType },
+            ),
+        ) {
+            val providerId = it.arguments!!.getString("provider")!!
+            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
+            val sourceId = it.arguments!!.getLong("sourceId")
+            val scope = it.arguments!!.getString("scopeLocation")!!
+            SearchRoute(
+                nav = nav,
+                app = app,
+                database = app.database,
+                providerId = providerId,
+                sourceId = sourceId,
+                scopeLocationEncoded = scope,
+            )
+        }
+        composable(
+            Routes.PLAYER,
+            listOf(
+                navArgument("provider") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("itemRef") { type = NavType.StringType },
                 navArgument("startMs") { type = NavType.LongType },
             ),
         ) {
-            val serverId = it.arguments!!.getLong("serverId")
-            val itemId = it.arguments!!.getString("itemId")!!
+            val providerId = it.arguments!!.getString("provider")!!
+            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
+            val sourceId = it.arguments!!.getLong("sourceId")
+            val itemRef = it.arguments!!.getString("itemRef")!!
             val startMs = it.arguments!!.getLong("startMs")
-            EmbyPlayerRoute(
+            val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
+            PlayerRoute(
                 app = app,
-                serverId = serverId,
-                itemId = itemId,
-                startPositionMs = startMs,
-                onExit = { nav.popBackStack() },
-            )
-        }
-        composable(Routes.SMB_ADD) {
-            SmbAddRoute(
                 database = app.database,
-                onDone = { nav.popBackStack() },
-            )
-        }
-        composable(
-            Routes.SMB_EDIT,
-            listOf(navArgument("sourceId") { type = NavType.LongType }),
-        ) {
-            val sourceId = it.arguments!!.getLong("sourceId")
-            SmbEditRoute(
-                database = app.database,
+                providerId = providerId,
                 sourceId = sourceId,
-                onDone = { nav.popBackStack() },
-            )
-        }
-        composable(
-            Routes.SMB_BROWSE,
-            listOf(
-                navArgument("sourceId") { type = NavType.LongType },
-                navArgument("path") { type = NavType.StringType },
-            ),
-        ) {
-            val sourceId = it.arguments!!.getLong("sourceId")
-            val path = it.arguments!!.getString("path")!!
-            SmbBrowseRoute(
-                database = app.database,
-                sourceId = sourceId,
-                initialPath = path,
-                onBack = { nav.popBackStack() },
-                onPlayVideo = { filePath ->
-                    nav.navigate(Routes.smbPlayer(sourceId, filePath))
-                },
-            )
-        }
-        composable(
-            Routes.SMB_PLAYER,
-            listOf(
-                navArgument("sourceId") { type = NavType.LongType },
-                navArgument("path") { type = NavType.StringType },
-            ),
-        ) {
-            val sourceId = it.arguments!!.getLong("sourceId")
-            val path = it.arguments!!.getString("path")!!
-            SmbPlayerRoute(
-                database = app.database,
-                sourceId = sourceId,
-                filePath = path,
+                itemRefDecoded = itemRefDecoded,
+                startMs = startMs,
                 onExit = { nav.popBackStack() },
             )
         }

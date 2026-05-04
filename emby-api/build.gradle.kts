@@ -18,6 +18,7 @@ android {
 }
 
 dependencies {
+    api(project(":provider-api"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.retrofit)

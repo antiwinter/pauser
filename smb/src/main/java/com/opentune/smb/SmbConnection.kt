@@ -71,3 +71,10 @@ data class SmbListEntry(
     val path: String,
     val isDirectory: Boolean,
 )
+
+/** Case-insensitive filter for SMB search (current directory only). */
+fun List<SmbListEntry>.filterByName(query: String): List<SmbListEntry> {
+    val q = query.trim()
+    if (q.isEmpty()) return this
+    return filter { it.name.contains(q, ignoreCase = true) }
+}

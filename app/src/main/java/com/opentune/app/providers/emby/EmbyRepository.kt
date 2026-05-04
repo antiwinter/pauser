@@ -1,4 +1,4 @@
-package com.opentune.app
+package com.opentune.app.providers.emby
 
 import com.opentune.emby.api.EmbyApi
 import com.opentune.emby.api.EmbyClientFactory
@@ -24,6 +24,7 @@ class EmbyRepository(
         parentId: String? = null,
         includeItemTypes: String? = null,
         recursive: Boolean = false,
+        searchTerm: String? = null,
         startIndex: Int? = null,
         limit: Int? = null,
     ): QueryResultBaseItemDto = api.getItems(
@@ -31,6 +32,7 @@ class EmbyRepository(
         parentId = parentId,
         includeItemTypes = includeItemTypes,
         recursive = recursive,
+        searchTerm = searchTerm,
         sortBy = "SortName",
         startIndex = startIndex,
         limit = limit,

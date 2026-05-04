@@ -37,6 +37,7 @@ interface EmbyApi {
         @Query("ParentId") parentId: String? = null,
         @Query("IncludeItemTypes") includeItemTypes: String? = null,
         @Query("Recursive") recursive: Boolean? = null,
+        @Query("SearchTerm") searchTerm: String? = null,
         @Query("SortBy") sortBy: String? = null,
         @Query("StartIndex") startIndex: Int? = null,
         @Query("Limit") limit: Int? = null,

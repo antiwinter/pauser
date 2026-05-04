@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.smb"
+    namespace = "com.opentune.provider"
     compileSdk = 35
 
     defaultConfig {
@@ -17,11 +17,5 @@ android {
 }
 
 dependencies {
-    api(project(":provider-api"))
-    implementation(project(":playback-api"))
     implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.media3.datasource)
-    implementation(libs.media3.exoplayer)
-    api(libs.smbj)
 }

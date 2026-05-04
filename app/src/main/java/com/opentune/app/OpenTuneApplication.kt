@@ -5,6 +5,7 @@ import android.os.Build
 import android.provider.Settings
 import com.opentune.deviceprofile.AndroidDeviceProfileBuilder
 import com.opentune.app.drafts.AddServerDraftStore
+import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.emby.api.EmbyClientIdentification
 import com.opentune.emby.api.EmbyClientIdentificationStore
 import com.opentune.emby.api.dto.DeviceProfile
@@ -17,6 +18,9 @@ class OpenTuneApplication : Application() {
         private set
 
     lateinit var addServerDraftStore: AddServerDraftStore
+        private set
+
+    lateinit var providerRegistry: OpenTuneProviderRegistry
         private set
 
     val deviceProfile: DeviceProfile by lazy { AndroidDeviceProfileBuilder.build() }
@@ -35,5 +39,6 @@ class OpenTuneApplication : Application() {
         )
         database = OpenTuneDatabase.create(this)
         addServerDraftStore = AddServerDraftStore(this)
+        providerRegistry = OpenTuneProviderRegistry.create()
     }
 }

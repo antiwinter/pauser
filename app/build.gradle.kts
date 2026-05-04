@@ -39,6 +39,7 @@ android {
 
 dependencies {
     implementation(project(":playback-api"))
+    implementation(project(":provider-api"))
     implementation(project(":emby-api"))
     implementation(project(":device-profile"))
     implementation(project(":player"))
@@ -67,4 +68,6 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+
+    testImplementation("junit:junit:4.13.2")
 }

@@ -1,6 +1,6 @@
 package com.opentune.app.playback
 
-import com.opentune.app.EmbyRepository
+import com.opentune.app.providers.emby.EmbyRepository
 import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.emby.api.dto.PlaybackProgressInfo
 import com.opentune.emby.api.dto.PlaybackStartInfo

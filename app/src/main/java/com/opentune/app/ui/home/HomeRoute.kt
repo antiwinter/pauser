@@ -8,26 +8,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.app.R
+import com.opentune.app.providers.OpenTuneProviderIds
+import com.opentune.app.ui.catalog.CatalogNav
 import com.opentune.storage.OpenTuneDatabase
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeRoute(
     database: OpenTuneDatabase,
-    onAddEmby: () -> Unit,
-    onOpenServer: (Long) -> Unit,
-    onEditEmby: (Long) -> Unit,
-    onAddSmb: () -> Unit,
-    onOpenSmb: (Long, String) -> Unit,
-    onEditSmb: (Long) -> Unit,
+    onAddProvider: (String) -> Unit,
+    onOpenBrowse: (String, Long, String) -> Unit,
+    onEditProvider: (String, Long) -> Unit,
 ) {
     val servers by database.embyServerDao().observeAll()
         .collectAsState(initial = emptyList())
-    val smb by database.smbSourceDao().observeAll()
+    val fileShares by database.smbSourceDao().observeAll()
         .collectAsState(initial = emptyList())
 
     Column(
@@ -36,23 +37,29 @@ fun HomeRoute(
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = "OpenTune")
-        Button(onClick = onAddEmby) { Text("Add Emby server") }
-        Button(onClick = onAddSmb) { Text("Add SMB share") }
-        Text(text = "Emby servers (focus a server, then press Menu on the remote to edit)")
+        Text(text = stringResource(R.string.home_title))
+        Button(onClick = { onAddProvider(OpenTuneProviderIds.HTTP_LIBRARY) }) {
+            Text(stringResource(R.string.home_add_http))
+        }
+        Button(onClick = { onAddProvider(OpenTuneProviderIds.FILE_SHARE) }) {
+            Text(stringResource(R.string.home_add_file_share))
+        }
+        Text(text = stringResource(R.string.home_section_http_sources))
         servers.forEach { s ->
             Button(
-                onClick = { onOpenServer(s.id) },
-                modifier = Modifier.onTvMenuKeyDown { onEditEmby(s.id) },
+                onClick = {
+                    onOpenBrowse(OpenTuneProviderIds.HTTP_LIBRARY, s.id, CatalogNav.LIBRARIES_ROOT_SEGMENT)
+                },
+                modifier = Modifier.onTvMenuKeyDown { onEditProvider(OpenTuneProviderIds.HTTP_LIBRARY, s.id) },
             ) {
                 Text(s.displayName)
             }
         }
-        Text(text = "SMB sources (Menu on the remote to edit)")
-        smb.forEach { s ->
+        Text(text = stringResource(R.string.home_section_file_sources))
+        fileShares.forEach { s ->
             Button(
-                onClick = { onOpenSmb(s.id, "") },
-                modifier = Modifier.onTvMenuKeyDown { onEditSmb(s.id) },
+                onClick = { onOpenBrowse(OpenTuneProviderIds.FILE_SHARE, s.id, "") },
+                modifier = Modifier.onTvMenuKeyDown { onEditProvider(OpenTuneProviderIds.FILE_SHARE, s.id) },
             ) {
                 Text(s.displayName)
             }

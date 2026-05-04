@@ -2,4 +2,28 @@
 <resources>
     <string name="app_name">OpenTune</string>
     <string name="smb_audio_unsupported_banner">Audio format is not supported. Playing video only.</string>
+
+    <string name="fld_http_library_url">Server URL (e.g. http://192.168.1.10:8096)</string>
+    <string name="ph_http_library_url">http://host:8096</string>
+    <string name="fld_account_username">Username</string>
+    <string name="fld_account_password">Password</string>
+    <string name="fld_display_name">Display name</string>
+    <string name="fld_network_host">Host / IP</string>
+    <string name="fld_share_name">Share name</string>
+    <string name="fld_domain_optional">Domain (optional)</string>
+
+    <string name="server_add_title">Add source</string>
+    <string name="server_add_hint_autosave">Fields are saved automatically if you leave before finishing.</string>
+    <string name="server_add_primary_http">Save and connect</string>
+    <string name="server_add_primary_file_share">Save share</string>
+    <string name="server_edit_title">Edit source</string>
+    <string name="server_edit_hint_http">Re-enter username and password to refresh the session, then save.</string>
+    <string name="server_edit_hint_file_share">Save changes and Cancel are fixed below the form.</string>
+    <string name="server_edit_primary">Save changes</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="home_title">OpenTune</string>
+    <string name="home_section_http_sources">Library servers (Menu on the remote to edit)</string>
+    <string name="home_section_file_sources">File shares (Menu on the remote to edit)</string>
+    <string name="home_add_http">Add library server</string>
+    <string name="home_add_file_share">Add file share</string>
 </resources>
