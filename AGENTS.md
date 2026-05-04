@@ -30,7 +30,7 @@ Keep **parallel** roles per provider in **`:providers:emby`** vs **`:providers:s
 
 ## Navigation route strings
 
-**Unified catalog flows** (`provider` segment = registry id, e.g. values in [`OpenTuneProviderIds`](provider-api/src/main/java/com/opentune/provider/OpenTuneProviderIds.kt)):
+**Unified catalog flows** (`provider` segment = registry id, e.g. values in [`OpenTuneProviderIds`](provider-api/src/main/java/com/opentune/provider/ConfigContracts.kt)):
 
 - `browse/{provider}/{sourceId}/{location}` — URL-encoded `location` (opaque to Nav; decode in `CatalogNav` / binding plugins).
 - `detail/{provider}/{sourceId}/{itemRef}` — encoded item key.
@@ -42,7 +42,7 @@ Keep **parallel** roles per provider in **`:providers:emby`** vs **`:providers:s
 - `provider_add/{providerId}` — [`Routes.providerAdd`](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt)
 - `provider_edit/{providerId}/{sourceId}` — [`Routes.providerEdit`](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt)
 
-Encode/decode route segments in **`Routes`** and/or **`CatalogNav`** — avoid scattering magic location strings. Libraries root token: **`CatalogNav.LIBRARIES_ROOT_SEGMENT`** (same value as [`CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT`](provider-api/src/main/java/com/opentune/provider/CatalogRouteTokens.kt)).
+Encode/decode route segments in **`Routes`** and/or **`CatalogNav`** — avoid scattering magic location strings. Libraries root token: **`CatalogNav.LIBRARIES_ROOT_SEGMENT`** (same value as [`CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT`](provider-api/src/main/java/com/opentune/provider/CatalogContracts.kt)).
 
 ## Composables and files
 
