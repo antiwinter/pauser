@@ -17,16 +17,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.util.Log
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.emby.api.EmbyApi
 import com.opentune.emby.api.EmbyClientFactory
+import com.opentune.emby.api.formatHttpExceptionForDisplay
+import com.opentune.emby.api.runEmbyHttpPhase
 import com.opentune.emby.api.dto.AuthenticateByNameRequest
 import com.opentune.storage.OpenTuneDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import retrofit2.HttpException
+
+private const val EMBY_EDIT_TAG = "OpenTuneEmby"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -114,7 +121,15 @@ fun EditEmbyRoute(
                             )
                         }
                         onDone()
+                    } catch (e: HttpException) {
+                        val msg = formatHttpExceptionForDisplay(e)
+                        Log.e(EMBY_EDIT_TAG, "updateEmbyServer failed: $msg", e)
+                        error = msg
+                    } catch (e: SerializationException) {
+                        Log.e(EMBY_EDIT_TAG, "updateEmbyServer JSON error: ${e.message}", e)
+                        error = e.message ?: e::class.java.simpleName
                     } catch (e: Exception) {
+                        Log.e(EMBY_EDIT_TAG, "updateEmbyServer failed: ${e::class.java.simpleName} ${e.message}", e)
                         error = e.message ?: e::class.java.simpleName
                     }
                 }
@@ -137,12 +152,18 @@ private suspend fun updateEmbyServer(
 ) {
     val existing = database.embyServerDao().getById(serverId) ?: error("Server not found")
     val normalized = EmbyClientFactory.normalizeBaseUrl(baseUrlInput)
+    Log.e(
+        EMBY_EDIT_TAG,
+        "updateEmbyServer start serverId=$serverId normalizedUrl=$normalized usernameLen=${username.length} passwordEmpty=${password.isEmpty()}",
+    )
     val unauth: EmbyApi = EmbyClientFactory.create(normalized, accessToken = null)
-    val auth = unauth.authenticateByName(AuthenticateByNameRequest(username, password))
+    val auth = runEmbyHttpPhase("authenticateByName") {
+        unauth.authenticateByName(AuthenticateByNameRequest(username, password))
+    }
     val token = auth.accessToken ?: error("No access token from Emby")
     val userId = auth.user?.id ?: error("No user id from Emby")
     val api = EmbyClientFactory.create(normalized, token)
-    val info = api.getSystemInfo()
+    val info = runEmbyHttpPhase("getSystemInfo") { api.getSystemInfo() }
     val display = displayNameInput.ifBlank { info.serverName ?: normalized }
     val entity = existing.copy(
         displayName = display,
@@ -152,4 +173,5 @@ private suspend fun updateEmbyServer(
         serverId = info.id,
     )
     database.embyServerDao().update(entity)
+    Log.w(EMBY_EDIT_TAG, "updateEmbyServer success serverId=$serverId displayName=$display")
 }

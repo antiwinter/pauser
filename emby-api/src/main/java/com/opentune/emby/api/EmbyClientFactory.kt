@@ -27,12 +27,36 @@ object EmbyClientFactory {
             .readTimeout(readTimeoutSec, TimeUnit.SECONDS)
             .writeTimeout(readTimeoutSec, TimeUnit.SECONDS)
             .addInterceptor { chain ->
+                val ident = EmbyClientIdentificationStore.current()
+                val mediaBrowser = ident.mediaBrowserAuthorizationHeader()
                 val req = chain.request().newBuilder()
                 req.header("Accept", "application/json")
+                // Jellyfin accepts either header; some reverse proxies strip `Authorization` but keep X-Emby-*.
+                req.header("Authorization", mediaBrowser)
+                req.header("X-Emby-Authorization", mediaBrowser)
                 if (!accessToken.isNullOrBlank()) {
                     req.header("X-Emby-Token", accessToken)
                 }
                 chain.proceed(req.build())
+            }
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val response = chain.proceed(request)
+                if (!response.isSuccessful) {
+                    val snippet = try {
+                        response.peekBody(8192).string()
+                    } catch (e: Exception) {
+                        "(peekBody failed: ${e.message})"
+                    }
+                    logUnsuccessfulEmbyResponse(
+                        request.method,
+                        request.url,
+                        response.code,
+                        response.message,
+                        snippet,
+                    )
+                }
+                response
             }
             .apply {
                 if (enableLogging) {
@@ -59,6 +83,8 @@ object EmbyClientFactory {
         }
         val url = withScheme.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Invalid base URL: $input")
-        return url.newBuilder().build().toString()
+        val base = url.newBuilder().build().toString()
+        // Retrofit requires baseUrl to end with `/` so @POST("Users/...") resolves under the host path.
+        return if (base.endsWith('/')) base else "$base/"
     }
 }

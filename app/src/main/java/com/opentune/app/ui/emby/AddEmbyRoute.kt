@@ -19,10 +19,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.util.Log
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.emby.api.EmbyClientFactory
+import com.opentune.emby.api.formatHttpExceptionForDisplay
+import com.opentune.emby.api.runEmbyHttpPhase
 import com.opentune.emby.api.dto.AuthenticateByNameRequest
 import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.emby.api.EmbyApi
@@ -36,6 +39,10 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import retrofit2.HttpException
+
+private const val EMBY_ADD_TAG = "OpenTuneEmby"
 
 @OptIn(ExperimentalTvMaterial3Api::class, FlowPreview::class)
 @Composable
@@ -116,7 +123,15 @@ fun AddEmbyRoute(
                             drafts.clearEmby()
                         }
                         onDone()
+                    } catch (e: HttpException) {
+                        val msg = formatHttpExceptionForDisplay(e)
+                        Log.e(EMBY_ADD_TAG, "addEmbyServer failed: $msg", e)
+                        error = msg
+                    } catch (e: SerializationException) {
+                        Log.e(EMBY_ADD_TAG, "addEmbyServer JSON error: ${e.message}", e)
+                        error = e.message ?: e::class.java.simpleName
                     } catch (e: Exception) {
+                        Log.e(EMBY_ADD_TAG, "addEmbyServer failed: ${e::class.java.simpleName} ${e.message}", e)
                         error = e.message ?: e::class.java.simpleName
                     }
                 }
@@ -136,12 +151,18 @@ private suspend fun addEmbyServer(
     password: String,
 ) {
     val normalized = EmbyClientFactory.normalizeBaseUrl(baseUrl)
+    Log.e(
+        EMBY_ADD_TAG,
+        "addEmbyServer start normalizedUrl=$normalized usernameLen=${username.length} passwordEmpty=${password.isEmpty()}",
+    )
     val unauth: EmbyApi = EmbyClientFactory.create(normalized, accessToken = null)
-    val auth = unauth.authenticateByName(AuthenticateByNameRequest(username, password))
+    val auth = runEmbyHttpPhase("authenticateByName") {
+        unauth.authenticateByName(AuthenticateByNameRequest(username, password))
+    }
     val token = auth.accessToken ?: error("No access token from Emby")
     val userId = auth.user?.id ?: error("No user id from Emby")
     val api = EmbyClientFactory.create(normalized, token)
-    val info = api.getSystemInfo()
+    val info = runEmbyHttpPhase("getSystemInfo") { api.getSystemInfo() }
     val display = info.serverName ?: normalized
     val entity = EmbyServerEntity(
         displayName = display,
@@ -151,4 +172,5 @@ private suspend fun addEmbyServer(
         serverId = info.id,
     )
     database.embyServerDao().insert(entity)
+    Log.w(EMBY_ADD_TAG, "addEmbyServer success displayName=$display serverId=${info.id}")
 }
