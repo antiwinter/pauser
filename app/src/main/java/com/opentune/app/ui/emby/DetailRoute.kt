@@ -2,9 +2,13 @@ package com.opentune.app.ui.emby
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +43,7 @@ fun DetailRoute(
     onPlay: (startMs: Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val scroll = rememberScrollState()
     var item by remember { mutableStateOf<BaseItemDto?>(null) }
     var server by remember { mutableStateOf<EmbyServerEntity?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -71,6 +76,7 @@ fun DetailRoute(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scroll)
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -79,27 +85,17 @@ fun DetailRoute(
         val i = item
         val s = server
         if (i != null && s != null) {
-            val poster = EmbyImageUrls.primaryPoster(
-                baseUrl = s.baseUrl,
-                item = i,
-                accessToken = s.accessToken,
-            )
-            if (poster != null) {
-                AsyncImage(
-                    model = poster,
-                    contentDescription = i.name,
-                    modifier = Modifier
-                        .height(280.dp)
-                        .padding(bottom = 8.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            }
             Text(i.name ?: itemId)
-            i.overview?.let { Text(it) }
-            Button(onClick = { onPlay(resumeMs) }) {
-                Text(if (resumeMs > 0) "Resume" else "Play")
+            // Primary actions before poster/synopsis so TV focus and first paint show Play immediately.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(onClick = { onPlay(resumeMs) }) {
+                    Text(if (resumeMs > 0) "Resume" else "Play")
+                }
+                Button(onClick = { onPlay(0L) }) { Text("From start") }
             }
-            Button(onClick = { onPlay(0L) }) { Text("Play from start") }
             Button(
                 onClick = {
                     scope.launch {
@@ -123,6 +119,27 @@ fun DetailRoute(
                 },
             ) {
                 Text(if (isFavorite) "Remove favorite" else "Add favorite")
+            }
+            val poster = EmbyImageUrls.primaryPoster(
+                baseUrl = s.baseUrl,
+                item = i,
+                accessToken = s.accessToken,
+            )
+            if (poster != null) {
+                AsyncImage(
+                    model = poster,
+                    contentDescription = i.name,
+                    modifier = Modifier
+                        .height(280.dp)
+                        .padding(bottom = 8.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+            i.overview?.let { synopsis ->
+                Text(
+                    synopsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
         }
     }
