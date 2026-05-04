@@ -2,32 +2,26 @@ package com.opentune.player
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.tv.material3.Button
+import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
 import com.opentune.playback.api.OpenTunePlaybackHooks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -56,14 +50,16 @@ fun OpenTunePlayerScreen(
     hooks: OpenTunePlaybackHooks,
     startPositionMs: Long,
     onExit: () -> Unit,
+    /** When non-null, current playback position is mirrored locally for resumption. */
+    resumeProgressKey: String? = null,
     topBanner: (@Composable BoxScope.() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var speed by remember { mutableFloatStateOf(1f) }
-    val speedState = rememberUpdatedState(speed)
     val hooksState = rememberUpdatedState(hooks)
     val onExitState = rememberUpdatedState(onExit)
     val released = remember(exoPlayer) { AtomicBoolean(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     suspend fun shutdown(userInitiatedExit: Boolean) {
         Log.d(LOG_TAG, "shutdown userInitiated=$userInitiatedExit alreadyReleased=${released.get()}")
@@ -74,11 +70,31 @@ fun OpenTunePlayerScreen(
             return
         }
         val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
+        val rk = resumeProgressKey
+        if (rk != null) {
+            OpenTunePlaybackResumeStore.writeResumePosition(context.applicationContext, rk, pos)
+        }
         hooksState.value.onStop(pos)
         withContext(Dispatchers.Main) { exoPlayer.release() }
         if (userInitiatedExit) {
             withContext(Dispatchers.Main) { onExitState.value() }
         }
+    }
+
+    fun playbackRate(): Float = exoPlayer.playbackParameters.speed
+
+    DisposableEffect(exoPlayer, context, resumeProgressKey) {
+        val appContext = context.applicationContext
+        val rk = resumeProgressKey
+        val listener = object : Player.Listener {
+            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
+                if (rk != null) {
+                    OpenTunePlaybackResumeStore.writeSpeed(appContext, rk, parameters.speed)
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
     }
 
     LaunchedEffect(exoPlayer, hooks, startPositionMs) {
@@ -133,28 +149,44 @@ fun OpenTunePlayerScreen(
             return@LaunchedEffect
         }
         val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
-        Log.d(LOG_TAG, "onPlaybackReady positionMs=$pos rate=${speedState.value}")
-        hooks.onPlaybackReady(pos, speedState.value)
+        val rate = withContext(Dispatchers.Main) { playbackRate() }
+        Log.d(LOG_TAG, "onPlaybackReady positionMs=$pos rate=$rate")
+        hooks.onPlaybackReady(pos, rate)
     }
 
-    LaunchedEffect(exoPlayer, hooks) {
+    LaunchedEffect(exoPlayer, hooks, resumeProgressKey) {
         val interval = hooks.progressIntervalMs()
-        if (interval <= 0L) return@LaunchedEffect
-        while (isActive) {
-            delay(interval)
-            if (!exoPlayer.isPlaying) continue
-            if (released.get()) break
-            val pos = exoPlayer.currentPosition
-            hooksState.value.onProgressTick(pos, speedState.value)
+        val rk = resumeProgressKey
+        val appCtx = context.applicationContext
+        if (interval > 0L) {
+            while (isActive) {
+                delay(interval)
+                if (!exoPlayer.isPlaying) continue
+                if (released.get()) break
+                val pos = exoPlayer.currentPosition
+                hooksState.value.onProgressTick(pos, playbackRate())
+                if (rk != null) {
+                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, pos)
+                }
+            }
+        } else if (rk != null) {
+            while (isActive) {
+                delay(10_000L)
+                if (released.get()) break
+                if (exoPlayer.isPlaying) {
+                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, exoPlayer.currentPosition)
+                }
+            }
         }
     }
 
-    LaunchedEffect(exoPlayer, speed) {
-        exoPlayer.playbackParameters = PlaybackParameters(speed)
-    }
-
     BackHandler {
-        scope.launch { shutdown(userInitiatedExit = true) }
+        val pv = playerViewRef
+        if (pv != null && pv.isControllerFullyVisible) {
+            pv.hideController()
+        } else {
+            scope.launch { shutdown(userInitiatedExit = true) }
+        }
     }
 
     DisposableEffect(exoPlayer) {
@@ -163,31 +195,12 @@ fun OpenTunePlayerScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxSize(),
-        ) {
-            OpenTunePlayerView(player = exoPlayer, modifier = Modifier.fillMaxSize())
-            topBanner?.invoke(this@Box)
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                listOf(1f, 1.25f, 1.5f, 2f).forEach { s ->
-                    Button(onClick = { speed = s }) {
-                        Text("${s}x")
-                    }
-                }
-                Button(
-                    onClick = { scope.launch { shutdown(userInitiatedExit = true) } },
-                ) {
-                    Text("Exit")
-                }
-            }
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        OpenTunePlayerView(
+            player = exoPlayer,
+            modifier = Modifier.fillMaxSize(),
+            onPlayerViewBound = { playerViewRef = it },
+        )
+        topBanner?.invoke(this@Box)
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
@@ -35,6 +36,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.R
 import com.opentune.player.OpenTuneExoPlayer
+import com.opentune.player.OpenTunePlaybackResumeStore
 import com.opentune.player.OpenTunePlayerScreen
 import com.opentune.smb.SmbCredentials
 import com.opentune.smb.SmbDataSource
@@ -121,6 +123,10 @@ fun SmbPlayerRoute(
         Log.i(SMB_PLAYBACK_LOG, "remember ExoPlayer pathWin=$pathWin (single instance; in-place audio-off on failure)")
         val http = OkHttpClient()
         val exo = OpenTuneExoPlayer.create(context, http)
+        val resumeKey = "smb_${sourceId}_$pathWin"
+        exo.playbackParameters = PlaybackParameters(
+            OpenTunePlaybackResumeStore.readSpeed(context, resumeKey),
+        )
         val audioDecodeRetryTaken = AtomicBoolean(false)
         val factory = DataSource.Factory {
             Log.d(LOG_TAG, "createDataSource for pathWin=$pathWin")
@@ -208,11 +214,18 @@ fun SmbPlayerRoute(
             }
         }
         exoPlayer != null -> {
+            val smbResumeKey = remember(sourceId, pathWin) { "smb_${sourceId}_$pathWin" }
+            val smbResumeStartMs = remember(sourceId, pathWin) {
+                OpenTunePlaybackResumeStore.readResumePosition(context, smbResumeKey).let { p ->
+                    if (p >= 0L) p else 0L
+                }
+            }
             OpenTunePlayerScreen(
                 exoPlayer = exoPlayer,
                 hooks = SmbPlaybackHooks,
-                startPositionMs = 0L,
+                startPositionMs = smbResumeStartMs,
                 onExit = onExit,
+                resumeProgressKey = smbResumeKey,
                 topBanner = if (showAudioUnsupportedBanner) {
                     {
                         M3Text(

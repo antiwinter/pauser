@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.tv.material3.Button
@@ -24,6 +25,7 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.playback.EmbyPlaybackHooks
 import com.opentune.emby.api.EmbyPlaybackUrlResolver
 import com.opentune.player.OpenTuneExoPlayer
+import com.opentune.player.OpenTunePlaybackResumeStore
 import com.opentune.player.OpenTunePlayerScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,6 +76,10 @@ fun EmbyPlayerRoute(
             val liveStreamId = source.liveStreamId
 
             val exo = OpenTuneExoPlayer.create(context, okHttp)
+            val resumeKey = "emby_${serverId}_$itemId"
+            exo.playbackParameters = PlaybackParameters(
+                OpenTunePlaybackResumeStore.readSpeed(context, resumeKey),
+            )
             exo.playWhenReady = true
             exo.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
             exo.prepare()
@@ -112,6 +118,7 @@ fun EmbyPlayerRoute(
                     hooks = ready!!.hooks,
                     startPositionMs = startPositionMs,
                     onExit = onExit,
+                    resumeProgressKey = "emby_${serverId}_$itemId",
                 )
             }
             else -> {
