@@ -14,7 +14,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,8 +44,12 @@ import com.opentune.storage.OpenTuneDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val LOG_TAG = "OpenTuneSmbPlayer"
+
+/** Grep this tag for SMB open → ExoPlayer → datasource lifecycle (path, audio retry). */
+private const val SMB_PLAYBACK_LOG = "OpenTuneSmbPlayback"
 
 private fun PlaybackException.isAudioDecodeFailure(): Boolean {
     val texts = sequence {
@@ -75,10 +78,8 @@ fun SmbPlayerRoute(
 
     var session by remember { mutableStateOf<SmbSession?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var disableAudioTracks by remember { mutableStateOf(false) }
     var showAudioUnsupportedBanner by remember { mutableStateOf(false) }
 
-    val latestSkipAudio = rememberUpdatedState(disableAudioTracks)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     LaunchedEffect(sourceId) {
@@ -109,26 +110,23 @@ fun SmbPlayerRoute(
     }
 
     LaunchedEffect(session?.share, pathWin) {
-        disableAudioTracks = false
         showAudioUnsupportedBanner = false
     }
 
     val share = session?.share
-    val exoPlayer = remember(share, pathWin, disableAudioTracks) {
+    // One ExoPlayer per (share, path): audio-off recovery mutates this instance instead of
+    // remember(disableAudio) rebuild — second prepare never reached READY for some MKVs.
+    val exoPlayer = remember(share, pathWin) {
         val sh = share ?: return@remember null
+        Log.i(SMB_PLAYBACK_LOG, "remember ExoPlayer pathWin=$pathWin (single instance; in-place audio-off on failure)")
         val http = OkHttpClient()
         val exo = OpenTuneExoPlayer.create(context, http)
-        if (disableAudioTracks) {
-            exo.trackSelectionParameters = exo.trackSelectionParameters
-                .buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                .build()
-        }
+        val audioDecodeRetryTaken = AtomicBoolean(false)
         val factory = DataSource.Factory {
             Log.d(LOG_TAG, "createDataSource for pathWin=$pathWin")
             SmbDataSource(sh, pathWin)
         }
-        val source = ProgressiveMediaSource.Factory(factory)
+        val mediaSource = ProgressiveMediaSource.Factory(factory)
             .createMediaSource(MediaItem.fromUri(Uri.parse("https://local.invalid/video")))
         exo.addListener(
             object : Player.Listener {
@@ -155,17 +153,27 @@ fun SmbPlayerRoute(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (!latestSkipAudio.value && error.isAudioDecodeFailure()) {
+                    if (error.isAudioDecodeFailure()) {
+                        if (!audioDecodeRetryTaken.compareAndSet(false, true)) {
+                            Log.w(LOG_TAG, "Audio error after in-place retry; ignoring code=${error.errorCode}")
+                            return
+                        }
                         Log.w(
                             LOG_TAG,
-                            "Audio decode failed; retrying with audio disabled. code=${error.errorCode}",
+                            "Audio decode failed; disabling audio on same ExoPlayer. code=${error.errorCode}",
                             error,
                         )
                         mainHandler.post {
-                            if (!latestSkipAudio.value) {
-                                showAudioUnsupportedBanner = true
-                                disableAudioTracks = true
-                            }
+                            showAudioUnsupportedBanner = true
+                            exo.trackSelectionParameters = exo.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                                .build()
+                            exo.stop()
+                            exo.setMediaSource(mediaSource)
+                            exo.playWhenReady = true
+                            exo.prepare()
+                            Log.d(SMB_PLAYBACK_LOG, "in-place audio-off prepare issued")
                         }
                     } else {
                         Log.e(
@@ -181,8 +189,8 @@ fun SmbPlayerRoute(
                 }
             },
         )
-        Log.d(LOG_TAG, "prepare pathWin=$pathWin audioDisabled=$disableAudioTracks")
-        exo.setMediaSource(source)
+        Log.d(LOG_TAG, "prepare pathWin=$pathWin")
+        exo.setMediaSource(mediaSource)
         exo.playWhenReady = true
         exo.prepare()
         exo

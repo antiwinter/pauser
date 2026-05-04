@@ -1,5 +1,6 @@
 package com.opentune.player
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,17 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
+private const val LOG_TAG = "OpenTunePlayerShell"
+
+/** Emby (session hooks): wait for READY up to this long. */
+private const val MAX_WAIT_READY_MS = 120_000L
+
+/**
+ * SMB / no progress hooks: old SMB player never blocked on READY; strict wait can hang forever
+ * if the pipeline never reaches READY after an audio-off retry. Keep a short soft wait only.
+ */
+private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
+
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun OpenTunePlayerScreen(
@@ -54,6 +66,7 @@ fun OpenTunePlayerScreen(
     val released = remember(exoPlayer) { AtomicBoolean(false) }
 
     suspend fun shutdown(userInitiatedExit: Boolean) {
+        Log.d(LOG_TAG, "shutdown userInitiated=$userInitiatedExit alreadyReleased=${released.get()}")
         if (!released.compareAndSet(false, true)) {
             if (userInitiatedExit) {
                 withContext(Dispatchers.Main) { onExitState.value() }
@@ -69,11 +82,42 @@ fun OpenTunePlayerScreen(
     }
 
     LaunchedEffect(exoPlayer, hooks, startPositionMs) {
-        while (exoPlayer.playbackState != Player.STATE_READY && isActive) {
-            delay(32)
+        Log.d(
+            LOG_TAG,
+            "readyEffect start startPositionMs=$startPositionMs progressIntervalMs=${hooks.progressIntervalMs()}",
+        )
+        val strictReadyWait = hooks.progressIntervalMs() > 0L || startPositionMs > 0L
+        val maxReadyMs = if (strictReadyWait) MAX_WAIT_READY_MS else MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS
+        if (!strictReadyWait) {
+            Log.d(LOG_TAG, "readyEffect soft READY wait (no progress hooks / typical SMB)")
         }
-        if (!isActive) return@LaunchedEffect
+        var waitedReadyMs = 0L
+        while (exoPlayer.playbackState != Player.STATE_READY && isActive) {
+            if (strictReadyWait && waitedReadyMs % 2000L < 32L) {
+                val err = withContext(Dispatchers.Main) { exoPlayer.playerError }
+                Log.i(
+                    LOG_TAG,
+                    "waiting STATE_READY waitedMs=$waitedReadyMs playbackState=${exoPlayer.playbackState} " +
+                        "isLoading=${exoPlayer.isLoading} playWhenReady=${exoPlayer.playWhenReady} err=${err?.message}",
+                )
+            }
+            delay(32)
+            waitedReadyMs += 32
+            if (waitedReadyMs >= maxReadyMs) {
+                Log.w(
+                    LOG_TAG,
+                    "timeout waiting STATE_READY after ${waitedReadyMs}ms (strict=$strictReadyWait) " +
+                        "state=${exoPlayer.playbackState} err=${exoPlayer.playerError?.message}",
+                )
+                break
+            }
+        }
+        if (!isActive) {
+            Log.d(LOG_TAG, "readyEffect cancelled before seek")
+            return@LaunchedEffect
+        }
         if (startPositionMs > 0) {
+            Log.d(LOG_TAG, "seekTo startPositionMs=$startPositionMs")
             withContext(Dispatchers.Main) { exoPlayer.seekTo(startPositionMs) }
             var n = 0
             while (isActive && n++ < 200) {
@@ -81,10 +125,15 @@ fun OpenTunePlayerScreen(
                 if (abs(cur - startPositionMs) < 1500) break
                 delay(32)
             }
+            Log.d(LOG_TAG, "after seek loop iterations=$n position=${exoPlayer.currentPosition}")
         }
         if (!isActive) return@LaunchedEffect
-        if (released.get()) return@LaunchedEffect
+        if (released.get()) {
+            Log.d(LOG_TAG, "readyEffect skip onPlaybackReady: already released")
+            return@LaunchedEffect
+        }
         val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
+        Log.d(LOG_TAG, "onPlaybackReady positionMs=$pos rate=${speedState.value}")
         hooks.onPlaybackReady(pos, speedState.value)
     }
 
