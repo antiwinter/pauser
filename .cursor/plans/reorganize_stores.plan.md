@@ -1,67 +1,50 @@
 # Unified Config + Media State Persistence
 
-## Agreed Decisions
+## Decisions
 
 | Topic | Decision |
 |---|---|
-| `StoreContracts.kt` | Deleted entirely, no replacement ports |
-| `ProviderConfigBackend` | Deleted; absorbed into `OpenTuneProvider` factory |
-| Provider API shape | `getFieldsSpec()` + `validateFields(values): ValidationResult` + `createInstance(values: Map<String,String>): OpenTuneProviderInstance` |
-| `addFields()`/`editFields()` | Replaced by single `getFieldsSpec()` |
-| `validateAdd`/`validateEdit` | Replaced by single `validateFields(values)` |
-| `display_name` | App-only (`ServerEntity` column); NOT in `fieldsJson`; NOT returned by provider |
-| `ValidationResult` | `data class ValidationResult(val hash: String, val displayName: String)` |
-| `sourceId` PK | `String` = `"${providerId}_${hash}"`, computed by app from `ValidationResult.hash` |
-| `ServerEntity` PK | `@PrimaryKey val sourceId: String` (replaces autoGenerate Long) |
-| Serdes | App does all `Map<String,String>` <-> JSON; provider never touches JSON |
-| Server clash | `OnConflict.ABORT` -> surface "server already exists" to UI |
-| Edit -> hash unchanged | Update `displayName` in place; keep `media_state` rows |
-| Edit -> hash changed | Delete old `ServerEntity` + cascade-delete `media_state WHERE sourceId = old`; insert new; evict + recreate instance |
-| Server removal | Delete `ServerEntity` + cascade-delete all `media_state` for that `sourceId` |
-| `CatalogBindingDeps`/`PlaybackResolveDeps` | Both deleted |
-| Instance lifecycle | Created at home screen, held in app-level registry keyed by `sourceId: String`; evicted on server edit/remove |
-| `UserMediaStateStore` | Lives in `:storage`, NOT in `:provider-api` |
-| `:player` dependency | `:player` depends on `:storage` for `UserMediaStateStore` |
-| `OpenTunePlayerScreen` signature | `(spec: PlaybackSpec, mediaState: UserMediaStateStore, mediaStateKey: MediaStateKey, onExit: () -> Unit)` — store/key are direct params, NOT in `PlaybackSpec` |
-| `PlaybackSpec` | No persistence fields; pure playback contract |
-| `MediaDetailModel` | Keeps remote `isFavorite`/`resumePositionMs`; app merges with local `media_state` in `DetailRoute` |
-| `media_state` composite PK | `(providerId: String, sourceId: String, itemId: String)` |
+| `StoreContracts.kt` | Deleted entirely, no replacement |
+| `ConfigContracts.kt` | Deleted; `ProviderConfigBackend` replaced by new `OpenTuneProvider` shape |
+| Provider field spec | `getFieldsSpec(): List<ServerFieldSpec>` — single method, same fields for add and edit; `display_name` absent |
+| Validation | `validateFields(values): ValidationResult(hash: String, displayName: String)` — provider connects, authenticates, derives stable hash and display name; no store access |
+| `display_name` | Returned by `validateFields`, stored in `ServerEntity.displayName` (app-only label); NOT in `fieldsJson`, NOT in `getFieldsSpec()` |
+| Serdes | App owns JSON ↔ `Map<String,String>` round-trip; key set = `getFieldsSpec()` field IDs, preserved verbatim |
+| `sourceId` | `"${providerId}_${hash}"` String, computed by app; PK of `ServerEntity`; used in routes and `media_state` |
+| `ServerEntity` PK | `sourceId: String` (no autoGenerate Long); `OnConflict.ABORT` on insert → "server already exists" |
+| `createInstance` | `createInstance(values: Map<String, String>): OpenTuneProviderInstance` — no sourceId param; instance is identity-free |
+| `OpenTuneProviderInstance.sourceId` | Removed — instance has no identity fields; app registry maps `sourceId → instance` externally |
+| Instance registry | Owned by `OpenTuneApplication`; `getOrCreate(sourceId)` with `Mutex`; lazy DB lookup on first route resolve; home populates eagerly |
+| Edit → hash change | App: validate → compute newSourceId → if changed: insert new `ServerEntity`, delete old `ServerEntity` + cascade-delete `media_state` WHERE `sourceId = old`, swap registry — insert before delete to avoid brief gap |
+| Edit → hash same | App: update `fieldsJson` + `displayName` in existing row, update registry instance |
+| Server removal | App deletes `ServerEntity`, deletes `media_state` WHERE `sourceId = sourceId`, removes from registry |
+| `CatalogBindingDeps` / `PlaybackResolveDeps` | Deleted |
+| `CatalogBindingPlugin` / `MediaCatalogSource` | Deleted; replaced by `OpenTuneProviderInstance` methods |
+| `:player` persistence | `OpenTunePlayerScreen` takes `UserMediaStateStore` + `MediaStateKey` as direct params; NOT via `PlaybackSpec` |
+| `PlaybackSpec` | No persistence fields; pure playback contract from `:provider-api` |
+| `:player` module dep | `:player` depends on `:storage` for `UserMediaStateStore`; `:storage` does NOT depend on `:player` |
+| `UserMediaStateStore` | Interface in `:storage`; `RoomMediaStateStore` implements it |
+| `MediaDetailModel` | Keeps remote `isFavorite` / `resumePositionMs`; app merges with local state in `DetailRoute` |
+| `media_state` PK | `(providerId, sourceId: String, itemId)` |
 | `OpenTunePlaybackResumeStore` | Deleted |
-| `AddServerDraftStore` | Deleted -> DataStore in `:storage` |
+| `AddServerDraftStore` | Deleted; draft storage replaced by DataStore in `:storage` |
+| Favorites nav | `observeAllFavorites()` snapshots carry `providerId + sourceId + itemId`; routes constructed as `browse/{providerId}/{sourceId}/{itemId}` |
 
 ---
 
 ## Plan
 
-Collapse three persistence mechanisms (SharedPreferences resume store, Room favorites + progress tables, JSON draft file) into two clean surfaces — a single `media_state` Room table and a DataStore-backed draft store — all owned by `:app`/`:storage`. Providers become zero-persistence factories: they receive a `Map<String,String>` at construction (deserialized by app from `fieldsJson`) and return protocol results only. `:player` is the sole local writer for playback state and receives the store + key as direct composable parameters.
+Collapse three persistence mechanisms (SharedPreferences resume store, Room favorites + progress tables, JSON draft file) into two clean surfaces — a single `media_state` Room table and a DataStore-backed draft store — all owned by `:app`/`:storage`. Providers become zero-persistence factories: they receive a `Map<String,String>` at construction and return protocol results only. `:player` is the sole local writer for playback state via `UserMediaStateStore` passed as a direct composable parameter.
 
 ---
 
 ### Phase 1 — Storage layer: replace entities and DAOs
 
 1. In `storage/src/main/java/com/opentune/storage/ServerEntities.kt`:
-   - Replace autoGenerate Long PK with content-addressed String PK:
-     ```kotlin
-     @Entity(tableName = "servers")
-     data class ServerEntity(
-         @PrimaryKey val sourceId: String,   // "${providerId}_${hash}"
-         val providerId: String,
-         val displayName: String,            // app-only, not in fieldsJson
-         val fieldsJson: String,             // opaque JSON blob, deserialized by app
-     )
-     ```
+   - Change `ServerEntity` PK from autoGenerate `Long id` to `@PrimaryKey val sourceId: String`; keep `providerId`, `displayName`, `fieldsJson`, `createdAtEpochMs`, `updatedAtEpochMs`
    - Add `MediaStateEntity`:
      ```kotlin
-     @Entity(
-         tableName = "media_state",
-         primaryKeys = ["providerId", "sourceId", "itemId"],
-         foreignKeys = [ForeignKey(
-             entity = ServerEntity::class,
-             parentColumns = ["sourceId"],
-             childColumns = ["sourceId"],
-             onDelete = ForeignKey.CASCADE,
-         )],
-     )
+     @Entity(tableName = "media_state", primaryKeys = ["providerId", "sourceId", "itemId"])
      data class MediaStateEntity(
          val providerId: String,
          val sourceId: String,
@@ -75,234 +58,225 @@ Collapse three persistence mechanisms (SharedPreferences resume store, Room favo
          val updatedAtEpochMs: Long,
      )
      ```
-   - Remove `FavoriteEntity` and `PlaybackProgressEntity`.
+   - Remove `FavoriteEntity` and `PlaybackProgressEntity`
 
-2. In `storage/src/main/java/com/opentune/storage/Daos.kt`, add `MediaStateDao`:
-   - Partial `@Query UPDATE` methods: `upsertPosition`, `upsertSpeed`, `upsertFavorite`, `upsertCoverThumb`
-   - Full `@Insert(onConflict = REPLACE) fun upsert(entity: MediaStateEntity)`
-   - `suspend fun get(providerId, sourceId, itemId): MediaStateEntity?`
-   - `fun observeForSource(providerId, sourceId): Flow<List<MediaStateEntity>>`
-   - `fun observeAllFavorites(): Flow<List<MediaStateEntity>>` — WHERE `isFavorite = 1`
-   - `suspend fun deleteForSource(sourceId: String)` — used on server removal / edit hash change
-   - `suspend fun delete(providerId, sourceId, itemId)`
+2. In `storage/src/main/java/com/opentune/storage/Daos.kt`:
+   - Update `ServerDao`: change all queries referencing `Long id` to `String sourceId`; add `deleteBySourceId(sourceId: String)`
+   - Add `MediaStateDao`:
+     - Partial `@Query UPDATE`: `upsertPosition`, `upsertSpeed`, `upsertFavorite`, `upsertCoverThumb`
+     - `@Insert(onConflict = REPLACE) fun upsert(entity: MediaStateEntity)`
+     - `suspend fun get(providerId, sourceId, itemId): MediaStateEntity?`
+     - `fun observeForSource(providerId, sourceId): Flow<List<MediaStateEntity>>`
+     - `fun observeAllFavorites(): Flow<List<MediaStateEntity>>` — WHERE `isFavorite = 1`
+     - `suspend fun deleteBySource(sourceId: String)` — for server removal cascade
+     - `suspend fun delete(providerId, sourceId, itemId)`
+   - Remove `FavoriteDao` and `PlaybackProgressDao`
 
-   Remove `FavoriteDao` and `PlaybackProgressDao`.
-
-3. In `storage/src/main/java/com/opentune/storage/OpenTuneDatabase.kt`:
-   - Bump version to **3**
-   - Replace `FavoriteEntity`/`PlaybackProgressEntity` with `MediaStateEntity` and updated `ServerEntity` in entities list
-   - Expose `mediaStateDao()`, remove `favoriteDao()` and `playbackProgressDao()`
-   - Keep `fallbackToDestructiveMigration()`
+3. In `storage/src/main/java/com/opentune/storage/OpenTuneDatabase.kt`: bump version to **3**, replace `FavoriteEntity`/`PlaybackProgressEntity` with `MediaStateEntity`, remove obsolete DAO accessors, keep `fallbackToDestructiveMigration()`
 
 ---
 
 ### Phase 2 — Rework `:provider-api` contracts
 
-4. Delete `provider-api/src/main/java/com/opentune/provider/StoreContracts.kt` entirely. No replacement.
+4. Delete `provider-api/.../provider/StoreContracts.kt` entirely.
 
-5. In `provider-api/src/main/java/com/opentune/provider/ConfigContracts.kt`:
-   - Delete `ProviderConfigBackend` interface and `SubmitResult` sealed class
-   - Retain `ServerFieldSpec`, `ServerFieldKind`, `OpenTuneProviderIds` (these stay in this file)
+5. Delete `provider-api/.../provider/ConfigContracts.kt` (`ProviderConfigBackend`). `ServerFieldSpec`, `ServerFieldKind`, `OpenTuneProviderIds`, `SubmitResult` move to or stay in `ProviderContracts.kt` / a new `FieldContracts.kt`.
 
-6. In `provider-api/src/main/java/com/opentune/provider/ProviderContracts.kt`, reshape `OpenTuneProvider` into a **factory**:
+6. In `provider-api/.../provider/ProviderContracts.kt`, reshape `OpenTuneProvider`:
    ```kotlin
-   data class ValidationResult(val hash: String, val displayName: String)
-
    interface OpenTuneProvider {
-       val providerId: String                    // matches OpenTuneProviderIds constant
-       fun getFieldsSpec(): List<ServerFieldSpec>
-       // Network auth only; no store. Returns ValidationResult on success or throws/returns error.
+       val providerId: String                          // matches OpenTuneProviderIds constant
+       fun getFieldsSpec(): List<ServerFieldSpec>      // single spec for add and edit; no display_name field
        suspend fun validateFields(values: Map<String, String>): ValidationResult
-       // values is already-validated Map (not JSON); provider parses its own fields.
        fun createInstance(values: Map<String, String>): OpenTuneProviderInstance
+   }
+
+   sealed class ValidationResult {
+       data class Success(val hash: String, val displayName: String) : ValidationResult()
+       data class Error(val message: String) : ValidationResult()
    }
    ```
 
-7. Add `OpenTuneProviderInstance` to `:provider-api`:
+7. Add `OpenTuneProviderInstance` (same file or `InstanceContracts.kt`):
    ```kotlin
    interface OpenTuneProviderInstance {
-       val sourceId: String
        suspend fun loadBrowsePage(location: String, page: Int): BrowsePageResult
        suspend fun searchItems(scopeLocation: String, query: String, page: Int): BrowsePageResult
        suspend fun loadDetail(itemRef: String): MediaDetailModel
        suspend fun resolvePlayback(itemRef: String, startMs: Long, context: Context): PlaybackSpec
    }
    ```
-   No store/state parameters anywhere.
+   No identity fields, no store parameters.
 
-8. In `provider-api/src/main/java/com/opentune/provider/CatalogContracts.kt`:
+8. In `provider-api/.../provider/CatalogContracts.kt`:
    - Add `MediaCover.LocalFile(absolutePath: String)` variant
-   - Keep `isFavorite` and `resumePositionMs` on `MediaDetailModel` (remote/provider values; app merges with local state)
-   - Delete `CatalogBindingDeps`, `CatalogBindingPlugin`, `MediaCatalogSource` (replaced by `OpenTuneProviderInstance`)
+   - Keep `isFavorite`, `resumePositionMs` on `MediaDetailModel` as remote-sourced values
+   - Delete `CatalogBindingDeps`, `CatalogBindingPlugin`, `MediaCatalogSource`
 
-9. In `provider-api/src/main/java/com/opentune/provider/PlaybackContracts.kt`:
-   - Delete `PlaybackResolveDeps`, `PlaybackResumeAccessor`
-   - Delete `progressPersistenceKey` function
-   - `PlaybackSpec` has **no** persistence fields — pure playback contract
-
----
-
-### Phase 3 — `UserMediaStateStore` and `MediaStateKey` in `:storage`
-
-10. Add to `storage/src/main/java/com/opentune/storage/`:
-    ```kotlin
-    data class MediaStateKey(val providerId: String, val sourceId: String, val itemId: String)
-
-    data class MediaStateSnapshot(
-        val itemId: String,
-        val positionMs: Long,
-        val playbackSpeed: Float,
-        val isFavorite: Boolean,
-        val title: String?,
-        val type: String?,
-        val coverThumbPath: String?,
-    )
-
-    interface UserMediaStateStore {
-        suspend fun get(key: MediaStateKey): MediaStateSnapshot?
-        suspend fun upsertPosition(key: MediaStateKey, positionMs: Long)
-        suspend fun upsertSpeed(key: MediaStateKey, speed: Float)
-        suspend fun upsertFavorite(key: MediaStateKey, isFavorite: Boolean, title: String?, type: String?)
-        suspend fun upsertCoverThumb(key: MediaStateKey, path: String?)
-        fun observeForSource(providerId: String, sourceId: String): Flow<List<MediaStateSnapshot>>
-        fun observeAllFavorites(): Flow<List<MediaStateSnapshot>>
-    }
-    ```
+9. In `provider-api/.../provider/PlaybackContracts.kt`:
+   - Delete `PlaybackResolveDeps`, `PlaybackResumeAccessor`, `progressPersistenceKey`
+   - `PlaybackSpec` stays as-is (pure playback contract); no persistence fields added
 
 ---
 
-### Phase 4 — `:storage` wiring
+### Phase 3 — `:storage` wiring
 
-11. In `storage/src/main/java/com/opentune/storage/StorageBindings.kt`, replace `OpenTuneStorageBindings(serverStore, favoritesStore, progressStore)` with `OpenTuneStorageBindings(serverDao, mediaStateStore, appConfigStore)`:
-    - `RoomServerDao`: insert/update/delete/observe — app-only, not exposed via any `:provider-api` interface
-    - `RoomMediaStateStore : UserMediaStateStore` backed by `MediaStateDao`
-    - `DataStoreAppConfigStore`: DataStore-backed draft storage (see Phase 5)
+10. In `storage/.../StorageBindings.kt`, replace `OpenTuneStorageBindings(serverStore, favoritesStore, progressStore)` with `OpenTuneStorageBindings(serverDao, mediaStateStore, appConfigStore)`:
+    - `serverDao`: updated `RoomServerDao` (app-only access)
+    - `mediaStateStore`: `RoomMediaStateStore` implementing `UserMediaStateStore` (see below)
+    - `appConfigStore`: `DataStoreAppConfigStore` (Phase 4)
     - Factory: `OpenTuneStorageBindings.create(database: OpenTuneDatabase, context: Context)`
 
+11. Add `UserMediaStateStore` interface in `:storage`:
+    ```kotlin
+    interface UserMediaStateStore {
+        suspend fun get(providerId: String, sourceId: String, itemId: String): MediaStateSnapshot?
+        suspend fun upsertPosition(providerId: String, sourceId: String, itemId: String, positionMs: Long)
+        suspend fun upsertSpeed(providerId: String, sourceId: String, itemId: String, speed: Float)
+        suspend fun upsertFavorite(providerId: String, sourceId: String, itemId: String, isFavorite: Boolean, title: String?, type: String?)
+        suspend fun upsertCoverThumb(providerId: String, sourceId: String, itemId: String, path: String?)
+        fun observeForSource(providerId: String, sourceId: String): Flow<List<MediaStateSnapshot>>
+        fun observeAllFavorites(): Flow<List<MediaStateSnapshot>>
+        suspend fun deleteBySource(sourceId: String)
+    }
+    data class MediaStateSnapshot(
+        val providerId: String, val sourceId: String, val itemId: String,
+        val positionMs: Long, val playbackSpeed: Float,
+        val isFavorite: Boolean, val title: String?, val type: String?, val coverThumbPath: String?,
+    )
+    ```
+    `RoomMediaStateStore` implements this backed by `MediaStateDao`.
+
 ---
 
-### Phase 5 — DataStore for draft storage
+### Phase 4 — DataStore for draft storage
 
-12. In `gradle/libs.versions.toml`, add `datastore = "1.1.1"` and library alias `androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }`.
+12. In `gradle/libs.versions.toml`, add `datastore = "1.1.1"` and `androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }`.
 
 13. In `storage/build.gradle.kts`, add `implementation(libs.androidx.datastore.preferences)`.
 
-14. Implement `DataStoreAppConfigStore` in `:storage`: draft maps stored as JSON strings keyed by `draft_{providerId}`. API: `loadDraft(providerId)`, `saveDraft(providerId, values)`, `clearDraft(providerId)`. Exposed via `OpenTuneStorageBindings.appConfigStore`.
+14. Implement `DataStoreAppConfigStore` in `:storage`: drafts stored as JSON strings keyed by `draft_{providerId}`. API: `loadDraft(providerId)`, `saveDraft(providerId, values)`, `clearDraft(providerId)`. Exposed via `OpenTuneStorageBindings.appConfigStore`.
 
 ---
 
-### Phase 6 — Thumbnail disk cache
+### Phase 5 — Thumbnail disk cache
 
-15. Add `ThumbnailDiskCache` in `storage/src/main/java/com/opentune/storage/thumb/`: deterministic path from SHA-256 prefix of `"${providerId}|${sourceId}|${itemId}"`, `put(bytes)`, `exists()`, `delete()`, `absolutePath()`. Called only from `:app`.
+15. Add `ThumbnailDiskCache` in `storage/.../thumb/`: deterministic path from SHA-256 prefix of `"${providerId}|${sourceId}|${itemId}"`, `put(bytes)`, `exists()`, `delete()`, `absolutePath()`. Called only from `:app`.
 
-16. In `app/src/main/java/com/opentune/app/ui/catalog/MediaEntryComponent.kt` and any other cover renderer, add branch for `MediaCover.LocalFile(path)` -> `AsyncImage(model = File(path))` via Coil.
+16. In `app/.../ui/catalog/MediaEntryComponent.kt` and any other cover renderer, add branch for `MediaCover.LocalFile(path)` → `AsyncImage(model = File(path))` via Coil.
 
 ---
 
-### Phase 7 — Provider modules (emby, smb)
+### Phase 6 — Provider modules (emby, smb)
 
 17. Reshape `EmbyProvider` to implement `OpenTuneProvider`:
-    - `getFieldsSpec()` — replaces `addFields()` + `editFields()`
-    - `validateFields(values)` — network auth, returns `ValidationResult(hash, displayName)`; no store writes
-    - `createInstance(values: Map<String,String>)` -> `EmbyProviderInstance(/* parsed config */)`
+    - `getFieldsSpec()` — single field list (url, username, password); no `display_name`; consolidates current `serverAddFields` and `serverEditFields`
+    - `validateFields(values)` — authenticates with Emby API, returns `ValidationResult.Success(hash = sha256(baseUrl + userId), displayName = serverName)` or `Error`
+    - `createInstance(values)` → `EmbyProviderInstance(/* parsed values */)`
+    - Delete `EmbyServerFields.kt` and `EmbyConfigBackend`
 
 18. `EmbyProviderInstance` implements `OpenTuneProviderInstance`:
-    - `loadBrowsePage`, `searchItems`, `loadDetail` — current Emby catalog logic, only parsed config; no store references
+    - `loadBrowsePage`, `searchItems`, `loadDetail` — Emby catalog logic from parsed values; no store references
     - `resolvePlayback` — builds `PlaybackSpec` with `EmbyPlaybackHooks`; no store references
 
-19. `EmbyPlaybackHooks`: remove `progressStore` constructor param and `progressStore.upsert(...)` in `onStop`. Keep only Emby HTTP session reporting (`reportPlaying`, `reportProgress`, `reportStopped`).
+19. `EmbyPlaybackHooks`: remove `progressStore` constructor param and `progressStore.upsert(...)` in `onStop`. Keep only Emby HTTP session reporting.
 
-20. Delete `EmbyConfigBackend`. Delete `CatalogBindingPlugin` implementations (`EmbyBrowseBinding`, `EmbyDetailBinding`, etc.) — replaced by `EmbyProviderInstance` methods.
+20. Delete `EmbyBrowseBinding`, `EmbyDetailBinding`, `EmbySearchBinding` (all replaced by `EmbyProviderInstance`).
 
-21. Same reshape for `SmbProvider` -> `SmbProviderInstance`. `SmbPlaybackHooks`: no store references.
+21. Same reshape for `SmbProvider` → `SmbProviderInstance`; `SmbPlaybackHooks`: no store references.
 
 ---
 
-### Phase 8 — App wiring
+### Phase 7 — App: instance registry
 
-22. In `app/src/main/java/com/opentune/app/OpenTuneApplication.kt`:
-    - Remove `addServerDraftStore: AddServerDraftStore` field
+22. In `app/.../OpenTuneApplication.kt`:
+    - Remove `addServerDraftStore` field
     - Update `storageBindings` to `OpenTuneStorageBindings.create(database, applicationContext)`
-    - `providerRegistry` stays as-is; instance registry (below) is separate
-    - Add `instanceRegistry: Map<String, OpenTuneProviderInstance>` (mutable, writable on home screen)
+    - Add `instanceRegistry: ProviderInstanceRegistry` — owns `Map<String, OpenTuneProviderInstance>` with `Mutex`; exposes `suspend fun getOrCreate(sourceId: String): OpenTuneProviderInstance?` (lazy DB lookup: reads `ServerEntity`, deserializes `fieldsJson` to map, calls `provider.createInstance(values)`)
 
-23. In `app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt`:
-    - Draft methods -> `app.storageBindings.appConfigStore`
+---
+
+### Phase 8 — App: server config repository
+
+23. In `app/.../providers/ServerConfigRepository.kt`:
+    - Draft methods → `storageBindings.appConfigStore`
     - `submitAdd(providerId, values)`:
-      1. `provider.validateFields(values)` -> `ValidationResult(hash, displayName)`
+      1. `provider.validateFields(values)` → `ValidationResult.Success(hash, displayName)`
       2. Compute `sourceId = "${providerId}_${hash}"`
-      3. `storageBindings.serverDao.insert(ServerEntity(sourceId, providerId, displayName, fieldsJson))` with `OnConflict.ABORT` -> show "server already exists" on failure
-    - `submitEdit(providerId, sourceId, values)`:
-      1. `provider.validateFields(values)` -> `ValidationResult(newHash, newDisplayName)`
-      2. If `newHash == oldHash`: `serverDao.updateDisplayName(sourceId, newDisplayName)`
-      3. If `newHash != oldHash`:
-         - Compute `newSourceId = "${providerId}_${newHash}"`
-         - `serverDao.insert(ServerEntity(newSourceId, ...))` with `OnConflict.ABORT`
-         - `serverDao.delete(oldSourceId)` — FK CASCADE deletes `media_state` rows automatically
-         - Evict old instance from registry; create new instance
-    - `removeServer(sourceId)`: `serverDao.delete(sourceId)` — FK CASCADE handles `media_state`
-    - Delete `app/src/main/java/com/opentune/app/drafts/AddServerDraftStore.kt`
+      3. `storageBindings.serverDao.insert(ServerEntity(sourceId, providerId, displayName, fieldsJson, ...))` with `OnConflict.ABORT` → on conflict return "server already exists"
+      4. `instanceRegistry.createAndRegister(sourceId, values)`
+    - `submitEdit(sourceId, providerId, values)`:
+      1. `provider.validateFields(values)` → `Success(newHash, newDisplayName)`
+      2. Compute `newSourceId = "${providerId}_${newHash}"`
+      3. If `newSourceId == sourceId`: update `displayName` + `fieldsJson` in existing row; update instance in registry
+      4. If `newSourceId != sourceId`: insert new `ServerEntity` → delete old `media_state` (cascade) → delete old `ServerEntity` → swap registry (remove old, create new)
+    - `removeServer(sourceId)`:
+      1. `storageBindings.mediaStateStore.deleteBySource(sourceId)`
+      2. `storageBindings.serverDao.deleteBySourceId(sourceId)`
+      3. `instanceRegistry.remove(sourceId)`
+    - Delete `app/.../drafts/AddServerDraftStore.kt`
 
-24. **Instance lifecycle** in `HomeRoute` / home ViewModel:
-    - On load: for each `ServerEntity` in `serverDao.observeAll()`, if `instanceRegistry[sourceId] == null`, deserialize `fieldsJson` -> `Map<String,String>`, call `provider.createInstance(values)`, store in registry
-    - On server removal: evict from registry
-    - `BrowseRoute`, `DetailRoute`, `SearchRoute`, `PlayerRoute` look up `instanceRegistry[sourceId]` — never call `createInstance` themselves
+---
+
+### Phase 9 — App: home screen
+
+24. In `app/.../ui/home/HomeRoute.kt`:
+    - Observe `storageBindings.serverDao.observeAll()` to list servers
+    - Display `ServerEntity.displayName` + `ServerEntity.providerId` (type icon via `OpenTuneProviderIds`)
+    - On launch, eagerly populate `instanceRegistry` from observed server list
+    - "Add server": `providerRegistry.registeredProviders()` → list provider types
+
+---
+
+### Phase 10 — App: catalog routes
 
 25. In `BrowseRoute`, `SearchRoute`, `DetailRoute`:
-    - Get `OpenTuneProviderInstance` from `instanceRegistry[sourceId]`
-    - Call catalog methods directly — no `CatalogBindingPlugin`, no `CatalogBindingDeps`
-    - After `loadDetail`, read `storageBindings.mediaStateStore.get(key)` and merge `isFavorite`, `resumePositionMs`, `coverThumbPath` into local enriched state
-    - Favorite toggle: `mediaStateStore.upsertFavorite(key, ...)` + optimistic local update
+    - Get instance via `instanceRegistry.getOrCreate(sourceId)` (lazy safe)
+    - Call catalog methods on instance directly; no `CatalogBindingPlugin`, no deps
+    - After `loadDetail`, read `storageBindings.mediaStateStore.get(providerId, sourceId, itemId)` and merge `isFavorite`, `resumePositionMs`, `coverThumbPath` with `MediaDetailModel` values (prefer local for position, merge for favorite)
+    - Favorite toggle: `mediaStateStore.upsertFavorite(...)` + optimistic local update
 
-26. In `app/src/main/java/com/opentune/app/ui/catalog/PlayerRoute.kt`:
-    - Get `OpenTuneProviderInstance` from `instanceRegistry[sourceId]`
-    - Read resume: `storageBindings.mediaStateStore.get(key)?.positionMs ?: 0L`
-    - Call `instance.resolvePlayback(itemRef, startMs, context)` -> `PlaybackSpec`
-    - Pass `PlaybackSpec`, `storageBindings.mediaStateStore`, and `MediaStateKey(providerId, sourceId, itemRef)` as separate args to `OpenTunePlayerScreen`
+26. In `app/.../ui/catalog/PlayerRoute.kt`:
+    - Get instance via `instanceRegistry.getOrCreate(sourceId)`
+    - Read resume: `storageBindings.mediaStateStore.get(providerId, sourceId, itemRef)?.positionMs`
+    - Call `instance.resolvePlayback(itemRef, startMs, context)` → `PlaybackSpec`
+    - Pass `storageBindings.mediaStateStore` and `MediaStateKey(providerId, sourceId, itemRef)` as separate params to `OpenTunePlayerScreen`
     - Drop all `OpenTunePlaybackResumeStore` usage
 
 ---
 
-### Phase 9 — `:player` uses `UserMediaStateStore` as direct param
+### Phase 11 — `:player` uses `UserMediaStateStore` directly
 
-27. In `player/build.gradle.kts`, add `implementation(project(":storage"))`.
-
-28. In `player/src/main/java/com/opentune/player/OpenTunePlayerScreen.kt`, update signature:
+27. `OpenTunePlayerScreen` signature change:
     ```kotlin
-    @Composable
-    fun OpenTunePlayerScreen(
+    @Composable fun OpenTunePlayerScreen(
         spec: PlaybackSpec,
-        mediaState: UserMediaStateStore,
+        mediaStateStore: UserMediaStateStore,
         mediaStateKey: MediaStateKey,
         onExit: () -> Unit,
     )
     ```
-    - Speed read on spec change: `mediaState.get(mediaStateKey)?.playbackSpeed ?: 1f`
-    - Speed write (DisposableEffect): `mediaState.upsertSpeed(mediaStateKey, speed)`
-    - `shutdown()`: call `mediaState.upsertPosition(mediaStateKey, positionMs)` **before** `spec.hooks.onStop(positionMs)` (local-first, crash-safe)
 
-29. Delete `player/src/main/java/com/opentune/player/OpenTunePlaybackResumeStore.kt`.
+28. In `OpenTunePlayerScreen`:
+    - Speed read on spec change: `mediaStateStore.get(...)?.playbackSpeed ?: 1f`
+    - Speed write (DisposableEffect): `mediaStateStore.upsertSpeed(..., speed)`
+    - `shutdown()`: `mediaStateStore.upsertPosition(..., positionMs)` **before** `spec.hooks.onStop(positionMs)` (local-first)
 
----
+29. Delete `player/.../OpenTunePlaybackResumeStore.kt`.
 
-### Phase 10 — Home screen
-
-30. In `app/src/main/java/com/opentune/app/ui/home/HomeRoute.kt`:
-    - Observe `storageBindings.serverDao.observeAll()` to list added servers
-    - Display `ServerEntity.displayName` + `ServerEntity.providerId` (type label/icon via `OpenTuneProviderIds`)
-    - "Add server": `providerRegistry.registeredProviders()` -> list all registered `OpenTuneProvider` types
-    - Instantiate missing instances into registry on each emission (see Phase 8 step 24)
+30. Add `data class MediaStateKey(val providerId: String, val sourceId: String, val itemRef: String)` in `:storage` (or a shared location both `:app` and `:player` can see without a cycle).
 
 ---
 
-### Phase 11 — AGENTS.md
+### Phase 12 — AGENTS.md
 
 31. Update `AGENTS.md`:
-    - Contracts: replace `StoreContracts.kt` / `CatalogBindingPlugin` / `PlaybackResolveDeps` mentions with `createInstance` pattern (`OpenTuneProvider` factory + `OpenTuneProviderInstance`)
-    - Providers are store-blind — no read or write of any store; `createInstance` takes `Map<String,String>` (not JSON)
-    - Add `MediaCover.LocalFile`; clarify thumbnail rule (disk cache in `:storage`, written by `:app` only)
-    - Note `UserMediaStateStore` / `MediaStateKey` live in `:storage`; `:player` depends on `:storage`
-    - `OpenTunePlayerScreen` signature: store + key are direct params, not embedded in `PlaybackSpec`
+    - Contracts: `OpenTuneProvider` (factory: `getFieldsSpec`, `validateFields`, `createInstance`) + `OpenTuneProviderInstance` (protocol methods only)
+    - No persistence interfaces in `:provider-api`; providers are store-blind
+    - `sourceId` = `"${providerId}_${hash}"`, computed by app, String PK
+    - `MediaCover.LocalFile`; thumbnail rule: disk cache in `:storage`, written by app only
+    - Playback: local-first via `UserMediaStateStore` passed directly to `OpenTunePlayerScreen`
+    - `:player` depends on `:storage`; `:storage` does not depend on `:player`
 
 ---
 
@@ -316,9 +290,10 @@ Grep gates (all must return 0 results):
 - `OpenTunePlaybackResumeStore` anywhere
 - `AddServerDraftStore` anywhere
 - `StoreContracts` anywhere
+- `ProviderConfigBackend` anywhere
 - `CatalogBindingDeps|PlaybackResolveDeps|CatalogBindingPlugin` anywhere
 - `FavoritesStore|ProgressStore|ServerStore` anywhere
 - `progressStore|favoritesStore` inside `providers/`
 - `\.upsert\|ProgressStore` inside `EmbyPlaybackHooks.kt`
 - Any `:storage` import inside `providers/emby/` or `providers/smb/`
-- `userMediaState|mediaStateKey` inside `PlaybackSpec` (must NOT appear there)
+- `sourceId.*Long|Long.*sourceId` in `ServerEntity` (sourceId must be String)
