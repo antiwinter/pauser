@@ -21,8 +21,8 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.tv.material3.Surface
 import com.opentune.provider.MediaArt
-import java.io.File
 import com.opentune.provider.MediaEntryKind
+import java.io.File
 import com.opentune.provider.MediaListItem
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -31,7 +31,6 @@ fun MediaEntryComponent(
     item: MediaListItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    coverOverride: MediaArt? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -47,7 +46,7 @@ fun MediaEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                when (val c = coverOverride ?: item.cover) {
+                when (val c = item.cover) {
                     is MediaArt.Http -> AsyncImage(
                         model = c.url,
                         contentDescription = item.title,

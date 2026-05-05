@@ -19,13 +19,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.provider.BrowsePageResult
-import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +38,7 @@ private const val PAGE_SIZE = 100
 @Composable
 fun BrowseScreen(
     logTag: String,
+    items: SnapshotStateList<MediaListItem>,
     loadPage: suspend (startIndex: Int, limit: Int) -> BrowsePageResult,
     subtitle: String,
     onBack: () -> Unit,
@@ -45,10 +46,8 @@ fun BrowseScreen(
     onOpenBrowseLocation: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
     onItemsLoaded: ((List<MediaListItem>) -> Unit)? = null,
-    coverOverride: ((String) -> MediaArt?)? = null,
 ) {
     val scope = rememberCoroutineScope()
-    var items by remember { mutableStateOf<List<MediaListItem>>(emptyList()) }
     var totalCount by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -57,11 +56,11 @@ fun BrowseScreen(
         scope.launch {
             loading = true
             error = null
-            items = emptyList()
+            items.clear()
             totalCount = 0
             try {
                 val page = withContext(Dispatchers.IO) { loadPage(0, PAGE_SIZE) }
-                items = page.items
+                items.addAll(page.items)
                 totalCount = page.totalCount
                 onItemsLoaded?.invoke(page.items)
             } catch (e: Exception) {
@@ -121,7 +120,6 @@ fun BrowseScreen(
                             MediaEntryKind.Playable, MediaEntryKind.Other -> onOpenDetail(item.id)
                         }
                     },
-                    coverOverride = coverOverride?.invoke(item.id),
                 )
             }
             if (!loading && items.isNotEmpty() && items.size < totalCount) {
@@ -135,7 +133,7 @@ fun BrowseScreen(
                                     val page = withContext(Dispatchers.IO) {
                                         loadPage(items.size, PAGE_SIZE)
                                     }
-                                    items = items + page.items
+                                    items.addAll(page.items)
                                     onItemsLoaded?.invoke(page.items)
                                 } catch (e: Exception) {
                                     Log.e(logTag, "load more", e)
