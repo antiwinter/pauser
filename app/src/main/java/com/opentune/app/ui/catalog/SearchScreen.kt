@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,8 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    onItemsLoaded: ((List<MediaListItem>) -> Unit)? = null,
+    coverOverride: ((String) -> MediaArt?)? = null,
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaListItem>>(emptyList()) }
@@ -53,6 +56,7 @@ fun SearchScreen(
         searching = true
         try {
             results = withContext(Dispatchers.IO) { searchFn(q) }
+            onItemsLoaded?.invoke(results)
         } catch (e: Exception) {
             Log.e(logTag, "search", e)
             results = emptyList()
@@ -96,6 +100,7 @@ fun SearchScreen(
                             MediaEntryKind.Playable, MediaEntryKind.Other -> onOpenDetail(item.id)
                         }
                     },
+                    coverOverride = coverOverride?.invoke(item.id),
                 )
             }
         }

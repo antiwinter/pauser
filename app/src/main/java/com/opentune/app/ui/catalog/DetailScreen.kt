@@ -70,7 +70,7 @@ fun DetailScreen(
                         Text(if (isFavorite) "Remove favorite" else "Add favorite")
                     }
                 }
-                when (val c = d.cover) {
+                when (val c = d.poster) {
                     is MediaArt.Http -> AsyncImage(
                         model = c.url,
                         contentDescription = d.title,

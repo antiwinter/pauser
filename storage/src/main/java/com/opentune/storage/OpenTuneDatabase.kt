@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         ServerEntity::class,
         MediaStateEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class OpenTuneDatabase : RoomDatabase() {

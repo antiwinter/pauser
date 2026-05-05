@@ -15,7 +15,7 @@ data class ServerEntity(
 
 @Entity(
     tableName = "media_state",
-    primaryKeys = ["providerType", "sourceId", "itemId"],
+    primaryKeys = ["sourceId", "itemId"],
 )
 data class MediaStateEntity(
     val providerType: String,
@@ -26,6 +26,16 @@ data class MediaStateEntity(
     val isFavorite: Boolean = false,
     val title: String? = null,
     val type: String? = null,
-    val coverThumbPath: String? = null,
+    /**
+     * Tri-state cover cache path:
+     * - null  = not yet attempted
+     * - [COVER_FAILED] = extraction failed, do not retry
+     * - any other string = absolute path to cached thumbnail
+     */
+    val coverCachePath: String? = null,
     val updatedAtEpochMs: Long,
-)
+) {
+    companion object {
+        const val COVER_FAILED = "failed"
+    }
+}

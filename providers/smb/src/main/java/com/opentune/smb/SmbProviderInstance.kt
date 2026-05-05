@@ -7,7 +7,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.hierynomus.msdtyp.AccessMask
+import com.hierynomus.msfscc.fileinformation.FileStandardInformation
+import com.hierynomus.mssmb2.SMB2CreateDisposition
+import com.hierynomus.mssmb2.SMB2ShareAccess
+import com.hierynomus.smbj.share.File as SmbFile
 import com.opentune.provider.BrowsePageResult
+import com.opentune.provider.ItemStream
 import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
 import com.opentune.provider.MediaEntryKind
@@ -17,6 +23,7 @@ import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.EnumSet
 import com.opentune.smb.R as SmbR
 
 private const val SMB_PLAYER_LOG = "OpenTunePlayer"
@@ -73,6 +80,7 @@ class SmbProviderInstance(
             title = name,
             synopsis = path,
             cover = MediaArt.DrawableRes(coverRes),
+            poster = MediaArt.None,
             canPlay = video,
             resumePositionMs = 0L,
             favoriteSupported = false,
@@ -110,6 +118,36 @@ class SmbProviderInstance(
                 initialPositionMs = startMs,
                 onPlaybackDispose = { session.close() },
             )
+        }
+    }
+
+    override suspend fun <T> withStream(itemRef: String, block: suspend (ItemStream) -> T): T? {
+        return withContext(Dispatchers.IO) {
+            val session = SmbSession.open(credentials())
+            val share = session.share
+            val pathWin = itemRef.replace('/', '\\')
+            val smbFile = share.openFile(
+                pathWin,
+                EnumSet.of(AccessMask.GENERIC_READ), null,
+                EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
+                SMB2CreateDisposition.FILE_OPEN, null,
+            )
+            try {
+                block(SmbItemStream(smbFile))
+            } finally {
+                runCatching { smbFile.close() }
+                session.close()
+            }
+        }
+    }
+
+    private class SmbItemStream(private val file: SmbFile) : ItemStream {
+        override suspend fun getSize(): Long =
+            file.getFileInformation(FileStandardInformation::class.java).endOfFile
+
+        override suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
+            val r = file.read(buffer, position, offset, size)
+            return if (r == -1) 0 else r
         }
     }
 

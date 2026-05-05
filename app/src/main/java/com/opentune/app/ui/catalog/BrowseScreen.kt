@@ -25,6 +25,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.provider.BrowsePageResult
+import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,8 @@ fun BrowseScreen(
     onSearch: () -> Unit,
     onOpenBrowseLocation: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    onItemsLoaded: ((List<MediaListItem>) -> Unit)? = null,
+    coverOverride: ((String) -> MediaArt?)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<MediaListItem>>(emptyList()) }
@@ -60,6 +63,7 @@ fun BrowseScreen(
                 val page = withContext(Dispatchers.IO) { loadPage(0, PAGE_SIZE) }
                 items = page.items
                 totalCount = page.totalCount
+                onItemsLoaded?.invoke(page.items)
             } catch (e: Exception) {
                 Log.e(logTag, "browse load", e)
                 error = e.message
@@ -117,6 +121,7 @@ fun BrowseScreen(
                             MediaEntryKind.Playable, MediaEntryKind.Other -> onOpenDetail(item.id)
                         }
                     },
+                    coverOverride = coverOverride?.invoke(item.id),
                 )
             }
             if (!loading && items.isNotEmpty() && items.size < totalCount) {
@@ -131,6 +136,7 @@ fun BrowseScreen(
                                         loadPage(items.size, PAGE_SIZE)
                                     }
                                     items = items + page.items
+                                    onItemsLoaded?.invoke(page.items)
                                 } catch (e: Exception) {
                                     Log.e(logTag, "load more", e)
                                     error = e.message

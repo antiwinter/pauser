@@ -87,13 +87,16 @@ class EmbyProviderInstance(
         val r = repo()
         return withContext(Dispatchers.IO) {
             val item = r.getItem(itemRef)
-            val poster = EmbyImageUrls.primaryPoster(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
-            val cover = if (poster != null) MediaArt.Http(poster) else MediaArt.None
+            val posterUrl = EmbyImageUrls.primaryPoster(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
+            val thumbUrl = EmbyImageUrls.primaryThumb(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
+            val poster = if (posterUrl != null) MediaArt.Http(posterUrl) else MediaArt.None
+            val cover = if (thumbUrl != null) MediaArt.Http(thumbUrl) else MediaArt.None
             MediaDetailModel(
                 itemKey = itemRef,
                 title = item.name ?: itemRef,
                 synopsis = item.overview,
                 cover = cover,
+                poster = poster,
                 canPlay = true,
                 resumePositionMs = 0L,
                 favoriteSupported = true,

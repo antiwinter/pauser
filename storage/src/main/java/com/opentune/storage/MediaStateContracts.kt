@@ -17,7 +17,7 @@ data class MediaStateSnapshot(
     val isFavorite: Boolean,
     val title: String?,
     val type: String?,
-    val coverThumbPath: String?,
+    val coverCachePath: String?,
 )
 
 interface UserMediaStateStore {
@@ -32,7 +32,7 @@ interface UserMediaStateStore {
         title: String? = null,
         type: String? = null,
     )
-    suspend fun upsertCoverThumb(providerType: String, sourceId: String, itemId: String, path: String?)
+    suspend fun upsertCoverCache(providerType: String, sourceId: String, itemId: String, path: String?)
     fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>>
     fun observeAllFavorites(): Flow<List<MediaStateSnapshot>>
     suspend fun deleteBySource(sourceId: String)

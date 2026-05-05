@@ -31,6 +31,7 @@ fun MediaEntryComponent(
     item: MediaListItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    coverOverride: MediaArt? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -46,7 +47,7 @@ fun MediaEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                when (val c = item.cover) {
+                when (val c = coverOverride ?: item.cover) {
                     is MediaArt.Http -> AsyncImage(
                         model = c.url,
                         contentDescription = item.title,

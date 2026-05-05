@@ -13,6 +13,8 @@ class SmbProvider : OpenTuneProvider {
 
     override val providerType: String = PROVIDER_TYPE
 
+    override val providesCover: Boolean = false
+
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(
             id = "host",

@@ -51,8 +51,8 @@ interface MediaStateDao {
     @Query("UPDATE media_state SET isFavorite = :isFavorite, title = :title, type = :type, updatedAtEpochMs = :now WHERE providerType = :providerType AND sourceId = :sourceId AND itemId = :itemId")
     suspend fun updateFavorite(providerType: String, sourceId: String, itemId: String, isFavorite: Boolean, title: String?, type: String?, now: Long)
 
-    @Query("UPDATE media_state SET coverThumbPath = :path, updatedAtEpochMs = :now WHERE providerType = :providerType AND sourceId = :sourceId AND itemId = :itemId")
-    suspend fun updateCoverThumb(providerType: String, sourceId: String, itemId: String, path: String?, now: Long)
+    @Query("UPDATE media_state SET coverCachePath = :path, updatedAtEpochMs = :now WHERE providerType = :providerType AND sourceId = :sourceId AND itemId = :itemId")
+    suspend fun updateCoverCache(providerType: String, sourceId: String, itemId: String, path: String?, now: Long)
 
     @Query("DELETE FROM media_state WHERE sourceId = :sourceId")
     suspend fun deleteBySource(sourceId: String)

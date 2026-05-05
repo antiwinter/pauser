@@ -17,7 +17,7 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
             isFavorite = isFavorite,
             title = title,
             type = type,
-            coverThumbPath = coverThumbPath,
+            coverCachePath = coverCachePath,
         )
 
     private suspend fun ensureRow(providerType: String, sourceId: String, itemId: String) {
@@ -69,14 +69,14 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
         dao.updateFavorite(providerType, sourceId, itemId, isFavorite, title, type, System.currentTimeMillis())
     }
 
-    override suspend fun upsertCoverThumb(
+    override suspend fun upsertCoverCache(
         providerType: String,
         sourceId: String,
         itemId: String,
         path: String?,
     ) {
         ensureRow(providerType, sourceId, itemId)
-        dao.updateCoverThumb(providerType, sourceId, itemId, path, System.currentTimeMillis())
+        dao.updateCoverCache(providerType, sourceId, itemId, path, System.currentTimeMillis())
     }
 
     override fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>> =

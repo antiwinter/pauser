@@ -2,6 +2,19 @@ package com.opentune.provider
 
 import android.content.Context
 
+// --- Streaming ---
+
+/**
+ * Random-access byte-stream abstraction for local/network files.
+ * No Closeable — the implementing [OpenTuneProviderInstance.withStream] owns the lifecycle.
+ */
+interface ItemStream {
+    /** Reads [size] bytes from [position] into [buffer] at [offset]. Returns bytes actually read (0 = EOF). */
+    suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int
+    /** Total byte length of the stream. */
+    suspend fun getSize(): Long
+}
+
 // --- Field specs (moved from ConfigContracts.kt) ---
 
 data class ServerFieldSpec(
@@ -52,6 +65,12 @@ sealed class SubmitResult {
 interface OpenTuneProvider {
     val providerType: String
 
+    /**
+     * True if catalog list items carry HTTP cover art directly (e.g. Emby).
+     * False if covers must be extracted from the media stream (e.g. SMB).
+     */
+    val providesCover: Boolean
+
     /** Single field spec for both add and edit forms. Does not include display_name. */
     fun getFieldsSpec(): List<ServerFieldSpec>
 
@@ -83,4 +102,10 @@ interface OpenTuneProviderInstance {
     suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem>
     suspend fun loadDetail(itemRef: String): MediaDetailModel
     suspend fun resolvePlayback(itemRef: String, startMs: Long, context: Context): PlaybackSpec
+
+    /**
+     * Opens a random-access stream for [itemRef], calls [block] with it, and closes the stream.
+     * Returns null if this provider does not support streaming (default).
+     */
+    suspend fun <T> withStream(itemRef: String, block: suspend (ItemStream) -> T): T? = null
 }

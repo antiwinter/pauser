@@ -21,6 +21,8 @@ class EmbyProvider(
 
     override val providerType: String = PROVIDER_TYPE
 
+    override val providesCover: Boolean = true
+
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(
             id = "base_url",

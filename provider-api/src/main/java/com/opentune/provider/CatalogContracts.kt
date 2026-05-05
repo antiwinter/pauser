@@ -32,6 +32,7 @@ data class MediaDetailModel(
     val title: String,
     val synopsis: String?,
     val cover: MediaArt,
+    val poster: MediaArt,
     val canPlay: Boolean,
     /** Resume position from remote source; 0 if none. App layer overwrites with local value. */
     val resumePositionMs: Long,
