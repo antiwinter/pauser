@@ -5,15 +5,11 @@ import com.opentune.emby.api.dto.PlaybackProgressInfo
 import com.opentune.emby.api.dto.PlaybackStartInfo
 import com.opentune.emby.api.dto.PlaybackStopInfo
 import com.opentune.provider.OpenTunePlaybackHooks
-import com.opentune.provider.ProgressStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class EmbyPlaybackHooks(
-    private val progressStore: ProgressStore,
     private val deviceProfile: DeviceProfile,
-    private val providerId: String,
-    private val sourceId: Long,
     private val itemId: String,
     private val playMethod: String,
     private val playSessionId: String?,
@@ -79,12 +75,6 @@ class EmbyPlaybackHooks(
                     liveStreamId = liveStreamId,
                     positionTicks = ticks,
                 ),
-            )
-            progressStore.upsert(
-                providerId = providerId,
-                sourceId = sourceId,
-                itemId = itemId,
-                positionMs = positionMs,
             )
         }
     }

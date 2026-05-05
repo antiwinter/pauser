@@ -1,5 +1,6 @@
 package com.opentune.app.ui.catalog
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -10,51 +11,58 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.provider.CatalogScreenBindingState
-import com.opentune.provider.toScreenState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+
+private const val LOG_TAG = "OpenTuneBrowseRoute"
+
+sealed interface BrowseState {
+    data object Loading : BrowseState
+    data class Error(val message: String) : BrowseState
+    data class Ready(val instance: com.opentune.provider.OpenTuneProviderInstance) : BrowseState
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
-    providerId: String,
-    sourceId: Long,
+    providerType: String,
+    sourceId: String,
     locationEncoded: String,
 ) {
     val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
-    var state by remember { mutableStateOf<CatalogScreenBindingState>(CatalogScreenBindingState.Loading) }
+    var state by remember { mutableStateOf<BrowseState>(BrowseState.Loading) }
 
-    LaunchedEffect(app, providerId, sourceId, locationDecoded) {
-        state = CatalogScreenBindingState.Loading
-        state = resolveBrowseBinding(app, providerId, sourceId, locationDecoded).toScreenState()
-    }
-
-    DisposableEffect(state) {
-        val b = (state as? CatalogScreenBindingState.Ready)?.binding
-        onDispose { b?.onDispose() }
+    LaunchedEffect(app, providerType, sourceId) {
+        state = BrowseState.Loading
+        val instance = app.instanceRegistry.getOrCreate(sourceId)
+        state = if (instance == null) {
+            Log.e(LOG_TAG, "No instance for sourceId=$sourceId")
+            BrowseState.Error("Server not found")
+        } else {
+            BrowseState.Ready(instance)
+        }
     }
 
     when (val s = state) {
-        is CatalogScreenBindingState.Loading -> Text("Loading…")
-        is CatalogScreenBindingState.Error -> Text("Error: ${s.message}")
-        is CatalogScreenBindingState.Ready -> {
-            val b = s.binding
+        is BrowseState.Loading -> Text("Loading\u2026")
+        is BrowseState.Error -> Text("Error: ${s.message}")
+        is BrowseState.Ready -> {
+            val instance = s.instance
             BrowseScreen(
-                logTag = b.logTag,
-                catalog = b.catalog,
-                subtitle = b.subtitle,
+                logTag = "OpenTuneEmbyBrowse",
+                loadPage = { startIndex, limit -> instance.loadBrowsePage(locationDecoded, startIndex, limit) },
+                subtitle = if (locationDecoded == CatalogNav.LIBRARIES_ROOT_SEGMENT) "Libraries" else locationDecoded,
                 onBack = { nav.popBackStack() },
                 onSearch = {
-                    nav.navigate(Routes.search(providerId, sourceId, locationDecoded))
+                    nav.navigate(Routes.search(providerType, sourceId, locationDecoded))
                 },
                 onOpenBrowseLocation = { raw ->
-                    nav.navigate(Routes.browse(providerId, sourceId, raw))
+                    nav.navigate(Routes.browse(providerType, sourceId, raw))
                 },
                 onOpenDetail = { raw ->
-                    nav.navigate(Routes.detail(providerId, sourceId, raw))
+                    nav.navigate(Routes.detail(providerType, sourceId, raw))
                 },
             )
         }

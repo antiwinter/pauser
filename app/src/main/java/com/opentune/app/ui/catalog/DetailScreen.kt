@@ -21,6 +21,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.opentune.provider.MediaCover
 import com.opentune.provider.MediaDetailModel
+import java.io.File
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -28,6 +29,8 @@ fun DetailScreen(
     detail: MediaDetailModel?,
     loading: Boolean,
     error: String?,
+    isFavorite: Boolean,
+    resumePositionMs: Long,
     onBack: () -> Unit,
     onPlayFromStart: () -> Unit,
     onResume: () -> Unit,
@@ -47,24 +50,24 @@ fun DetailScreen(
             loading && detail == null -> Text("Loading…")
             detail == null -> Unit
             else -> {
-                val d = detail!!
+                val d = detail
                 Text(d.title)
                 if (d.canPlay) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (d.resumePositionMs > 0) {
+                        if (resumePositionMs > 0) {
                             Button(onClick = onResume) { Text("Resume") }
                         }
                         Button(onClick = onPlayFromStart) {
-                            Text(if (d.resumePositionMs > 0) "From start" else "Play")
+                            Text(if (resumePositionMs > 0) "From start" else "Play")
                         }
                     }
                 }
                 if (d.favoriteSupported) {
                     Button(onClick = onToggleFavorite) {
-                        Text(if (d.isFavorite) "Remove favorite" else "Add favorite")
+                        Text(if (isFavorite) "Remove favorite" else "Add favorite")
                     }
                 }
                 when (val c = d.cover) {
@@ -81,6 +84,14 @@ fun DetailScreen(
                         contentDescription = d.title,
                         modifier = Modifier
                             .height(200.dp)
+                            .padding(bottom = 8.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                    is MediaCover.LocalFile -> AsyncImage(
+                        model = File(c.absolutePath),
+                        contentDescription = d.title,
+                        modifier = Modifier
+                            .height(280.dp)
                             .padding(bottom = 8.dp),
                         contentScale = ContentScale.Fit,
                     )

@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.provider.MediaCatalogSource
+import com.opentune.provider.BrowsePageResult
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +37,7 @@ private const val PAGE_SIZE = 100
 @Composable
 fun BrowseScreen(
     logTag: String,
-    catalog: MediaCatalogSource,
+    loadPage: suspend (startIndex: Int, limit: Int) -> BrowsePageResult,
     subtitle: String,
     onBack: () -> Unit,
     onSearch: () -> Unit,
@@ -57,9 +57,7 @@ fun BrowseScreen(
             items = emptyList()
             totalCount = 0
             try {
-                val page = withContext(Dispatchers.IO) {
-                    catalog.loadBrowsePage(0, PAGE_SIZE)
-                }
+                val page = withContext(Dispatchers.IO) { loadPage(0, PAGE_SIZE) }
                 items = page.items
                 totalCount = page.totalCount
             } catch (e: Exception) {
@@ -71,7 +69,7 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(catalog) {
+    LaunchedEffect(loadPage) {
         resetAndLoad()
     }
 
@@ -87,18 +85,14 @@ fun BrowseScreen(
             Button(onClick = onBack) { Text("Back") }
             Button(onClick = onSearch) { Text("Search") }
         }
-        Text(
-            text = subtitle,
-            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
-        )
+        Text(text = subtitle, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         error?.let { Text("Error: $it") }
         if (error == null) {
             Text(
                 when {
-                    loading && items.isEmpty() -> "Loading…"
+                    loading && items.isEmpty() -> "Loading\u2026"
                     !loading && items.isEmpty() -> "Nothing here."
-                    totalCount > 0 && items.size < totalCount ->
-                        "Showing ${items.size} of $totalCount"
+                    totalCount > 0 && items.size < totalCount -> "Showing ${items.size} of $totalCount"
                     totalCount > 0 -> "$totalCount items"
                     else -> "${items.size} items"
                 },
@@ -120,8 +114,7 @@ fun BrowseScreen(
                     onClick = {
                         when (item.kind) {
                             MediaEntryKind.Folder -> onOpenBrowseLocation(item.id)
-                            MediaEntryKind.Playable, MediaEntryKind.Other ->
-                                onOpenDetail(item.id)
+                            MediaEntryKind.Playable, MediaEntryKind.Other -> onOpenDetail(item.id)
                         }
                     },
                 )
@@ -135,7 +128,7 @@ fun BrowseScreen(
                                 loading = true
                                 try {
                                     val page = withContext(Dispatchers.IO) {
-                                        catalog.loadBrowsePage(items.size, PAGE_SIZE)
+                                        loadPage(items.size, PAGE_SIZE)
                                     }
                                     items = items + page.items
                                 } catch (e: Exception) {

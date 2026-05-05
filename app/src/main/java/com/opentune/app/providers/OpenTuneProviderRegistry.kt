@@ -5,8 +5,8 @@ import com.opentune.provider.OpenTuneProvider
 class OpenTuneProviderRegistry private constructor(
     private val providersById: Map<String, OpenTuneProvider>,
 ) {
-    fun provider(providerId: String): OpenTuneProvider =
-        providersById[providerId] ?: error("Unknown provider: $providerId")
+    fun provider(providerType: String): OpenTuneProvider =
+        providersById[providerType] ?: error("Unknown provider: $providerType")
 
     fun allProviders(): Collection<OpenTuneProvider> = providersById.values
 
@@ -19,7 +19,7 @@ class OpenTuneProviderRegistry private constructor(
                 newProvider(EMBY_PROVIDER_CLASS, deviceProfile),
                 newProvider(SMB_PROVIDER_CLASS),
             )
-            return OpenTuneProviderRegistry(providers.associateBy { it.providerId })
+            return OpenTuneProviderRegistry(providers.associateBy { it.providerType })
         }
 
         private fun newProvider(className: String, vararg args: Any): OpenTuneProvider {

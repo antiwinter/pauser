@@ -15,11 +15,10 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
-import com.opentune.player.OpenTunePlaybackResumeStore
 import com.opentune.player.OpenTunePlayerScreen
-import com.opentune.provider.PlaybackResumeAccessor
-import com.opentune.provider.PlaybackResolveDeps
 import com.opentune.provider.PlaybackSpec
+import com.opentune.storage.MediaStateKey
+import com.opentune.storage.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -27,35 +26,28 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PlayerRoute(
     app: OpenTuneApplication,
-    providerId: String,
-    sourceId: Long,
+    providerType: String,
+    sourceId: String,
     itemRefDecoded: String,
     startMs: Long,
     onExit: () -> Unit,
 ) {
+    val stateKey = remember(providerType, sourceId, itemRefDecoded) {
+        MediaStateKey(providerType, sourceId, itemRefDecoded)
+    }
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(providerId, sourceId, itemRefDecoded, startMs) {
+    LaunchedEffect(providerType, sourceId, itemRefDecoded, startMs) {
         spec = null
         error = null
         try {
             spec = withContext(Dispatchers.IO) {
-                val resumeAccessor = PlaybackResumeAccessor { rk ->
-                    OpenTunePlaybackResumeStore.readResumePosition(app, rk)
-                }
-                val deps = PlaybackResolveDeps(
-                    serverStore = app.storageBindings.serverStore,
-                    progressStore = app.storageBindings.progressStore,
-                    androidContext = app,
-                    resumeAccessor = resumeAccessor,
-                )
-                app.providerRegistry.provider(providerId).resolvePlayback(
-                    deps,
-                    sourceId,
-                    itemRefDecoded,
-                    startMs,
-                )
+                val resumeMs = app.storageBindings.mediaStateStore.get(stateKey)
+                    ?.positionMs?.takeIf { it > 0L } ?: startMs
+                val inst = app.instanceRegistry.getOrCreate(sourceId)
+                    ?: throw IllegalStateException("No provider instance for $sourceId")
+                inst.resolvePlayback(itemRefDecoded, resumeMs, app)
             }
         } catch (e: Exception) {
             error = e.message ?: "Playback failed"
@@ -71,11 +63,16 @@ fun PlayerRoute(
         }
         spec != null -> {
             PlayerShell {
-                OpenTunePlayerScreen(spec = spec!!, onExit = onExit)
+                OpenTunePlayerScreen(
+                    spec = spec!!,
+                    mediaStateStore = app.storageBindings.mediaStateStore,
+                    mediaStateKey = stateKey,
+                    onExit = onExit,
+                )
             }
         }
         else -> {
-            Text("Loading…", modifier = Modifier.padding(48.dp))
+            Text("Loading\u2026", modifier = Modifier.padding(48.dp))
         }
     }
 }

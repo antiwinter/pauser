@@ -17,67 +17,67 @@ import androidx.compose.ui.unit.dp
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.ui.catalog.CatalogNav
-import com.opentune.provider.OpenTuneProviderIds
-import com.opentune.provider.ServerRecord
+import com.opentune.emby.api.EmbyProvider
+import com.opentune.smb.SmbProvider
+import com.opentune.storage.ServerEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeRoute(
     onAddProvider: (String) -> Unit,
-    onOpenBrowse: (String, Long, String) -> Unit,
-    onEditProvider: (String, Long) -> Unit,
+    onOpenBrowse: (String, String, String) -> Unit,
+    onEditProvider: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    var httpServers by remember { mutableStateOf<List<ServerRecord>>(emptyList()) }
-    var fileShares by remember { mutableStateOf<List<ServerRecord>>(emptyList()) }
+    var httpServers by remember { mutableStateOf<List<ServerEntity>>(emptyList()) }
+    var fileShares by remember { mutableStateOf<List<ServerEntity>>(emptyList()) }
     val librariesRoot = remember { CatalogNav.LIBRARIES_ROOT_SEGMENT }
 
     LaunchedEffect(app) {
         coroutineScope {
             launch {
-                app.storageBindings.serverStore.observeByProvider(OpenTuneProviderIds.HTTP_LIBRARY).collect {
-                    httpServers = it
+                app.storageBindings.serverDao.observeByProvider(EmbyProvider.PROVIDER_TYPE).collect { list ->
+                    httpServers = list
+                    launch { app.instanceRegistry.populateEager(list) }
                 }
             }
             launch {
-                app.storageBindings.serverStore.observeByProvider(OpenTuneProviderIds.FILE_SHARE).collect {
-                    fileShares = it
+                app.storageBindings.serverDao.observeByProvider(SmbProvider.PROVIDER_TYPE).collect { list ->
+                    fileShares = list
+                    launch { app.instanceRegistry.populateEager(list) }
                 }
             }
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(48.dp),
+        modifier = Modifier.fillMaxSize().padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(stringResource(R.string.home_title))
-        Button(onClick = { onAddProvider(OpenTuneProviderIds.HTTP_LIBRARY) }) {
+        Button(onClick = { onAddProvider(EmbyProvider.PROVIDER_TYPE) }) {
             Text(stringResource(R.string.home_add_http))
         }
-        Button(onClick = { onAddProvider(OpenTuneProviderIds.FILE_SHARE) }) {
+        Button(onClick = { onAddProvider(SmbProvider.PROVIDER_TYPE) }) {
             Text(stringResource(R.string.home_add_file_share))
         }
         httpServers.forEach { s ->
             Button(
-                onClick = { onOpenBrowse(OpenTuneProviderIds.HTTP_LIBRARY, s.id, librariesRoot) },
-                modifier = Modifier.onTvMenuKeyDown { onEditProvider(OpenTuneProviderIds.HTTP_LIBRARY, s.id) },
+                onClick = { onOpenBrowse(EmbyProvider.PROVIDER_TYPE, s.sourceId, librariesRoot) },
+                modifier = Modifier.onTvMenuKeyDown { onEditProvider(EmbyProvider.PROVIDER_TYPE, s.sourceId) },
             ) {
                 Text(s.displayName)
             }
         }
         fileShares.forEach { s ->
             Button(
-                onClick = { onOpenBrowse(OpenTuneProviderIds.FILE_SHARE, s.id, "") },
-                modifier = Modifier.onTvMenuKeyDown { onEditProvider(OpenTuneProviderIds.FILE_SHARE, s.id) },
+                onClick = { onOpenBrowse(SmbProvider.PROVIDER_TYPE, s.sourceId, "") },
+                modifier = Modifier.onTvMenuKeyDown { onEditProvider(SmbProvider.PROVIDER_TYPE, s.sourceId) },
             ) {
                 Text(s.displayName)
             }

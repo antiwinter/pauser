@@ -35,6 +35,10 @@ import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.opentune.provider.PlaybackSpec
+import com.opentune.storage.MediaStateKey
+import com.opentune.storage.UserMediaStateStore
+import com.opentune.storage.upsertPosition
+import com.opentune.storage.upsertSpeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -61,6 +65,8 @@ private tailrec fun Context.findActivity(): Activity? =
 @Composable
 fun OpenTunePlayerScreen(
     spec: PlaybackSpec,
+    mediaStateStore: UserMediaStateStore,
+    mediaStateKey: MediaStateKey,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -68,8 +74,9 @@ fun OpenTunePlayerScreen(
     val specState = rememberUpdatedState(spec)
     val onExitState = rememberUpdatedState(onExit)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    val exo = remember(spec.resumeKey) { OpenTuneExoPlayer.createForBundledSources(context) }
-    val released = remember(spec.resumeKey) { AtomicBoolean(false) }
+    val instanceKey = mediaStateKey
+    val exo = remember(instanceKey) { OpenTuneExoPlayer.createForBundledSources(context) }
+    val released = remember(instanceKey) { AtomicBoolean(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var showAudioUnsupportedBanner by remember { mutableStateOf(false) }
 
@@ -83,7 +90,7 @@ fun OpenTunePlayerScreen(
             return
         }
         val pos = withContext(Dispatchers.Main) { exo.currentPosition }
-        OpenTunePlaybackResumeStore.writeResumePosition(context.applicationContext, s.resumeKey, pos)
+        withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
         s.hooks.onStop(pos)
         withContext(Dispatchers.Main) { exo.release() }
         s.onPlaybackDispose()
@@ -96,14 +103,19 @@ fun OpenTunePlayerScreen(
 
     val hooksState = rememberUpdatedState(spec.hooks)
 
-    LaunchedEffect(spec.resumeKey) {
+    LaunchedEffect(instanceKey) {
         val s = spec
         released.set(false)
         showAudioUnsupportedBanner = false
+        val savedSpeed = withContext(Dispatchers.IO) {
+            mediaStateStore.get(
+                instanceKey.providerType,
+                instanceKey.sourceId,
+                instanceKey.itemRef
+            )?.playbackSpeed ?: 1f
+        }.coerceIn(0.25f, 4f)
         withContext(Dispatchers.Main) {
-            exo.playbackParameters = PlaybackParameters(
-                OpenTunePlaybackResumeStore.readSpeed(context.applicationContext, s.resumeKey),
-            )
+            exo.playbackParameters = PlaybackParameters(savedSpeed)
             exo.stop()
             exo.setMediaSource(s.mediaSourceFactory.create())
             exo.playWhenReady = true
@@ -167,12 +179,12 @@ fun OpenTunePlayerScreen(
         hooks.onPlaybackReady(pos, rate)
     }
 
-    DisposableEffect(exo, spec.resumeKey) {
-        val appContext = context.applicationContext
-        val rk = spec.resumeKey
+    DisposableEffect(exo, instanceKey) {
         val listener = object : Player.Listener {
             override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
-                OpenTunePlaybackResumeStore.writeSpeed(appContext, rk, parameters.speed)
+                scope.launch(Dispatchers.IO) {
+                    mediaStateStore.upsertSpeed(instanceKey, parameters.speed)
+                }
             }
         }
         exo.addListener(listener)
@@ -201,11 +213,9 @@ fun OpenTunePlayerScreen(
         }
     }
 
-    LaunchedEffect(exo, spec.resumeKey, spec.hooks) {
+    LaunchedEffect(exo, instanceKey, spec.hooks) {
         val s = spec
         val interval = s.hooks.progressIntervalMs()
-        val rk = s.resumeKey
-        val appCtx = context.applicationContext
         if (interval > 0L) {
             while (isActive) {
                 delay(interval)
@@ -213,14 +223,15 @@ fun OpenTunePlayerScreen(
                 if (released.get()) break
                 val pos = exo.currentPosition
                 hooksState.value.onProgressTick(pos, playbackRate())
-                OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, pos)
+                withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
             }
         } else {
             while (isActive) {
                 delay(10_000L)
                 if (released.get()) break
                 if (exo.isPlaying) {
-                    OpenTunePlaybackResumeStore.writeResumePosition(appCtx, rk, exo.currentPosition)
+                    val pos = exo.currentPosition
+                    withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
                 }
             }
         }

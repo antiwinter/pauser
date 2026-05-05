@@ -8,16 +8,14 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         ServerEntity::class,
-        FavoriteEntity::class,
-        PlaybackProgressEntity::class,
+        MediaStateEntity::class,
     ],
-    version = 2,
+    version = 4,
     exportSchema = false,
 )
 abstract class OpenTuneDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
-    abstract fun favoriteDao(): FavoriteDao
-    abstract fun playbackProgressDao(): PlaybackProgressDao
+    abstract fun mediaStateDao(): MediaStateDao
 
     companion object {
         fun create(context: Context): OpenTuneDatabase =

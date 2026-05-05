@@ -1,8 +1,5 @@
 package com.opentune.app.ui.catalog
 
-import com.opentune.provider.MediaCatalogSource
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.provider.MediaEntryKind
+import com.opentune.provider.MediaListItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -34,7 +33,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SearchScreen(
     logTag: String,
-    catalog: MediaCatalogSource,
+    searchFn: suspend (String) -> List<MediaListItem>,
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
@@ -53,7 +52,7 @@ fun SearchScreen(
         }
         searching = true
         try {
-            results = withContext(Dispatchers.IO) { catalog.searchItems(q) }
+            results = withContext(Dispatchers.IO) { searchFn(q) }
         } catch (e: Exception) {
             Log.e(logTag, "search", e)
             results = emptyList()
@@ -77,7 +76,7 @@ fun SearchScreen(
             singleLine = true,
         )
         if (searching) {
-            Text("Searching…")
+            Text("Searching\u2026")
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(5),

@@ -28,7 +28,7 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.provider.OpenTuneProviderIds
+import com.opentune.emby.api.EmbyProvider
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
@@ -40,23 +40,23 @@ private const val LOG_TAG = "OpenTuneServerEdit"
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ServerEditRoute(
-    providerId: String,
-    sourceId: Long,
+    providerType: String,
+    sourceId: String,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerId) {
-        app.providerRegistry.provider(providerId).editFields().sortedBy { it.order }
+    val fields = remember(providerType) {
+        app.providerRegistry.provider(providerType).getFieldsSpec().sortedBy { it.order }
     }
     var values by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(providerId, sourceId) {
+    LaunchedEffect(providerType, sourceId) {
         loaded = false
         val initial = withContext(Dispatchers.IO) {
-            ServerConfigRepository.loadEditFields(providerId, app, sourceId)
+            ServerConfigRepository.loadEditFields(providerType, app, sourceId)
         }
         values = fields.associate { it.id to (initial[it.id] ?: "") }
         loaded = true
@@ -78,7 +78,7 @@ fun ServerEditRoute(
         ) {
             Text(stringResource(R.string.server_edit_title))
             Text(
-                if (providerId == OpenTuneProviderIds.HTTP_LIBRARY) {
+                if (providerType == EmbyProvider.PROVIDER_TYPE) {
                     stringResource(R.string.server_edit_hint_http)
                 } else {
                     stringResource(R.string.server_edit_hint_file_share)
@@ -113,7 +113,7 @@ fun ServerEditRoute(
                 scope.launch {
                     error = null
                     val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitEdit(providerId, sourceId, values, app)
+                        ServerConfigRepository.submitEdit(providerType, sourceId, values, app)
                     }
                     when (result) {
                         is SubmitResult.Success -> onDone()
@@ -125,7 +125,7 @@ fun ServerEditRoute(
                 }
             },
             enabled = loaded && (
-                if (providerId == OpenTuneProviderIds.HTTP_LIBRARY) {
+                if (providerType == EmbyProvider.PROVIDER_TYPE) {
                     (values["username"]?.isNotBlank() == true) && (values["password"]?.isNotBlank() == true)
                 } else {
                     true

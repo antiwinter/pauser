@@ -5,8 +5,8 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "servers")
 data class ServerEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val providerId: String,
+    @PrimaryKey val sourceId: String,
+    val providerType: String,
     val displayName: String,
     val fieldsJson: String,
     val createdAtEpochMs: Long,
@@ -14,23 +14,18 @@ data class ServerEntity(
 )
 
 @Entity(
-    tableName = "favorites",
-    primaryKeys = ["providerId", "sourceId", "itemId"],
+    tableName = "media_state",
+    primaryKeys = ["providerType", "sourceId", "itemId"],
 )
-data class FavoriteEntity(
-    val providerId: String,
-    val sourceId: Long,
+data class MediaStateEntity(
+    val providerType: String,
+    val sourceId: String,
     val itemId: String,
-    val title: String,
-    val type: String?,
-)
-
-@Entity(tableName = "playback_progress")
-data class PlaybackProgressEntity(
-    @PrimaryKey val key: String,
-    val providerId: String,
-    val sourceId: Long,
-    val itemId: String,
-    val positionMs: Long,
+    val positionMs: Long = 0L,
+    val playbackSpeed: Float = 1f,
+    val isFavorite: Boolean = false,
+    val title: String? = null,
+    val type: String? = null,
+    val coverThumbPath: String? = null,
     val updatedAtEpochMs: Long,
 )

@@ -1,14 +1,15 @@
 package com.opentune.emby.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
 data class EmbyServerFieldsJson(
-    val baseUrl: String,
-    val userId: String,
-    val accessToken: String,
-    val serverId: String? = null,
+    @SerialName("base_url") val baseUrl: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("server_id") val serverId: String? = null,
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }

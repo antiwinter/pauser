@@ -1,37 +1,110 @@
 package com.opentune.smb
 
-import android.content.Context
-import com.opentune.provider.CatalogBindingPlugin
 import com.opentune.provider.OpenTuneProvider
-import com.opentune.provider.OpenTuneProviderIds
-import com.opentune.provider.PlaybackResolveDeps
-import com.opentune.provider.PlaybackSpec
-import com.opentune.provider.ProviderConfigBackend
+import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.ServerFieldSpec
+import com.opentune.provider.ValidationResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.security.MessageDigest
 
 class SmbProvider : OpenTuneProvider {
 
-    override val providerId: String = OpenTuneProviderIds.FILE_SHARE
+    override val providerType: String = PROVIDER_TYPE
 
-    private val catalogPluginImpl = SmbCatalogBindingPlugin()
-    private val configBackendImpl = SmbConfigBackend()
+    override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
+        ServerFieldSpec(
+            id = "host",
+            labelKey = "fld_network_host",
+            kind = ServerFieldKind.SingleLineText,
+            required = true,
+            order = 0,
+        ),
+        ServerFieldSpec(
+            id = "share_name",
+            labelKey = "fld_share_name",
+            kind = ServerFieldKind.SingleLineText,
+            required = true,
+            order = 1,
+        ),
+        ServerFieldSpec(
+            id = "username",
+            labelKey = "fld_account_username",
+            kind = ServerFieldKind.SingleLineText,
+            required = true,
+            order = 2,
+        ),
+        ServerFieldSpec(
+            id = "password",
+            labelKey = "fld_account_password",
+            kind = ServerFieldKind.Password,
+            required = true,
+            sensitive = true,
+            order = 3,
+        ),
+        ServerFieldSpec(
+            id = "domain",
+            labelKey = "fld_domain_optional",
+            kind = ServerFieldKind.SingleLineText,
+            required = false,
+            order = 4,
+        ),
+    )
 
-    override fun addFields(): List<ServerFieldSpec> = SmbServerFields.serverFields()
+    override suspend fun validateFields(values: Map<String, String>): ValidationResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val host = values["host"]?.trim().orEmpty()
+                val shareName = values["share_name"]?.trim().orEmpty()
+                val username = values["username"].orEmpty()
+                val password = values["password"].orEmpty()
+                val domain = values["domain"]?.trim()?.ifBlank { null }
+                val session = SmbSession.open(
+                    SmbCredentials(
+                        host = host,
+                        shareName = shareName,
+                        username = username,
+                        password = password,
+                        domain = domain,
+                    ),
+                )
+                session.close()
+                val fields = SmbServerFieldsJson(
+                    host = host,
+                    shareName = shareName,
+                    username = username,
+                    password = password,
+                    domain = domain,
+                )
+                val hash = sha256("$host$shareName")
+                ValidationResult.Success(
+                    hash = hash,
+                    displayName = shareName,
+                    fieldsJson = SmbServerFieldsJson.encode(fields),
+                )
+            } catch (e: Exception) {
+                ValidationResult.Error(e.message ?: "SMB validation failed")
+            }
+        }
 
-    override fun editFields(): List<ServerFieldSpec> = SmbServerFields.serverFields()
+    override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
+        val fields = SmbServerFieldsJson(
+            host = values["host"] ?: error("Missing host"),
+            shareName = values["share_name"] ?: error("Missing share_name"),
+            username = values["username"] ?: error("Missing username"),
+            password = values["password"] ?: error("Missing password"),
+            domain = values["domain"],
+        )
+        return SmbProviderInstance(fields = fields)
+    }
 
-    override val catalogPlugin: CatalogBindingPlugin get() = catalogPluginImpl
+    companion object {
+        const val PROVIDER_TYPE = "smb"
 
-    override val configBackend: ProviderConfigBackend get() = configBackendImpl
-
-    override suspend fun resolvePlayback(
-        deps: PlaybackResolveDeps,
-        sourceId: Long,
-        itemRef: String,
-        startMs: Long,
-    ): PlaybackSpec = SmbPlaybackResolver.resolve(deps, sourceId, itemRef, startMs)
-
-    override fun bootstrap(context: Context) {
-        // File-share has no global HTTP client identification.
+        private fun sha256(s: String): String {
+            val digest = MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8))
+            return digest.joinToString("") { b -> "%02x".format(b) }
+        }
     }
 }

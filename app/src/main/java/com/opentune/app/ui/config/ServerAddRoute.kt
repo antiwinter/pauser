@@ -29,7 +29,7 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.provider.OpenTuneProviderIds
+import com.opentune.emby.api.EmbyProvider
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
@@ -44,12 +44,12 @@ private const val LOG_TAG = "OpenTuneServerAdd"
 @OptIn(ExperimentalTvMaterial3Api::class, FlowPreview::class)
 @Composable
 fun ServerAddRoute(
-    providerId: String,
+    providerType: String,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerId) {
-        app.providerRegistry.provider(providerId).addFields().sortedBy { it.order }
+    val fields = remember(providerType) {
+        app.providerRegistry.provider(providerType).getFieldsSpec().sortedBy { it.order }
     }
     var values by remember {
         mutableStateOf(fields.associate { it.id to "" })
@@ -57,18 +57,18 @@ fun ServerAddRoute(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(providerId) {
-        val initial = ServerConfigRepository.loadAddDraft(providerId, app)
+    LaunchedEffect(providerType) {
+        val initial = ServerConfigRepository.loadAddDraft(providerType, app)
         values = fields.associate { it.id to (initial[it.id] ?: "") }
     }
 
-    LaunchedEffect(providerId, fields) {
+    LaunchedEffect(providerType, fields) {
         snapshotFlow { values }
             .distinctUntilChanged()
             .debounce(600)
             .collect { v ->
                 withContext(Dispatchers.IO) {
-                    ServerConfigRepository.saveAddDraft(providerId, app, v)
+                    ServerConfigRepository.saveAddDraft(providerType, app, v)
                 }
             }
     }
@@ -114,12 +114,12 @@ fun ServerAddRoute(
                 scope.launch {
                     error = null
                     val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitAdd(providerId, values, app)
+                        ServerConfigRepository.submitAdd(providerType, values, app)
                     }
                     when (result) {
                         is SubmitResult.Success -> {
                             withContext(Dispatchers.IO) {
-                                ServerConfigRepository.clearAddDraft(providerId, app)
+                                ServerConfigRepository.clearAddDraft(providerType, app)
                             }
                             onDone()
                         }
@@ -132,7 +132,7 @@ fun ServerAddRoute(
             },
         ) {
             Text(
-                if (providerId == OpenTuneProviderIds.HTTP_LIBRARY) {
+                if (providerType == EmbyProvider.PROVIDER_TYPE) {
                     stringResource(R.string.server_add_primary_http)
                 } else {
                     stringResource(R.string.server_add_primary_file_share)

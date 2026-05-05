@@ -16,7 +16,6 @@ import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.config.ServerAddRoute
 import com.opentune.app.ui.config.ServerEditRoute
 import com.opentune.app.ui.home.HomeRoute
-import com.opentune.provider.OpenTuneProviderIds
 import java.net.URLEncoder
 
 object Routes {
@@ -28,24 +27,25 @@ object Routes {
     const val DETAIL = "detail/{provider}/{sourceId}/{itemRef}"
     const val PLAYER = "player/{provider}/{sourceId}/{itemRef}/{startMs}"
     const val SEARCH = "search/{provider}/{sourceId}/{scopeLocation}"
-    const val PROVIDER_ADD = "provider_add/{providerId}"
-    const val PROVIDER_EDIT = "provider_edit/{providerId}/{sourceId}"
+    const val PROVIDER_ADD = "provider_add/{providerType}"
+    const val PROVIDER_EDIT = "provider_edit/{providerType}/{sourceId}"
 
-    fun providerAdd(providerId: String) = "provider_add/$providerId"
+    fun providerAdd(providerType: String) = "provider_add/$providerType"
 
-    fun providerEdit(providerId: String, sourceId: Long) = "provider_edit/$providerId/$sourceId"
+    fun providerEdit(providerType: String, sourceId: String) =
+        "provider_edit/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}"
 
-    fun browse(providerId: String, sourceId: Long, locationRaw: String) =
-        "browse/$providerId/$sourceId/${URLEncoder.encode(locationRaw, UrlCharset)}"
+    fun browse(providerType: String, sourceId: String, locationRaw: String) =
+        "browse/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
 
-    fun detail(providerId: String, sourceId: Long, itemRefRaw: String) =
-        "detail/$providerId/$sourceId/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun detail(providerType: String, sourceId: String, itemRefRaw: String) =
+        "detail/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 
-    fun player(providerId: String, sourceId: Long, itemRefRaw: String, startMs: Long) =
-        "player/$providerId/$sourceId/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
+    fun player(providerType: String, sourceId: String, itemRefRaw: String, startMs: Long) =
+        "player/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
 
-    fun search(providerId: String, sourceId: Long, scopeLocationRaw: String) =
-        "search/$providerId/$sourceId/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+    fun search(providerType: String, sourceId: String, scopeLocationRaw: String) =
+        "search/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
 }
 
 @Composable
@@ -56,34 +56,34 @@ fun OpenTuneNavHost() {
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeRoute(
-                onAddProvider = { pid -> nav.navigate(Routes.providerAdd(pid)) },
-                onOpenBrowse = { pid, id, path ->
-                    nav.navigate(Routes.browse(pid, id, path))
+                onAddProvider = { pt -> nav.navigate(Routes.providerAdd(pt)) },
+                onOpenBrowse = { pt, sid, path ->
+                    nav.navigate(Routes.browse(pt, sid, path))
                 },
-                onEditProvider = { pid, id -> nav.navigate(Routes.providerEdit(pid, id)) },
+                onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
             )
         }
         composable(
             Routes.PROVIDER_ADD,
-            listOf(navArgument("providerId") { type = NavType.StringType }),
+            listOf(navArgument("providerType") { type = NavType.StringType }),
         ) {
-            val providerId = it.arguments!!.getString("providerId")!!
+            val providerType = it.arguments!!.getString("providerType")!!
             ServerAddRoute(
-                providerId = providerId,
+                providerType = providerType,
                 onDone = { nav.popBackStack() },
             )
         }
         composable(
             Routes.PROVIDER_EDIT,
             listOf(
-                navArgument("providerId") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("providerType") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.StringType },
             ),
         ) {
-            val providerId = it.arguments!!.getString("providerId")!!
-            val sourceId = it.arguments!!.getLong("sourceId")
+            val providerType = it.arguments!!.getString("providerType")!!
+            val sourceId = it.arguments!!.getString("sourceId")!!
             ServerEditRoute(
-                providerId = providerId,
+                providerType = providerType,
                 sourceId = sourceId,
                 onDone = { nav.popBackStack() },
             )
@@ -92,18 +92,17 @@ fun OpenTuneNavHost() {
             Routes.BROWSE,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("sourceId") { type = NavType.StringType },
                 navArgument("location") { type = NavType.StringType },
             ),
         ) {
-            val providerId = it.arguments!!.getString("provider")!!
-            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
-            val sourceId = it.arguments!!.getLong("sourceId")
+            val providerType = it.arguments!!.getString("provider")!!
+            val sourceId = it.arguments!!.getString("sourceId")!!
             val location = it.arguments!!.getString("location")!!
             BrowseRoute(
                 nav = nav,
                 app = app,
-                providerId = providerId,
+                providerType = providerType,
                 sourceId = sourceId,
                 locationEncoded = location,
             )
@@ -112,18 +111,17 @@ fun OpenTuneNavHost() {
             Routes.DETAIL,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("sourceId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
             ),
         ) {
-            val providerId = it.arguments!!.getString("provider")!!
-            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
-            val sourceId = it.arguments!!.getLong("sourceId")
+            val providerType = it.arguments!!.getString("provider")!!
+            val sourceId = it.arguments!!.getString("sourceId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             DetailRoute(
                 nav = nav,
                 app = app,
-                providerId = providerId,
+                providerType = providerType,
                 sourceId = sourceId,
                 itemRefEncoded = itemRef,
             )
@@ -132,18 +130,17 @@ fun OpenTuneNavHost() {
             Routes.SEARCH,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("sourceId") { type = NavType.StringType },
                 navArgument("scopeLocation") { type = NavType.StringType },
             ),
         ) {
-            val providerId = it.arguments!!.getString("provider")!!
-            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
-            val sourceId = it.arguments!!.getLong("sourceId")
+            val providerType = it.arguments!!.getString("provider")!!
+            val sourceId = it.arguments!!.getString("sourceId")!!
             val scope = it.arguments!!.getString("scopeLocation")!!
             SearchRoute(
                 nav = nav,
                 app = app,
-                providerId = providerId,
+                providerType = providerType,
                 sourceId = sourceId,
                 scopeLocationEncoded = scope,
             )
@@ -152,20 +149,19 @@ fun OpenTuneNavHost() {
             Routes.PLAYER,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.LongType },
+                navArgument("sourceId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
                 navArgument("startMs") { type = NavType.LongType },
             ),
         ) {
-            val providerId = it.arguments!!.getString("provider")!!
-            check(OpenTuneProviderIds.isKnown(providerId)) { "Unknown provider: $providerId" }
-            val sourceId = it.arguments!!.getLong("sourceId")
+            val providerType = it.arguments!!.getString("provider")!!
+            val sourceId = it.arguments!!.getString("sourceId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             val startMs = it.arguments!!.getLong("startMs")
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
             PlayerRoute(
                 app = app,
-                providerId = providerId,
+                providerType = providerType,
                 sourceId = sourceId,
                 itemRefDecoded = itemRefDecoded,
                 startMs = startMs,
