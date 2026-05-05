@@ -3,11 +3,14 @@ package com.opentune.app.ui.config
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -25,6 +29,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
@@ -55,6 +60,7 @@ fun ServerAddRoute(
         mutableStateOf(fields.associate { it.id to "" })
     }
     var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(providerType) {
@@ -105,40 +111,61 @@ fun ServerAddRoute(
                     } else {
                         VisualTransformation.None
                     },
+                    enabled = !isLoading,
                 )
             }
-            error?.let { Text("Error: $it") }
         }
         Button(
             onClick = {
+                if (isLoading) return@Button
                 scope.launch {
                     error = null
-                    val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitAdd(providerType, values, app)
-                    }
-                    when (result) {
-                        is SubmitResult.Success -> {
-                            withContext(Dispatchers.IO) {
-                                ServerConfigRepository.clearAddDraft(providerType, app)
+                    isLoading = true
+                    try {
+                        val result = withContext(Dispatchers.IO) {
+                            ServerConfigRepository.submitAdd(providerType, values, app)
+                        }
+                        when (result) {
+                            is SubmitResult.Success -> {
+                                withContext(Dispatchers.IO) {
+                                    ServerConfigRepository.clearAddDraft(providerType, app)
+                                }
+                                onDone()
                             }
-                            onDone()
+                            is SubmitResult.Error -> {
+                                Log.e(LOG_TAG, "submitAdd failed: ${result.message}")
+                                error = result.message
+                            }
                         }
-                        is SubmitResult.Error -> {
-                            Log.e(LOG_TAG, "submitAdd failed: ${result.message}")
-                            error = result.message
-                        }
+                    } finally {
+                        isLoading = false
                     }
                 }
             },
+            enabled = !isLoading,
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                }
+                Text(
+                    if (providerType == EmbyProvider.PROVIDER_TYPE) {
+                        stringResource(R.string.server_add_primary_http)
+                    } else {
+                        stringResource(R.string.server_add_primary_file_share)
+                    },
+                )
+            }
+        }
+        error?.let {
             Text(
-                if (providerType == EmbyProvider.PROVIDER_TYPE) {
-                    stringResource(R.string.server_add_primary_http)
-                } else {
-                    stringResource(R.string.server_add_primary_file_share)
-                },
+                text = "Error: $it",
+                color = MaterialTheme.colorScheme.error,
             )
         }
-        Button(onClick = onDone) { Text(stringResource(R.string.action_cancel)) }
+        Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.action_cancel)) }
     }
 }

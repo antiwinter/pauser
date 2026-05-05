@@ -4,9 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,64 +40,75 @@ fun DetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scroll)
-            .padding(48.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .verticalScroll(scroll),
     ) {
-        Button(onClick = onBack) { Text("Back") }
-        error?.let { Text("Error: $it") }
-        when {
-            loading && detail == null -> Text("Loading…")
-            detail == null -> Unit
-            else -> {
-                val d = detail
-                Text(d.title)
-                if (d.canPlay) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (resumePositionMs > 0) {
-                            Button(onClick = onResume) { Text("Resume") }
-                        }
-                        Button(onClick = onPlayFromStart) {
-                            Text(if (resumePositionMs > 0) "From start" else "Play")
+        // Full-bleed poster at the top
+        if (detail != null) {
+            val d = detail
+            when (val c = d.poster) {
+                is MediaArt.Http -> AsyncImage(
+                    model = c.url,
+                    contentDescription = d.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                    contentScale = ContentScale.Crop,
+                )
+                is MediaArt.DrawableRes -> Image(
+                    painter = painterResource(c.resId),
+                    contentDescription = d.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                    contentScale = ContentScale.Crop,
+                )
+                is MediaArt.LocalFile -> AsyncImage(
+                    model = File(c.absolutePath),
+                    contentDescription = d.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                    contentScale = ContentScale.Crop,
+                )
+                MediaArt.None -> Unit
+            }
+        }
+
+        // Padded content below the poster
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(48.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Button(onClick = onBack) { Text("Back") }
+            error?.let { Text("Error: $it") }
+            when {
+                loading && detail == null -> Text("Loading…")
+                detail == null -> Unit
+                else -> {
+                    val d = detail
+                    Text(d.title)
+                    if (d.canPlay) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (resumePositionMs > 0) {
+                                Button(onClick = onResume) { Text("Resume") }
+                            }
+                            Button(onClick = onPlayFromStart) {
+                                Text(if (resumePositionMs > 0) "From start" else "Play")
+                            }
                         }
                     }
-                }
-                if (d.favoriteSupported) {
-                    Button(onClick = onToggleFavorite) {
-                        Text(if (isFavorite) "Remove favorite" else "Add favorite")
+                    if (d.favoriteSupported) {
+                        Button(onClick = onToggleFavorite) {
+                            Text(if (isFavorite) "Remove favorite" else "Add favorite")
+                        }
                     }
+                    d.synopsis?.let { Text(it, modifier = Modifier.padding(top = 4.dp)) }
                 }
-                when (val c = d.poster) {
-                    is MediaArt.Http -> AsyncImage(
-                        model = c.url,
-                        contentDescription = d.title,
-                        modifier = Modifier
-                            .height(280.dp)
-                            .padding(bottom = 8.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                    is MediaArt.DrawableRes -> Image(
-                        painter = painterResource(c.resId),
-                        contentDescription = d.title,
-                        modifier = Modifier
-                            .height(200.dp)
-                            .padding(bottom = 8.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                    is MediaArt.LocalFile -> AsyncImage(
-                        model = File(c.absolutePath),
-                        contentDescription = d.title,
-                        modifier = Modifier
-                            .height(280.dp)
-                            .padding(bottom = 8.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                    MediaArt.None -> Unit
-                }
-                d.synopsis?.let { Text(it, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
     }

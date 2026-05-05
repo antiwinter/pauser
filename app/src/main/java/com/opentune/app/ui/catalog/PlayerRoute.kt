@@ -18,7 +18,6 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.player.OpenTunePlayerScreen
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
-import com.opentune.storage.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -43,8 +42,9 @@ fun PlayerRoute(
         error = null
         try {
             spec = withContext(Dispatchers.IO) {
-                val resumeMs = app.storageBindings.mediaStateStore.get(stateKey)
-                    ?.positionMs?.takeIf { it > 0L } ?: startMs
+                // startMs=0 means "from start" — skip the DB lookup entirely so we never
+                // accidentally resume from a saved position.
+                val resumeMs = startMs
                 val inst = app.instanceRegistry.getOrCreate(sourceId)
                     ?: throw IllegalStateException("No provider instance for $sourceId")
                 inst.resolvePlayback(itemRefDecoded, resumeMs, app)
