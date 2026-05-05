@@ -20,7 +20,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
 import androidx.tv.material3.Surface
-import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaArt
 import java.io.File
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
@@ -47,25 +47,25 @@ fun MediaEntryComponent(
                 contentAlignment = Alignment.Center,
             ) {
                 when (val c = item.cover) {
-                    is MediaCover.Http -> AsyncImage(
+                    is MediaArt.Http -> AsyncImage(
                         model = c.url,
                         contentDescription = item.title,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
                     )
-                    is MediaCover.DrawableRes -> Image(
+                    is MediaArt.DrawableRes -> Image(
                         painter = painterResource(c.resId),
                         contentDescription = item.title,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Fit,
                     )
-                    is MediaCover.LocalFile -> AsyncImage(
+                    is MediaArt.LocalFile -> AsyncImage(
                         model = File(c.absolutePath),
                         contentDescription = item.title,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
                     )
-                    MediaCover.None -> Text(
+                    MediaArt.None -> Text(
                         text = when (item.kind) {
                             MediaEntryKind.Folder -> "📁"
                             MediaEntryKind.Playable -> "▶"

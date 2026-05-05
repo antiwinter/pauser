@@ -19,7 +19,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
 import java.io.File
 
@@ -71,7 +71,7 @@ fun DetailScreen(
                     }
                 }
                 when (val c = d.cover) {
-                    is MediaCover.Http -> AsyncImage(
+                    is MediaArt.Http -> AsyncImage(
                         model = c.url,
                         contentDescription = d.title,
                         modifier = Modifier
@@ -79,7 +79,7 @@ fun DetailScreen(
                             .padding(bottom = 8.dp),
                         contentScale = ContentScale.Fit,
                     )
-                    is MediaCover.DrawableRes -> Image(
+                    is MediaArt.DrawableRes -> Image(
                         painter = painterResource(c.resId),
                         contentDescription = d.title,
                         modifier = Modifier
@@ -87,7 +87,7 @@ fun DetailScreen(
                             .padding(bottom = 8.dp),
                         contentScale = ContentScale.Fit,
                     )
-                    is MediaCover.LocalFile -> AsyncImage(
+                    is MediaArt.LocalFile -> AsyncImage(
                         model = File(c.absolutePath),
                         contentDescription = d.title,
                         modifier = Modifier
@@ -95,7 +95,7 @@ fun DetailScreen(
                             .padding(bottom = 8.dp),
                         contentScale = ContentScale.Fit,
                     )
-                    MediaCover.None -> Unit
+                    MediaArt.None -> Unit
                 }
                 d.synopsis?.let { Text(it, modifier = Modifier.padding(top = 4.dp)) }
             }

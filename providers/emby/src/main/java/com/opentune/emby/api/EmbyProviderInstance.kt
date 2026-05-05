@@ -10,7 +10,7 @@ import com.opentune.emby.api.dto.BaseItemDto
 import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.provider.BrowsePageResult
 import com.opentune.provider.CatalogRouteTokens
-import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
@@ -44,7 +44,7 @@ class EmbyProviderInstance(
         val type = type ?: ""
         val kind = if (type in CONTAINER_TYPES) MediaEntryKind.Folder else MediaEntryKind.Playable
         val thumb = EmbyImageUrls.primaryThumb(baseUrl = fields.baseUrl, item = this, accessToken = fields.accessToken)
-        val cover = if (thumb != null) MediaCover.Http(thumb) else MediaCover.None
+        val cover = if (thumb != null) MediaArt.Http(thumb) else MediaArt.None
         return MediaListItem(id = id, title = name ?: id, kind = kind, cover = cover)
     }
 
@@ -88,7 +88,7 @@ class EmbyProviderInstance(
         return withContext(Dispatchers.IO) {
             val item = r.getItem(itemRef)
             val poster = EmbyImageUrls.primaryPoster(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
-            val cover = if (poster != null) MediaCover.Http(poster) else MediaCover.None
+            val cover = if (poster != null) MediaArt.Http(poster) else MediaArt.None
             MediaDetailModel(
                 itemKey = itemRef,
                 title = item.name ?: itemRef,

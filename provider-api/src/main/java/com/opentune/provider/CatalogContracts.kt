@@ -8,18 +8,18 @@ enum class MediaEntryKind {
     Other,
 }
 
-sealed class MediaCover {
-    data class Http(val url: String) : MediaCover()
-    data class DrawableRes(val resId: Int) : MediaCover()
-    data class LocalFile(val absolutePath: String) : MediaCover()
-    data object None : MediaCover()
+sealed class MediaArt {
+    data class Http(val url: String) : MediaArt()
+    data class DrawableRes(val resId: Int) : MediaArt()
+    data class LocalFile(val absolutePath: String) : MediaArt()
+    data object None : MediaArt()
 }
 
 data class MediaListItem(
     val id: String,
     val title: String,
     val kind: MediaEntryKind,
-    val cover: MediaCover,
+    val cover: MediaArt,
 )
 
 data class BrowsePageResult(
@@ -31,7 +31,7 @@ data class MediaDetailModel(
     val itemKey: String,
     val title: String,
     val synopsis: String?,
-    val cover: MediaCover,
+    val cover: MediaArt,
     val canPlay: Boolean,
     /** Resume position from remote source; 0 if none. App layer overwrites with local value. */
     val resumePositionMs: Long,

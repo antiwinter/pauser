@@ -8,7 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.opentune.provider.BrowsePageResult
-import com.opentune.provider.MediaCover
+import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
@@ -72,7 +72,7 @@ class SmbProviderInstance(
             itemKey = itemRef,
             title = name,
             synopsis = path,
-            cover = MediaCover.DrawableRes(coverRes),
+            cover = MediaArt.DrawableRes(coverRes),
             canPlay = video,
             resumePositionMs = 0L,
             favoriteSupported = false,
@@ -128,7 +128,7 @@ class SmbProviderInstance(
             id = e.path,
             title = e.name + if (e.isDirectory) "/" else "",
             kind = kind,
-            cover = MediaCover.DrawableRes(res),
+            cover = MediaArt.DrawableRes(res),
         )
     }
 }
