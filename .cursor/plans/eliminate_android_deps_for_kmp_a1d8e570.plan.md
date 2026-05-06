@@ -1,6 +1,6 @@
 ---
 name: Eliminate Android Dependencies from KMP Modules
-overview: "Remove all Android and Media3 imports from provider-api, emby, device-profile, and storage so they can be compiled as KMP commonMain. Room KMP (2.6+) means storage stays as a single module with expect/actual for platform-specific database creation. KMP modules provide fully functional providers (emby). Android-only code (ExoPlayer, Context, Build, Compose) stays in app or Android-only modules. App remains free to implement additional providers (like smb) against provider-api."
+overview: "Remove all Android and Media3 imports from provider-api, emby, and storage so they can be compiled as KMP commonMain. Delete device-profile module — codec capabilities flow from app through setCapabilities() on OpenTuneProvider. Emby builds DeviceProfile internally, no Emby types leak outside :emby. Room KMP (2.6+) means storage stays as a single module with expect/actual. Android-only code (ExoPlayer, Context, Build, Compose) stays in app or Android-only modules. App remains free to implement additional providers (like smb) against provider-api."
 todos:
   - id: decouple-playback-contracts
     content: "Replace Media3 MediaSource in provider-api/PlaybackContracts with platform-agnostic PlaybackUrlSpec; add NoOpPlaybackHooks"
@@ -14,8 +14,8 @@ todos:
   - id: extract-emby-dtos-and-client
     content: "Verify all DTOs, EmbyRepository, EmbyPlaybackHooks, EmbyPlaybackUrlResolver, EmbyClientFactory, EmbyClientIdentification have zero Android deps"
     status: pending
-  - id: decouple-device-profile
-    content: "Split AndroidDeviceProfileBuilder: shared DeviceProfileBuilder(CodecCapabilities) + expect fun probeCodecCapabilities()"
+  - id: add-capabilities-to-provider
+    content: "Add setCapabilities(CodecCapabilities) to OpenTuneProvider in provider-api; delete device-profile module entirely"
     status: pending
   - id: decouple-storage
     content: "Remove Android Context/DataStore from storage; use expect/actual for database creation and preferences; Room 2.6+ KMP support keeps it as a single module"
@@ -34,10 +34,9 @@ isProject: false
                     KMP shared (pure Kotlin)
         ┌──────────────────────────────────────────┐
         │  :provider-api       contracts + DTOs    │
+        │                      CodecCapabilities   │
         │  :emby               Emby provider (fully│
         │                      usable, no Android) │
-        │  :device-profile     codec probe expect  │
-        │                      + shared mapping    │
         │  :storage            Room KMP (2.6+)     │
         │                      expect/actual for   │
         │                      DB creation         │
@@ -213,15 +212,11 @@ class AndroidPlatformContext(private val androidContext: Context) : PlatformCont
 
 ---
 
-## Step 5: Decouple device-profile
+## Step 5: Add capabilities to provider, delete device-profile module
 
-**File:** `device-profile/src/main/java/com/opentune/deviceprofile/AndroidDeviceProfileBuilder.kt`
+**Principle:** No Emby keyword (`DeviceProfile`, `CodecProfile`, `DirectPlayProfile`, etc.) appears outside `:emby`. The `device-profile` module is deleted entirely.
 
-**Problem:** Entire file uses `android.media.MediaCodecList`, `MediaFormat`, `android.os.Build`.
-
-**Change:** Split into two parts.
-
-**Part A — Shared `DeviceProfileBuilder` (pure Kotlin):**
+**NEW `provider-api/src/main/java/com/opentune/provider/CodecCapabilities.kt`:**
 
 ```kotlin
 data class VideoCodecCapability(
@@ -233,37 +228,53 @@ data class VideoCodecCapability(
 data class CodecCapabilities(
     val videoCodecs: List<VideoCodecCapability>,
     val audioCodecs: List<String>,  // MIME types like "audio/mp4a-latm"
+    val modelName: String = "",     // for device identification
 )
+```
 
-object DeviceProfileBuilder {
-    fun build(capabilities: CodecCapabilities, modelName: String = ""): DeviceProfile {
-        // All current mapping logic refactored to take data instead of probing:
-        // - MIME → Emby codec name mapping
-        // - Profile condition building (bitrate, width, height limits)
-        // - Transcoding profiles, subtitle profiles, response profiles
-        // - DeviceIdentification with modelName
+**Update `OpenTuneProvider` interface** in `provider-api/ProviderContracts.kt`:
+
+```kotlin
+interface OpenTuneProvider {
+    // ... existing methods ...
+
+    /** Set decoder capabilities probed from the platform. Default is no-op. */
+    fun setCapabilities(capabilities: CodecCapabilities) {}
+}
+```
+
+**`EmbyProvider` implementation:**
+
+```kotlin
+class EmbyProvider(...) : OpenTuneProvider {
+    @Volatile
+    private var capabilities: CodecCapabilities? = null
+
+    override fun setCapabilities(capabilities: CodecCapabilities) {
+        this.capabilities = capabilities
+    }
+
+    override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
+        val caps = capabilities ?: CodecCapabilities(
+            videoCodecs = listOf(VideoCodecCapability("video/avc", 1920, 1080)),
+            audioCodecs = listOf("audio/mp4a-latm"),
+        )
+        val deviceProfile = buildDeviceProfile(caps)  // private method, stays in :emby
+        return EmbyProviderInstance(fields = values, deviceProfile = deviceProfile)
+    }
+
+    private fun buildDeviceProfile(caps: CodecCapabilities): DeviceProfile {
+        // All mapping logic from current AndroidDeviceProfileBuilder:
+        // MIME → Emby codec name, profile conditions, transcoding profiles, etc.
     }
 }
 ```
 
-**Part B — `expect` function for probing:**
+**`SmbProvider` implementation:** no-op default (doesn't care about codec capabilities).
 
-```kotlin
-// In commonMain (device-profile)
-expect fun probeCodecCapabilities(): CodecCapabilities
-```
+**App-side probing:** The app probes `MediaCodecList` on Android (VideoToolbox on iOS), constructs `CodecCapabilities`, and calls `provider.setCapabilities(result)` on each provider. The app never imports `DeviceProfile`.
 
-```kotlin
-// In androidMain (device-profile) — later, when converting to KMP
-actual fun probeCodecCapabilities(): CodecCapabilities {
-    val list = MediaCodecList(MediaCodecList.ALL_CODECS)
-    // ... current isDecoderSupported + maxVideoPixels logic ...
-}
-```
-
-For now (before full KMP setup), keep the `actual` implementation in the same module as an `android/` subpackage. Once the module is converted to KMP, move it to `androidMain`.
-
-**Shared `DeviceProfileBuilder.build()`** contains ~80% of the current file. The probe is thin hardware interrogation.
+**Delete:** `device-profile/` directory entirely.
 
 ---
 
@@ -336,7 +347,6 @@ rootProject.name = "OpenTune"
 // Shared KMP modules (pure Kotlin — zero Android imports)
 include(":provider-api")
 include(":emby")
-include(":device-profile")
 include(":storage")
 
 // Android-only modules
@@ -351,7 +361,6 @@ include(":smb")
 |---|---|---|
 | `provider-api` | `android.library` | `kotlin("jvm")` |
 | `emby` (was `providers:emby`) | `android.library` | `kotlin("jvm")` |
-| `device-profile` | `android.library` | `kotlin("jvm")` |
 | `storage` (was `storage`) | `android.library` | `kotlin("jvm")` + Room KMP plugin |
 | `app` | `android.application` | stays |
 | `player` | `android.library` | stays |
@@ -360,11 +369,10 @@ include(":smb")
 **Dependency graph:**
 
 ```
-app → provider-api, emby, device-profile, storage, player, smb
+app → provider-api, emby, storage, player, smb
 
 player → provider-api, storage
 smb → provider-api
-device-profile → emby (for DeviceProfile DTOs)
 emby → provider-api
 storage → provider-api (for MediaStateKey using providerType)
 ```
@@ -376,7 +384,7 @@ Before:                          After:
 app/                             app/
 providers/emby/                  emby/
 providers/smb/                   smb/
-device-profile/                  device-profile/
+device-profile/                  (deleted)
 storage/                         storage/  (renamed internally, no split)
 player/                          player/
 provider-api/                    provider-api/
@@ -387,7 +395,7 @@ provider-api/                    provider-api/
 - `providers/smb` → `smb/` (top-level, rename)
 - `storage/` stays in place, no split — just updates to Room KMP
 - `provider-api/` stays in place but plugin changes
-- `device-profile/` stays in place but plugin changes
+- `device-profile/` → deleted entirely
 
 ---
 
@@ -397,7 +405,7 @@ provider-api/                    provider-api/
 2. **Step 2** — `emby` EmbyProviderInstance (depends on Step 1)
 3. **Step 3** — PlatformContext interface in provider-api
 4. **Step 4** — Audit and clean remaining emby Android imports (depends on Steps 2-3)
-5. **Step 5** — device-profile split
+5. **Step 5** — Add `setCapabilities` to `OpenTuneProvider`, delete device-profile module
 6. **Step 6** — storage `expect/actual` decoupling
 7. **Step 7** — Rename, restructure, update Gradle (depends on all above)
 
@@ -409,7 +417,7 @@ Steps 5 and 6 are independent of each other and can be done in parallel after St
 
 - **Step 1** changes the API that `player`, `emby`, and `smb` all depend on. Do this first, verify the app builds and plays before moving on.
 - **Step 3** changes the `OpenTuneProvider` interface — all providers (emby, smb) and the registry need updating together.
-- **Steps 4-5** are low risk — mostly moving files, extracting interfaces.
+- **Steps 4-5** are low risk — mostly moving files, extracting interfaces, deleting a module.
 - **Step 6** is medium risk — `expect/actual` for Room database creation and preferences needs testing on both platforms. Room KMP is relatively new (2.6+), so verify the KSP/annotation processor works correctly.
 - **Step 7** is mechanical — renames and Gradle changes. Should be a single commit after everything else is verified.
 - No data migration is needed. Room schema doesn't change.
