@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
@@ -69,6 +72,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 private const val LOG_TAG = "OpenTunePlayerShell"
+private const val SUB_LOG_TAG = "OT_Subtitle"
 
 private const val MAX_WAIT_READY_MS = 120_000L
 
@@ -110,6 +114,7 @@ private fun PlayerSettingsOverlay(
     audioGroups: List<Tracks.Group>,
     audioMenuIndex: Int,
     speedMenuIndex: Int,
+    currentTracks: Tracks = Tracks.EMPTY,
 ) {
     Box(
         modifier = Modifier
@@ -137,14 +142,26 @@ private fun PlayerSettingsOverlay(
                     }
                 }
                 PlayerMenuScreen.Subtitles -> {
-                    subtitleOptions.forEachIndexed { i, option ->
-                        val label = when (option) {
-                            SubtitleOption.Off -> androidx.compose.ui.res.stringResource(R.string.subtitle_track_none)
-                            SubtitleOption.Adjust -> androidx.compose.ui.res.stringResource(R.string.subtitle_adjust_mode_label)
-                            is SubtitleOption.FromSpec -> buildTrackLabel(option.track)
-                            is SubtitleOption.ExoNative -> buildExoTrackLabel(option.group, i)
+                    val items = subtitleOptions
+                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                        itemsIndexed(items) { i, option ->
+                            val label = when (option) {
+                                SubtitleOption.Off -> androidx.compose.ui.res.stringResource(R.string.subtitle_track_none)
+                                SubtitleOption.Adjust -> androidx.compose.ui.res.stringResource(R.string.subtitle_adjust_mode_label)
+                                is SubtitleOption.FromSpec -> {
+                                    val exoGroup = currentTracks.groups
+                                        .filter { it.type == C.TRACK_TYPE_TEXT }
+                                        .firstOrNull { it.mediaTrackGroup.id == option.track.trackId }
+                                    val exoLabel = if (exoGroup != null && exoGroup.length > 0)
+                                        exoGroup.getTrackFormat(0).label else null
+                                    val exoLang = if (exoGroup != null && exoGroup.length > 0)
+                                        exoGroup.getTrackFormat(0).language else null
+                                    buildTrackLabel(option.track, exoLabel, exoLang)
+                                }
+                                is SubtitleOption.ExoNative -> buildExoTrackLabel(option.group, i)
+                            }
+                            PlayerOverlayMenuItem(label = label, isSelected = i == subtitleMenuIndex)
                         }
-                        PlayerOverlayMenuItem(label = label, isSelected = i == subtitleMenuIndex)
                     }
                 }
                 PlayerMenuScreen.Audio -> {
@@ -188,11 +205,32 @@ private fun SubtitleAdjustOverlay() {
     }
 }
 
-private fun buildTrackLabel(track: SubtitleTrack): String {
-    var label = track.label
-    if (track.isForced) label += " (Forced)"
-    if (track.isDefault) label += " ●"
-    return label
+private fun buildTrackLabel(track: SubtitleTrack, exoLabel: String? = null, exoLang: String? = null): String {
+    val base = exoLabel?.takeIf { it.isNotBlank() } ?: track.label
+    val langTag = languageDisplayName(exoLang ?: track.language)
+    val flags = buildString {
+        if (track.isDefault) append(" ●")
+        if (track.isForced) append(" (Forced)")
+    }
+    return "[${langTag}] ${track.trackId} $base$flags"
+}
+
+private fun languageDisplayName(lang: String?): String = when (lang?.lowercase()?.take(3)) {
+    "zh", "chi", "zho" -> "Chinese"
+    "en", "eng" -> "English"
+    "ja", "jpn" -> "Japanese"
+    "ko", "kor" -> "Korean"
+    "fr", "fre", "fra" -> "French"
+    "de", "ger", "deu" -> "German"
+    "es", "spa" -> "Spanish"
+    "it", "ita" -> "Italian"
+    "pt", "por" -> "Portuguese"
+    "ru", "rus" -> "Russian"
+    "ar", "ara" -> "Arabic"
+    "th", "tha" -> "Thai"
+    "vi", "vie" -> "Vietnamese"
+    null, "und", "" -> "Unknown"
+    else -> lang ?: "Unknown"
 }
 
 @UnstableApi
@@ -224,7 +262,9 @@ private fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
 
 @UnstableApi
 private fun subtitleMimeType(ref: String): String {
-    return when (ref.substringAfterLast('.', "").lowercase()) {
+    // Strip query string before looking at the extension
+    val path = ref.substringBefore('?')
+    return when (path.substringAfterLast('.', "").lowercase()) {
         "ass", "ssa" -> MimeTypes.TEXT_SSA
         "vtt", "webvtt" -> MimeTypes.TEXT_VTT
         else -> MimeTypes.APPLICATION_SUBRIP
@@ -275,7 +315,15 @@ fun OpenTunePlayerScreen(
 
     DisposableEffect(exo, instanceKey) {
         val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) { currentTracks = tracks }
+            override fun onTracksChanged(tracks: Tracks) {
+                val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+                Log.d(SUB_LOG_TAG, "onTracksChanged: textGroups=${textGroups.size}")
+                textGroups.forEachIndexed { i, g ->
+                    val fmt = if (g.length > 0) g.getTrackFormat(0) else null
+                    Log.d(SUB_LOG_TAG, "  text[$i] id=${g.mediaTrackGroup.id} lang=${fmt?.language} label=${fmt?.label} isSelected=${g.isSelected} isSupported=${g.isSupported}")
+                }
+                currentTracks = tracks
+            }
         }
         exo.addListener(listener)
         currentTracks = exo.currentTracks
@@ -515,6 +563,11 @@ fun OpenTunePlayerScreen(
         currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
     }
 
+    // Log subtitle options whenever they are rebuilt
+    LaunchedEffect(subtitleOptions) {
+        Log.d(SUB_LOG_TAG, "subtitleOptions rebuilt: ${subtitleOptions.size} entries, activeId=$activeSubtitleTrackId, exoTextGroups=${currentTracks.groups.count { it.type == C.TRACK_TYPE_TEXT }}")
+    }
+
     // Sync speed picker index when speed menu is opened
     LaunchedEffect(menuScreen) {
         if (menuScreen == PlayerMenuScreen.Speed) {
@@ -588,6 +641,7 @@ fun OpenTunePlayerScreen(
                 val option = subtitleOptions.getOrNull(subtitleMenuIndex)
                 when (option) {
                     SubtitleOption.Off -> {
+                        Log.d(SUB_LOG_TAG, "select: Off — disabling text track type")
                         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -601,12 +655,14 @@ fun OpenTunePlayerScreen(
                         isSubtitleAdjustActive = true
                     }
                     is SubtitleOption.ExoNative -> {
+                        val gid = "exo_${option.group.mediaTrackGroup.id}"
+                        Log.d(SUB_LOG_TAG, "select: ExoNative gid=$gid groupId=${option.group.mediaTrackGroup.id} isSupported=${option.group.isSupported}")
                         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                             .setOverrideForType(TrackSelectionOverride(option.group.mediaTrackGroup, 0))
                             .build()
-                        val gid = "exo_${option.group.mediaTrackGroup.id}"
+                        Log.d(SUB_LOG_TAG, "select: ExoNative params applied — disabledTypes=${exo.trackSelectionParameters.disabledTrackTypes}")
                         activeSubtitleTrackId = gid
                         scope.launch(Dispatchers.IO) { mediaStateStore.upsertSubtitleTrack(instanceKey, gid) }
                         menuScreen = PlayerMenuScreen.None
@@ -614,28 +670,43 @@ fun OpenTunePlayerScreen(
                     is SubtitleOption.FromSpec -> {
                         val track = option.track
                         if (track.externalRef == null) {
-                            // Embedded — apply via language preference
-                            exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                            // Embedded — try direct TrackSelectionOverride first; fall back to language preference
+                            val exoGroup = currentTracks.groups
+                                .filter { it.type == C.TRACK_TYPE_TEXT }
+                                .firstOrNull { g ->
+                                    g.mediaTrackGroup.id == track.trackId
+                                }
+                            Log.d(SUB_LOG_TAG, "select: FromSpec embedded trackId=${track.trackId} lang=${track.language} label=${track.label} exoGroupMatch=${
+                                exoGroup?.let { g -> "id=${g.mediaTrackGroup.id} isSupported=${g.isSupported}" } ?: "null"
+                            }")
+                            val params = exo.trackSelectionParameters.buildUpon()
                                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                .apply {
-                                    if (track.language != null) setPreferredTextLanguage(track.language)
-                                }
-                                .build()
+                            if (exoGroup != null) {
+                                Log.d(SUB_LOG_TAG, "select: using TrackSelectionOverride for group id=${exoGroup.mediaTrackGroup.id}")
+                                params.setOverrideForType(TrackSelectionOverride(exoGroup.mediaTrackGroup, 0))
+                            } else {
+                                Log.d(SUB_LOG_TAG, "select: no matching ExoPlayer group found — falling back to preferredTextLanguage=${track.language}")
+                                if (track.language != null) params.setPreferredTextLanguage(track.language)
+                            }
+                            exo.trackSelectionParameters = params.build()
+                            Log.d(SUB_LOG_TAG, "select: params applied disabledTypes=${exo.trackSelectionParameters.disabledTrackTypes}")
                             activeSubtitleTrackId = track.trackId
                             scope.launch(Dispatchers.IO) { mediaStateStore.upsertSubtitleTrack(instanceKey, track.trackId) }
                         } else {
                             // External — resolve URI and re-prepare
                             menuScreen = PlayerMenuScreen.None
-                            val externalRef = track.externalRef
+                            val externalRef = track.externalRef!!
+                            Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=$externalRef")
                             scope.launch {
                                 val subtitleUri = if (externalRef.startsWith("http://") || externalRef.startsWith("https://")) {
                                     Uri.parse(externalRef)
                                 } else {
                                     spec.resolveExternalSubtitle?.invoke(externalRef)
                                 }
+                                Log.d(SUB_LOG_TAG, "select: external resolved subtitleUri=$subtitleUri")
                                 if (subtitleUri == null) {
-                                    Log.w(OPEN_TUNE_PLAYER_LOG, "resolveExternalSubtitle returned null for $externalRef")
+                                    Log.w(SUB_LOG_TAG, "resolveExternalSubtitle returned null for $externalRef")
                                     return@launch
                                 }
                                 val pos = withContext(Dispatchers.Main) { exo.currentPosition }
@@ -649,12 +720,49 @@ fun OpenTunePlayerScreen(
                                     .createMediaSource(subtitleConfig, C.TIME_UNSET)
                                 val mergedSource = MergingMediaSource(spec.mediaSourceFactory.create(), subtitleSource)
                                 withContext(Dispatchers.Main) {
+                                    // One-shot listener: after MergingMediaSource tracks are resolved,
+                                    // explicitly select the last supported text group (the sidecar).
+                                    var sidecarListener: Player.Listener? = null
+                                    sidecarListener = object : Player.Listener {
+                                        override fun onTracksChanged(tracks: Tracks) {
+                                            val supported = tracks.groups.filter {
+                                                it.type == C.TRACK_TYPE_TEXT && it.isSupported
+                                            }
+                                            Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: textSupported=${supported.size} total=${tracks.groups.count { it.type == C.TRACK_TYPE_TEXT }}")
+                                            if (supported.isNotEmpty()) {
+                                                exo.removeListener(this)
+                                                val sidecarGroup = supported.last()
+                                                Log.d(SUB_LOG_TAG, "sidecar: selecting group id=${sidecarGroup.mediaTrackGroup.id} label=${if (sidecarGroup.length > 0) sidecarGroup.getTrackFormat(0).label else null}")
+                                                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                                    .setOverrideForType(TrackSelectionOverride(sidecarGroup.mediaTrackGroup, 0))
+                                                    .build()
+                                            }
+                                        }
+                                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                                            Log.e(SUB_LOG_TAG, "sidecar.onPlayerError: ${error.message}")
+                                            exo.removeListener(this)
+                                        }
+                                        override fun onPlaybackStateChanged(state: Int) {
+                                            Log.d(SUB_LOG_TAG, "sidecar.onPlaybackStateChanged: state=$state")
+                                            // Clean up if player goes back to IDLE unexpectedly
+                                            if (state == Player.STATE_IDLE) exo.removeListener(this)
+                                        }
+                                    }
+                                    exo.addListener(sidecarListener)
+                                    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                        .setSelectUndeterminedTextLanguage(true)
+                                        .build()
                                     exo.stop()
                                     exo.setMediaSource(mergedSource)
                                     exo.playWhenReady = true
                                     exo.prepare()
                                     exo.seekTo(pos)
                                 }
+                                Log.d(SUB_LOG_TAG, "select: external re-prepared with merged source, activeSubtitleTrackId=${track.trackId}")
                                 activeSubtitleTrackId = track.trackId
                                 withContext(Dispatchers.IO) { mediaStateStore.upsertSubtitleTrack(instanceKey, track.trackId) }
                             }
@@ -691,6 +799,7 @@ fun OpenTunePlayerScreen(
     }
 
     val subtitleAdjustCallback: (Int) -> Unit = { keyCode ->
+        Log.d(SUB_LOG_TAG, "adjustCallback keyCode=$keyCode before: offsetFraction=$subtitleOffsetFraction sizeScale=$subtitleSizeScale")
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> subtitleOffsetFraction -= offsetStep
             KeyEvent.KEYCODE_DPAD_DOWN -> subtitleOffsetFraction += offsetStep
@@ -708,7 +817,8 @@ fun OpenTunePlayerScreen(
         }
     }
 
-    val bannerText = spec.audioDecodeUnsupportedBanner    val topBanner: (@Composable BoxScope.() -> Unit)? =
+    val bannerText = spec.audioDecodeUnsupportedBanner
+    val topBanner: (@Composable BoxScope.() -> Unit)? =
         if (showAudioUnsupportedBanner && !bannerText.isNullOrBlank()) {
             {
                 M3Text(
@@ -749,6 +859,7 @@ fun OpenTunePlayerScreen(
                 audioGroups = audioGroups,
                 audioMenuIndex = audioMenuIndex,
                 speedMenuIndex = speedMenuIndex,
+                currentTracks = currentTracks,
             )
         }
         if (isSubtitleAdjustActive) {

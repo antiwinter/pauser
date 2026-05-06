@@ -137,14 +137,28 @@ class EmbyProviderInstance(
                 .mapNotNull { stream ->
                     val index = stream.index ?: return@mapNotNull null
                     val label = stream.displayTitle ?: stream.language ?: "Subtitle $index"
-                    val ext = when (stream.codec?.lowercase()) {
+                    val codec = stream.codec?.lowercase()
+                    // Native ext for external files; for embedded choose delivery format.
+                    val ext = when (codec) {
                         "ass", "ssa" -> "ass"
                         "vtt", "webvtt" -> "vtt"
                         else -> "srt"
                     }
-                    val externalRef = if (stream.isExternal == true) {
-                        "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext?api_key=${fields.accessToken}"
-                    } else null
+                    // Bitmap subtitle codecs that ExoPlayer cannot render natively.
+                    val isBitmapCodec = codec in setOf(
+                        "pgssub", "hdmv_pgs_subtitle", "dvd_subtitle", "dvbsub",
+                        "dvb_subtitle", "xsub", "microdvd",
+                    )
+                    val externalRef = when {
+                        // Already an external file — use it directly.
+                        stream.isExternal == true ->
+                            "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext?api_key=${fields.accessToken}"
+                        // Embedded bitmap track — ask Emby to convert to ASS.
+                        isBitmapCodec ->
+                            "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.ass?api_key=${fields.accessToken}"
+                        // Embedded text track — ExoPlayer handles it natively.
+                        else -> null
+                    }
                     SubtitleTrack(
                         trackId = index.toString(),
                         label = label,

@@ -1,6 +1,7 @@
 package com.opentune.player
 
 import android.view.LayoutInflater
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,9 +66,15 @@ fun OpenTunePlayerView(
                 tv.overlaySelectCallback = overlaySelectCallback
                 tv.isSubtitleAdjustActive = isSubtitleAdjustActive
                 tv.subtitleAdjustCallback = subtitleAdjustCallback
-                tv.subtitleView?.translationY = subtitleTranslationYPx
-                @Suppress("MagicNumber")
-                tv.subtitleView?.setFractionalTextSize(0.0533f * subtitleSizeScale, false)
+                val sv = tv.subtitleView
+                if (sv == null) {
+                    Log.w("OT_Subtitle", "update: subtitleView is null — cannot apply translation/scale")
+                } else {
+                    Log.d("OT_Subtitle", "update: subtitleView translationY=$subtitleTranslationYPx sizeScale=$subtitleSizeScale")
+                    sv.translationY = subtitleTranslationYPx
+                    sv.scaleX = subtitleSizeScale
+                    sv.scaleY = subtitleSizeScale
+                }
             }
         },
         modifier = modifier
