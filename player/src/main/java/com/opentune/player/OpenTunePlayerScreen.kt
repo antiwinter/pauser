@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
@@ -290,11 +291,15 @@ fun OpenTunePlayerScreen(
             }
             return
         }
-        val pos = withContext(Dispatchers.Main) { exo.currentPosition }
-        withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
-        s.hooks.onStop(pos)
-        withContext(Dispatchers.Main) { exo.release() }
-        s.onPlaybackDispose()
+        // Wrap cleanup in NonCancellable so it survives the composition cancellation
+        // triggered by onExit() navigating away.
+        withContext(NonCancellable) {
+            val pos = withContext(Dispatchers.Main) { exo.currentPosition }
+            withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
+            s.hooks.onStop(pos)
+            withContext(Dispatchers.Main) { exo.release() }
+            s.onPlaybackDispose()
+        }
         if (userInitiatedExit) {
             withContext(Dispatchers.Main) { onExitState.value() }
         }
