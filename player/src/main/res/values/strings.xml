@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subtitle_track_none">Off</string>
+    <string name="subtitle_adjust_hint">Adjusting subtitles  ↑↓ Move   ←→ Size  (OK to finish)</string>
+    <string name="subtitle_adjust_mode_label">Adjust position &amp; size…</string>
+    <string name="player_settings_subtitles">Subtitles</string>
+    <string name="player_settings_audio">Audio track</string>
+    <string name="player_settings_speed">Playback speed</string>
+    <string name="player_audio_auto">Auto</string>
+</resources>

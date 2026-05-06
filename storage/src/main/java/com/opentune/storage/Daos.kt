@@ -54,6 +54,9 @@ interface MediaStateDao {
     @Query("UPDATE media_state SET coverCachePath = :path, updatedAtEpochMs = :now WHERE providerType = :providerType AND sourceId = :sourceId AND itemId = :itemId")
     suspend fun updateCoverCache(providerType: String, sourceId: String, itemId: String, path: String?, now: Long)
 
+    @Query("UPDATE media_state SET selectedSubtitleTrackId = :id, updatedAtEpochMs = :now WHERE providerType = :providerType AND sourceId = :sourceId AND itemId = :itemId")
+    suspend fun updateSubtitleTrack(providerType: String, sourceId: String, itemId: String, id: String?, now: Long)
+
     @Query("DELETE FROM media_state WHERE sourceId = :sourceId")
     suspend fun deleteBySource(sourceId: String)
 

@@ -18,6 +18,7 @@ data class MediaStateSnapshot(
     val title: String?,
     val type: String?,
     val coverCachePath: String?,
+    val selectedSubtitleTrackId: String?,
 )
 
 interface UserMediaStateStore {
@@ -33,6 +34,7 @@ interface UserMediaStateStore {
         type: String? = null,
     )
     suspend fun upsertCoverCache(providerType: String, sourceId: String, itemId: String, path: String?)
+    suspend fun upsertSubtitleTrack(providerType: String, sourceId: String, itemId: String, trackId: String?)
     fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>>
     fun observeAllFavorites(): Flow<List<MediaStateSnapshot>>
     suspend fun deleteBySource(sourceId: String)
@@ -49,3 +51,6 @@ suspend fun UserMediaStateStore.upsertSpeed(key: MediaStateKey, speed: Float) =
 
 suspend fun UserMediaStateStore.upsertFavorite(key: MediaStateKey, isFavorite: Boolean) =
     upsertFavorite(key.providerType, key.sourceId, key.itemRef, isFavorite)
+
+suspend fun UserMediaStateStore.upsertSubtitleTrack(key: MediaStateKey, trackId: String?) =
+    upsertSubtitleTrack(key.providerType, key.sourceId, key.itemRef, trackId)

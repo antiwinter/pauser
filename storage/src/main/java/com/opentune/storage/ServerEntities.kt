@@ -33,6 +33,8 @@ data class MediaStateEntity(
      * - any other string = absolute path to cached thumbnail
      */
     val coverCachePath: String? = null,
+    /** Last-chosen subtitle track ID for this item; null = no subtitle selected. */
+    val selectedSubtitleTrackId: String? = null,
     val updatedAtEpochMs: Long,
 ) {
     companion object {

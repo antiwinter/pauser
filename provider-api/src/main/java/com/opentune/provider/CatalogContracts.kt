@@ -41,6 +41,20 @@ data class MediaDetailModel(
     val isFavorite: Boolean,
 )
 
+data class SubtitleTrack(
+    val trackId: String,
+    val label: String,
+    val language: String?,
+    val isDefault: Boolean,
+    val isForced: Boolean,
+    /**
+     * null = embedded (ExoPlayer selects natively via trackSelectionParameters).
+     * non-null = external ref: Emby = HTTP URL; SMB = file path fed to
+     * [com.opentune.provider.PlaybackSpec.resolveExternalSubtitle].
+     */
+    val externalRef: String?,
+)
+
 // --- Route tokens ---
 
 /** Opaque browse/search location tokens shared with catalog routes. */

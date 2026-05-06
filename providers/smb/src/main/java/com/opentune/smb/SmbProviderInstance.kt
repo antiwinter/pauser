@@ -21,12 +21,21 @@ import com.opentune.provider.MediaListItem
 import com.opentune.provider.OpenTuneMediaSourceFactory
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
+import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.MessageDigest
 import java.util.EnumSet
 import com.opentune.smb.R as SmbR
 
 private const val SMB_PLAYER_LOG = "OpenTunePlayer"
+
+private fun sha256hex(input: String): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    return digest.digest(input.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+}
 
 @UnstableApi
 class SmbProviderInstance(
@@ -117,6 +126,8 @@ class SmbProviderInstance(
                 audioDecodeUnsupportedBanner = banner,
                 initialPositionMs = startMs,
                 onPlaybackDispose = { session.close() },
+                subtitleTracks = findSidecarSubtitles(share, itemRef),
+                resolveExternalSubtitle = { ref -> downloadSubtitleToCache(ref, context) },
             )
         }
     }
@@ -168,5 +179,47 @@ class SmbProviderInstance(
             kind = kind,
             cover = MediaArt.DrawableRes(res),
         )
+    }
+
+    /** Lists subtitle sidecar files in the same folder as [itemRef]. */
+    private fun findSidecarSubtitles(share: com.hierynomus.smbj.share.DiskShare, itemRef: String): List<SubtitleTrack> {
+        val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
+        val parentFolder = itemRef.substringBeforeLast('/', "")
+        return runCatching {
+            share.listDirectory(parentFolder)
+                .filter { !it.isDirectory && subtitleExts.any { ext -> it.name.lowercase().endsWith(ext) } }
+                .map { entry ->
+                    SubtitleTrack(
+                        trackId = entry.path,
+                        label = entry.name,
+                        language = null,
+                        isDefault = false,
+                        isForced = false,
+                        externalRef = entry.path,
+                    )
+                }
+        }.getOrElse { emptyList() }
+    }
+
+    /**
+     * Downloads the subtitle file at [subtitleRef] (SMB path) to local cache and returns a
+     * file:// [Uri]. Returns null if the download fails or the file exceeds 5 MB.
+     */
+    private suspend fun downloadSubtitleToCache(subtitleRef: String, context: Context): Uri? {
+        return withStream(subtitleRef) { stream ->
+            val size = stream.getSize()
+            if (size > 5 * 1024 * 1024) {
+                Log.w(SMB_PLAYER_LOG, "Subtitle file too large (${size}B), skipping: $subtitleRef")
+                return@withStream null
+            }
+            val ext = subtitleRef.substringAfterLast('.', "srt").lowercase()
+            val hash = sha256hex(subtitleRef).take(16)
+            val cacheFile = File(context.cacheDir, "subtitles/$hash.$ext")
+            cacheFile.parentFile?.mkdirs()
+            val bytes = ByteArray(size.toInt())
+            stream.readAt(0L, bytes, 0, bytes.size)
+            cacheFile.writeBytes(bytes)
+            Uri.fromFile(cacheFile)
+        }
     }
 }

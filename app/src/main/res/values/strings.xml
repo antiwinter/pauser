@@ -25,4 +25,12 @@
     <string name="home_section_file_sources">File shares (Menu on the remote to edit)</string>
     <string name="home_add_http">Add library server</string>
     <string name="home_add_file_share">Add file share</string>
+
+    <string name="subtitle_track_none">Off</string>
+    <string name="subtitle_adjust_hint">Adjusting subtitles  ↑↓ Move   ←→ Size  (OK to finish)</string>
+    <string name="subtitle_adjust_mode_label">Adjust position &amp; size…</string>
+    <string name="player_settings_subtitles">Subtitles</string>
+    <string name="player_settings_audio">Audio track</string>
+    <string name="player_settings_speed">Playback speed</string>
+    <string name="player_audio_auto">Auto</string>
 </resources>

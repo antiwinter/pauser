@@ -1,5 +1,6 @@
 package com.opentune.provider
 
+import android.net.Uri
 import androidx.media3.exoplayer.source.MediaSource
 
 /**
@@ -37,4 +38,13 @@ data class PlaybackSpec(
     val initialPositionMs: Long = 0L,
     /** Invoked when the player screen is torn down (e.g. close SMB session after playback). */
     val onPlaybackDispose: () -> Unit = {},
+    /** All known subtitle tracks (embedded + external) for this item. Populated by resolvePlayback. */
+    val subtitleTracks: List<SubtitleTrack> = emptyList(),
+    /**
+     * Called by the player when selecting an external non-HTTP subtitle track (SMB only).
+     * Uses [com.opentune.provider.OpenTuneProviderInstance.withStream] internally to download the
+     * subtitle file into a local cache and returns a file:// [Uri]. Emby leaves this null since
+     * HTTP subtitle URLs are used directly.
+     */
+    val resolveExternalSubtitle: (suspend (subtitleRef: String) -> Uri?)? = null,
 )

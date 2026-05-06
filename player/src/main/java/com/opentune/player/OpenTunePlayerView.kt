@@ -23,6 +23,14 @@ fun OpenTunePlayerView(
     modifier: Modifier = Modifier,
     useController: Boolean = true,
     onPlayerViewBound: (PlayerView) -> Unit = {},
+    onSettingsMenu: () -> Unit = {},
+    isOverlayActive: Boolean = false,
+    overlayNavCallback: (keyCode: Int) -> Unit = {},
+    overlaySelectCallback: () -> Unit = {},
+    isSubtitleAdjustActive: Boolean = false,
+    subtitleAdjustCallback: (keyCode: Int) -> Unit = {},
+    subtitleTranslationYPx: Float = 0f,
+    subtitleSizeScale: Float = 1f,
 ) {
     AndroidView(
         factory = { context ->
@@ -49,7 +57,18 @@ fun OpenTunePlayerView(
             if (view.player !== player) view.player = player
             view.useController = useController
             view.setControllerShowTimeoutMs(CONTROLLER_HIDE_AFTER_MS)
-            (view as? OpenTuneTvPlayerView)?.updatePlaybackStateIndicatorAttachment()
+            (view as? OpenTuneTvPlayerView)?.also { tv ->
+                tv.updatePlaybackStateIndicatorAttachment()
+                tv.settingsMenuCallback = onSettingsMenu
+                tv.isOverlayActive = isOverlayActive
+                tv.overlayNavCallback = overlayNavCallback
+                tv.overlaySelectCallback = overlaySelectCallback
+                tv.isSubtitleAdjustActive = isSubtitleAdjustActive
+                tv.subtitleAdjustCallback = subtitleAdjustCallback
+                tv.subtitleView?.translationY = subtitleTranslationYPx
+                @Suppress("MagicNumber")
+                tv.subtitleView?.setFractionalTextSize(0.0533f * subtitleSizeScale, false)
+            }
         },
         modifier = modifier
             .fillMaxSize()

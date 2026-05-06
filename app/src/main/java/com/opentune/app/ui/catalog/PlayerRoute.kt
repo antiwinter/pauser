@@ -18,6 +18,7 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.player.OpenTunePlayerScreen
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
+import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,18 +37,23 @@ fun PlayerRoute(
     }
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var initialSubtitleTrackId by remember { mutableStateOf<String?>(null) }
+    var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
     LaunchedEffect(providerType, sourceId, itemRefDecoded, startMs) {
         spec = null
         error = null
         try {
-            spec = withContext(Dispatchers.IO) {
-                // startMs=0 means "from start" — skip the DB lookup entirely so we never
-                // accidentally resume from a saved position.
+            withContext(Dispatchers.IO) {
                 val resumeMs = startMs
                 val inst = app.instanceRegistry.getOrCreate(sourceId)
                     ?: throw IllegalStateException("No provider instance for $sourceId")
-                inst.resolvePlayback(itemRefDecoded, resumeMs, app)
+                val resolvedSpec = inst.resolvePlayback(itemRefDecoded, resumeMs, app)
+                val savedState = app.storageBindings.mediaStateStore.get(providerType, sourceId, itemRefDecoded)
+                val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
+                initialSubtitleTrackId = savedState?.selectedSubtitleTrackId
+                initialSubtitlePrefs = subtitlePrefs
+                spec = resolvedSpec
             }
         } catch (e: Exception) {
             error = e.message ?: "Playback failed"
@@ -68,6 +74,10 @@ fun PlayerRoute(
                     mediaStateStore = app.storageBindings.mediaStateStore,
                     mediaStateKey = stateKey,
                     onExit = onExit,
+                    initialSubtitleTrackId = initialSubtitleTrackId,
+                    initialSubtitleOffsetFraction = initialSubtitlePrefs.offsetFraction,
+                    initialSubtitleSizeScale = initialSubtitlePrefs.sizeScale,
+                    appConfigStore = app.storageBindings.appConfigStore,
                 )
             }
         }

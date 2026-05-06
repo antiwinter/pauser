@@ -17,6 +17,7 @@ import com.opentune.provider.MediaListItem
 import com.opentune.provider.OpenTuneMediaSourceFactory
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
+import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -131,6 +132,29 @@ class EmbyProviderInstance(
             val mainFactory = OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) }
             val fallbackFactory = OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) }
 
+            val subtitleTracks = source.mediaStreams
+                .filter { it.type == "Subtitle" }
+                .mapNotNull { stream ->
+                    val index = stream.index ?: return@mapNotNull null
+                    val label = stream.displayTitle ?: stream.language ?: "Subtitle $index"
+                    val ext = when (stream.codec?.lowercase()) {
+                        "ass", "ssa" -> "ass"
+                        "vtt", "webvtt" -> "vtt"
+                        else -> "srt"
+                    }
+                    val externalRef = if (stream.isExternal == true) {
+                        "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext?api_key=${fields.accessToken}"
+                    } else null
+                    SubtitleTrack(
+                        trackId = index.toString(),
+                        label = label,
+                        language = stream.language,
+                        isDefault = stream.isDefault ?: false,
+                        isForced = stream.isForced ?: false,
+                        externalRef = externalRef,
+                    )
+                }
+
             val hooks = EmbyPlaybackHooks(
                 deviceProfile = deviceProfile,
                 itemId = itemRef,
@@ -153,6 +177,7 @@ class EmbyProviderInstance(
                 audioDecodeUnsupportedBanner = null,
                 initialPositionMs = startMs,
                 onPlaybackDispose = {},
+                subtitleTracks = subtitleTracks,
             )
         }
     }
