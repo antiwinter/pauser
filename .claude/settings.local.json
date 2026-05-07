@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew :providers:smb:compileDebugKotlin)"
+      "Bash(./gradlew :providers:smb:compileDebugKotlin)",
+      "WebSearch"
     ]
   }
 }

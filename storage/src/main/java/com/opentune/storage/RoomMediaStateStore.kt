@@ -19,6 +19,7 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
             type = type,
             coverCachePath = coverCachePath,
             selectedSubtitleTrackId = selectedSubtitleTrackId,
+            selectedAudioTrackId = selectedAudioTrackId,
         )
 
     private suspend fun ensureRow(providerType: String, sourceId: String, itemId: String) {
@@ -88,6 +89,16 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
     ) {
         ensureRow(providerType, sourceId, itemId)
         dao.updateSubtitleTrack(providerType, sourceId, itemId, trackId, System.currentTimeMillis())
+    }
+
+    override suspend fun upsertAudioTrack(
+        providerType: String,
+        sourceId: String,
+        itemId: String,
+        trackId: String?,
+    ) {
+        ensureRow(providerType, sourceId, itemId)
+        dao.updateAudioTrack(providerType, sourceId, itemId, trackId, System.currentTimeMillis())
     }
 
     override fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>> =

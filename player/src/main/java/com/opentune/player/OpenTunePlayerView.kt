@@ -25,11 +25,7 @@ fun OpenTunePlayerView(
     useController: Boolean = true,
     onPlayerViewBound: (PlayerView) -> Unit = {},
     onSettingsMenu: () -> Unit = {},
-    isOverlayActive: Boolean = false,
-    overlayNavCallback: (keyCode: Int) -> Unit = {},
-    overlaySelectCallback: () -> Unit = {},
-    isSubtitleAdjustActive: Boolean = false,
-    subtitleAdjustCallback: (keyCode: Int) -> Unit = {},
+    onDpadKey: ((Int) -> Unit)? = null,
     subtitleTranslationYPx: Float = 0f,
     subtitleSizeScale: Float = 1f,
 ) {
@@ -61,11 +57,7 @@ fun OpenTunePlayerView(
             (view as? OpenTuneTvPlayerView)?.also { tv ->
                 tv.updatePlaybackStateIndicatorAttachment()
                 tv.settingsMenuCallback = onSettingsMenu
-                tv.isOverlayActive = isOverlayActive
-                tv.overlayNavCallback = overlayNavCallback
-                tv.overlaySelectCallback = overlaySelectCallback
-                tv.isSubtitleAdjustActive = isSubtitleAdjustActive
-                tv.subtitleAdjustCallback = subtitleAdjustCallback
+                tv.onDpadKey = onDpadKey
                 val sv = tv.subtitleView
                 if (sv == null) {
                     Log.w("OT_Subtitle", "update: subtitleView is null — cannot apply translation/scale")

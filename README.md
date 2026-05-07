@@ -22,8 +22,16 @@ Add a `LICENSE` file (for example Apache-2.0) before you publish the project pub
 
 
 # TODOs
-- [ ] subtitle
-- [ ] fix audio in background
+- [x] fix audio in background
 - [ ] folder, single media folder, series
 - [ ] sprite
+- [ ] proxy server
 - [ ] telegram, auto-proxy
+
+## Subtitle
+- [ ] check if same local cache used for smb subtitles as thumb
+- [ ] emby resolve external
+- [ ] srt/vss/ass as profile
+- [ ] pagedown -> menu
+- [ ] IME still shown
+- [x] overlay control logic is verbose and messy and too stateful

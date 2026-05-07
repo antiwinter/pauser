@@ -43,25 +43,11 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     var settingsMenuCallback: (() -> Unit)? = null
 
     /**
-     * When true, all DPAD/CENTER key events are routed to [overlayNavCallback] /
-     * [overlaySelectCallback] instead of triggering transport (seek, play/pause) actions.
+     * When non-null, all DPAD/CENTER key events are forwarded here instead of triggering
+     * transport actions. The screen owns mode-specific routing (overlay nav, subtitle adjust,
+     * etc.). Set to `null` to restore normal transport behaviour.
      */
-    var isOverlayActive: Boolean = false
-
-    /** Called with the DPAD keyCode (UP/DOWN/LEFT/RIGHT) when [isOverlayActive] is true. */
-    var overlayNavCallback: ((keyCode: Int) -> Unit)? = null
-
-    /** Called when CENTER/ENTER is pressed while [isOverlayActive] is true. */
-    var overlaySelectCallback: (() -> Unit)? = null
-
-    /**
-     * When true, DPAD UP/DOWN/LEFT/RIGHT/CENTER are forwarded to [subtitleAdjustCallback]
-     * instead of the normal transport handler.
-     */
-    var isSubtitleAdjustActive: Boolean = false
-
-    /** Called with the DPAD keyCode when [isSubtitleAdjustActive] is true. */
-    var subtitleAdjustCallback: ((keyCode: Int) -> Unit)? = null
+    var onDpadKey: ((keyCode: Int) -> Unit)? = null
 
     init {
         isFocusable = true
@@ -207,26 +193,10 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 
         val isDpad = isDpadKey(event.keyCode)
 
-        // Route to custom overlay when active (settings menu, subtitle picker, etc.)
-        if (isDpad && isOverlayActive) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                val isCenter = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                    event.keyCode == KeyEvent.KEYCODE_ENTER ||
-                    event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-                if (isCenter) {
-                    overlaySelectCallback?.invoke()
-                } else {
-                    overlayNavCallback?.invoke(event.keyCode)
-                }
-            }
-            return true
-        }
-
-        // Route to subtitle adjust mode when active
-        if (isDpad && isSubtitleAdjustActive) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                subtitleAdjustCallback?.invoke(event.keyCode)
-            }
+        // Route to caller-defined handler when active (settings overlay, subtitle adjust, etc.)
+        val dpadKey = onDpadKey
+        if (isDpad && dpadKey != null) {
+            if (event.action == KeyEvent.ACTION_DOWN) dpadKey(event.keyCode)
             return true
         }
         if (isDpad && useControllerFlag) {

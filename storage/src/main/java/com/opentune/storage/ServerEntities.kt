@@ -35,6 +35,8 @@ data class MediaStateEntity(
     val coverCachePath: String? = null,
     /** Last-chosen subtitle track ID for this item; null = no subtitle selected. */
     val selectedSubtitleTrackId: String? = null,
+    /** Last-chosen audio track ID for this item; null = auto selection. */
+    val selectedAudioTrackId: String? = null,
     val updatedAtEpochMs: Long,
 ) {
     companion object {
