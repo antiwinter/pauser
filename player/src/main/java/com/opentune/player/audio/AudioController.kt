@@ -35,7 +35,7 @@ internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
 }
 
 @UnstableApi
-class AudioController(
+internal class AudioController(
     private val currentTracksState: MutableState<Tracks>,
     private val activeTrackIdState: MutableState<String?>,
     private val scope: CoroutineScope,
@@ -95,7 +95,7 @@ class AudioController(
 
 @UnstableApi
 @Composable
-fun rememberAudioController(
+internal fun rememberAudioController(
     exo: ExoPlayer,
     stores: PlayerStores,
     mediaStateKey: MediaStateKey,

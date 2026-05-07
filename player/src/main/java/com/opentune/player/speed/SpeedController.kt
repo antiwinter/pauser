@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 internal val SPEED_VALUES = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 private val SPEED_LABELS = SPEED_VALUES.map { if (it == 1f) "1×" else "${it}×" }
 
-class SpeedController(
+internal class SpeedController(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
     private val mediaStateKey: MediaStateKey,
@@ -50,7 +50,7 @@ class SpeedController(
 }
 
 @Composable
-fun rememberSpeedController(
+internal fun rememberSpeedController(
     exo: ExoPlayer,
     stores: PlayerStores,
     mediaStateKey: MediaStateKey,

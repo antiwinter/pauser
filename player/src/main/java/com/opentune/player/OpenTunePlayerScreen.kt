@@ -54,6 +54,11 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
+internal data class PlayerStores(
+    val mediaStateStore: UserMediaStateStore,
+    val appConfigStore: DataStoreAppConfigStore?,
+)
+
 private const val LOG_TAG = "OpenTunePlayerShell"
 
 private const val MAX_WAIT_READY_MS = 120_000L

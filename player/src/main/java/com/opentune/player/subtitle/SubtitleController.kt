@@ -47,11 +47,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val LOG_TAG = "OT_CoverExtractor" // reuse tag as the plan specifies OT_Subtitle
 private const val SUB_LOG_TAG = "OT_Subtitle"
 
 @UnstableApi
-class SubtitleController(
+internal class SubtitleController(
     private val currentTracksState: MutableState<Tracks>,
     private val activeTrackIdState: MutableState<String?>,
     private val offsetFractionState: MutableState<Float>,
@@ -234,14 +233,19 @@ class SubtitleController(
             val externalRef = track.externalRef!!
             Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=$externalRef")
             scope.launch {
-                val subtitleUri: Uri? = if (externalRef.startsWith("http://") || externalRef.startsWith("https://")) {
-                    Uri.parse(externalRef)
-                } else {
-                    specState.value.resolveExternalSubtitle?.invoke(externalRef)
+                val subtitleUri: Uri? = try {
+                    if (externalRef.startsWith("http://") || externalRef.startsWith("https://")) {
+                        Uri.parse(externalRef)
+                    } else {
+                        specState.value.resolveExternalSubtitle?.invoke(externalRef)
+                    }
+                } catch (e: Exception) {
+                    Log.e(SUB_LOG_TAG, "select: resolveExternalSubtitle threw for $externalRef", e)
+                    return@launch
                 }
                 Log.d(SUB_LOG_TAG, "select: external resolved subtitleUri=$subtitleUri")
                 if (subtitleUri == null) {
-                    Log.w(SUB_LOG_TAG, "resolveExternalSubtitle returned null for $externalRef")
+                    Log.w(SUB_LOG_TAG, "select: resolveExternalSubtitle returned null for $externalRef")
                     return@launch
                 }
                 val pos = withContext(Dispatchers.Main) { exo.currentPosition }
@@ -261,25 +265,32 @@ class SubtitleController(
                             val supported = tracks.groups.filter {
                                 it.type == C.TRACK_TYPE_TEXT && it.isSupported
                             }
-                            Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: textSupported=${supported.size}")
                             if (supported.isNotEmpty()) {
+                                val g = supported.last()
+                                val fmt = if (g.length > 0) g.getTrackFormat(0) else null
+                                Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: selecting gid=${g.mediaTrackGroup.id} lang=${fmt?.language} mime=${fmt?.sampleMimeType}")
                                 exo.removeListener(this)
-                                val sidecarGroup = supported.last()
                                 exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                     .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                    .setOverrideForType(TrackSelectionOverride(sidecarGroup.mediaTrackGroup, 0))
+                                    .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, 0))
                                     .build()
+                            } else {
+                                Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: no supported text tracks yet (total=${tracks.groups.count { it.type == C.TRACK_TYPE_TEXT }})")
                             }
                         }
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                            Log.e(SUB_LOG_TAG, "sidecar.onPlayerError: ${error.message}")
+                            Log.e(SUB_LOG_TAG, "sidecar.onPlayerError: errorCode=${error.errorCode} msg=${error.message}", error.cause)
                             exo.removeListener(this)
                         }
                         override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_IDLE) exo.removeListener(this)
+                            if (state == Player.STATE_IDLE) {
+                                Log.d(SUB_LOG_TAG, "sidecar.onPlaybackStateChanged: IDLE — removing listener")
+                                exo.removeListener(this)
+                            }
                         }
                     }
+                    Log.d(SUB_LOG_TAG, "sidecar: re-preparing with merged source uri=$subtitleUri pos=$pos")
                     exo.addListener(sidecarListener)
                     exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -303,7 +314,7 @@ class SubtitleController(
 
 @UnstableApi
 @Composable
-fun rememberSubtitleController(
+internal fun rememberSubtitleController(
     exo: ExoPlayer,
     spec: com.opentune.provider.PlaybackSpec,
     stores: PlayerStores,
@@ -332,7 +343,11 @@ fun rememberSubtitleController(
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
                 val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-                Log.d(SUB_LOG_TAG, "onTracksChanged: textGroups=${textGroups.size}")
+                Log.d(SUB_LOG_TAG, "onTracksChanged: textGroups=${textGroups.size}" +
+                    textGroups.joinToString(prefix = " [", postfix = "]") { g ->
+                        val fmt = if (g.length > 0) g.getTrackFormat(0) else null
+                        "id=${g.mediaTrackGroup.id} lang=${fmt?.language} mime=${fmt?.sampleMimeType} supported=${g.isSupported}"
+                    })
                 currentTracksState.value = tracks
             }
         }
