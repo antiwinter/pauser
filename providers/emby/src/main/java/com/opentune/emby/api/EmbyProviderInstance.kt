@@ -31,7 +31,12 @@ private val CONTAINER_TYPES = setOf(
 class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
     private val deviceProfile: DeviceProfile,
+    private val context: Context,
 ) : OpenTuneProviderInstance {
+
+    private val browseCache by lazy {
+        EmbyBrowseCache(context, fields.serverId ?: EmbyProvider.sha256(fields.baseUrl))
+    }
 
     private fun repo(): EmbyRepository = EmbyRepository(
         baseUrl = fields.baseUrl,
@@ -52,24 +57,22 @@ class EmbyProviderInstance(
     override suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult {
         val r = repo()
         return withContext(Dispatchers.IO) {
-            if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
-                val views = r.getViews()
-                BrowsePageResult(
-                    items = views.items.mapNotNull { it.toListItem() },
-                    totalCount = views.totalRecordCount,
-                )
+            val result = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+                r.getViews()
             } else {
-                val result = r.getItems(
+                r.getItems(
                     parentId = location,
                     recursive = false,
                     startIndex = startIndex,
                     limit = limit,
                 )
-                BrowsePageResult(
-                    items = result.items.mapNotNull { it.toListItem() },
-                    totalCount = result.totalRecordCount,
-                )
             }
+            val cacheParentId = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) "__root__" else location
+            browseCache.setItems(cacheParentId, result.items)
+            BrowsePageResult(
+                items = result.items.mapNotNull { it.toListItem() },
+                totalCount = result.totalRecordCount,
+            )
         }
     }
 

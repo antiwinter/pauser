@@ -1,5 +1,35 @@
 # OpenTune architecture conventions
 
+## Building
+
+Android Studio is installed on this machine (SDK at `~/Library/Android/sdk`). It does **not** ship a standalone `gradle` CLI — the project uses the Gradle wrapper, but `gradlew` and `gradle-wrapper.jar` are both broken in this repo.
+
+**First-time setup (or fresh clone):**
+
+```sh
+# 1. Fix the wrapper jar (the committed one has no main manifest entry)
+curl -sL "https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar" \
+  -o gradle/wrapper/gradle-wrapper.jar
+
+# 2. Create the gradlew script (not committed to the repo)
+cat > gradlew << 'EOF'
+#!/bin/sh
+APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+exec java -Xmx64m -Xms64m -classpath "$CLASSPATH" \
+    org.gradle.wrapper.GradleWrapperMain "$@"
+EOF
+chmod +x gradlew
+```
+
+**Build commands:**
+
+```sh
+./gradlew :app:assembleDebug            # full app APK
+./gradlew :providers:emby:assembleDebug # emby module only
+./gradlew :app:installDebug             # build + install on connected device/emulator
+```
+
 When adding or changing TV screens for a **content source**, follow these rules so navigation and code stay easy to grep.
 
 ## Draft development (no migrations, no legacy shims)

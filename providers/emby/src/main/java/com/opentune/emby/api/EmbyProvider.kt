@@ -19,6 +19,8 @@ class EmbyProvider(
     private val deviceProfile: DeviceProfile,
 ) : OpenTuneProvider {
 
+    @Volatile private var appContext: Context? = null
+
     override val providerType: String = PROVIDER_TYPE
 
     override val providesCover: Boolean = true
@@ -80,14 +82,14 @@ class EmbyProvider(
         }
 
     override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
-        // values is the JSON-deserialized fieldsJson stored in ServerEntity (snake_case keys)
+        val context = appContext ?: error("EmbyProvider not bootstrapped")
         val fields = EmbyServerFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
             accessToken = values["access_token"] ?: error("Missing access_token"),
             serverId = values["server_id"]?.ifEmpty { null },
         )
-        return EmbyProviderInstance(fields = fields, deviceProfile = deviceProfile)
+        return EmbyProviderInstance(fields = fields, deviceProfile = deviceProfile, context = context)
     }
 
     override fun bootstrap(context: Context) {
