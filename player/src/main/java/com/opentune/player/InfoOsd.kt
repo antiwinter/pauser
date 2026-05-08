@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,31 +19,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
-import kotlinx.coroutines.delay
 
-internal class InfoOsdController(
+internal class InfoOsd(
     private val spec: PlaybackSpec,
     private val videoMime: String?,
     private val videoDisabled: Boolean,
     private val audioMime: String?,
     private val audioDisabled: Boolean,
     private val showState: MutableState<Boolean>,
-    private val upCountState: MutableState<Int>,
 ) {
-    val onDpadUp: () -> Unit = {
-        if (showState.value) {
-            showState.value = false
-            upCountState.value = 0
-        } else {
-            val next = upCountState.value + 1
-            if (next >= 3) {
-                showState.value = true
-                upCountState.value = 0
-            } else {
-                upCountState.value = next
-            }
-        }
-    }
+    val isVisible: Boolean get() = showState.value
+    fun show() { showState.value = true }
+    fun hide() { showState.value = false }
 
     @Composable
     fun Osd() {
@@ -96,34 +82,24 @@ private fun formatDuration(ms: Long?): String {
 }
 
 @Composable
-internal fun rememberInfoOsdController(
+internal fun rememberInfoOsd(
     instanceKey: MediaStateKey,
     spec: PlaybackSpec,
     videoMime: String?,
     videoDisabled: Boolean,
     audioMime: String?,
     audioDisabled: Boolean,
-): InfoOsdController {
+): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    val upCountState = remember(instanceKey) { mutableStateOf(0) }
-    val upCount = upCountState.value
-
-    LaunchedEffect(upCount) {
-        if (upCount > 0) {
-            delay(2_000L)
-            upCountState.value = 0
-        }
-    }
 
     return remember(instanceKey, spec, videoMime, videoDisabled, audioMime, audioDisabled) {
-        InfoOsdController(
+        InfoOsd(
             spec = spec,
             videoMime = videoMime,
             videoDisabled = videoDisabled,
             audioMime = audioMime,
             audioDisabled = audioDisabled,
             showState = showState,
-            upCountState = upCountState,
         )
     }
 }

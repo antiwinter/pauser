@@ -4,9 +4,9 @@
 - [ ] sprite
 - [ ] proxy server
 - [ ] telegram, auto-proxy
+- [-] collapse imports
 
 ## Player
-- [-] collapse imports
 - [x] pagedown -> menu
 - [ ] emby resolve external
 - [ ] srt/vss/ass as profile

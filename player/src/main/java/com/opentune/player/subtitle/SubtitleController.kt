@@ -71,7 +71,7 @@ internal class SubtitleController(
     private val offsetStep: Float get() =
         if (screenHeightPxState.value > 0f) 20f / screenHeightPxState.value else 0f
 
-    val adjustDpadKey: (Int) -> Unit = { keyCode ->
+    val adjustKey: (Int) -> Unit = { keyCode ->
         val isConfirm = keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
             keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
             keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER

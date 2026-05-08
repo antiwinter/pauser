@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,7 +33,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import com.opentune.player.audio.rememberAudioController
-import com.opentune.player.menu.rememberPlayerMenu
+import com.opentune.player.menu.rememberMenuOverlay
 import com.opentune.player.speed.rememberSpeedController
 import com.opentune.player.subtitle.rememberSubtitleController
 import com.opentune.provider.PlaybackSpec
@@ -130,7 +132,10 @@ fun OpenTunePlayerScreen(
         stores = stores,
         mediaStateKey = instanceKey,
     )
-    val menu = rememberPlayerMenu(subtitleCtrl.menuEntry, audioCtrl.menuEntry, speedCtrl.menuEntry)
+    val menu = rememberMenuOverlay(subtitleCtrl.menuEntry, audioCtrl.menuEntry, speedCtrl.menuEntry)
+
+    // UP press counter for infoOSD (3 presses to show)
+    var infoUpCount by remember { mutableIntStateOf(0) }
 
     // --- Playback lifecycle ---
 
@@ -378,7 +383,7 @@ fun OpenTunePlayerScreen(
 
     // --- UI ---
 
-    val infoOsd = rememberInfoOsdController(
+    val infoOsd = rememberInfoOsd(
         instanceKey = instanceKey,
         spec = spec,
         videoMime = videoMime,
@@ -393,18 +398,32 @@ fun OpenTunePlayerScreen(
             modifier = Modifier.fillMaxSize(),
             onPlayerViewBound = { playerViewRef = it },
             onSettingsMenu = { menu.open() },
-            onDpadKey = when {
-                menu.isOpen -> menu.onDpadKey
-                subtitleCtrl.isAdjustActive -> subtitleCtrl.adjustDpadKey
+            onKey = when {
+                menu.isOpen -> menu.onKey
+                subtitleCtrl.isAdjustActive -> { event ->
+                    if (event.action == KeyEvent.ACTION_DOWN) subtitleCtrl.adjustKey(event.keyCode)
+                    true
+                }
                 else -> null
             },
-            onDpadUp = infoOsd.onDpadUp,
+            onKeyUp = {
+                // UP ×3 gesture to show infoOSD
+                if (infoOsd.isVisible) {
+                    infoOsd.hide()
+                    infoUpCount = 0
+                } else {
+                    infoUpCount++
+                    if (infoUpCount >= 3) {
+                        infoOsd.show()
+                        infoUpCount = 0
+                    }
+                }
+            },
             subtitleTranslationYPx = subtitleCtrl.translationYPx,
             subtitleSizeScale = subtitleCtrl.sizeScale,
         )
-        menu.Menu()
+        menu.Overlay()
         subtitleCtrl.AdjustOsd()
         infoOsd.Osd()
     }
 }
-

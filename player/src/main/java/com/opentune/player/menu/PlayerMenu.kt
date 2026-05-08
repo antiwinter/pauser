@@ -43,10 +43,10 @@ data class PlayerMenuEntry(
 /**
  * Retained state for the two-level player settings menu.
  *
- * Create via [rememberPlayerMenu]. All Compose state is held as [mutableStateOf] / [mutableIntStateOf]
+ * Create via [rememberMenuOverlay]. All Compose state is held as [mutableStateOf] / [mutableIntStateOf]
  * so reads inside composables trigger recomposition automatically.
  */
-class PlayerMenuState(private val entries: List<PlayerMenuEntry>) {
+class MenuOverlay(private val entries: List<PlayerMenuEntry>) {
 
     // 0 = closed, 1 = top-level, 2 = sub-menu
     private var depth by mutableIntStateOf(0)
@@ -55,8 +55,8 @@ class PlayerMenuState(private val entries: List<PlayerMenuEntry>) {
 
     val isOpen: Boolean get() = depth > 0
 
-    /** Non-null when the menu is open; intercepts all DPAD events. */
-    val onDpadKey: ((Int) -> Unit)? get() = if (depth > 0) ::handleDpadKey else null
+    /** Non-null when the menu is open; intercepts all key events. */
+    val onKey: ((KeyEvent) -> Boolean)? get() = if (depth > 0) ::handleKeyEvent else null
 
     fun open() {
         topIndex = 0
@@ -70,7 +70,13 @@ class PlayerMenuState(private val entries: List<PlayerMenuEntry>) {
         else -> false
     }
 
-    private fun handleDpadKey(keyCode: Int) {
+    private fun handleKeyEvent(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        handleKey(event.keyCode)
+        return true
+    }
+
+    private fun handleKey(keyCode: Int) {
         val isConfirm = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
             keyCode == KeyEvent.KEYCODE_ENTER ||
             keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
@@ -104,7 +110,7 @@ class PlayerMenuState(private val entries: List<PlayerMenuEntry>) {
     }
 
     @Composable
-    fun Menu() {
+    fun Overlay() {
         if (depth == 0) return
         Box(
             modifier = Modifier
@@ -145,8 +151,8 @@ class PlayerMenuState(private val entries: List<PlayerMenuEntry>) {
 }
 
 @Composable
-fun rememberPlayerMenu(vararg entries: PlayerMenuEntry): PlayerMenuState =
-    remember(entries.toList()) { PlayerMenuState(entries.toList()) }
+fun rememberMenuOverlay(vararg entries: PlayerMenuEntry): MenuOverlay =
+    remember(entries.toList()) { MenuOverlay(entries.toList()) }
 
 @Composable
 private fun PlayerMenuItem(label: String, isCursor: Boolean, isActive: Boolean) {

@@ -1,5 +1,6 @@
 package com.opentune.player
 
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.util.Log
 import androidx.compose.foundation.background
@@ -25,8 +26,8 @@ fun OpenTunePlayerView(
     useController: Boolean = true,
     onPlayerViewBound: (PlayerView) -> Unit = {},
     onSettingsMenu: () -> Unit = {},
-    onDpadKey: ((Int) -> Unit)? = null,
-    onDpadUp: (() -> Unit)? = null,
+    onKey: ((KeyEvent) -> Boolean)? = null,
+    onKeyUp: (() -> Unit)? = null,
     subtitleTranslationYPx: Float = 0f,
     subtitleSizeScale: Float = 1f,
 ) {
@@ -58,8 +59,8 @@ fun OpenTunePlayerView(
             (view as? OpenTuneTvPlayerView)?.also { tv ->
                 tv.updatePlaybackStateIndicatorAttachment()
                 tv.settingsMenuCallback = onSettingsMenu
-                tv.onDpadKey = onDpadKey
-                tv.onDpadUp = onDpadUp
+                tv.onKey = onKey
+                tv.onKeyUp = onKeyUp
                 val sv = tv.subtitleView
                 if (sv == null) {
                     Log.w("OT_Subtitle", "update: subtitleView is null — cannot apply translation/scale")
