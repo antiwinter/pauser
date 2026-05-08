@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -144,9 +143,6 @@ fun OpenTunePlayerScreen(
         mediaStateKey = instanceKey,
     )
     val menu = rememberMenuOverlay(subtitleCtrl.menuEntry, audioCtrl.menuEntry, speedCtrl.menuEntry)
-
-    // UP press counter for infoOSD (3 presses to show)
-    var infoUpCount by remember { mutableIntStateOf(0) }
 
     // --- Playback lifecycle ---
 
@@ -359,7 +355,7 @@ fun OpenTunePlayerScreen(
             menu.handleBack() -> {}
             else -> {
                 val pv = playerViewRef
-                if (pv is OpenTuneTvPlayerView && pv.dismissSettingsPopupIfShowing()) {
+                if (pv is OpenTuneTvPlayerView && pv.dismissMenuPopupIfShowing()) {
                     return@BackHandler
                 }
                 if (pv != null && pv.isControllerFullyVisible) {
@@ -408,26 +404,20 @@ fun OpenTunePlayerScreen(
             player = exo,
             modifier = Modifier.fillMaxSize(),
             onPlayerViewBound = { playerViewRef = it },
-            onSettingsMenu = { menu.open() },
-            onKey = when {
-                menu.isOpen -> menu.onKey
-                subtitleCtrl.isAdjustActive -> { event ->
-                    if (event.action == KeyEvent.ACTION_DOWN) subtitleCtrl.adjustKey(event.keyCode)
-                    true
-                }
-                else -> null
-            },
-            onKeyUp = {
-                // UP ×3 gesture to show infoOSD
-                if (infoOsd.isVisible) {
-                    infoOsd.hide()
-                    infoUpCount = 0
-                } else {
-                    infoUpCount++
-                    if (infoUpCount >= 3) {
-                        infoOsd.show()
-                        infoUpCount = 0
+            onOpenMenu = { menu.open() },
+            onKey = { event ->
+                when {
+                    menu.isOpen -> menu.onKey?.invoke(event) == true
+                    subtitleCtrl.isAdjustActive -> {
+                        if (event.action == KeyEvent.ACTION_DOWN) subtitleCtrl.adjustKey(event.keyCode)
+                        true
                     }
+                    // No overlay: UP toggles infoOSD (don't consume — let view show controller)
+                    event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
+                        infoOsd.toggle()
+                        false
+                    }
+                    else -> false
                 }
             },
             subtitleTranslationYPx = subtitleCtrl.translationYPx,

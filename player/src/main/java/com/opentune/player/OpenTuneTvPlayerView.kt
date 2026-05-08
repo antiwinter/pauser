@@ -21,8 +21,8 @@ import androidx.media3.ui.R as Media3UiR
  * TV: Media3 [PlayerView.dispatchKeyEvent] consumes DPAD when the controller is hidden before
  * [setOnKeyListener] runs. This subclass handles transport (±15s, play/pause), shows the controller
  * on those actions (5s timeout via [androidx.media3.ui.PlayerView.setControllerShowTimeoutMs]),
- * keeps the same transport when the overlay is visible, opens the Exo settings sheet on MENU, and
- * exposes [dismissSettingsPopupIfShowing] for Back.
+ * keeps the same transport when the overlay is visible, opens the menu on MENU / PAGE_DOWN, and
+ * exposes [dismissMenuPopupIfShowing] for Back.
  *
  * Focus stays on this [PlayerView] ([ViewGroup.FOCUS_BLOCK_DESCENDANTS]) so TV keys are handled
  * here instead of being stuck on a bottom-bar [ImageButton] that stops receiving events once the
@@ -39,8 +39,8 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     private var playbackStateIndicatorPlayer: Player? = null
     private var playbackStateIndicatorListener: Player.Listener? = null
 
-    /** Called when the MENU key is pressed; replaces the native exo settings popup. */
-    var settingsMenuCallback: (() -> Unit)? = null
+    /** Called when the MENU / PAGE_DOWN key is pressed to open the player menu. */
+    var openMenuCallback: (() -> Unit)? = null
 
     /**
      * When non-null, all key events are forwarded here. Return true to consume the event;
@@ -49,9 +49,6 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
      * Set to `null` to restore normal transport behaviour.
      */
     var onKey: ((KeyEvent) -> Boolean)? = null
-
-    /** Called on DPAD_UP when [onKey] is null (normal transport mode). */
-    var onKeyUp: (() -> Unit)? = null
 
     init {
         isFocusable = true
@@ -152,7 +149,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
      * Dismisses the Exo playback settings [PopupWindow] if it is open. Used so Back closes the menu
      * before hiding the controller or exiting.
      */
-    fun dismissSettingsPopupIfShowing(): Boolean {
+    fun dismissMenuPopupIfShowing(): Boolean {
         val control = findViewById<PlayerControlView>(Media3UiR.id.exo_controller) ?: return false
         return try {
             val field = PlayerControlView::class.java.getDeclaredField("settingsWindow")
@@ -187,98 +184,75 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
             return super.dispatchKeyEvent(event)
         }
 
-        // MENU → custom settings
-        if (useControllerFlag && event.keyCode == KeyEvent.KEYCODE_MENU) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                settingsMenuCallback?.invoke()
-                Log.d(LOG_TAG, "MENU → custom settings")
-            }
-            return true
-        }
-
-        // PAGE_DOWN → custom settings
-        if (useControllerFlag && event.keyCode == KeyEvent.KEYCODE_PAGE_DOWN) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                settingsMenuCallback?.invoke()
-                Log.d(LOG_TAG, "PAGE_DOWN → custom settings")
-            }
-            return true
-        }
-
         // Route to active overlay interceptor (menu, subtitle adjust, etc.)
         val interceptor = onKey
         if (interceptor != null && interceptor(event)) return true
 
-        // Transport keys: seek, play/pause
-        if (event.action == KeyEvent.ACTION_DOWN && p != null && isTransportKey(event.keyCode)) {
+        // Handle all key actions in one unified block
+        if (event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
+                // MENU / PAGE_DOWN → open player menu
+                KeyEvent.KEYCODE_MENU,
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                -> {
+                    if (useControllerFlag) openMenuCallback?.invoke()
+                }
+
+                // LEFT / RIGHT → seek
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    val pos = p.currentPosition - SEEK_MS
-                    p.seekTo(pos.coerceAtLeast(0L))
-                    Log.d(LOG_TAG, "seek -${SEEK_MS}ms → ${p.currentPosition}")
+                    val pos = p?.currentPosition?.minus(SEEK_MS)?.coerceAtLeast(0L) ?: 0L
+                    p?.seekTo(pos)
+                    Log.d(LOG_TAG, "seek -${SEEK_MS}ms → ${p?.currentPosition}")
                     showController()
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    val dur = p.duration
-                    val target = p.currentPosition + SEEK_MS
-                    val to =
-                        if (dur != C.TIME_UNSET && dur > 0) {
-                            target.coerceAtMost(dur)
-                        } else {
-                            target
-                        }
-                    p.seekTo(to)
-                    Log.d(LOG_TAG, "seek +${SEEK_MS}ms → ${p.currentPosition}")
+                    val dur = p?.duration ?: C.TIME_UNSET
+                    val to = (p?.currentPosition ?: 0L) + SEEK_MS
+                    p?.seekTo(if (dur > 0) to.coerceAtMost(dur) else to)
+                    Log.d(LOG_TAG, "seek +${SEEK_MS}ms → ${p?.currentPosition}")
                     showController()
                 }
+
+                // CENTER / ENTER / SPACE → play/pause toggle
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER,
                 KeyEvent.KEYCODE_SPACE,
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                 -> {
-                    if (p.isPlaying) {
-                        p.pause()
-                        Log.d(LOG_TAG, "pause()")
-                    } else {
-                        p.play()
-                        Log.d(LOG_TAG, "play() playWhenReady=${p.playWhenReady}")
+                    if (p != null) {
+                        if (p.isPlaying) p.pause() else p.play()
+                        Log.d(LOG_TAG, "toggle play/pause")
                     }
                     showController()
                 }
+
+                // MEDIA_PLAY → play
                 KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    if (!p.isPlaying) p.play()
+                    p?.play()
                     Log.d(LOG_TAG, "media play")
                     showController()
                 }
+
+                // MEDIA_PAUSE / MEDIA_STOP → pause
                 KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_STOP,
                 -> {
-                    if (p.isPlaying) p.pause()
+                    p?.pause()
                     Log.d(LOG_TAG, "media pause/stop")
                     showController()
                 }
             }
-            return true
-        }
-
-        // DPAD_UP → info OSD callback
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            val upCb = onKeyUp
-            if (upCb != null) {
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    upCb()
-                    showController()
-                }
-                return true
+            // Keys with side-effects above always consume the event
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE,
+                KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP,
+                -> return true
             }
-        }
-
-        // Other DPAD → show controller if hidden
-        if (!isControllerFullyVisible && isNavKey(event.keyCode)) {
-            showController()
-            Log.d(LOG_TAG, "showController() for keyCode=${event.keyCode}")
-            return true
         }
 
         val consumed = super.dispatchKeyEvent(event)
@@ -287,29 +261,6 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         }
         return consumed
     }
-
-    private fun isTransportKey(keyCode: Int): Boolean =
-        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-            keyCode == KeyEvent.KEYCODE_ENTER ||
-            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
-            keyCode == KeyEvent.KEYCODE_SPACE ||
-            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
-            keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE ||
-            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-
-    /** Navigation keys that should reveal the controller when hidden. */
-    private fun isNavKey(keyCode: Int): Boolean =
-        keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-            keyCode == KeyEvent.KEYCODE_DPAD_UP_RIGHT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_DOWN_RIGHT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-            keyCode == KeyEvent.KEYCODE_DPAD_DOWN_LEFT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_UP_LEFT ||
-            keyCode == KeyEvent.KEYCODE_DPAD_CENTER
 
     private companion object {
         private const val LOG_TAG = "OpenTuneTvPlayerKeys"

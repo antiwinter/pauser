@@ -25,9 +25,8 @@ fun OpenTunePlayerView(
     modifier: Modifier = Modifier,
     useController: Boolean = true,
     onPlayerViewBound: (PlayerView) -> Unit = {},
-    onSettingsMenu: () -> Unit = {},
+    onOpenMenu: () -> Unit = {},
     onKey: ((KeyEvent) -> Boolean)? = null,
-    onKeyUp: (() -> Unit)? = null,
     subtitleTranslationYPx: Float = 0f,
     subtitleSizeScale: Float = 1f,
 ) {
@@ -58,9 +57,8 @@ fun OpenTunePlayerView(
             view.setControllerShowTimeoutMs(CONTROLLER_HIDE_AFTER_MS)
             (view as? OpenTuneTvPlayerView)?.also { tv ->
                 tv.updatePlaybackStateIndicatorAttachment()
-                tv.settingsMenuCallback = onSettingsMenu
+                tv.openMenuCallback = onOpenMenu
                 tv.onKey = onKey
-                tv.onKeyUp = onKeyUp
                 val sv = tv.subtitleView
                 if (sv == null) {
                     Log.w("OT_Subtitle", "update: subtitleView is null — cannot apply translation/scale")

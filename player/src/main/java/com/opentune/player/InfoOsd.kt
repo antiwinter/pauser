@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 internal class InfoOsd(
     private val spec: PlaybackSpec,
@@ -27,10 +30,22 @@ internal class InfoOsd(
     private val audioMime: String?,
     private val audioDisabled: Boolean,
     private val showState: MutableState<Boolean>,
+    private val countState: MutableState<Int>,
 ) {
     val isVisible: Boolean get() = showState.value
-    fun show() { showState.value = true }
-    fun hide() { showState.value = false }
+
+    fun toggle() {
+        if (showState.value) {
+            showState.value = false
+        } else {
+            if (countState.value >= 3) {
+                showState.value = true
+                countState.value = 0
+            } else {
+                countState.value++
+            }
+        }
+    }
 
     @Composable
     fun Osd() {
@@ -91,6 +106,19 @@ internal fun rememberInfoOsd(
     audioDisabled: Boolean,
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
+    val countState = remember(instanceKey) { mutableStateOf(0) }
+
+    // 1s inactivity timeout: reset count if no toggle occurs within 1s
+    LaunchedEffect(countState.value) {
+        val current = countState.value
+        if (current > 0 && !showState.value) {
+            delay(1_000L)
+            // Only reset if count hasn't changed during the delay
+            if (countState.value == current) {
+                countState.value = 0
+            }
+        }
+    }
 
     return remember(instanceKey, spec, videoMime, videoDisabled, audioMime, audioDisabled) {
         InfoOsd(
@@ -100,6 +128,7 @@ internal fun rememberInfoOsd(
             audioMime = audioMime,
             audioDisabled = audioDisabled,
             showState = showState,
+            countState = countState,
         )
     }
 }
