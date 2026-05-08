@@ -130,7 +130,6 @@ class EmbyProviderInstance(
             val mediaItem = MediaItem.fromUri(Uri.parse(url))
 
             val mainFactory = OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) }
-            val fallbackFactory = OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) }
 
             val subtitleTracks = source.mediaStreams
                 .filter { it.type == "Subtitle" }
@@ -183,12 +182,9 @@ class EmbyProviderInstance(
 
             PlaybackSpec(
                 mediaSourceFactory = mainFactory,
-                audioFallbackFactory = fallbackFactory,
                 displayTitle = title,
                 durationMs = null,
-                audioFallbackOnly = true,
                 hooks = hooks,
-                audioDecodeUnsupportedBanner = null,
                 initialPositionMs = startMs,
                 onPlaybackDispose = {},
                 subtitleTracks = subtitleTracks,

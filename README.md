@@ -36,6 +36,7 @@ Add a `LICENSE` file (for example Apache-2.0) before you publish the project pub
 - [ ] pagedown -> menu
 - [ ] IME still shown
 - [x] overlay control logic is verbose and messy and too stateful
+- [ ] investigate initialPositionMs
 
 1. Two views — necessary? What's the benefit?
                                                                                                                                                                                                                                               

@@ -12,6 +12,7 @@ import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.File as SmbFile
+import com.opentune.smb.R as SmbR
 import com.opentune.provider.BrowsePageResult
 import com.opentune.provider.ItemStream
 import com.opentune.provider.MediaArt
@@ -27,7 +28,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 import java.util.EnumSet
-import com.opentune.smb.R as SmbR
 
 private const val SMB_PLAYER_LOG = "OpenTunePlayer"
 
@@ -112,18 +112,12 @@ class SmbProviderInstance(
             val progressiveFactory = ProgressiveMediaSource.Factory(factory)
             val mediaItem = MediaItem.fromUri(Uri.parse("https://local.invalid/video"))
             val mainFactory = OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) }
-            val video = isLikelyVideoFile(pathWin.substringAfterLast('\\'))
-            val fallbackFactory = if (video) OpenTuneMediaSourceFactory { progressiveFactory.createMediaSource(mediaItem) } else null
-            val banner = if (video) context.getString(SmbR.string.smb_audio_unsupported_banner) else null
 
             PlaybackSpec(
                 mediaSourceFactory = mainFactory,
-                audioFallbackFactory = fallbackFactory,
                 displayTitle = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
-                audioFallbackOnly = video,
                 hooks = SmbPlaybackHooks,
-                audioDecodeUnsupportedBanner = banner,
                 initialPositionMs = startMs,
                 onPlaybackDispose = { session.close() },
                 subtitleTracks = findSidecarSubtitles(share, itemRef),

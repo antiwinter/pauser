@@ -49,6 +49,9 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
      */
     var onDpadKey: ((keyCode: Int) -> Unit)? = null
 
+    /** Called on DPAD_UP when [onDpadKey] is null (normal transport mode). */
+    var onDpadUp: (() -> Unit)? = null
+
     init {
         isFocusable = true
         isFocusableInTouchMode = true
@@ -198,6 +201,16 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         if (isDpad && dpadKey != null) {
             if (event.action == KeyEvent.ACTION_DOWN) dpadKey(event.keyCode)
             return true
+        }
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            val upCb = onDpadUp
+            if (upCb != null) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    upCb()
+                    showController()
+                }
+                return true
+            }
         }
         if (isDpad && useControllerFlag) {
             if (isTransportDpad(event.keyCode)) {

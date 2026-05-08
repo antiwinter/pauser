@@ -8,12 +8,8 @@ import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,17 +19,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.C
+import androidx.media3.common.Tracks
 import com.opentune.player.audio.rememberAudioController
 import com.opentune.player.menu.rememberPlayerMenu
 import com.opentune.player.speed.rememberSpeedController
@@ -61,6 +57,8 @@ internal data class PlayerStores(
 
 private const val LOG_TAG = "OpenTunePlayerShell"
 
+private const val PLAYER_LOG = "OpenTunePlayer"
+
 private const val MAX_WAIT_READY_MS = 120_000L
 
 private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
@@ -71,6 +69,16 @@ private tailrec fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
+
+private fun PlaybackException.causeChainContains(vararg keywords: String): Boolean {
+    var t: Throwable? = this
+    while (t != null) {
+        val msg = t.message ?: ""
+        if (keywords.any { msg.contains(it, ignoreCase = true) }) return true
+        t = t.cause
+    }
+    return false
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -96,7 +104,10 @@ fun OpenTunePlayerScreen(
     val stores = remember { PlayerStores(mediaStateStore, appConfigStore) }
 
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-    var showAudioUnsupportedBanner by remember { mutableStateOf(false) }
+    var audioDisabled by remember { mutableStateOf(false) }
+    var videoDisabled by remember { mutableStateOf(false) }
+    var videoMime by remember { mutableStateOf<String?>(null) }
+    var audioMime by remember { mutableStateOf<String?>(null) }
 
     // --- Controllers ---
     val subtitleCtrl = rememberSubtitleController(
@@ -151,7 +162,10 @@ fun OpenTunePlayerScreen(
     LaunchedEffect(instanceKey) {
         val s = spec
         released.set(false)
-        showAudioUnsupportedBanner = false
+        audioDisabled = false
+        videoDisabled = false
+        videoMime = null
+        audioMime = null
         val savedSpeed = withContext(Dispatchers.IO) {
             mediaStateStore.get(
                 instanceKey.providerType,
@@ -236,26 +250,67 @@ fun OpenTunePlayerScreen(
         onDispose { exo.removeListener(listener) }
     }
 
-    DisposableEffect(exo, spec) {
-        val s = spec
-        val fb = s.audioFallbackFactory
-        if (s.audioFallbackOnly && fb != null) {
-            val fallbackSource = fb.create()
-            val listener = exo.createAudioDecodeFallbackListener(
-                logTag = OPEN_TUNE_PLAYER_LOG,
-                mainHandler = mainHandler,
-                media = AudioFallbackMedia.MediaSourcePayload(fallbackSource),
-                onAudioDisabled = {
-                    if (!s.audioDecodeUnsupportedBanner.isNullOrBlank()) {
-                        showAudioUnsupportedBanner = true
-                    }
-                },
-            )
-            exo.addListener(listener)
-            onDispose { exo.removeListener(listener) }
-        } else {
-            onDispose { }
+    DisposableEffect(exo, instanceKey) {
+        val audioGate = AtomicBoolean(false)
+        val videoGate = AtomicBoolean(false)
+
+        fun attemptFallback(
+            gate: AtomicBoolean,
+            trackType: Int,
+            label: String,
+            error: PlaybackException,
+            setDisabled: () -> Unit,
+        ) {
+            if (!gate.compareAndSet(false, true)) {
+                Log.w(PLAYER_LOG, "$label error after in-place retry; ignoring code=${error.errorCode}")
+                return
+            }
+            Log.w(PLAYER_LOG, "$label decode failed; disabling. code=${error.errorCode}", error)
+            mainHandler.post {
+                setDisabled()
+                exo.trackSelectionParameters = exo.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(trackType, true)
+                    .build()
+                exo.stop()
+                exo.setMediaSource(specState.value.mediaSourceFactory.create())
+                exo.playWhenReady = true
+                exo.prepare()
+                Log.d(PLAYER_LOG, "in-place $label-off prepare issued")
+            }
         }
+
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                var vm: String? = null
+                var am: String? = null
+                for (group in tracks.groups) {
+                    if (!group.isSelected) continue
+                    for (i in 0 until group.length) {
+                        if (!group.isTrackSelected(i)) continue
+                        val fmt = group.getTrackFormat(i)
+                        when (group.type) {
+                            C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
+                            C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
+                        }
+                        break
+                    }
+                }
+                mainHandler.post { videoMime = vm; audioMime = am }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                when {
+                    error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") ->
+                        attemptFallback(audioGate, C.TRACK_TYPE_AUDIO, "audio", error) { audioDisabled = true }
+                    error.causeChainContains("MediaCodecVideoRenderer") ->
+                        attemptFallback(videoGate, C.TRACK_TYPE_VIDEO, "video", error) { videoDisabled = true }
+                    else -> Log.e(PLAYER_LOG, "onPlayerError code=${error.errorCode} msg=${error.message}", error)
+                }
+            }
+        }
+        exo.addListener(listener)
+        onDispose { exo.removeListener(listener) }
     }
 
     LaunchedEffect(exo, instanceKey, spec.hooks) {
@@ -323,23 +378,14 @@ fun OpenTunePlayerScreen(
 
     // --- UI ---
 
-    val bannerText = spec.audioDecodeUnsupportedBanner
-    val topBanner: (@Composable BoxScope.() -> Unit)? =
-        if (showAudioUnsupportedBanner && !bannerText.isNullOrBlank()) {
-            {
-                M3Text(
-                    text = bannerText,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                        .background(Color.Black.copy(alpha = 0.72f))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    color = Color.White,
-                )
-            }
-        } else {
-            null
-        }
+    val infoOsd = rememberInfoOsdController(
+        instanceKey = instanceKey,
+        spec = spec,
+        videoMime = videoMime,
+        videoDisabled = videoDisabled,
+        audioMime = audioMime,
+        audioDisabled = audioDisabled,
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         OpenTunePlayerView(
@@ -352,12 +398,13 @@ fun OpenTunePlayerScreen(
                 subtitleCtrl.isAdjustActive -> subtitleCtrl.adjustDpadKey
                 else -> null
             },
+            onDpadUp = infoOsd.onDpadUp,
             subtitleTranslationYPx = subtitleCtrl.translationYPx,
             subtitleSizeScale = subtitleCtrl.sizeScale,
         )
-        topBanner?.invoke(this@Box)
         menu.Menu()
         subtitleCtrl.AdjustOsd()
+        infoOsd.Osd()
     }
 }
 
