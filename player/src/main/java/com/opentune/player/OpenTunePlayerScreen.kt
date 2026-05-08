@@ -23,6 +23,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import android.view.inputmethod.InputMethodManager
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -110,6 +112,15 @@ fun OpenTunePlayerScreen(
     var videoDisabled by remember { mutableStateOf(false) }
     var videoMime by remember { mutableStateOf<String?>(null) }
     var audioMime by remember { mutableStateOf<String?>(null) }
+
+    // Dismiss any IME left open from a previous screen (e.g. server-add / search text fields).
+    // hideSoftInputFromWindow also ends the IME's input connection, preventing it from
+    // reappearing when the SurfaceView surface is created on first frame.
+    val rootView = LocalView.current
+    LaunchedEffect(Unit) {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(rootView.windowToken, 0)
+    }
 
     // --- Controllers ---
     val subtitleCtrl = rememberSubtitleController(
