@@ -83,17 +83,19 @@ class SmbProviderInstance(
         val path = itemRef.replace('\\', '/')
         val name = path.substringAfterLast('/').ifEmpty { path }
         val video = isLikelyVideoFile(name)
-        val coverRes = if (video) SmbR.drawable.opentune_smb_video else SmbR.drawable.opentune_smb_file
         return MediaDetailModel(
-            itemKey = itemRef,
             title = name,
-            synopsis = path,
-            cover = MediaArt.DrawableRes(coverRes),
-            poster = MediaArt.None,
+            overview = path,
+            logo = MediaArt.None,
+            backdropImages = emptyList(),
             canPlay = video,
-            resumePositionMs = 0L,
-            favoriteSupported = false,
-            isFavorite = false,
+            communityRating = null,
+            bitrate = null,
+            externalUrls = emptyList(),
+            productionYear = null,
+            providerIds = emptyMap(),
+            mediaStreams = emptyList(),
+            etag = null,
         )
     }
 

@@ -10,10 +10,13 @@ import com.opentune.emby.api.dto.BaseItemDto
 import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.provider.BrowsePageResult
 import com.opentune.provider.CatalogRouteTokens
+import com.opentune.provider.ExternalUrl
 import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
+import com.opentune.provider.MediaStreamInfo
+import com.opentune.provider.MediaUserData
 import com.opentune.provider.OpenTuneMediaSourceFactory
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
@@ -23,9 +26,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 
 private val CONTAINER_TYPES = setOf(
-    "Folder", "Series", "Season", "BoxSet", "MusicAlbum",
+    "Folder", "BoxSet", "MusicAlbum",
     "MusicArtist", "Playlist", "CollectionFolder", "UserView",
 )
+
+private val NON_PLAYABLE_TYPES = CONTAINER_TYPES + setOf("Series", "Season")
 
 @UnstableApi
 class EmbyProviderInstance(
@@ -43,10 +48,44 @@ class EmbyProviderInstance(
     private fun BaseItemDto.toListItem(): MediaListItem? {
         val id = id ?: return null
         val type = type ?: ""
-        val kind = if (type in CONTAINER_TYPES) MediaEntryKind.Folder else MediaEntryKind.Playable
-        val thumb = EmbyImageUrls.primaryThumb(baseUrl = fields.baseUrl, item = this, accessToken = fields.accessToken)
-        val cover = if (thumb != null) MediaArt.Http(thumb) else MediaArt.None
-        return MediaListItem(id = id, title = name ?: id, kind = kind, cover = cover)
+        val kind = when (type) {
+            "Series" -> MediaEntryKind.Series
+            "Season" -> MediaEntryKind.Season
+            "Episode" -> MediaEntryKind.Episode
+            in CONTAINER_TYPES -> MediaEntryKind.Folder
+            else -> MediaEntryKind.Playable
+        }
+        val primaryTag = imageTags?.get("Primary")
+        val cover = if (primaryTag != null) {
+            MediaArt.Http(
+                EmbyImageUrls.imageUrl(
+                    baseUrl = fields.baseUrl,
+                    itemId = id,
+                    imageType = "Primary",
+                    tag = primaryTag,
+                    accessToken = fields.accessToken,
+                )
+            )
+        } else MediaArt.None
+        return MediaListItem(
+            id = id,
+            title = name ?: id,
+            kind = kind,
+            cover = cover,
+            userData = userData?.let {
+                MediaUserData(
+                    positionMs = (it.playbackPositionTicks ?: 0L) / 10_000L,
+                    isFavorite = it.isFavorite ?: false,
+                    played = it.played ?: false,
+                )
+            },
+            originalTitle = originalTitle,
+            genres = genres,
+            communityRating = communityRating,
+            studios = studios?.mapNotNull { it.name },
+            etag = etag,
+            indexNumber = indexNumber,
+        )
     }
 
     override suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult {
@@ -64,6 +103,7 @@ class EmbyProviderInstance(
                     recursive = false,
                     startIndex = startIndex,
                     limit = limit,
+                    fields = EmbyFieldSets.BROWSE_FIELDS,
                 )
                 BrowsePageResult(
                     items = result.items.mapNotNull { it.toListItem() },
@@ -79,7 +119,14 @@ class EmbyProviderInstance(
         val r = repo()
         return withContext(Dispatchers.IO) {
             val parentId: String? = if (scopeLocation == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) null else scopeLocation
-            val result = r.getItems(parentId = parentId, recursive = true, searchTerm = q, startIndex = 0, limit = 100)
+            val result = r.getItems(
+                parentId = parentId,
+                recursive = true,
+                searchTerm = q,
+                startIndex = 0,
+                limit = 100,
+                fields = EmbyFieldSets.BROWSE_FIELDS,
+            )
             result.items.mapNotNull { it.toListItem() }
         }
     }
@@ -87,21 +134,70 @@ class EmbyProviderInstance(
     override suspend fun loadDetail(itemRef: String): MediaDetailModel {
         val r = repo()
         return withContext(Dispatchers.IO) {
-            val item = r.getItem(itemRef)
-            val posterUrl = EmbyImageUrls.primaryPoster(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
-            val thumbUrl = EmbyImageUrls.primaryThumb(baseUrl = fields.baseUrl, item = item, accessToken = fields.accessToken)
-            val poster = if (posterUrl != null) MediaArt.Http(posterUrl) else MediaArt.None
-            val cover = if (thumbUrl != null) MediaArt.Http(thumbUrl) else MediaArt.None
+            val item = r.getItem(itemRef, fields = EmbyFieldSets.DETAIL_FIELDS)
+            val id = item.id ?: itemRef
+
+            val logoTag = item.imageTags?.get("Logo")
+            val logo = if (logoTag != null) {
+                MediaArt.Http(
+                    EmbyImageUrls.imageUrl(
+                        baseUrl = fields.baseUrl,
+                        itemId = id,
+                        imageType = "Logo",
+                        tag = logoTag,
+                        accessToken = fields.accessToken,
+                        maxHeight = 160,
+                    )
+                )
+            } else MediaArt.None
+
+            val backdropImages = (item.backdropImageTags ?: emptyList()).mapIndexed { index, tag ->
+                EmbyImageUrls.imageUrl(
+                    baseUrl = fields.baseUrl,
+                    itemId = id,
+                    imageType = "Backdrop",
+                    tag = tag,
+                    accessToken = fields.accessToken,
+                    maxHeight = 1080,
+                    index = index,
+                )
+            }
+
+            val bitrate = item.mediaSources?.firstOrNull()?.bitrate
+
+            val externalUrls = item.externalUrls?.mapNotNull {
+                val name = it.name ?: return@mapNotNull null
+                val url = it.url ?: return@mapNotNull null
+                ExternalUrl(name, url)
+            } ?: emptyList()
+
+            val mediaStreams = (item.mediaStreams ?: emptyList()).map { stream ->
+                MediaStreamInfo(
+                    index = stream.index ?: 0,
+                    type = stream.type ?: "",
+                    codec = stream.codec,
+                    displayTitle = stream.displayTitle,
+                    language = stream.language,
+                    isDefault = stream.isDefault ?: false,
+                    isForced = stream.isForced ?: false,
+                )
+            }
+
+            val canPlay = item.type !in NON_PLAYABLE_TYPES
+
             MediaDetailModel(
-                itemKey = itemRef,
                 title = item.name ?: itemRef,
-                synopsis = item.overview,
-                cover = cover,
-                poster = poster,
-                canPlay = true,
-                resumePositionMs = 0L,
-                favoriteSupported = true,
-                isFavorite = false,
+                overview = item.overview,
+                logo = logo,
+                backdropImages = backdropImages,
+                canPlay = canPlay,
+                communityRating = item.communityRating,
+                bitrate = bitrate,
+                externalUrls = externalUrls,
+                productionYear = item.productionYear,
+                providerIds = item.providerIds ?: emptyMap(),
+                mediaStreams = mediaStreams,
+                etag = item.etag,
             )
         }
     }
@@ -137,25 +233,20 @@ class EmbyProviderInstance(
                     val index = stream.index ?: return@mapNotNull null
                     val label = stream.displayTitle ?: stream.language ?: "Subtitle $index"
                     val codec = stream.codec?.lowercase()
-                    // Native ext for external files; for embedded choose delivery format.
                     val ext = when (codec) {
                         "ass", "ssa" -> "ass"
                         "vtt", "webvtt" -> "vtt"
                         else -> "srt"
                     }
-                    // Bitmap subtitle codecs that ExoPlayer cannot render natively.
                     val isBitmapCodec = codec in setOf(
                         "pgssub", "hdmv_pgs_subtitle", "dvd_subtitle", "dvbsub",
                         "dvb_subtitle", "xsub", "microdvd",
                     )
                     val externalRef = when {
-                        // Already an external file — use it directly.
                         stream.isExternal == true ->
                             "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext?api_key=${fields.accessToken}"
-                        // Embedded bitmap track — ask Emby to convert to ASS.
                         isBitmapCodec ->
                             "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.ass?api_key=${fields.accessToken}"
-                        // Embedded text track — ExoPlayer handles it natively.
                         else -> null
                     }
                     SubtitleTrack(

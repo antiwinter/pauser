@@ -6,6 +6,9 @@ enum class MediaEntryKind {
     Folder,
     Playable,
     Other,
+    Series,
+    Season,
+    Episode,
 }
 
 sealed class MediaArt {
@@ -15,11 +18,24 @@ sealed class MediaArt {
     data object None : MediaArt()
 }
 
+data class MediaUserData(
+    val positionMs: Long,
+    val isFavorite: Boolean,
+    val played: Boolean,
+)
+
 data class MediaListItem(
     val id: String,
     val title: String,
     val kind: MediaEntryKind,
     val cover: MediaArt,
+    val userData: MediaUserData? = null,
+    val originalTitle: String? = null,
+    val genres: List<String>? = null,
+    val communityRating: Float? = null,
+    val studios: List<String>? = null,
+    val etag: String? = null,
+    val indexNumber: Int? = null,
 )
 
 data class BrowsePageResult(
@@ -27,18 +43,34 @@ data class BrowsePageResult(
     val totalCount: Int,
 )
 
+data class ExternalUrl(
+    val name: String,
+    val url: String,
+)
+
+data class MediaStreamInfo(
+    val index: Int,
+    val type: String,
+    val codec: String?,
+    val displayTitle: String?,
+    val language: String?,
+    val isDefault: Boolean,
+    val isForced: Boolean,
+)
+
 data class MediaDetailModel(
-    val itemKey: String,
     val title: String,
-    val synopsis: String?,
-    val cover: MediaArt,
-    val poster: MediaArt,
+    val overview: String?,
+    val logo: MediaArt,
+    val backdropImages: List<String>,
     val canPlay: Boolean,
-    /** Resume position from remote source; 0 if none. App layer overwrites with local value. */
-    val resumePositionMs: Long,
-    val favoriteSupported: Boolean,
-    /** Favorite state from remote source. App layer may override with local state. */
-    val isFavorite: Boolean,
+    val communityRating: Float?,
+    val bitrate: Int?,
+    val externalUrls: List<ExternalUrl>,
+    val productionYear: Int?,
+    val providerIds: Map<String, String>,
+    val mediaStreams: List<MediaStreamInfo>,
+    val etag: String?,
 )
 
 data class SubtitleTrack(

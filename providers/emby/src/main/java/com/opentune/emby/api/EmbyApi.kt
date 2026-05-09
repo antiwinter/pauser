@@ -17,6 +17,13 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+object EmbyFieldSets {
+    const val BROWSE_FIELDS =
+        "UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle"
+    const val DETAIL_FIELDS =
+        "Overview,ImageTags,BackdropImageTags,RunTimeTicks,UserData,MediaSources,CommunityRating,Genres,Studios,ProductionYear,ProviderIds,ExternalUrls,OriginalTitle,IndexNumber,Etag,MediaStreams"
+}
+
 interface EmbyApi {
 
     @POST("Users/AuthenticateByName")
@@ -41,12 +48,14 @@ interface EmbyApi {
         @Query("SortBy") sortBy: String? = null,
         @Query("StartIndex") startIndex: Int? = null,
         @Query("Limit") limit: Int? = null,
+        @Query("Fields") fields: String? = null,
     ): QueryResultBaseItemDto
 
     @GET("Users/{userId}/Items/{itemId}")
     suspend fun getItem(
         @Path("userId") userId: String,
         @Path("itemId") itemId: String,
+        @Query("Fields") fields: String? = null,
     ): BaseItemDto
 
     @POST("Items/{itemId}/PlaybackInfo")

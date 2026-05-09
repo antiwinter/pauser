@@ -25,6 +25,7 @@ class EmbyRepository(
         searchTerm: String? = null,
         startIndex: Int? = null,
         limit: Int? = null,
+        fields: String? = null,
     ): QueryResultBaseItemDto = api.getItems(
         userId = userId,
         parentId = parentId,
@@ -34,9 +35,11 @@ class EmbyRepository(
         sortBy = "SortName",
         startIndex = startIndex,
         limit = limit,
+        fields = fields,
     )
 
-    suspend fun getItem(itemId: String): BaseItemDto = api.getItem(userId, itemId)
+    suspend fun getItem(itemId: String, fields: String? = null): BaseItemDto =
+        api.getItem(userId, itemId, fields = fields)
 
     suspend fun getPlaybackInfo(
         itemId: String,

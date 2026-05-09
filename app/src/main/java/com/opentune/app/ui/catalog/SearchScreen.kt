@@ -26,6 +26,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
+import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -36,6 +37,7 @@ fun SearchScreen(
     logTag: String,
     results: SnapshotStateList<MediaListItem>,
     searchFn: suspend (String) -> List<MediaListItem>,
+    titleLang: TitleLang,
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
@@ -95,10 +97,15 @@ fun SearchScreen(
             items(results, key = { it.id }) { item ->
                 MediaEntryComponent(
                     item = item,
+                    titleLang = titleLang,
                     onClick = {
                         when (item.kind) {
-                            MediaEntryKind.Folder -> onOpenBrowse(item.id)
-                            MediaEntryKind.Playable, MediaEntryKind.Other -> onOpenDetail(item.id)
+                            MediaEntryKind.Folder,
+                            MediaEntryKind.Series,
+                            MediaEntryKind.Season -> onOpenBrowse(item.id)
+                            MediaEntryKind.Playable,
+                            MediaEntryKind.Episode,
+                            MediaEntryKind.Other -> onOpenDetail(item.id)
                         }
                     },
                 )

@@ -21,6 +21,17 @@ data class BaseItemDto(
     @SerialName("ImageTags") val imageTags: Map<String, String>? = null,
     @SerialName("BackdropImageTags") val backdropImageTags: List<String>? = null,
     @SerialName("UserData") val userData: UserItemDataDto? = null,
+    @SerialName("OriginalTitle") val originalTitle: String? = null,
+    @SerialName("CommunityRating") val communityRating: Float? = null,
+    @SerialName("Genres") val genres: List<String>? = null,
+    @SerialName("Studios") val studios: List<StudioDto>? = null,
+    @SerialName("ProductionYear") val productionYear: Int? = null,
+    @SerialName("IndexNumber") val indexNumber: Int? = null,
+    @SerialName("Etag") val etag: String? = null,
+    @SerialName("ProviderIds") val providerIds: Map<String, String>? = null,
+    @SerialName("ExternalUrls") val externalUrls: List<ExternalUrlDto>? = null,
+    @SerialName("MediaSources") val mediaSources: List<MediaSourceInfo>? = null,
+    @SerialName("MediaStreams") val mediaStreams: List<MediaStream>? = null,
 )
 
 @Serializable
@@ -29,4 +40,15 @@ data class UserItemDataDto(
     @SerialName("PlayedPercentage") val playedPercentage: Double? = null,
     @SerialName("IsFavorite") val isFavorite: Boolean? = null,
     @SerialName("Played") val played: Boolean? = null,
+)
+
+@Serializable
+data class StudioDto(
+    @SerialName("Name") val name: String? = null,
+)
+
+@Serializable
+data class ExternalUrlDto(
+    @SerialName("Name") val name: String? = null,
+    @SerialName("Url") val url: String? = null,
 )

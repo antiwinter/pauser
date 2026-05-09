@@ -1,6 +1,6 @@
 # TODOs
 - [x] fix audio in background
-- [ ] folder, single media folder, series
+- [x] folder, single media folder, series
 - [ ] sprite
 - [ ] proxy server
 - [ ] telegram, auto-proxy
