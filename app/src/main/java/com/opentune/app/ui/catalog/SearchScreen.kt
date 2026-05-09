@@ -101,8 +101,8 @@ fun SearchScreen(
                     onClick = {
                         when (item.kind) {
                             MediaEntryKind.Folder,
-                            MediaEntryKind.Series,
                             MediaEntryKind.Season -> onOpenBrowse(item.id)
+                            MediaEntryKind.Series,
                             MediaEntryKind.Playable,
                             MediaEntryKind.Episode,
                             MediaEntryKind.Other -> onOpenDetail(item.id)

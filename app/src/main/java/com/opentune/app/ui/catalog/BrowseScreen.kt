@@ -153,8 +153,8 @@ fun BrowseScreen(
                     onClick = {
                         when (item.kind) {
                             MediaEntryKind.Folder,
-                            MediaEntryKind.Series,
                             MediaEntryKind.Season -> onOpenBrowseLocation(item.id)
+                            MediaEntryKind.Series,
                             MediaEntryKind.Playable,
                             MediaEntryKind.Episode,
                             MediaEntryKind.Other -> onOpenDetail(item.id)
