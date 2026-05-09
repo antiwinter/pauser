@@ -13,6 +13,7 @@ import com.opentune.app.ui.catalog.CatalogNav
 import com.opentune.app.ui.catalog.DetailRoute
 import com.opentune.app.ui.catalog.PlayerRoute
 import com.opentune.app.ui.catalog.SearchRoute
+import com.opentune.app.ui.catalog.SettingsScreen
 import com.opentune.app.ui.config.ServerAddRoute
 import com.opentune.app.ui.config.ServerEditRoute
 import com.opentune.app.ui.home.HomeRoute
@@ -29,6 +30,7 @@ object Routes {
     const val SEARCH = "search/{provider}/{sourceId}/{scopeLocation}"
     const val PROVIDER_ADD = "provider_add/{providerType}"
     const val PROVIDER_EDIT = "provider_edit/{providerType}/{sourceId}"
+    const val SETTINGS = "settings"
 
     fun providerAdd(providerType: String) = "provider_add/$providerType"
 
@@ -166,6 +168,12 @@ fun OpenTuneNavHost() {
                 itemRefDecoded = itemRefDecoded,
                 startMs = startMs,
                 onExit = { nav.popBackStack() },
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                app = app,
+                onBack = { nav.popBackStack() },
             )
         }
     }

@@ -5,7 +5,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -15,6 +17,8 @@ data class SubtitlePrefs(
     val offsetFraction: Float = 0f,
     val sizeScale: Float = 1f,
 )
+
+enum class TitleLang { Local, Original }
 
 class DataStoreAppConfigStore(private val context: Context) {
 
@@ -61,6 +65,24 @@ class DataStoreAppConfigStore(private val context: Context) {
         context.appConfigDataStore.edit {
             it[subtitleOffsetKey] = prefs.offsetFraction
             it[subtitleSizeKey] = prefs.sizeScale
+        }
+    }
+
+    // --- Title language ---
+
+    private val titleLangKey = stringPreferencesKey("title_lang")
+
+    val titleLangFlow: Flow<TitleLang>
+        get() = context.appConfigDataStore.data.map { prefs ->
+            when (prefs[titleLangKey]) {
+                TitleLang.Original.name -> TitleLang.Original
+                else -> TitleLang.Local
+            }
+        }
+
+    suspend fun saveTitleLang(value: TitleLang) {
+        context.appConfigDataStore.edit { prefs ->
+            prefs[titleLangKey] = value.name
         }
     }
 }
