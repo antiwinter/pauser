@@ -18,3 +18,4 @@ Thumbs.db
 *.log
 1
 test/.env
+files/

@@ -7,7 +7,9 @@
       "Bash(java -jar gradle/wrapper/gradle-wrapper.jar :player:assembleDebug)",
       "Bash(gradle --version)",
       "Read(//Users/warits/Library/Android/sdk/**)",
-      "Read(//Users/warits/Library/Android/sdk/platform-tools/**)"
+      "Read(//Users/warits/Library/Android/sdk/platform-tools/**)",
+      "Bash(python3 -c ' *)",
+            "Bash(*)"
     ]
   }
 }
