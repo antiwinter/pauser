@@ -1,22 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew :providers:smb:compileDebugKotlin)",
       "WebSearch",
-      "Bash(./gradlew assembleDebug)",
-      "Bash(java -jar gradle/wrapper/gradle-wrapper.jar :player:assembleDebug)",
-      "Bash(gradle --version)",
-      "Read(//Users/warits/Library/Android/sdk/**)",
-      "Read(//Users/warits/Library/Android/sdk/platform-tools/**)",
-      "Bash(./gradlew :providers:emby:assembleDebug)",
-      "Bash(java -jar gradle/wrapper/gradle-wrapper.jar -p /Users/warits/code/pauser :providers:emby:assembleDebug)",
-      "Read(//Applications/**)",
-      "Read(//Users/warits/Library/**)",
+      "Bash(gradle *)",
       "Bash(brew list *)",
-      "Bash(chmod +x gradlew)",
-      "Bash(curl -sL \"https://raw.githubusercontent.com/gradle/gradle/v9.4.1/gradle/wrapper/gradle-wrapper.jar\" -o gradle/wrapper/gradle-wrapper.jar)",
-      "Bash(java -jar gradle/wrapper/gradle-wrapper.jar --version)",
-      "Bash(./gradlew :app:assembleDebug)"
+      "Bash(./gradlew *)"
     ]
   }
 }

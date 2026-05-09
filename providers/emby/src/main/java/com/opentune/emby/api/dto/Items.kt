@@ -21,6 +21,7 @@ data class BaseItemDto(
     @SerialName("ImageTags") val imageTags: Map<String, String>? = null,
     @SerialName("BackdropImageTags") val backdropImageTags: List<String>? = null,
     @SerialName("UserData") val userData: UserItemDataDto? = null,
+    @SerialName("ChildCount") val childCount: Int? = null,
 )
 
 @Serializable

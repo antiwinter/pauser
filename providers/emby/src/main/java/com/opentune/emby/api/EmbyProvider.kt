@@ -3,6 +3,7 @@ package com.opentune.emby.api
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import com.opentune.emby.api.dto.AuthenticateByNameRequest
 import com.opentune.emby.api.dto.DeviceProfile
 import com.opentune.provider.OpenTuneProvider
@@ -82,18 +83,24 @@ class EmbyProvider(
         }
 
     override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
-        val context = appContext ?: error("EmbyProvider not bootstrapped")
+        val context = appContext ?: run {
+            Log.e(LOG_TAG, "createInstance: appContext is null — bootstrap was not called")
+            error("EmbyProvider not bootstrapped")
+        }
         val fields = EmbyServerFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
             accessToken = values["access_token"] ?: error("Missing access_token"),
             serverId = values["server_id"]?.ifEmpty { null },
         )
+        Log.d(LOG_TAG, "createInstance: serverId=${fields.serverId}, baseUrl=${fields.baseUrl.take(30)}")
         return EmbyProviderInstance(fields = fields, deviceProfile = deviceProfile, context = context)
     }
 
     override fun bootstrap(context: Context) {
         val appContext = context.applicationContext
+        this.appContext = appContext
+        Log.d(LOG_TAG, "bootstrap: context=${appContext.packageName}")
         EmbyClientIdentificationStore.install(
             EmbyClientIdentification(
                 clientName = "OpenTune",
@@ -113,6 +120,7 @@ class EmbyProvider(
 
     companion object {
         const val PROVIDER_TYPE = "emby"
+        private const val LOG_TAG = "OT_EmbyProvider"
 
         internal fun sha256(s: String): String {
             val digest = MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8))

@@ -43,4 +43,7 @@ No new dependencies. `kotlinx.serialization` and Android `Context` are already a
 
 1. `./gradlew :providers:emby:assembleDebug` — build passes
 2. Run on device, add Emby server, browse libraries → folders
-3. `adb shell cat /data/data/com.opentune.app/files/emby_browse/emby_browse_*.json` — verify nested JSON structure
+
+
+adb shell run-as com.opentune.app cat files/emby_browse/emby_browse.json > 1.json
+adb exec-out run-as com.opentune.app tar c files/emby_browse/images/ | tar xf - -C .

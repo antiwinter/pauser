@@ -2,6 +2,7 @@ package com.opentune.emby.api
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -27,6 +28,8 @@ private val CONTAINER_TYPES = setOf(
     "MusicArtist", "Playlist", "CollectionFolder", "UserView",
 )
 
+private const val LOG_TAG = "OT_EmbyInstance"
+
 @UnstableApi
 class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
@@ -34,8 +37,13 @@ class EmbyProviderInstance(
     private val context: Context,
 ) : OpenTuneProviderInstance {
 
+    init {
+        Log.d(LOG_TAG, "created: serverId=${fields.serverId}")
+    }
+
     private val browseCache by lazy {
-        EmbyBrowseCache(context, fields.serverId ?: EmbyProvider.sha256(fields.baseUrl))
+        Log.d(LOG_TAG, "lazy init browseCache")
+        EmbyBrowseCache(context, fields.baseUrl, fields.accessToken)
     }
 
     private fun repo(): EmbyRepository = EmbyRepository(
@@ -57,22 +65,49 @@ class EmbyProviderInstance(
     override suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult {
         val r = repo()
         return withContext(Dispatchers.IO) {
-            val result = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
-                r.getViews()
-            } else {
-                r.getItems(
-                    parentId = location,
-                    recursive = false,
-                    startIndex = startIndex,
-                    limit = limit,
+            try {
+                // Typed call for UI
+                val result = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+                    r.getViews()
+                } else {
+                    r.getItems(
+                        parentId = location,
+                        recursive = false,
+                        startIndex = startIndex,
+                        limit = limit,
+                    )
+                }
+
+                // Raw call for cache (captures all fields Emby returns)
+                val cacheParentId = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) "__root__" else location
+                val rawJson = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+                    r.getViewsRaw()
+                } else {
+                    r.getItemsRaw(
+                        parentId = location,
+                        recursive = false,
+                        startIndex = startIndex,
+                        limit = limit,
+                    )
+                }
+
+                // When browsing into a child folder, also dump the parent item's detail
+                val detailJson = if (location != CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+                    runCatching { r.getItemRaw(location) }.getOrNull()
+                } else null
+
+                Log.d(LOG_TAG, "loadBrowsePage: location=$location itemCount=${result.items.size}")
+                browseCache.setItemsFromRaw(cacheParentId, rawJson, detailJson)
+                Log.d(LOG_TAG, "loadBrowsePage: cache written OK")
+
+                BrowsePageResult(
+                    items = result.items.mapNotNull { it.toListItem() },
+                    totalCount = result.totalRecordCount,
                 )
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "loadBrowsePage: failed for location=$location", e)
+                throw e
             }
-            val cacheParentId = if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) "__root__" else location
-            browseCache.setItems(cacheParentId, result.items)
-            BrowsePageResult(
-                items = result.items.mapNotNull { it.toListItem() },
-                totalCount = result.totalRecordCount,
-            )
         }
     }
 
