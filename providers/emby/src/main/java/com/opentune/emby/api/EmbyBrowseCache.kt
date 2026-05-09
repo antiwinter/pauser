@@ -51,9 +51,16 @@ class EmbyBrowseCache(
      * Save raw API response. [rawJson] is the full response body
      * (e.g. `{"Items": [...], "TotalRecordCount": N, ...}`).
      * Also downloads images for items whose Type is "Movie".
+     * [parentDetailJson] is the detail of the parent folder being browsed into.
+     * [itemDetailJsonMap] maps child item Id → raw detail JSON for items needing detail enrichment.
      */
-    suspend fun setItemsFromRaw(parentId: String, rawJson: String, detailJson: String? = null) = withContext(Dispatchers.IO) {
-        Log.d(LOG_TAG, "setItemsFromRaw: parentId=$parentId")
+    suspend fun setItemsFromRaw(
+        parentId: String,
+        rawJson: String,
+        parentDetailJson: String? = null,
+        itemDetailJsonMap: Map<String, String> = emptyMap(),
+    ) = withContext(Dispatchers.IO) {
+        Log.d(LOG_TAG, "setItemsFromRaw: parentId=$parentId detailCount=${itemDetailJsonMap.size}")
         val root = loadOrCreateRoot()
         val items = extractItemsArray(rawJson)
         if (items == null) {
@@ -71,10 +78,14 @@ class EmbyBrowseCache(
             }
             save(JsonObject(root + ("__root__" to node)))
         } else {
-            // Merge detail into the parent item if available
+            // Merge detail into the parent item
             var newRoot = mergeChildIntoParent(root, parentId, items)
-            if (detailJson != null) {
-                newRoot = mergeDetailIntoItem(newRoot, parentId, detailJson)
+            if (parentDetailJson != null) {
+                newRoot = mergeDetailIntoItem(newRoot, parentId, parentDetailJson)
+            }
+            // Merge detail into child items (e.g. Movies that need Overview)
+            for ((itemId, detailJson) in itemDetailJsonMap) {
+                newRoot = mergeDetailIntoItem(newRoot, itemId, detailJson)
             }
             save(newRoot)
         }
@@ -104,7 +115,7 @@ class EmbyBrowseCache(
     }
 
     /**
-     * Walks __root__.items to find the item with matching Id, then replaces
+     * Recursively finds the item with matching Id anywhere in the tree, then replaces
      * its "children" field with the fetched child data.
      */
     private fun mergeChildIntoParent(
@@ -120,7 +131,7 @@ class EmbyBrowseCache(
             }
         }
 
-        val itemsArray = (rootData["items"] as? JsonArray)?.toMutableList()
+        val itemsArray = rootData["items"] as? JsonArray
         if (itemsArray == null) {
             return buildJsonObject {
                 root.forEach { (k, v) -> put(k, v) }
@@ -128,43 +139,81 @@ class EmbyBrowseCache(
             }
         }
 
-        // Find the parent item by Id
-        val found = itemsArray.indexOfFirst { item ->
-            val id = (item as? JsonObject)?.get("Id")
-            (id as? kotlinx.serialization.json.JsonPrimitive)?.content == childId
-        }
-
-        if (found < 0) {
-            Log.w(LOG_TAG, "mergeChildIntoParent: parentId=$childId not found in __root__.items")
+        val (newArray, found) = tryInsertChildren(itemsArray, childId, childItems)
+        if (!found) {
+            Log.w(LOG_TAG, "mergeChildIntoParent: parentId=$childId not found in tree")
             return buildJsonObject {
                 root.forEach { (k, v) -> put(k, v) }
                 put(childId, buildChildNode(childItems))
             }
         }
 
-        val oldItem = itemsArray[found] as JsonObject
-        val newItem = buildJsonObject {
-            oldItem.forEach { (k, v) ->
-                if (k != "children") put(k, v)
-            }
-            put("children", buildChildNode(childItems))
-        }
-        itemsArray[found] = newItem
-
         return buildJsonObject {
             root.forEach { (k, v) ->
                 if (k == "__root__") {
                     put("__root__", buildJsonObject {
                         rootData.forEach { (rk, rv) ->
-                            if (rk != "items") put(rk, rv)
+                            if (rk == "items") put("items", newArray)
+                            else put(rk, rv)
                         }
-                        put("items", JsonArray(itemsArray))
                     })
                 } else {
                     put(k, v)
                 }
             }
         }
+    }
+
+    /**
+     * Recursively searches the items array for an item matching [childId].
+     * When found, replaces its "children" field with [childItems].
+     * Returns (newArray, true) if found and changed, (originalArray, false) if not.
+     */
+    private fun tryInsertChildren(
+        itemsArray: JsonArray,
+        childId: String,
+        childItems: JsonArray,
+    ): Pair<JsonArray, Boolean> {
+        for (i in itemsArray.indices) {
+            val item = itemsArray[i] as? JsonObject ?: continue
+            val id = (item["Id"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+
+            if (id == childId) {
+                // Found the parent — merge children
+                val newItem = buildJsonObject {
+                    item.forEach { (k, v) ->
+                        if (k != "children") put(k, v)
+                    }
+                    put("children", buildChildNode(childItems))
+                }
+                return JsonArray(itemsArray.toMutableList().apply { this[i] = newItem }) to true
+            }
+
+            // Recurse into this item's children
+            val childrenObj = item["children"] as? JsonObject
+            if (childrenObj != null) {
+                val existingChildItems = childrenObj["items"] as? JsonArray
+                if (existingChildItems != null) {
+                    val (newChildItems, changed) = tryInsertChildren(existingChildItems, childId, childItems)
+                    if (changed) {
+                        val updatedItem = buildJsonObject {
+                            item.forEach { (k, v) ->
+                                if (k == "children") {
+                                    put("children", buildJsonObject {
+                                        childrenObj.forEach { (ck, cv) ->
+                                            if (ck == "items") put("items", newChildItems)
+                                            else put(ck, cv)
+                                        }
+                                    })
+                                } else put(k, v)
+                            }
+                        }
+                        return JsonArray(itemsArray.toMutableList().apply { this[i] = updatedItem }) to true
+                    }
+                }
+            }
+        }
+        return itemsArray to false
     }
 
     private fun buildChildNode(items: JsonArray): JsonObject = buildJsonObject {

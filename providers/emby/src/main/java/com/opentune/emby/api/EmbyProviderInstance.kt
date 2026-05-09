@@ -91,13 +91,21 @@ class EmbyProviderInstance(
                     )
                 }
 
-                // When browsing into a child folder, also dump the parent item's detail
-                val detailJson = if (location != CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+                // Detail of the parent folder being browsed into
+                val parentDetailJson = if (location != CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
                     runCatching { r.getItemRaw(location) }.getOrNull()
                 } else null
 
-                Log.d(LOG_TAG, "loadBrowsePage: location=$location itemCount=${result.items.size}")
-                browseCache.setItemsFromRaw(cacheParentId, rawJson, detailJson)
+                // Fetch detail for Movie items (Emby list endpoint omits Overview for Movies)
+                val movieIds = result.items
+                    .filter { it.type == "Movie" }
+                    .mapNotNull { it.id }
+                val itemDetailMap = movieIds.associateWith { id ->
+                    runCatching { r.getItemRaw(id) }.getOrDefault("")
+                }
+
+                Log.d(LOG_TAG, "loadBrowsePage: location=$location itemCount=${result.items.size} movies=${movieIds.size}")
+                browseCache.setItemsFromRaw(cacheParentId, rawJson, parentDetailJson, itemDetailMap)
                 Log.d(LOG_TAG, "loadBrowsePage: cache written OK")
 
                 BrowsePageResult(
