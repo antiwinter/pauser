@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,7 @@ import com.opentune.storage.upsertSpeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -101,8 +103,20 @@ fun OpenTunePlayerScreen(
     val onExitState = rememberUpdatedState(onExit)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val instanceKey = mediaStateKey
-    val exo = remember(instanceKey) { OpenTuneExoPlayer.createForBundledSources(context) }
-    val released = remember(instanceKey) { AtomicBoolean(false) }
+
+    val preBufferMs by (appConfigStore?.preBufferMsFlow
+        ?: flowOf(DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS))
+        .collectAsState(initial = DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS)
+
+    // preBufferMs is a key so the player is recreated if the setting changes. If a settings UI
+    // is added that allows changing the buffer duration during playback, this will cause a
+    // mid-playback player teardown and reconstruction — acceptable, but worth keeping in mind.
+    val playerWithMeter = remember(instanceKey, preBufferMs) {
+        OpenTuneExoPlayer.createForBundledSources(context, preBufferMs)
+    }
+    val exo = playerWithMeter.player
+    val bandwidthMeter = playerWithMeter.bandwidthMeter
+    val released = remember(instanceKey, preBufferMs) { AtomicBoolean(false) }
 
     val stores = remember { PlayerStores(mediaStateStore, appConfigStore) }
 
@@ -111,6 +125,7 @@ fun OpenTunePlayerScreen(
     var videoDisabled by remember { mutableStateOf(false) }
     var videoMime by remember { mutableStateOf<String?>(null) }
     var audioMime by remember { mutableStateOf<String?>(null) }
+    var mbps by remember(instanceKey) { mutableStateOf(0f) }
 
     // Dismiss any IME left open from a previous screen (e.g. server-add / search text fields).
     // hideSoftInputFromWindow also ends the IME's input connection, preventing it from
@@ -325,6 +340,9 @@ fun OpenTunePlayerScreen(
         onDispose { exo.removeListener(listener) }
     }
 
+    // DefaultBandwidthMeter only receives transfer events from ExoPlayer's DataSource layer.
+    // SMB uses SmbJ directly (not ExoPlayer's DataSource), so getBitrateEstimate() always
+    // returns -1 for SMB sources — MbpsOverlay will remain hidden, which is the correct behaviour.
     LaunchedEffect(exo, instanceKey, spec.hooks) {
         val s = spec
         val interval = s.hooks.progressIntervalMs()
@@ -334,6 +352,7 @@ fun OpenTunePlayerScreen(
                 if (!exo.isPlaying) continue
                 if (released.get()) break
                 val pos = exo.currentPosition
+                mbps = bandwidthMeter.getBitrateEstimate() / 1_000_000f
                 hooksState.value.onProgressTick(pos, playbackRate())
                 withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
             }
@@ -341,6 +360,7 @@ fun OpenTunePlayerScreen(
             while (isActive) {
                 delay(10_000L)
                 if (released.get()) break
+                mbps = bandwidthMeter.getBitrateEstimate() / 1_000_000f
                 if (exo.isPlaying) {
                     val pos = exo.currentPosition
                     withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
@@ -426,5 +446,6 @@ fun OpenTunePlayerScreen(
         menu.Overlay()
         subtitleCtrl.AdjustOsd()
         infoOsd.Osd()
+        MbpsOverlay(mbps = mbps)
     }
 }

@@ -3,6 +3,7 @@ package com.opentune.storage
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -84,5 +85,22 @@ class DataStoreAppConfigStore(private val context: Context) {
         context.appConfigDataStore.edit { prefs ->
             prefs[titleLangKey] = value.name
         }
+    }
+
+    // --- Pre-buffer duration ---
+
+    private val preBufferMsKey = intPreferencesKey("pre_buffer_ms")
+
+    val preBufferMsFlow: Flow<Int>
+        get() = context.appConfigDataStore.data.map { prefs ->
+            prefs[preBufferMsKey] ?: DEFAULT_PRE_BUFFER_MS
+        }
+
+    suspend fun savePreBufferMs(ms: Int) {
+        context.appConfigDataStore.edit { it[preBufferMsKey] = ms }
+    }
+
+    companion object {
+        const val DEFAULT_PRE_BUFFER_MS = 5 * 60 * 1000
     }
 }

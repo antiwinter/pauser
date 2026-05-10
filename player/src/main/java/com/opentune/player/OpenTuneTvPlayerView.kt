@@ -2,6 +2,7 @@ package com.opentune.player
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Color
 import android.util.AttributeSet
 import android.util.Log
 import android.view.KeyEvent
@@ -12,6 +13,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
+import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.PlayerView.ControllerVisibilityListener
@@ -74,6 +76,9 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         post { requestFocus() }
+        // post: Media3 inflates the controller layout lazily; posting ensures the DefaultTimeBar
+        // exists in the view hierarchy before we call findViewById.
+        post { applyTimeBarColors() }
     }
 
     override fun onDetachedFromWindow() {
@@ -260,6 +265,14 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
             Log.v(LOG_TAG, "super.dispatchKeyEvent → $consumed")
         }
         return consumed
+    }
+
+    private fun applyTimeBarColors() {
+        val timeBar = findViewById<DefaultTimeBar>(Media3UiR.id.exo_progress) ?: return
+        timeBar.setPlayedColor(Color.parseColor("#2979FF"))
+        timeBar.setBufferedColor(Color.parseColor("#D0D0D0"))
+        timeBar.setUnplayedColor(Color.parseColor("#606060"))
+        timeBar.setScrubberColor(Color.parseColor("#2979FF"))
     }
 
     private companion object {

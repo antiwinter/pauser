@@ -2,10 +2,13 @@ package com.opentune.player
 
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import com.opentune.storage.DataStoreAppConfigStore
 
 @UnstableApi
 object OpenTuneExoPlayer {
@@ -31,14 +34,32 @@ object OpenTuneExoPlayer {
         )
     }
 
+    data class PlayerWithMeter(val player: ExoPlayer, val bandwidthMeter: DefaultBandwidthMeter)
+
     /**
      * ExoPlayer for provider-supplied [androidx.media3.exoplayer.source.MediaSource] instances
      * (each source bundles its own [androidx.media3.datasource.DataSource]).
+     *
+     * [bandwidthMeter] is owned by the player after [ExoPlayer.Builder.setBandwidthMeter]; it is
+     * torn down automatically when [ExoPlayer.release] is called — no separate disposal needed.
      */
-    fun createForBundledSources(context: Context): ExoPlayer {
+    fun createForBundledSources(context: Context, preBufferMs: Int = DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS): PlayerWithMeter {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                preBufferMs,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            )
+            .build()
+        val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
         val renderersFactory = DefaultRenderersFactory(context)
             .setMediaCodecSelector(preferHardwareDecodersFirst)
             .setEnableDecoderFallback(true)
-        return ExoPlayer.Builder(context, renderersFactory).build()
+        val player = ExoPlayer.Builder(context, renderersFactory)
+            .setLoadControl(loadControl)
+            .setBandwidthMeter(bandwidthMeter)
+            .build()
+        return PlayerWithMeter(player, bandwidthMeter)
     }
 }
