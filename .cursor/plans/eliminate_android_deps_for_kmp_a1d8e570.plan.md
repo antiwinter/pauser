@@ -1,15 +1,9 @@
 ---
 name: Eliminate Android Dependencies from KMP Modules
-overview: "Remove all Android and Media3 imports from provider-api, emby, and storage so they can be compiled as KMP commonMain. Delete device-profile module — codec capabilities flow from app through setCapabilities() on OpenTuneProvider. Emby builds DeviceProfile internally, no Emby types leak outside :emby. Room KMP (2.6+) means storage stays as a single module with expect/actual. Android-only code (ExoPlayer, Context, Build, Compose) stays in app or Android-only modules. App remains free to implement additional providers (like smb) against provider-api."
+overview: "Remove all Android and Media3 imports from provider-api, emby, and storage so they can be compiled as kotlin(\"jvm\") modules. Delete device-profile module — codec capabilities flow from app through setCapabilities() on OpenTuneProvider. Emby builds DeviceProfile internally, no Emby types leak outside :emby. Storage stays as a single module: Room KMP (2.6+) handles annotations, DataStore moves to :app, Context-dependent construction moves to OpenTuneApplication. Android-only code (ExoPlayer, Context, Build, Compose) stays in app or Android-only modules. App remains free to implement additional providers (like smb) against provider-api."
 todos:
-  - id: decouple-playback-contracts
-    content: "Replace Media3 MediaSource in provider-api/PlaybackContracts with platform-agnostic PlaybackUrlSpec; add NoOpPlaybackHooks"
-    status: pending
-  - id: decouple-provider-instance
-    content: "Remove Context from resolvePlayback; remove all Media3/OkHttp construction from EmbyProviderInstance; return PlaybackUrlSpec with headers"
-    status: pending
-  - id: decouple-emby-provider
-    content: "Replace bootstrap(Context) with bootstrap(PlatformContext); introduce PlatformContext interface in provider-api; app provides AndroidPlatformContext"
+  - id: decouple-provider-api
+    content: "Replace MediaSource/Uri/Context in provider-api with PlaybackUrlSpec/PlatformContext; fix resolveExternalSubtitle return type; remove MediaArt.DrawableRes; update all callers (EmbyProviderInstance, SmbProviderInstance, PlayerRoute.kt, player module, OpenTuneProviderRegistry)"
     status: pending
   - id: extract-emby-dtos-and-client
     content: "Verify all DTOs, EmbyRepository, EmbyPlaybackHooks, EmbyPlaybackUrlResolver, EmbyClientFactory, EmbyClientIdentification have zero Android deps"
@@ -18,7 +12,7 @@ todos:
     content: "Add setCapabilities(CodecCapabilities) to OpenTuneProvider in provider-api; delete device-profile module entirely"
     status: pending
   - id: decouple-storage
-    content: "Remove Android Context/DataStore from storage; use expect/actual for database creation and preferences; Room 2.6+ KMP support keeps it as a single module"
+    content: "Extract AppConfigStore interface in storage; move DataStoreAppConfigStore to :app; replace Context-based Room builder with JVM file-path builder; move StorageBindings construction to OpenTuneApplication"
     status: pending
   - id: rename-modules-and-gradle
     content: "Rename modules per KMP architecture; switch shared modules to kotlin(\"jvm\"); update dependency graph"
@@ -38,8 +32,7 @@ isProject: false
         │  :emby               Emby provider (fully│
         │                      usable, no Android) │
         │  :storage            Room KMP (2.6+)     │
-        │                      expect/actual for   │
-        │                      DB creation         │
+        │                      Context-free APIs   │
         └──────────────────────────────────────────┘
                       │  depends on provider-api
         ┌─────────────┼──────────────┬──────────────┐
@@ -59,13 +52,15 @@ Modules that stay Android-only:
 
 ---
 
-## Step 1: Decouple playback contracts (provider-api)
+## Step 1: Decouple provider-api from Android (merged)
 
-**File:** `provider-api/src/main/java/com/opentune/provider/PlaybackContracts.kt`
+This is the highest-risk step — it changes the contract that `player`, `emby`, `smb`, and the app all implement or depend on. Do it as one commit, verify the app builds and plays before continuing.
 
-**Problem:** `OpenTuneMediaSourceFactory` returns `androidx.media3.exoplayer.source.MediaSource`.
+### 1a — PlaybackContracts.kt
 
-**Change:** Replace with a platform-agnostic playback URL descriptor:
+**Remove** `OpenTuneMediaSourceFactory` (`fun interface` returning `MediaSource`) — gone entirely.
+
+**Add** `PlaybackUrlSpec`:
 
 ```kotlin
 data class PlaybackUrlSpec(
@@ -75,23 +70,28 @@ data class PlaybackUrlSpec(
 )
 ```
 
-Update `PlaybackSpec`:
+**Replace** `PlaybackSpec`. Current fields `mediaSourceFactory: OpenTuneMediaSourceFactory` and `resolveExternalSubtitle: (suspend (String) -> Uri?)?` both use Android types. New shape:
 
 ```kotlin
 data class PlaybackSpec(
     val urlSpec: PlaybackUrlSpec,
-    val urlSpecFallback: PlaybackUrlSpec? = null,
     val displayTitle: String,
     val durationMs: Long?,
-    val audioFallbackOnly: Boolean,
     val hooks: OpenTunePlaybackHooks,
-    val audioDecodeUnsupportedBanner: String? = null,
     val initialPositionMs: Long = 0L,
     val onPlaybackDispose: () -> Unit = {},
+    val subtitleTracks: List<SubtitleTrack> = emptyList(),
+    /**
+     * Called by the player when selecting an external non-HTTP subtitle (SMB only).
+     * Returns a local file path (or file:// string); Emby leaves this null.
+     */
+    val resolveExternalSubtitle: (suspend (subtitleRef: String) -> String?)? = null,
 )
 ```
 
-**Add `NoOpPlaybackHooks`** in provider-api so app-provided providers (like SMB) don't need to write a no-op class:
+`resolveExternalSubtitle` return type changes from `android.net.Uri?` to `String?` — the player converts the path to a `Uri` locally inside `:player`.
+
+**Add** `NoOpPlaybackHooks` in provider-api so SMB and future providers don't need to write a no-op:
 
 ```kotlin
 object NoOpPlaybackHooks : OpenTunePlaybackHooks {
@@ -102,95 +102,84 @@ object NoOpPlaybackHooks : OpenTunePlaybackHooks {
 }
 ```
 
-**Remove:** `OpenTuneMediaSourceFactory` — no longer in `provider-api`.
-
-**Callers to update:**
-- `EmbyProviderInstance.resolvePlayback()` — build `PlaybackUrlSpec` instead of `ProgressiveMediaSource.Factory`.
-- `SmbProviderInstance.resolvePlayback()` — build `PlaybackUrlSpec` instead of `ProgressiveMediaSource.Factory`. Use `NoOpPlaybackHooks` instead of `SmbPlaybackHooks` (or keep `SmbPlaybackHooks` in the `smb` module if it needs custom behavior).
-- `player` module — add a local helper that converts `PlaybackUrlSpec` → Media3 `MediaSource`. This is a thin conversion: create OkHttp client, attach headers, wrap in `OkHttpDataSource.Factory`, create `ProgressiveMediaSource`.
-
 **`PlaybackContracts.kt` after:** Zero Android imports.
 
----
+### 1e — CatalogContracts.kt
 
-## Step 2: Decouple EmbyProviderInstance (emby)
+**Remove `MediaArt.DrawableRes`** from the sealed class. It carries an Android drawable resource ID, which is meaningless on any non-Android target.
 
-**File:** `providers/emby/src/main/java/com/opentune/emby/api/EmbyProviderInstance.kt`
+```kotlin
+sealed class MediaArt {
+    data class Http(val url: String) : MediaArt()
+    data class LocalFile(val absolutePath: String) : MediaArt()
+    data object None : MediaArt()
+}
+```
 
-**Problem:** `resolvePlayback` takes `Context` (line 108) and constructs OkHttp + `ProgressiveMediaSource` + `MediaItem` directly — all Android/Media3.
+Providers that previously returned `DrawableRes` should return `MediaArt.None`. The app layer shows whatever placeholder UI it chooses when it receives `None`.
 
-**Change:**
-1. Remove `context: Context` parameter from `resolvePlayback`.
-2. Remove all Media3 imports (`OkHttpDataSource`, `ProgressiveMediaSource`, `MediaItem`, `Uri`).
-3. Remove OkHttp `DataSource` construction. Build `PlaybackUrlSpec` with the resolved URL and Emby auth headers (`X-Emby-Token`).
-4. Use `EmbyPlaybackHooks` for session reporting (stays — it has zero Android deps).
-5. `onPlaybackDispose` closes the OkHttp client if needed, or stays no-op since HTTP is stateless.
+### 1b — ProviderContracts.kt
 
-**After:** `EmbyProviderInstance` imports only `kotlinx.coroutines`, `kotlinx.serialization`, and `provider-api` contracts. Zero Android.
+Two signatures change:
 
----
+```kotlin
+interface OpenTuneProvider {
+    // ...
+    fun bootstrap(context: PlatformContext) {}   // was Context
+}
 
-## Step 3: PlatformContext interface (provider-api)
+interface OpenTuneProviderInstance {
+    // ...
+    suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec  // Context removed
+}
+```
 
-**File:** NEW `provider-api/src/main/java/com/opentune/provider/PlatformContext.kt`
+### 1c — NEW PlatformContext.kt
 
-**Problem:** `EmbyProvider.bootstrap(context: Context)` (line 93 of `EmbyProvider.kt`) uses `Build.MODEL`, `Settings.Secure.ANDROID_ID`, `PackageManager`. `SmbProvider.bootstrap` is a no-op but still takes `Context`.
+**File:** `provider-api/src/main/java/com/opentune/provider/PlatformContext.kt`
 
-**Change:** Introduce a platform-agnostic context interface in `provider-api`:
+`EmbyProvider.bootstrap` currently uses `Build.MODEL`, `Settings.Secure.ANDROID_ID`, and `PackageManager` — all Android. Replace with:
 
 ```kotlin
 interface PlatformContext {
-    val deviceName: String      // Build.MODEL (Android) / UIDevice.model (iOS)
-    val deviceId: String        // Settings.Secure.ANDROID_ID / identifierForVendor
-    val clientVersion: String   // package version
-}
-
-// Update OpenTuneProvider interface
-interface OpenTuneProvider {
-    // ... existing methods ...
-
-    /** Called once before any provider method is used. */
-    fun bootstrap(context: PlatformContext) {}
+    val deviceName: String    // Build.MODEL on Android
+    val deviceId: String      // Settings.Secure.ANDROID_ID on Android
+    val clientVersion: String // from PackageManager on Android
 }
 ```
 
-**Update `EmbyProvider.bootstrap(PlatformContext)`:**
+Note: SHA-256 hashing in `EmbyProvider.bootstrap` uses `java.security.MessageDigest` — this is JVM standard, not Android-specific. No change needed there.
 
-```kotlin
-override fun bootstrap(context: PlatformContext) {
-    EmbyClientIdentificationStore.install(
-        EmbyClientIdentification(
-            clientName = "OpenTune",
-            deviceName = context.deviceName,
-            deviceId = context.deviceId,
-            clientVersion = context.clientVersion,
-        ),
-    )
-}
-```
+### 1d — Callers to update
 
-**App-side implementation** (in `app` module, Android-only):
+| Caller | Change |
+|---|---|
+| `EmbyProviderInstance.resolvePlayback()` | Remove `context: Context` param; remove all Media3 imports; build and return `PlaybackUrlSpec(url, headers)` with Emby auth headers (`X-Emby-Token`) |
+| `SmbProviderInstance.resolvePlayback()` | Remove `context: Context` param; build and return `PlaybackUrlSpec`; update `resolveExternalSubtitle` lambda to return `String?` (file path) instead of `Uri?` |
+| `EmbyProvider.bootstrap()` | Switch to `PlatformContext`; logic unchanged |
+| `SmbProvider.bootstrap()` | Update signature to `PlatformContext` (body stays no-op) |
+| `PlayerRoute.kt` | Remove the `app` Context arg from `inst.resolvePlayback(itemRefDecoded, resumeMs, app)` |
+| `player` module | Add a local `PlaybackUrlSpec.toMediaSource(): MediaSource` helper — create OkHttp client, attach headers, wrap in `OkHttpDataSource.Factory`, create `ProgressiveMediaSource`; update `resolveExternalSubtitle` consumer to call `Uri.parse(path)` |
+| `OpenTuneProviderRegistry` | Add `AndroidPlatformContext(applicationContext)` construction; pass it to each provider's `bootstrap()` call |
+
+**App-side** (in `:app`):
 
 ```kotlin
 class AndroidPlatformContext(private val androidContext: Context) : PlatformContext {
     override val deviceName: String get() = Build.MODEL
     override val deviceId: String get() =
         Settings.Secure.getString(androidContext.contentResolver, Settings.Secure.ANDROID_ID)
-    override val clientVersion: String get() = ... // PackageManager
+    override val clientVersion: String get() = // PackageManager lookup
 }
 ```
 
-**`OpenTuneProviderRegistry`** passes `AndroidPlatformContext(applicationContext)` to each provider during initialization.
-
-**`PlatformContext` after:** In `provider-api`. Zero Android imports. The interface only exposes `String` properties.
-
 ---
 
-## Step 4: Verify emby module is Android-free (emby)
+## Step 2: Verify emby module is Android-free (emby)
 
 **Files to audit:**
 
-| File | Expected state after Steps 1-3 |
+| File | Expected state after Step 1 |
 |---|---|
 | `dto/*.kt` (6 files) | Already clean — pure `kotlinx.serialization` |
 | `EmbyApi.kt` | Clean — Retrofit interface |
@@ -199,36 +188,32 @@ class AndroidPlatformContext(private val androidContext: Context) : PlatformCont
 | `EmbyRepository.kt` | Clean — calls EmbyApi, builds DeviceProfile request |
 | `EmbyPlaybackHooks.kt` | Clean — calls EmbyRepository for progress reporting |
 | `EmbyPlaybackUrlResolver.kt` | Clean — URL string manipulation |
-| `EmbyProvider.kt` | Clean after Step 3 — uses PlatformContext |
-| `EmbyProviderInstance.kt` | Clean after Step 2 — returns PlaybackUrlSpec |
-| `EmbyHttpDiagnostics.kt` | Check for Android-specific logging — remove if needed |
+| `EmbyProvider.kt` | Clean after Step 1 — uses PlatformContext |
+| `EmbyProviderInstance.kt` | Clean after Step 1 — returns PlaybackUrlSpec |
+| `EmbyHttpDiagnostics.kt` | Uses `android.util.Log` — replace all calls with `java.util.logging.Logger` |
 | `EmbyImageUrls.kt` | Clean — URL building |
 | `EmbyJson.kt` | Clean — Json configuration |
 | `EmbyServerFieldsJson.kt` | Clean — serialization |
 
-**Action:** Read each file, grep for `android.` imports. If `EmbyHttpDiagnostics.kt` has Android-specific code, remove it or inline the relevant parts into `EmbyClientFactory`.
+**Action:** Grep for `android.` imports across the module. In `EmbyHttpDiagnostics.kt`, replace every `android.util.Log.d/e/w/i(...)` call with the equivalent `java.util.logging.Logger.getLogger(...).fine/severe/warning/info(...)`.
 
-**After:** The entire `:emby` module has zero Android imports and is directly usable as a KMP commonMain module.
+**After:** The entire `:emby` module has zero Android imports.
 
 ---
 
-## Step 5: Add capabilities to provider, delete device-profile module
+## Step 3: Add capabilities to provider, delete device-profile module
 
 **Principle:** No Emby keyword (`DeviceProfile`, `CodecProfile`, `DirectPlayProfile`, etc.) appears outside `:emby`. The `device-profile` module is deleted entirely.
 
 **NEW `provider-api/src/main/java/com/opentune/provider/CodecCapabilities.kt`:**
 
-```kotlin
-data class VideoCodecCapability(
-    val mimeType: String,   // e.g. "video/avc"
-    val maxWidth: Int,
-    val maxHeight: Int,
-)
+From reading `AndroidDeviceProfileBuilder`, the only device-variable information it probes is: which video/audio MIME types are supported, and the max pixel count across AVC + HEVC decoders. Everything else (bitrate cap, containers, transcoding profiles, subtitle formats) is hardcoded inside the builder. `VideoCodecCapability` is therefore unnecessary — there is no per-codec resolution — and `modelName` is redundant with `PlatformContext.deviceName`.
 
+```kotlin
 data class CodecCapabilities(
-    val videoCodecs: List<VideoCodecCapability>,
-    val audioCodecs: List<String>,  // MIME types like "audio/mp4a-latm"
-    val modelName: String = "",     // for device identification
+    val supportedVideoMimeTypes: List<String>,  // e.g. ["video/avc", "video/hevc", "video/vp9"]
+    val supportedAudioMimeTypes: List<String>,  // e.g. ["audio/mp4a-latm", "audio/ac3"]
+    val maxVideoPixels: Int = 1920 * 1080,      // max supported resolution (width × height)
 )
 ```
 
@@ -256,8 +241,8 @@ class EmbyProvider(...) : OpenTuneProvider {
 
     override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
         val caps = capabilities ?: CodecCapabilities(
-            videoCodecs = listOf(VideoCodecCapability("video/avc", 1920, 1080)),
-            audioCodecs = listOf("audio/mp4a-latm"),
+            supportedVideoMimeTypes = listOf("video/avc"),
+            supportedAudioMimeTypes = listOf("audio/mp4a-latm"),
         )
         val deviceProfile = buildDeviceProfile(caps)  // private method, stays in :emby
         return EmbyProviderInstance(fields = values, deviceProfile = deviceProfile)
@@ -265,7 +250,8 @@ class EmbyProvider(...) : OpenTuneProvider {
 
     private fun buildDeviceProfile(caps: CodecCapabilities): DeviceProfile {
         // All mapping logic from current AndroidDeviceProfileBuilder:
-        // MIME → Emby codec name, profile conditions, transcoding profiles, etc.
+        // MIME → Emby codec name, sqrtApprox for max resolution, hardcoded bitrate/containers/transcoding.
+        // PlatformContext.deviceName provides Build.MODEL equivalent for DeviceIdentification.
     }
 }
 ```
@@ -274,70 +260,68 @@ class EmbyProvider(...) : OpenTuneProvider {
 
 **App-side probing:** The app probes `MediaCodecList` on Android (VideoToolbox on iOS), constructs `CodecCapabilities`, and calls `provider.setCapabilities(result)` on each provider. The app never imports `DeviceProfile`.
 
+**Update `OpenTuneProviderRegistry`:** Currently `OpenTuneApplication` calls `AndroidDeviceProfileBuilder.build()` and passes the result to `OpenTuneProviderRegistry.default(deviceProfile: Any)`. After this step:
+1. Remove the `deviceProfile` parameter from `OpenTuneProviderRegistry.default(...)`.
+2. In `OpenTuneApplication`, replace `AndroidDeviceProfileBuilder.build()` with direct `MediaCodecList` probing that produces `CodecCapabilities`.
+3. Call `provider.setCapabilities(caps)` on each registered provider after `bootstrap()`, inside the registry's initialization sequence.
+
 **Delete:** `device-profile/` directory entirely.
 
 ---
 
-## Step 6: Decouple storage module (Room KMP)
+## Step 4: Decouple storage module
 
-Room 2.6+ supports KMP. `@Entity`, `@Dao`, `@Database` annotations work in `commonMain`. The compiler generates platform-specific implementations. The only Android-specific code is the `Context`-dependent database builder and DataStore usage.
+Target plugin: `kotlin("jvm")` + Room KMP plugin. No `expect/actual` — Android-specific construction moves to `:app`, not into platform source sets.
 
 **Files and what changes:**
 
-| File | Current Android dep | KMP approach |
+| File | Current Android dep | Action |
 |---|---|---|
-| `ServerEntities.kt` | `@Entity` annotation | Room KMP supports this in commonMain — no change |
-| `Daos.kt` | `@Dao` annotation | Room KMP supports this in commonMain — no change |
-| `OpenTuneDatabase.kt` | `Context` in `companion object` | Extract builder to `expect/actual`: `expect fun createDatabase(): OpenTuneDatabase` |
-| `RoomMediaStateStore.kt` | None (uses DAOs) | Already clean — Room KMP DAOs work in commonMain |
+| `ServerEntities.kt` | `@Entity` annotation | No change — Room KMP supports this under `kotlin("jvm")` |
+| `Daos.kt` | `@Dao` annotation | No change — Room KMP supports this under `kotlin("jvm")` |
+| `OpenTuneDatabase.kt` | `Context` in companion builder | Replace `Room.databaseBuilder(Context, ...)` with JVM Room builder taking a file path string: `Room.databaseBuilder<OpenTuneDatabase>(name = dbFilePath).build()` |
+| `RoomMediaStateStore.kt` | None | Already clean |
 | `MediaStateContracts.kt` | None | Already clean |
-| `DataStoreAppConfigStore.kt` | `Context`, DataStore | Extract `AppConfigStore` interface in commonMain, `actual` with DataStore on Android, `NSUserDefaults`/`Settings` on iOS |
-| `StorageBindings.kt` | `Context`, `java.io.File` | Extract `StorageBindings` as an interface in commonMain; Android `actual` takes `Context` to construct it; `ThumbnailDiskCache` uses `java.io.File` — needs an `expect/actual` for file path resolution |
+| `DataStoreAppConfigStore.kt` | `Context`, AndroidX DataStore | Extract `AppConfigStore` interface that stays in `:storage`; move `DataStoreAppConfigStore` class to `:app` |
+| `ThumbnailDiskCache.kt` | None (uses `java.io.File` only) | Already JVM-portable — no change |
+| `StorageBindings.kt` | `Context` | Accept `AppConfigStore` interface instead of `DataStoreAppConfigStore`; remove Context; construction moves to `OpenTuneApplication` |
 
 **Concrete changes:**
 
-1. **`OpenTuneDatabase.Companion.create(Context)` → `expect fun createDatabase(name: String = "opentune.db"): OpenTuneDatabase`**
-   - `androidMain` actual: `Room.databaseBuilder(context, ...)`
-   - `iosMain` actual: `Room.databaseBuilder<OpenTuneDatabase>(name = name, factory = { ... })`
-
-2. **`DataStoreAppConfigStore` → `AppConfigStore` interface + platform actuals**
+1. **Extract `AppConfigStore` interface** (stays in `:storage`):
    ```kotlin
-   // commonMain
    interface AppConfigStore {
-       suspend fun getString(key: String): String?
-       suspend fun putString(key: String, value: String)
+       // existing methods from DataStoreAppConfigStore
    }
-   // androidMain actual: DataStore-backed
-   // iosMain actual: NSUserDefaults-backed
    ```
 
-3. **`ThumbnailDiskCache` → `ThumbnailCache` interface + platform actuals**
-   ```kotlin
-   // commonMain
-   interface ThumbnailCache {
-       suspend fun get(key: String): String?  // returns local file path
-       suspend fun put(key: String, data: ByteArray)
-   }
-   // androidMain actual: uses context.cacheDir + java.io.File
-   // iosMain actual: uses NSCacheDirectory + NSFileManager
-   ```
+2. **`DataStoreAppConfigStore`** moves to `:app` as the Android implementation of `AppConfigStore`. Logic unchanged.
 
-4. **`StorageBindings`** — stays in commonMain as a plain data class that holds the three interfaces (`UserMediaStateStore` is the DAO-backed implementation, `AppConfigStore`, `ThumbnailCache`). The `app` module constructs it via platform-specific factory:
+3. **`OpenTuneDatabase.create()`** — replace Context-based builder:
    ```kotlin
-   // commonMain
-   data class StorageBindings(
+   companion object {
+       fun create(dbFilePath: String): OpenTuneDatabase =
+           Room.databaseBuilder<OpenTuneDatabase>(name = dbFilePath).build()
+   }
+   ```
+   `:app` computes `dbFilePath` via `context.getDatabasePath("opentune.db").absolutePath`.
+
+4. **`StorageBindings`** — remove Context, accept `AppConfigStore`:
+   ```kotlin
+   class OpenTuneStorageBindings(
        val serverDao: ServerDao,
+       val mediaStateStore: UserMediaStateStore,
        val appConfigStore: AppConfigStore,
-       val thumbnailCache: ThumbnailCache,
+       val thumbnailCache: ThumbnailDiskCache,
    )
-   // androidMain: expect fun createStorageBindings(context: Context): StorageBindings
    ```
+   `OpenTuneApplication` constructs it, passing `DataStoreAppConfigStore(androidContext)` as the `appConfigStore`.
 
-**No module split.** The entire `:storage` module stays as one unit with `expect/actual` for the platform-specific constructors. Room annotations (`@Entity`, `@Dao`, `@Database`) remain in `commonMain` — Room KMP handles them.
+**No module split.** `:storage` stays as one module; all Android-specific wiring lives in `:app`.
 
 ---
 
-## Step 7: Rename modules and update Gradle
+## Step 5: Rename modules and update Gradle
 
 **New `settings.gradle.kts`:**
 
@@ -365,6 +349,14 @@ include(":smb")
 | `app` | `android.application` | stays |
 | `player` | `android.library` | stays |
 | `smb` (was `providers:smb`) | `android.library` | stays |
+
+**Dependency changes for shared modules (`:provider-api`, `:emby`, `:storage`):**
+
+| Remove | Replace with |
+|---|---|
+| `kotlinx-coroutines-android` | `kotlinx-coroutines-core` (`Dispatchers.IO` is available on JVM) |
+| `androidx.core.ktx` | remove — no Android APIs in shared modules |
+| `media3.exoplayer`, `media3.datasource-okhttp` | remove from `:provider-api` and `:emby` |
 
 **Dependency graph:**
 
@@ -401,24 +393,22 @@ provider-api/                    provider-api/
 
 ## Order of execution
 
-1. **Step 1** — `provider-api` PlaybackContracts (highest risk, foundational)
-2. **Step 2** — `emby` EmbyProviderInstance (depends on Step 1)
-3. **Step 3** — PlatformContext interface in provider-api
-4. **Step 4** — Audit and clean remaining emby Android imports (depends on Steps 2-3)
-5. **Step 5** — Add `setCapabilities` to `OpenTuneProvider`, delete device-profile module
-6. **Step 6** — storage `expect/actual` decoupling
-7. **Step 7** — Rename, restructure, update Gradle (depends on all above)
+1. **Step 1** — Decouple provider-api: replace `MediaSource`/`Uri`/`Context` throughout the contract layer and all callers (highest risk, foundational — one commit)
+2. **Step 2** — Audit and clean remaining emby Android imports (depends on Step 1)
+3. **Step 3** — Add `setCapabilities` to `OpenTuneProvider`, delete device-profile module
+4. **Step 4** — Storage decoupling (independent of Step 3, can be done in parallel)
+5. **Step 5** — Rename, restructure, update Gradle (depends on all above)
 
-Steps 5 and 6 are independent of each other and can be done in parallel after Step 1.
+Steps 3 and 4 are independent of each other and can be done in parallel after Step 1.
 
 ---
 
 ## Risk and rollback
 
-- **Step 1** changes the API that `player`, `emby`, and `smb` all depend on. Do this first, verify the app builds and plays before moving on.
-- **Step 3** changes the `OpenTuneProvider` interface — all providers (emby, smb) and the registry need updating together.
-- **Steps 4-5** are low risk — mostly moving files, extracting interfaces, deleting a module.
-- **Step 6** is medium risk — `expect/actual` for Room database creation and preferences needs testing on both platforms. Room KMP is relatively new (2.6+), so verify the KSP/annotation processor works correctly.
-- **Step 7** is mechanical — renames and Gradle changes. Should be a single commit after everything else is verified.
+- **Step 1** changes the API that `player`, `emby`, and `smb` all depend on. Do this as one commit, verify the app builds and plays before moving on.
+- **Step 2** is low risk — mostly removing imports and replacing one logging class.
+- **Step 3** changes the `OpenTuneProvider` interface and deletes a module — all providers (emby, smb) and the registry need updating together.
+- **Step 4** is medium risk — Room KMP with `kotlin("jvm")` is relatively new (2.6+); verify KSP/annotation processor works correctly. The DataStore move to `:app` is mechanical.
+- **Step 5** is mechanical — renames and Gradle changes. Should be a single commit after everything else is verified.
 - No data migration is needed. Room schema doesn't change.
 - Each step can be committed independently within the ordering constraints.
