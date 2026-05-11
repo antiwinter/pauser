@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -9,9 +8,11 @@ kotlin {
 }
 
 dependencies {
+    api(project(":provider-api"))
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.room.runtime)
-    ksp(libs.room.compiler)
-    implementation(libs.sqlite.bundled)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
 }

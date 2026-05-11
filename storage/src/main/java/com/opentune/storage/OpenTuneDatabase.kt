@@ -1,9 +1,9 @@
 package com.opentune.storage
 
-import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 
 @Database(
     entities = [
@@ -18,9 +18,10 @@ abstract class OpenTuneDatabase : RoomDatabase() {
     abstract fun mediaStateDao(): MediaStateDao
 
     companion object {
-        fun create(context: Context): OpenTuneDatabase =
-            Room.databaseBuilder(context, OpenTuneDatabase::class.java, "opentune.db")
-                .fallbackToDestructiveMigration()
+        fun create(dbFilePath: String): OpenTuneDatabase =
+            Room.databaseBuilder<OpenTuneDatabase>(name = dbFilePath)
+                .setDriver(BundledSQLiteDriver())
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }
 }

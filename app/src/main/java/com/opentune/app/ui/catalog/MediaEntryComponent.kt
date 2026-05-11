@@ -60,12 +60,6 @@ fun MediaEntryComponent(
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
                     )
-                    is MediaArt.DrawableRes -> Image(
-                        painter = painterResource(c.resId),
-                        contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        contentScale = ContentScale.Fit,
-                    )
                     is MediaArt.LocalFile -> AsyncImage(
                         model = File(c.absolutePath),
                         contentDescription = displayTitle,

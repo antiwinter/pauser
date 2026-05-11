@@ -39,7 +39,7 @@ import com.opentune.player.menu.rememberMenuOverlay
 import com.opentune.player.speed.rememberSpeedController
 import com.opentune.player.subtitle.rememberSubtitleController
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.DataStoreAppConfigStore
+import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.UserMediaStateStore
 import com.opentune.storage.upsertPosition
@@ -57,7 +57,7 @@ import kotlin.math.abs
 
 internal data class PlayerStores(
     val mediaStateStore: UserMediaStateStore,
-    val appConfigStore: DataStoreAppConfigStore?,
+    val appConfigStore: AppConfigStore?,
 )
 
 private const val LOG_TAG = "OpenTunePlayerShell"
@@ -95,7 +95,7 @@ fun OpenTunePlayerScreen(
     initialSubtitleTrackId: String? = null,
     initialSubtitleOffsetFraction: Float = 0f,
     initialSubtitleSizeScale: Float = 1f,
-    appConfigStore: DataStoreAppConfigStore? = null,
+    appConfigStore: AppConfigStore? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -105,8 +105,8 @@ fun OpenTunePlayerScreen(
     val instanceKey = mediaStateKey
 
     val preBufferMs by (appConfigStore?.preBufferMsFlow
-        ?: flowOf(DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS))
-        .collectAsState(initial = DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS)
+        ?: flowOf(AppConfigStore.DEFAULT_PRE_BUFFER_MS))
+        .collectAsState(initial = AppConfigStore.DEFAULT_PRE_BUFFER_MS)
 
     // preBufferMs is a key so the player is recreated if the setting changes. If a settings UI
     // is added that allows changing the buffer duration during playback, this will cause a
@@ -203,7 +203,7 @@ fun OpenTunePlayerScreen(
         withContext(Dispatchers.Main) {
             exo.playbackParameters = PlaybackParameters(savedSpeed)
             exo.stop()
-            exo.setMediaSource(s.mediaSourceFactory.create())
+            exo.setMediaSource(s.toMediaSource(context))
             exo.playWhenReady = true
             exo.prepare()
         }
@@ -300,7 +300,7 @@ fun OpenTunePlayerScreen(
                     .setTrackTypeDisabled(trackType, true)
                     .build()
                 exo.stop()
-                exo.setMediaSource(specState.value.mediaSourceFactory.create())
+                exo.setMediaSource(specState.value.toMediaSource(context))
                 exo.playWhenReady = true
                 exo.prepare()
                 Log.d(PLAYER_LOG, "in-place $label-off prepare issued")

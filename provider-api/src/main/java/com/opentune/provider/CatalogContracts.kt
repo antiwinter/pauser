@@ -13,7 +13,6 @@ enum class MediaEntryKind {
 
 sealed class MediaArt {
     data class Http(val url: String) : MediaArt()
-    data class DrawableRes(val resId: Int) : MediaArt()
     data class LocalFile(val absolutePath: String) : MediaArt()
     data object None : MediaArt()
 }

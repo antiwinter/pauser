@@ -1,7 +1,5 @@
 package com.opentune.provider
 
-import android.content.Context
-
 // --- Streaming ---
 
 /**
@@ -88,7 +86,10 @@ interface OpenTuneProvider {
     fun createInstance(values: Map<String, String>): OpenTuneProviderInstance
 
     /** One-time bootstrap (e.g. install HTTP client identification). */
-    fun bootstrap(context: Context) {}
+    fun bootstrap(context: PlatformContext) {}
+
+    /** Set decoder capabilities probed from the platform. Default is no-op. */
+    fun setCapabilities(capabilities: CodecCapabilities) {}
 }
 
 // --- Provider instance ---
@@ -101,7 +102,7 @@ interface OpenTuneProviderInstance {
     suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult
     suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem>
     suspend fun loadDetail(itemRef: String): MediaDetailModel
-    suspend fun resolvePlayback(itemRef: String, startMs: Long, context: Context): PlaybackSpec
+    suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec
 
     /**
      * Opens a random-access stream for [itemRef], calls [block] with it, and closes the stream.

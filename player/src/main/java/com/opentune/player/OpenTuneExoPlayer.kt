@@ -8,7 +8,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
-import com.opentune.storage.DataStoreAppConfigStore
+import com.opentune.storage.AppConfigStore
 
 @UnstableApi
 object OpenTuneExoPlayer {
@@ -43,7 +43,7 @@ object OpenTuneExoPlayer {
      * [bandwidthMeter] is owned by the player after [ExoPlayer.Builder.setBandwidthMeter]; it is
      * torn down automatically when [ExoPlayer.release] is called — no separate disposal needed.
      */
-    fun createForBundledSources(context: Context, preBufferMs: Int = DataStoreAppConfigStore.DEFAULT_PRE_BUFFER_MS): PlayerWithMeter {
+    fun createForBundledSources(context: Context, preBufferMs: Int = AppConfigStore.DEFAULT_PRE_BUFFER_MS): PlayerWithMeter {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,

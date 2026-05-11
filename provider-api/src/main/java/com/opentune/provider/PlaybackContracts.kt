@@ -1,13 +1,5 @@
 package com.opentune.provider
 
-import android.net.Uri
-import androidx.media3.exoplayer.source.MediaSource
-
-/**
- * Source-specific playback side effects (session reporting, etc.).
- * Implementations must not reference ExoPlayer or Media3 — the TV shell passes
- * primitive timing and rate only.
- */
 interface OpenTunePlaybackHooks {
     /** If 0, the shell does not run a progress tick loop. */
     fun progressIntervalMs(): Long
@@ -17,26 +9,37 @@ interface OpenTunePlaybackHooks {
     suspend fun onStop(positionMs: Long)
 }
 
-fun interface OpenTuneMediaSourceFactory {
-    fun create(): MediaSource
+object NoOpPlaybackHooks : OpenTunePlaybackHooks {
+    override fun progressIntervalMs(): Long = 0L
+    override suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float) = Unit
+    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float) = Unit
+    override suspend fun onStop(positionMs: Long) = Unit
 }
 
+data class PlaybackUrlSpec(
+    val url: String,
+    val headers: Map<String, String> = emptyMap(),
+    val mimeType: String? = null,
+)
+
 data class PlaybackSpec(
-    val mediaSourceFactory: OpenTuneMediaSourceFactory,
+    /** HTTP(S) sources. Null for providers that supply their own data pipeline (e.g. SMB). */
+    val urlSpec: PlaybackUrlSpec? = null,
+    /**
+     * For Android-only providers that cannot be expressed as a URL (e.g. SMB via SmbDataSource).
+     * Typed as `() -> Any` so provider-api has zero Media3 imports; the player module casts to
+     * `() -> MediaSource`.
+     */
+    val customMediaSourceFactory: (() -> Any)? = null,
     val displayTitle: String,
     val durationMs: Long?,
     val hooks: OpenTunePlaybackHooks,
-    /** ExoPlayer seek target when the screen opens (route hint and/or local resume store). */
     val initialPositionMs: Long = 0L,
-    /** Invoked when the player screen is torn down (e.g. close SMB session after playback). */
     val onPlaybackDispose: () -> Unit = {},
-    /** All known subtitle tracks (embedded + external) for this item. Populated by resolvePlayback. */
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     /**
-     * Called by the player when selecting an external non-HTTP subtitle track (SMB only).
-     * Uses [com.opentune.provider.OpenTuneProviderInstance.withStream] internally to download the
-     * subtitle file into a local cache and returns a file:// [Uri]. Emby leaves this null since
-     * HTTP subtitle URLs are used directly.
+     * Called by the player when selecting an external non-HTTP subtitle (SMB only).
+     * Returns a local file path string; the player converts to Uri. Emby leaves this null.
      */
-    val resolveExternalSubtitle: (suspend (subtitleRef: String) -> Uri?)? = null,
+    val resolveExternalSubtitle: (suspend (subtitleRef: String) -> String?)? = null,
 )

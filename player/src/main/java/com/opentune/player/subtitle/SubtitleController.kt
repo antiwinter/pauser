@@ -38,6 +38,7 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.PlayerStores
 import com.opentune.player.R
+import com.opentune.player.toMediaSource
 import com.opentune.player.menu.PlayerMenuEntry
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -237,7 +238,7 @@ internal class SubtitleController(
                     if (externalRef.startsWith("http://") || externalRef.startsWith("https://")) {
                         Uri.parse(externalRef)
                     } else {
-                        specState.value.resolveExternalSubtitle?.invoke(externalRef)
+                        specState.value.resolveExternalSubtitle?.invoke(externalRef)?.let { Uri.parse(it) }
                     }
                 } catch (e: Exception) {
                     Log.e(SUB_LOG_TAG, "select: resolveExternalSubtitle threw for $externalRef", e)
@@ -257,7 +258,7 @@ internal class SubtitleController(
                 val subtitleSource = SingleSampleMediaSource
                     .Factory(DefaultDataSource.Factory(context))
                     .createMediaSource(subtitleConfig, C.TIME_UNSET)
-                val mergedSource = MergingMediaSource(specState.value.mediaSourceFactory.create(), subtitleSource)
+                val mergedSource = MergingMediaSource(specState.value.toMediaSource(context), subtitleSource)
                 withContext(Dispatchers.Main) {
                     var sidecarListener: Player.Listener? = null
                     sidecarListener = object : Player.Listener {

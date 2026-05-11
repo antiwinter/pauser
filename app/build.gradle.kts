@@ -39,11 +39,10 @@ android {
 
 dependencies {
     implementation(project(":provider-api"))
-    implementation(project(":providers:emby"))
-    implementation(project(":device-profile"))
+    implementation(project(":emby"))
     implementation(project(":player"))
     implementation(project(":storage"))
-    implementation(project(":providers:smb"))
+    implementation(project(":smb"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -65,8 +64,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.coil.compose)
     implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
+    implementation(libs.androidx.datastore.preferences)
 
     testImplementation("junit:junit:4.13.2")
 }
