@@ -28,7 +28,6 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.emby.EmbyProvider
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
@@ -77,13 +76,6 @@ fun ServerEditRoute(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(R.string.server_edit_title))
-            Text(
-                if (providerType == EmbyProvider.PROVIDER_TYPE) {
-                    stringResource(R.string.server_edit_hint_http)
-                } else {
-                    stringResource(R.string.server_edit_hint_file_share)
-                },
-            )
             if (!loaded) {
                 Text("Loading…")
             } else {
@@ -124,13 +116,7 @@ fun ServerEditRoute(
                     }
                 }
             },
-            enabled = loaded && (
-                if (providerType == EmbyProvider.PROVIDER_TYPE) {
-                    (values["username"]?.isNotBlank() == true) && (values["password"]?.isNotBlank() == true)
-                } else {
-                    true
-                }
-                ),
+            enabled = loaded && fields.filter { it.required }.all { values[it.id]?.isNotBlank() == true },
         ) {
             Text(stringResource(R.string.server_edit_primary))
         }

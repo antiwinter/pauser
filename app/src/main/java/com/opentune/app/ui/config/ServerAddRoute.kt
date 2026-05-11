@@ -34,7 +34,6 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.emby.EmbyProvider
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers
@@ -151,13 +150,7 @@ fun ServerAddRoute(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 }
-                Text(
-                    if (providerType == EmbyProvider.PROVIDER_TYPE) {
-                        stringResource(R.string.server_add_primary_http)
-                    } else {
-                        stringResource(R.string.server_add_primary_file_share)
-                    },
-                )
+                Text(stringResource(R.string.server_add_primary))
             }
         }
         error?.let {

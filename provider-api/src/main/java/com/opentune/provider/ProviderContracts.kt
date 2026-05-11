@@ -96,7 +96,7 @@ interface OpenTuneProvider {
  * No identity fields — the app registry maps sourceId → instance externally.
  */
 interface OpenTuneProviderInstance {
-    suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult
+    suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult
     suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem>
     suspend fun loadDetail(itemRef: String): MediaDetailModel
     suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec

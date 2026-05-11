@@ -3,7 +3,6 @@ package com.opentune.emby
 import com.opentune.emby.dto.BaseItemDto
 import com.opentune.emby.dto.DeviceProfile
 import com.opentune.provider.BrowsePageResult
-import com.opentune.provider.CatalogRouteTokens
 import com.opentune.provider.ExternalUrl
 import com.opentune.provider.MediaArt
 import com.opentune.provider.MediaDetailModel
@@ -82,10 +81,10 @@ class EmbyProviderInstance(
         )
     }
 
-    override suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult {
+    override suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult {
         val r = repo()
         return withContext(Dispatchers.IO) {
-            if (location == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) {
+            if (location == null) {
                 val views = r.getViews()
                 BrowsePageResult(
                     items = views.items.mapNotNull { it.toListItem() },
@@ -112,7 +111,7 @@ class EmbyProviderInstance(
         if (q.isEmpty()) return emptyList()
         val r = repo()
         return withContext(Dispatchers.IO) {
-            val parentId: String? = if (scopeLocation == CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT) null else scopeLocation
+            val parentId: String? = scopeLocation.ifEmpty { null }
             val result = r.getItems(
                 parentId = parentId,
                 recursive = true,

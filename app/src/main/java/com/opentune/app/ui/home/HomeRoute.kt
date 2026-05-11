@@ -16,9 +16,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.ui.catalog.CatalogNav
-import com.opentune.emby.EmbyProvider
-import com.opentune.smb.SmbProvider
 import com.opentune.storage.ServerEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -34,22 +31,17 @@ fun HomeRoute(
     onEditProvider: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    var httpServers by remember { mutableStateOf<List<ServerEntity>>(emptyList()) }
-    var fileShares by remember { mutableStateOf<List<ServerEntity>>(emptyList()) }
-    val librariesRoot = remember { CatalogNav.LIBRARIES_ROOT_SEGMENT }
+    val providers = remember { app.providerRegistry.allProviders().toList() }
+    var serversByType by remember { mutableStateOf<Map<String, List<ServerEntity>>>(emptyMap()) }
 
     LaunchedEffect(app) {
         coroutineScope {
-            launch {
-                app.storageBindings.serverDao.observeByProvider(EmbyProvider.PROVIDER_TYPE).collect { list ->
-                    httpServers = list
-                    launch { app.instanceRegistry.populateEager(list) }
-                }
-            }
-            launch {
-                app.storageBindings.serverDao.observeByProvider(SmbProvider.PROVIDER_TYPE).collect { list ->
-                    fileShares = list
-                    launch { app.instanceRegistry.populateEager(list) }
+            providers.forEach { provider ->
+                launch {
+                    app.storageBindings.serverDao.observeByProvider(provider.providerType).collect { list ->
+                        serversByType = serversByType + (provider.providerType to list)
+                        launch { app.instanceRegistry.populateEager(list) }
+                    }
                 }
             }
         }
@@ -60,26 +52,19 @@ fun HomeRoute(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(stringResource(R.string.home_title))
-        Button(onClick = { onAddProvider(EmbyProvider.PROVIDER_TYPE) }) {
-            Text(stringResource(R.string.home_add_http))
-        }
-        Button(onClick = { onAddProvider(SmbProvider.PROVIDER_TYPE) }) {
-            Text(stringResource(R.string.home_add_file_share))
-        }
-        httpServers.forEach { s ->
-            Button(
-                onClick = { onOpenBrowse(EmbyProvider.PROVIDER_TYPE, s.sourceId, librariesRoot) },
-                modifier = Modifier.onTvMenuKeyDown { onEditProvider(EmbyProvider.PROVIDER_TYPE, s.sourceId) },
-            ) {
-                Text(s.displayName)
+        providers.forEach { provider ->
+            Button(onClick = { onAddProvider(provider.providerType) }) {
+                Text(stringResource(R.string.home_add_provider, provider.providerType))
             }
         }
-        fileShares.forEach { s ->
-            Button(
-                onClick = { onOpenBrowse(SmbProvider.PROVIDER_TYPE, s.sourceId, "") },
-                modifier = Modifier.onTvMenuKeyDown { onEditProvider(SmbProvider.PROVIDER_TYPE, s.sourceId) },
-            ) {
-                Text(s.displayName)
+        providers.forEach { provider ->
+            (serversByType[provider.providerType] ?: emptyList()).forEach { s ->
+                Button(
+                    onClick = { onOpenBrowse(provider.providerType, s.sourceId, "") },
+                    modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.providerType, s.sourceId) },
+                ) {
+                    Text(s.displayName)
+                }
             }
         }
     }

@@ -68,8 +68,8 @@ fun BrowseRoute(
         is BrowseState.Ready -> BrowseScreen(
             logTag = "OT_Browse_$sourceId",
             items = items,
-            loadPage = { startIndex, limit -> s.instance.loadBrowsePage(locationDecoded, startIndex, limit) },
-            subtitle = if (locationDecoded == CatalogNav.LIBRARIES_ROOT_SEGMENT) "Libraries" else locationDecoded,
+            loadPage = { startIndex, limit -> s.instance.loadBrowsePage(locationDecoded.ifEmpty { null }, startIndex, limit) },
+            subtitle = locationDecoded,
             titleLang = titleLang,
             onBack = { nav.popBackStack() },
             onSearch = { nav.navigate(Routes.search(providerType, sourceId, locationDecoded)) },

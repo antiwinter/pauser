@@ -26,7 +26,6 @@ class EmbyProvider : OpenTuneProvider {
     @Volatile private var deviceName: String = "Android TV"
 
     override val providerType: String = PROVIDER_TYPE
-
     override val providesCover: Boolean = true
 
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(

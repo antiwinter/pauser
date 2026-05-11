@@ -48,12 +48,12 @@ class SmbProviderInstance(
         domain = fields.domain,
     )
 
-    override suspend fun loadBrowsePage(location: String, startIndex: Int, limit: Int): BrowsePageResult {
+    override suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share ?: error("No share")
-                val all = share.listDirectory(location)
+                val all = share.listDirectory(location ?: "")
                 val slice = all.drop(startIndex).take(limit)
                 BrowsePageResult(items = slice.map { mapEntry(it) }, totalCount = all.size)
             } finally {

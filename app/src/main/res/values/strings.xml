@@ -13,18 +13,14 @@
 
     <string name="server_add_title">Add source</string>
     <string name="server_add_hint_autosave">Fields are saved automatically if you leave before finishing.</string>
-    <string name="server_add_primary_http">Save and connect</string>
-    <string name="server_add_primary_file_share">Save share</string>
+    <string name="server_add_primary">Save and connect</string>
     <string name="server_edit_title">Edit source</string>
-    <string name="server_edit_hint_http">Re-enter username and password to refresh the session, then save.</string>
-    <string name="server_edit_hint_file_share">Save changes and Cancel are fixed below the form.</string>
     <string name="server_edit_primary">Save changes</string>
     <string name="action_cancel">Cancel</string>
     <string name="home_title">OpenTune</string>
     <string name="home_section_http_sources">Library servers (Menu on the remote to edit)</string>
     <string name="home_section_file_sources">File shares (Menu on the remote to edit)</string>
-    <string name="home_add_http">Add library server</string>
-    <string name="home_add_file_share">Add file share</string>
+    <string name="home_add_provider">Add %s</string>
 
     <string name="subtitle_track_none">Off</string>
     <string name="subtitle_adjust_hint">Adjusting subtitles  ↑↓ Move   ←→ Size  (OK to finish)</string>

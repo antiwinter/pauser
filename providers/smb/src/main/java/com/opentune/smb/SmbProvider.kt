@@ -17,7 +17,6 @@ class SmbProvider : OpenTuneProvider {
     @Volatile private var subtitleCacheDir: File = File("")
 
     override val providerType: String = PROVIDER_TYPE
-
     override val providesCover: Boolean = false
 
     override fun bootstrap(context: PlatformContext) {
