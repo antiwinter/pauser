@@ -112,8 +112,9 @@ fun OpenTunePlayerScreen(
     // preBufferMs is a key so the player is recreated if the setting changes. If a settings UI
     // is added that allows changing the buffer duration during playback, this will cause a
     // mid-playback player teardown and reconstruction — acceptable, but worth keeping in mind.
+    val codecSelector = remember(instanceKey, preBufferMs) { RetryableMediaCodecSelector() }
     val playerWithMeter = remember(instanceKey, preBufferMs) {
-        OpenTuneExoPlayer.createForBundledSources(context, preBufferMs)
+        OpenTuneExoPlayer.createForBundledSources(context, preBufferMs, codecSelector.selector)
     }
     val exo = playerWithMeter.player
     val bandwidthMeter = playerWithMeter.bandwidthMeter
@@ -122,10 +123,10 @@ fun OpenTunePlayerScreen(
     val stores = remember { PlayerStores(mediaStateStore, appConfigStore) }
 
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-    var audioDisabled by remember { mutableStateOf(false) }
-    var videoDisabled by remember { mutableStateOf(false) }
     var videoMime by remember { mutableStateOf<String?>(null) }
     var audioMime by remember { mutableStateOf<String?>(null) }
+    var videoDecoderName by remember { mutableStateOf<String?>(null) }
+    var audioDecoderName by remember { mutableStateOf<String?>(null) }
     var mbps by remember(instanceKey) { mutableStateOf(0f) }
 
     // Dismiss any IME left open from a previous screen (e.g. server-add / search text fields).
@@ -190,10 +191,10 @@ fun OpenTunePlayerScreen(
     LaunchedEffect(instanceKey) {
         val s = spec
         released.set(false)
-        audioDisabled = false
-        videoDisabled = false
         videoMime = null
         audioMime = null
+        videoDecoderName = null
+        audioDecoderName = null
         val savedSpeed = withContext(Dispatchers.IO) {
             mediaStateStore.get(
                 instanceKey.providerType,
@@ -282,29 +283,50 @@ fun OpenTunePlayerScreen(
         val audioGate = AtomicBoolean(false)
         val videoGate = AtomicBoolean(false)
 
-        fun attemptFallback(
+        /**
+         * Runtime decode failure: blacklist the current decoder and re-prepare so ExoPlayer picks
+         * the next one from [codecSelector]. The gate prevents the same prepare cycle from
+         * triggering two concurrent retries; it is reset inside the main-thread post so the next
+         * prepare cycle can retry again if needed.
+         *
+         * If the error originates from the [RetryableMediaCodecSelector.NULL_DECODER_NAME] sentinel
+         * (all real decoders exhausted), instead disable the track entirely.
+         */
+        fun handleDecoderError(
             gate: AtomicBoolean,
             trackType: Int,
             label: String,
+            mime: String?,
             error: PlaybackException,
-            setDisabled: () -> Unit,
+            setDecoderName: (String?) -> Unit,
         ) {
             if (!gate.compareAndSet(false, true)) {
-                Log.w(PLAYER_LOG, "$label error after in-place retry; ignoring code=${error.errorCode}")
+                Log.w(PLAYER_LOG, "$label error during retry; ignoring code=${error.errorCode}")
                 return
             }
-            Log.w(PLAYER_LOG, "$label decode failed; disabling. code=${error.errorCode}", error)
+            if (mime == null) {
+                Log.w(PLAYER_LOG, "$label decode error but mime unknown; ignoring")
+                gate.set(false)
+                return
+            }
+            codecSelector.markFailed(mime)
+            val isExhausted = codecSelector.isExhausted(mime)
+            Log.w(PLAYER_LOG, "$label decode failed; ${if (isExhausted) "all decoders exhausted" else "retrying next decoder"}. code=${error.errorCode}", error)
             mainHandler.post {
-                setDisabled()
-                exo.trackSelectionParameters = exo.trackSelectionParameters
-                    .buildUpon()
-                    .setTrackTypeDisabled(trackType, true)
-                    .build()
                 exo.stop()
+                if (isExhausted) {
+                    setDecoderName(RetryableMediaCodecSelector.NULL_DECODER_NAME)
+                    exo.trackSelectionParameters = exo.trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(trackType, true)
+                        .build()
+                } else {
+                    gate.set(false)
+                }
                 exo.setMediaSource(specState.value.toMediaSource(context))
                 exo.playWhenReady = true
                 exo.prepare()
-                Log.d(PLAYER_LOG, "in-place $label-off prepare issued")
+                Log.d(PLAYER_LOG, "in-place $label ${if (isExhausted) "disabled" else "decoder-swap"} prepare issued")
             }
         }
 
@@ -318,21 +340,26 @@ fun OpenTunePlayerScreen(
                         if (!group.isTrackSelected(i)) continue
                         val fmt = group.getTrackFormat(i)
                         when (group.type) {
+                            // Only update when a track is actively selected; preserve last-known
+                            // value when the track is disabled so the OSD can still show it.
                             C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
                             C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
                         }
                         break
                     }
                 }
-                mainHandler.post { videoMime = vm; audioMime = am }
+                mainHandler.post {
+                    vm?.let { videoMime = it; videoDecoderName = codecSelector.currentDecoderName(it) }
+                    am?.let { audioMime = it; audioDecoderName = codecSelector.currentDecoderName(it) }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
                 when {
                     error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") ->
-                        attemptFallback(audioGate, C.TRACK_TYPE_AUDIO, "audio", error) { audioDisabled = true }
+                        handleDecoderError(audioGate, C.TRACK_TYPE_AUDIO, "audio", audioMime, error) { audioDecoderName = it }
                     error.causeChainContains("MediaCodecVideoRenderer") ->
-                        attemptFallback(videoGate, C.TRACK_TYPE_VIDEO, "video", error) { videoDisabled = true }
+                        handleDecoderError(videoGate, C.TRACK_TYPE_VIDEO, "video", videoMime, error) { videoDecoderName = it }
                     else -> Log.e(PLAYER_LOG, "onPlayerError code=${error.errorCode} msg=${error.message}", error)
                 }
             }
@@ -415,9 +442,9 @@ fun OpenTunePlayerScreen(
         instanceKey = instanceKey,
         spec = spec,
         videoMime = videoMime,
-        videoDisabled = videoDisabled,
+        videoDecoderName = videoDecoderName,
         audioMime = audioMime,
-        audioDisabled = audioDisabled,
+        audioDecoderName = audioDecoderName,
     )
 
     Box(modifier = Modifier.fillMaxSize()) {

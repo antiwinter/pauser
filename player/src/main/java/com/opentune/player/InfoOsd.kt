@@ -26,9 +26,9 @@ import kotlinx.coroutines.isActive
 internal class InfoOsd(
     private val spec: PlaybackSpec,
     private val videoMime: String?,
-    private val videoDisabled: Boolean,
+    private val videoDecoderName: String?,
     private val audioMime: String?,
-    private val audioDisabled: Boolean,
+    private val audioDecoderName: String?,
     private val showState: MutableState<Boolean>,
     private val countState: MutableState<Int>,
 ) {
@@ -66,14 +66,14 @@ internal class InfoOsd(
                 Text(text = formatDuration(spec.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 videoMime?.let { mime ->
                     Text(
-                        text = if (videoDisabled) "$mime ⚠️" else mime,
+                        text = if (videoDecoderName != null) "$mime $videoDecoderName" else mime,
                         color = Color.White,
                         fontSize = 14.sp,
                     )
                 }
                 audioMime?.let { mime ->
                     Text(
-                        text = if (audioDisabled) "$mime ⚠️" else mime,
+                        text = if (audioDecoderName != null) "$mime $audioDecoderName" else mime,
                         color = Color.White,
                         fontSize = 14.sp,
                     )
@@ -101,9 +101,9 @@ internal fun rememberInfoOsd(
     instanceKey: MediaStateKey,
     spec: PlaybackSpec,
     videoMime: String?,
-    videoDisabled: Boolean,
+    videoDecoderName: String?,
     audioMime: String?,
-    audioDisabled: Boolean,
+    audioDecoderName: String?,
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
     val countState = remember(instanceKey) { mutableStateOf(0) }
@@ -120,13 +120,13 @@ internal fun rememberInfoOsd(
         }
     }
 
-    return remember(instanceKey, spec, videoMime, videoDisabled, audioMime, audioDisabled) {
+    return remember(instanceKey, spec, videoMime, videoDecoderName, audioMime, audioDecoderName) {
         InfoOsd(
             spec = spec,
             videoMime = videoMime,
-            videoDisabled = videoDisabled,
+            videoDecoderName = videoDecoderName,
             audioMime = audioMime,
-            audioDisabled = audioDisabled,
+            audioDecoderName = audioDecoderName,
             showState = showState,
             countState = countState,
         )
