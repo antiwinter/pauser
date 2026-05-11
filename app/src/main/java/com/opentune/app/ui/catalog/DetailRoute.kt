@@ -46,7 +46,7 @@ fun DetailRoute(
 
     var detail by remember { mutableStateOf<MediaDetailModel?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
-    var resumePositionMs by remember { mutableStateOf(0L) }
+    var resumeMs by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -71,7 +71,7 @@ fun DetailRoute(
                 app.storageBindings.mediaStateStore.get(stateKey)
             }
             isFavorite = mediaState?.isFavorite ?: false
-            resumePositionMs = mediaState?.positionMs ?: 0L
+            resumeMs = mediaState?.positionMs ?: 0L
             val d = withContext(Dispatchers.IO) { inst.loadDetail(itemRefDecoded) }
             detail = d
             if (!d.canPlay) {
@@ -110,7 +110,7 @@ fun DetailRoute(
             detail = detail,
             loading = loading,
             isFavorite = isFavorite,
-            resumePositionMs = resumePositionMs,
+            resumeMs = resumeMs,
             titleLang = titleLang,
             seasons = seasons,
             selectedSeasonIndex = selectedSeasonIndex,
@@ -122,7 +122,7 @@ fun DetailRoute(
                 nav.navigate(Routes.player(providerType, sourceId, itemRefDecoded, 0L))
             },
             onResume = {
-                nav.navigate(Routes.player(providerType, sourceId, itemRefDecoded, resumePositionMs))
+                nav.navigate(Routes.player(providerType, sourceId, itemRefDecoded, resumeMs))
             },
             onToggleFavorite = {
                 scope.launch {

@@ -262,7 +262,6 @@ class EmbyProviderInstance(
                 displayTitle = title,
                 durationMs = null,
                 hooks = hooks,
-                initialPositionMs = startMs,
                 onPlaybackDispose = {},
                 subtitleTracks = subtitleTracks,
                 subtitleHeaders = mapOf("X-Emby-Token" to fields.accessToken),

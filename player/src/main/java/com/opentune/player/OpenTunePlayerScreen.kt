@@ -89,6 +89,7 @@ private fun PlaybackException.causeChainContains(vararg keywords: String): Boole
 @Composable
 fun OpenTunePlayerScreen(
     spec: PlaybackSpec,
+    startMs: Long = 0L,
     mediaStateStore: UserMediaStateStore,
     mediaStateKey: MediaStateKey,
     onExit: () -> Unit,
@@ -211,9 +212,9 @@ fun OpenTunePlayerScreen(
         val hooks = s.hooks
         Log.d(
             LOG_TAG,
-            "readyEffect start initialPositionMs=${s.initialPositionMs} progressIntervalMs=${hooks.progressIntervalMs()}",
+            "readyEffect start startMs=$startMs progressIntervalMs=${hooks.progressIntervalMs()}",
         )
-        val strictReadyWait = hooks.progressIntervalMs() > 0L || s.initialPositionMs > 0L
+        val strictReadyWait = hooks.progressIntervalMs() > 0L || startMs > 0L
         val maxReadyMs = if (strictReadyWait) MAX_WAIT_READY_MS else MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS
         if (!strictReadyWait) {
             Log.d(LOG_TAG, "readyEffect soft READY wait (no progress hooks / typical SMB)")
@@ -243,13 +244,13 @@ fun OpenTunePlayerScreen(
             Log.d(LOG_TAG, "readyEffect cancelled before seek")
             return@LaunchedEffect
         }
-        if (s.initialPositionMs > 0) {
-            Log.d(LOG_TAG, "seekTo initialPositionMs=${s.initialPositionMs}")
-            withContext(Dispatchers.Main) { exo.seekTo(s.initialPositionMs) }
+        if (startMs > 0) {
+            Log.d(LOG_TAG, "seekTo startMs=$startMs")
+            withContext(Dispatchers.Main) { exo.seekTo(startMs) }
             var n = 0
             while (isActive && n++ < 200) {
                 val cur = withContext(Dispatchers.Main) { exo.currentPosition }
-                if (abs(cur - s.initialPositionMs) < 1500) break
+                if (abs(cur - startMs) < 1500) break
                 delay(32)
             }
             Log.d(LOG_TAG, "after seek loop iterations=$n position=${exo.currentPosition}")

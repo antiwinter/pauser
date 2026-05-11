@@ -40,7 +40,7 @@ fun DetailScreen(
     detail: MediaDetailModel?,
     loading: Boolean,
     isFavorite: Boolean,
-    resumePositionMs: Long,
+    resumeMs: Long,
     titleLang: TitleLang,
     seasons: List<MediaListItem>?,
     selectedSeasonIndex: Int,
@@ -138,11 +138,11 @@ fun DetailScreen(
                     // Action buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (detail.canPlay) {
-                            if (resumePositionMs > 0) {
+                            if (resumeMs > 0) {
                                 Button(onClick = onResume) { Text("Resume") }
                             }
                             Button(onClick = onPlayFromStart) {
-                                Text(if (resumePositionMs > 0) "From start" else "Play")
+                                Text(if (resumeMs > 0) "From start" else "Play")
                             }
                         }
                         Button(onClick = onToggleFavorite) {

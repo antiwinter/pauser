@@ -13,6 +13,6 @@
 - [x] emby resolve external
 - [x] srt/vss/ass as profile
 - [x] IME still shown
-- [ ] investigate initialPositionMs
+- [x] investigate initialPositionMs
 - [ ] check if same local cache used for smb subtitles as thumb
 - [x] overlay control logic is verbose and messy and too stateful

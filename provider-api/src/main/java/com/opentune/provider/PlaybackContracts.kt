@@ -34,7 +34,6 @@ data class PlaybackSpec(
     val displayTitle: String,
     val durationMs: Long?,
     val hooks: OpenTunePlaybackHooks,
-    val initialPositionMs: Long = 0L,
     val onPlaybackDispose: () -> Unit = {},
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     /** HTTP headers added when loading external subtitle URLs (e.g. Emby auth token). */

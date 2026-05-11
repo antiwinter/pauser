@@ -126,7 +126,6 @@ class SmbProviderInstance(
                 displayTitle = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
                 hooks = SmbPlaybackHooks,
-                initialPositionMs = startMs,
                 onPlaybackDispose = { session.close() },
                 subtitleTracks = subtitleTracks,
             )
