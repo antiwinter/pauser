@@ -1,4 +1,4 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json

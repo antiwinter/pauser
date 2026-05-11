@@ -1,4 +1,4 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
 import kotlinx.serialization.json.Json
 

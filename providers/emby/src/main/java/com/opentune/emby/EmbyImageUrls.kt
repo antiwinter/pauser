@@ -1,6 +1,6 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
-import com.opentune.emby.api.dto.BaseItemDto
+import com.opentune.emby.dto.BaseItemDto
 
 object EmbyImageUrls {
 

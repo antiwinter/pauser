@@ -1,4 +1,4 @@
-package com.opentune.emby.api.dto
+package com.opentune.emby.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.ui.catalog.CatalogNav
-import com.opentune.emby.api.EmbyProvider
+import com.opentune.emby.EmbyProvider
 import com.opentune.smb.SmbProvider
 import com.opentune.storage.ServerEntity
 import androidx.tv.material3.Button

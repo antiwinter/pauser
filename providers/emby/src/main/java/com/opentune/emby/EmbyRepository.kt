@@ -1,10 +1,10 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
-import com.opentune.emby.api.dto.BaseItemDto
-import com.opentune.emby.api.dto.DeviceProfile
-import com.opentune.emby.api.dto.PlaybackInfoRequest
-import com.opentune.emby.api.dto.PlaybackInfoResponse
-import com.opentune.emby.api.dto.QueryResultBaseItemDto
+import com.opentune.emby.dto.BaseItemDto
+import com.opentune.emby.dto.DeviceProfile
+import com.opentune.emby.dto.PlaybackInfoRequest
+import com.opentune.emby.dto.PlaybackInfoResponse
+import com.opentune.emby.dto.QueryResultBaseItemDto
 
 class EmbyRepository(
     baseUrl: String,
@@ -64,9 +64,9 @@ class EmbyRepository(
         )
     }
 
-    suspend fun reportPlaying(body: com.opentune.emby.api.dto.PlaybackStartInfo) = api.reportPlaying(body)
+    suspend fun reportPlaying(body: com.opentune.emby.dto.PlaybackStartInfo) = api.reportPlaying(body)
 
-    suspend fun reportProgress(body: com.opentune.emby.api.dto.PlaybackProgressInfo) = api.reportProgress(body)
+    suspend fun reportProgress(body: com.opentune.emby.dto.PlaybackProgressInfo) = api.reportProgress(body)
 
-    suspend fun reportStopped(body: com.opentune.emby.api.dto.PlaybackStopInfo) = api.reportStopped(body)
+    suspend fun reportStopped(body: com.opentune.emby.dto.PlaybackStopInfo) = api.reportStopped(body)
 }

@@ -1,6 +1,6 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
-import com.opentune.emby.api.dto.MediaSourceInfo
+import com.opentune.emby.dto.MediaSourceInfo
 
 object EmbyPlaybackUrlResolver {
 

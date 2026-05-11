@@ -28,7 +28,7 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.emby.api.EmbyProvider
+import com.opentune.emby.EmbyProvider
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.SubmitResult
 import kotlinx.coroutines.Dispatchers

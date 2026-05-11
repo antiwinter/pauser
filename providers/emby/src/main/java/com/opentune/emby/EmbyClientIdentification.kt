@@ -1,8 +1,8 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
 /**
  * Jellyfin and Emby expect a MediaBrowser-style client header on API calls (including
- * [com.opentune.emby.api.EmbyApi.authenticateByName]); without it the server returns 400
+ * [com.opentune.emby.EmbyApi.authenticateByName]); without it the server returns 400
  * ("Value cannot be null. (Parameter 'appName')").
  *
  * See Jellyfin authentication docs: `Authorization: MediaBrowser Client="…", Device="…", …`.

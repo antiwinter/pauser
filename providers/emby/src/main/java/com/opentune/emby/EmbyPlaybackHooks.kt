@@ -1,9 +1,9 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
-import com.opentune.emby.api.dto.DeviceProfile
-import com.opentune.emby.api.dto.PlaybackProgressInfo
-import com.opentune.emby.api.dto.PlaybackStartInfo
-import com.opentune.emby.api.dto.PlaybackStopInfo
+import com.opentune.emby.dto.DeviceProfile
+import com.opentune.emby.dto.PlaybackProgressInfo
+import com.opentune.emby.dto.PlaybackStartInfo
+import com.opentune.emby.dto.PlaybackStopInfo
 import com.opentune.provider.OpenTunePlaybackHooks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

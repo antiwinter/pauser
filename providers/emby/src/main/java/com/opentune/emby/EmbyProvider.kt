@@ -1,14 +1,14 @@
-package com.opentune.emby.api
+package com.opentune.emby
 
-import com.opentune.emby.api.dto.AuthenticateByNameRequest
-import com.opentune.emby.api.dto.CodecProfile
-import com.opentune.emby.api.dto.DeviceIdentification
-import com.opentune.emby.api.dto.DeviceProfile
-import com.opentune.emby.api.dto.DirectPlayProfile
-import com.opentune.emby.api.dto.ProfileCondition
-import com.opentune.emby.api.dto.ResponseProfile
-import com.opentune.emby.api.dto.SubtitleProfile
-import com.opentune.emby.api.dto.TranscodingProfile
+import com.opentune.emby.dto.AuthenticateByNameRequest
+import com.opentune.emby.dto.CodecProfile
+import com.opentune.emby.dto.DeviceIdentification
+import com.opentune.emby.dto.DeviceProfile
+import com.opentune.emby.dto.DirectPlayProfile
+import com.opentune.emby.dto.ProfileCondition
+import com.opentune.emby.dto.ResponseProfile
+import com.opentune.emby.dto.SubtitleProfile
+import com.opentune.emby.dto.TranscodingProfile
 import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
