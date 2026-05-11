@@ -1,11 +1,22 @@
 package com.opentune.app.providers
 
+import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import java.util.ServiceLoader
 
 class OpenTuneProviderRegistry private constructor(
     private val providersById: Map<String, OpenTuneProvider>,
 ) {
+    @Volatile var codecCapabilities: CodecCapabilities = CodecCapabilities(
+        supportedVideoMimeTypes = listOf("video/avc"),
+        supportedAudioMimeTypes = listOf("audio/mp4a-latm"),
+    )
+        private set
+
+    fun setCapabilities(capabilities: CodecCapabilities) {
+        this.codecCapabilities = capabilities
+    }
+
     fun provider(providerType: String): OpenTuneProvider =
         providersById[providerType] ?: error("Unknown provider: $providerType")
 

@@ -23,7 +23,6 @@ import kotlin.math.sqrt
 
 class EmbyProvider : OpenTuneProvider {
 
-    @Volatile private var capabilities: CodecCapabilities? = null
     @Volatile private var deviceName: String = "Android TV"
 
     override val providerType: String = PROVIDER_TYPE
@@ -86,22 +85,14 @@ class EmbyProvider : OpenTuneProvider {
             }
         }
 
-    override fun setCapabilities(capabilities: CodecCapabilities) {
-        this.capabilities = capabilities
-    }
-
-    override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
-        val caps = capabilities ?: CodecCapabilities(
-            supportedVideoMimeTypes = listOf("video/avc"),
-            supportedAudioMimeTypes = listOf("audio/mp4a-latm"),
-        )
+    override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
         val fields = EmbyServerFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
             accessToken = values["access_token"] ?: error("Missing access_token"),
             serverId = values["server_id"]?.ifEmpty { null },
         )
-        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(caps))
+        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities))
     }
 
     override fun bootstrap(context: PlatformContext) {

@@ -83,13 +83,10 @@ interface OpenTuneProvider {
      * Construct a live instance from already-validated credentials.
      * Called without a sourceId; the instance carries no identity state.
      */
-    fun createInstance(values: Map<String, String>): OpenTuneProviderInstance
+    fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance
 
     /** One-time bootstrap (e.g. install HTTP client identification). */
     fun bootstrap(context: PlatformContext) {}
-
-    /** Set decoder capabilities probed from the platform. Default is no-op. */
-    fun setCapabilities(capabilities: CodecCapabilities) {}
 }
 
 // --- Provider instance ---

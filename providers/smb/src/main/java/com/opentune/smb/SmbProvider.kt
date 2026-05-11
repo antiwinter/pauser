@@ -1,7 +1,9 @@
 package com.opentune.smb
 
+import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.PlatformContext
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.ServerFieldSpec
 import com.opentune.provider.ValidationResult
@@ -10,12 +12,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 
-class SmbProvider(private val subtitleCacheDir: File) : OpenTuneProvider {
+class SmbProvider : OpenTuneProvider {
+
+    @Volatile private var subtitleCacheDir: File = File("")
 
     override val providerType: String = PROVIDER_TYPE
 
     override val providesCover: Boolean = false
 
+    override fun bootstrap(context: PlatformContext) {
+        subtitleCacheDir = File(context.cacheDir, "opentune_subtitles")
+    }
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(
             id = "host",
@@ -91,7 +98,7 @@ class SmbProvider(private val subtitleCacheDir: File) : OpenTuneProvider {
             }
         }
 
-    override fun createInstance(values: Map<String, String>): OpenTuneProviderInstance {
+    override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
         val fields = SmbServerFieldsJson(
             host = values["host"] ?: error("Missing host"),
             shareName = values["share_name"] ?: error("Missing share_name"),

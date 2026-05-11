@@ -60,6 +60,6 @@ class ProviderInstanceRegistry(
         val values = runCatching {
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrNull() ?: return null
-        return runCatching { provider.createInstance(values) }.getOrNull()
+        return runCatching { provider.createInstance(values, providerRegistry.codecCapabilities) }.getOrNull()
     }
 }

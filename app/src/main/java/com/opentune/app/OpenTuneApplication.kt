@@ -40,11 +40,8 @@ class OpenTuneApplication : Application() {
             providerRegistry = providerRegistry,
         )
         val platformContext = AndroidPlatformContext(this)
-        val codecCapabilities = buildCodecCapabilities()
-        providerRegistry.allProviders().forEach {
-            it.bootstrap(platformContext)
-            it.setCapabilities(codecCapabilities)
-        }
+        providerRegistry.allProviders().forEach { it.bootstrap(platformContext) }
+        providerRegistry.setCapabilities(buildCodecCapabilities())
     }
 
     private fun buildCodecCapabilities(): CodecCapabilities {
