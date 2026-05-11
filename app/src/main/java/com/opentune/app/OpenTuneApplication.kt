@@ -2,6 +2,7 @@ package com.opentune.app
 
 import android.app.Application
 import android.media.MediaCodecList
+import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
 import com.opentune.provider.CodecCapabilities
@@ -27,7 +28,10 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = OpenTuneDatabase.create(getDatabasePath("opentune.db").absolutePath)
+        database = Room.databaseBuilder<OpenTuneDatabase>(
+            context = this,
+            name = getDatabasePath("opentune.db").absolutePath,
+        ).fallbackToDestructiveMigration(dropAllTables = true).build()
         storageBindings = OpenTuneStorageBindings(
             serverDao = database.serverDao(),
             mediaStateStore = RoomMediaStateStore(database),

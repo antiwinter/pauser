@@ -12,6 +12,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
-    implementation(libs.sqlite.bundled)
     implementation(libs.kotlinx.serialization.json)
 }
