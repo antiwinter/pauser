@@ -112,6 +112,15 @@ class SmbProviderInstance(
             val progressiveFactory = ProgressiveMediaSource.Factory(factory)
             val mediaItem = MediaItem.fromUri(Uri.parse("https://local.invalid/video"))
 
+            val rawSubtitles = findSidecarSubtitles(share, itemRef)
+            val subtitleTracks = buildList {
+                for (track in rawSubtitles) {
+                    val smbPath = track.externalRef ?: continue
+                    val cached = downloadSubtitleToCache(smbPath) ?: continue
+                    add(track.copy(externalRef = cached))
+                }
+            }
+
             PlaybackSpec(
                 customMediaSourceFactory = { progressiveFactory.createMediaSource(mediaItem) },
                 displayTitle = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
@@ -119,8 +128,7 @@ class SmbProviderInstance(
                 hooks = SmbPlaybackHooks,
                 initialPositionMs = startMs,
                 onPlaybackDispose = { session.close() },
-                subtitleTracks = findSidecarSubtitles(share, itemRef),
-                resolveExternalSubtitle = { ref -> downloadSubtitleToCache(ref) },
+                subtitleTracks = subtitleTracks,
             )
         }
     }

@@ -80,8 +80,9 @@ data class SubtitleTrack(
     val isForced: Boolean,
     /**
      * null = embedded (ExoPlayer selects natively via trackSelectionParameters).
-     * non-null = external ref: Emby = HTTP URL; SMB = file path fed to
-     * [com.opentune.provider.PlaybackSpec.resolveExternalSubtitle].
+     * non-null = external URI the player loads directly.
+     * HTTP(S) providers set subtitleHeaders in PlaybackSpec for auth.
+     * File-based providers (SMB) supply file:// URIs pointing to local cache.
      */
     val externalRef: String?,
 )

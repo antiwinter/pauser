@@ -92,7 +92,7 @@ class EmbyProvider : OpenTuneProvider {
             accessToken = values["access_token"] ?: error("Missing access_token"),
             serverId = values["server_id"]?.ifEmpty { null },
         )
-        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities))
+        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities)
     }
 
     override fun bootstrap(context: PlatformContext) {
@@ -150,11 +150,7 @@ class EmbyProvider : OpenTuneProvider {
                 TranscodingProfile(container = "ts", type = "Video", videoCodec = "h264", audioCodec = "aac", protocol = "hls", context = "Streaming"),
             ),
             codecProfiles = codecProfiles,
-            subtitleProfiles = listOf(
-                SubtitleProfile(format = "srt"),
-                SubtitleProfile(format = "vtt"),
-                SubtitleProfile(format = "ass"),
-            ),
+            subtitleProfiles = caps.supportedSubtitleFormats.map { SubtitleProfile(format = it) },
             responseProfiles = listOf(
                 ResponseProfile(type = "Video", container = "m3u8", mimeType = "application/vnd.apple.mpegurl"),
             ),

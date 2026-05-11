@@ -37,9 +37,6 @@ data class PlaybackSpec(
     val initialPositionMs: Long = 0L,
     val onPlaybackDispose: () -> Unit = {},
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
-    /**
-     * Called by the player when selecting an external non-HTTP subtitle (SMB only).
-     * Returns a local file path string; the player converts to Uri. Emby leaves this null.
-     */
-    val resolveExternalSubtitle: (suspend (subtitleRef: String) -> String?)? = null,
+    /** HTTP headers added when loading external subtitle URLs (e.g. Emby auth token). */
+    val subtitleHeaders: Map<String, String> = emptyMap(),
 )

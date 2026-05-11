@@ -11,6 +11,7 @@ import com.opentune.provider.MediaEntryKind
 import com.opentune.provider.MediaListItem
 import com.opentune.provider.MediaStreamInfo
 import com.opentune.provider.MediaUserData
+import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.PlaybackUrlSpec
@@ -28,6 +29,7 @@ private val NON_PLAYABLE_TYPES = CONTAINER_TYPES + setOf("Series", "Season")
 class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
     private val deviceProfile: DeviceProfile,
+    private val capabilities: CodecCapabilities = CodecCapabilities(emptyList(), emptyList()),
 ) : OpenTuneProviderInstance {
 
     private fun repo(): EmbyRepository = EmbyRepository(
@@ -211,20 +213,24 @@ class EmbyProviderInstance(
                     val index = stream.index ?: return@mapNotNull null
                     val label = stream.displayTitle ?: stream.language ?: "Subtitle $index"
                     val codec = stream.codec?.lowercase()
+                    val isBitmapCodec = codec in setOf(
+                        "pgssub", "hdmv_pgs_subtitle", "dvd_subtitle", "dvbsub",
+                        "dvb_subtitle", "xsub", "microdvd",
+                    )
                     val ext = when (codec) {
                         "ass", "ssa" -> "ass"
                         "vtt", "webvtt" -> "vtt"
                         else -> "srt"
                     }
-                    val isBitmapCodec = codec in setOf(
-                        "pgssub", "hdmv_pgs_subtitle", "dvd_subtitle", "dvbsub",
-                        "dvb_subtitle", "xsub", "microdvd",
-                    )
                     val externalRef = when {
                         stream.isExternal == true ->
-                            "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext?api_key=${fields.accessToken}"
-                        isBitmapCodec ->
-                            "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.ass?api_key=${fields.accessToken}"
+                            "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.$ext"
+                        isBitmapCodec -> {
+                            if ("ass" in capabilities.supportedSubtitleFormats)
+                                "${fields.baseUrl}/Videos/$itemRef/Subtitles/$index/Stream.ass"
+                            else
+                                return@mapNotNull null
+                        }
                         else -> null
                     }
                     SubtitleTrack(
@@ -260,6 +266,7 @@ class EmbyProviderInstance(
                 initialPositionMs = startMs,
                 onPlaybackDispose = {},
                 subtitleTracks = subtitleTracks,
+                subtitleHeaders = mapOf("X-Emby-Token" to fields.accessToken),
             )
         }
     }

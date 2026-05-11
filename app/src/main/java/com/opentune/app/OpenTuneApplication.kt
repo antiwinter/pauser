@@ -70,6 +70,7 @@ class OpenTuneApplication : Application() {
             supportedVideoMimeTypes = videoMimes.distinct(),
             supportedAudioMimeTypes = audioMimes.distinct(),
             maxVideoPixels = maxPixels.coerceAtLeast(1920 * 1080),
+            supportedSubtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
         )
     }
 }

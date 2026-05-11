@@ -33,6 +33,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
@@ -234,29 +235,17 @@ internal class SubtitleController(
             val externalRef = track.externalRef!!
             Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=$externalRef")
             scope.launch {
-                val subtitleUri: Uri? = try {
-                    if (externalRef.startsWith("http://") || externalRef.startsWith("https://")) {
-                        Uri.parse(externalRef)
-                    } else {
-                        specState.value.resolveExternalSubtitle?.invoke(externalRef)?.let { Uri.parse(it) }
-                    }
-                } catch (e: Exception) {
-                    Log.e(SUB_LOG_TAG, "select: resolveExternalSubtitle threw for $externalRef", e)
-                    return@launch
-                }
-                Log.d(SUB_LOG_TAG, "select: external resolved subtitleUri=$subtitleUri")
-                if (subtitleUri == null) {
-                    Log.w(SUB_LOG_TAG, "select: resolveExternalSubtitle returned null for $externalRef")
-                    return@launch
-                }
+                val subtitleUri = Uri.parse(externalRef)
                 val pos = withContext(Dispatchers.Main) { exo.currentPosition }
                 val mimeType = subtitleMimeType(externalRef)
                 val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
                     .Builder(subtitleUri)
                     .setMimeType(mimeType)
                     .build()
+                val httpFactory = DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(specState.value.subtitleHeaders)
                 val subtitleSource = SingleSampleMediaSource
-                    .Factory(DefaultDataSource.Factory(context))
+                    .Factory(DefaultDataSource.Factory(context, httpFactory))
                     .createMediaSource(subtitleConfig, C.TIME_UNSET)
                 val mergedSource = MergingMediaSource(specState.value.toMediaSource(context), subtitleSource)
                 withContext(Dispatchers.Main) {
