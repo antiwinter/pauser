@@ -39,10 +39,10 @@ android {
 
 dependencies {
     implementation(project(":provider-api"))
-    implementation(project(":emby"))
+    implementation(project(":providers:emby"))
     implementation(project(":player"))
     implementation(project(":storage"))
-    implementation(project(":smb"))
+    implementation(project(":providers:smb"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -34,8 +34,7 @@ class OpenTuneApplication : Application() {
             appConfigStore = DataStoreAppConfigStore(applicationContext),
             thumbnailDiskCache = ThumbnailDiskCache(File(cacheDir, "covers")),
         )
-        val smbSubtitleCacheDir = File(cacheDir, "opentune_subtitles")
-        providerRegistry = OpenTuneProviderRegistry.default(smbSubtitleCacheDir)
+        providerRegistry = OpenTuneProviderRegistry.discover()
         instanceRegistry = ProviderInstanceRegistry(
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,

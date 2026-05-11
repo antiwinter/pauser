@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import com.opentune.provider.PlatformContext
+import java.io.File
 import java.util.UUID
 
 class AndroidPlatformContext(private val androidContext: Context) : PlatformContext {
@@ -22,4 +23,7 @@ class AndroidPlatformContext(private val androidContext: Context) : PlatformCont
         } catch (_: Exception) {
             "0"
         }
+
+    override val cacheDir: File
+        get() = androidContext.cacheDir
 }
