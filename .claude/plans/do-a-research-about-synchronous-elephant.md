@@ -6,210 +6,342 @@ OpenTune is a multi-provider media player app (Emby, SMB, etc.) with two HTTP tr
 1. **Lower layer**: Provider API calls (catalog, search, playback resolution) — Emby uses Retrofit+OkHttp
 2. **Upper layer**: ExoPlayer media streaming — creates its own OkHttpClient for streaming URLs and subtitle loading
 
-The goal is a **single source of truth** for HTTP clients: the provider layer builds a proxied OkHttp client, and the player layer reuses it. Proxies are managed independently (separate screen) and assigned per-provider.
+The goal is a **single source of truth** for HTTP clients: the provider layer builds a proxied OkHttp client, and the player layer reuses it.
+
+**Key architectural decision**: Proxy is modeled as a first-class provider type, mirroring how `OpenTuneProvider` works. Each proxy type defines its own configuration fields, validates them, implements its own proxy logic internally, and exposes an `OkHttpClient`. The app doesn't care how the proxy works internally.
 
 ## Architecture Summary
 
-- `:provider-api` — Pure Kotlin contracts (interfaces, data classes)
+- `:provider-api` — Pure Kotlin contracts (interfaces, data classes) — gains `ProxyProvider` interface
 - `:providers:emby` — Emby provider (Retrofit + OkHttp for HTTP traffic)
-- `:providers:smb` — SMB provider (SMBJ library, no HTTP — excluded from proxy)
+- `:providers:smb` — SMB provider (SMBJ, no HTTP, sets `supportsProxy = false`)
+- `:providers:coil` — **NEW** — First proxy provider (Coil-based HTTP proxy)
 - `:player` — ExoPlayer wrapper (OkHttp for media streaming)
 - `:storage` — Room database
 - `:app` — Android UI, provider registration, navigation
 
 ## Implementation Plan
 
-### Phase 1: Storage — Proxy Config Entity & DAO
+### Phase 1: `ProxyProvider` Interface + Registry (in `:provider-api`)
+
+**New file: `provider-api/src/main/java/com/opentune/provider/ProxyProvider.kt`**
+
+```kotlin
+interface ProxyProvider {
+    val proxyType: String
+
+    /**
+     * Configuration fields this proxy type needs. Rendered by the generic proxy-add UI.
+     */
+    fun getFieldsSpec(): List<ServerFieldSpec>
+
+    /**
+     * Validate the supplied fields (e.g. test connectivity).
+     */
+    suspend fun validateFields(values: Map<String, String>): ValidationResult
+
+    /**
+     * Build and return a fully-configured OkHttpClient that routes traffic through this proxy.
+     * The app does not care how the proxy works internally — it just uses the returned client.
+     */
+    fun createClient(values: Map<String, String>): OkHttpClient
+
+    /**
+     * Optional bootstrap (e.g. initialize native libs, create temp dirs).
+     */
+    fun bootstrap(context: PlatformContext) {}
+}
+```
+
+**New file: `provider-api/src/main/java/com/opentune/provider/ProxyProviderRegistry.kt`**
+
+```kotlin
+class ProxyProviderRegistry private constructor(
+    private val providers: Map<String, ProxyProvider>,
+) {
+    fun proxy(proxyType: String): ProxyProvider = providers[proxyType]
+        ?: error("Unknown proxy provider: $proxyType")
+    fun allProxies(): Collection<ProxyProvider> = providers.values
+
+    companion object {
+        fun discover(): ProxyProviderRegistry {
+            val list = ServiceLoader
+                .load(ProxyProvider::class.java, ProxyProvider::class.java.classLoader)
+                .toList()
+            return ProxyProviderRegistry(list.associateBy { it.proxyType })
+        }
+    }
+}
+```
+
+**Modify: `provider-api/build.gradle.kts`**
+Add `implementation(libs.okhttp)` — both `:providers:emby` and `:player` depend on `:provider-api` so they get OkHttp transitively.
+
+### Phase 2: Storage — Proxy Config Entity & DAO
 
 **New file: `storage/src/main/java/com/opentune/storage/ProxyConfigEntity.kt`**
+
+Mirrors `ServerEntity` structure — stores proxy type + provider-specific fields:
+
 ```kotlin
 @Entity(tableName = "proxy_configs", primaryKeys = ["id"])
 data class ProxyConfigEntity(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val name: String,            // user-friendly name like "Home Proxy"
-    val proxyUrl: String,        // e.g. "http://192.168.11.22:8888"
+    @PrimaryKey val id: String,
+    val proxyType: String,       // e.g. "coil" — matches ProxyProvider.proxyType
+    val displayName: String,     // user-chosen name like "Home Proxy"
+    val fieldsJson: String,      // proxy-provider-specific config blob
     val isEnabled: Boolean = true,
     val createdAtEpochMs: Long,
 )
 ```
 
 **New file: `storage/src/main/java/com/opentune/storage/ProxyAssignmentEntity.kt`**
+
+Maps media providers to proxy configs:
+
 ```kotlin
 @Entity(tableName = "proxy_assignments", primaryKeys = ["sourceId"])
 data class ProxyAssignmentEntity(
     @PrimaryKey val sourceId: String,
-    val proxyConfigId: String,   // FK to proxy_configs.id, null = no proxy
+    val proxyConfigId: String?,  // FK to proxy_configs.id, null = no proxy
 )
 ```
 
 **Modify: `storage/src/main/java/com/opentune/storage/Daos.kt`**
+
 Add two DAOs:
-- `ProxyConfigDao` — CRUD for proxy configs (list all, insert, update, delete, observeAll as Flow)
-- `ProxyAssignmentDao` — map sourceId to proxyConfigId (upsert, getBySourceId, deleteBySourceId, **getAssignmentsForProxy** — returns list of sourceIds assigned to a given proxyConfigId, used by delete behavior)
+- `ProxyConfigDao` — observeAll (Flow), getBySourceId, insert, update, delete
+- `ProxyAssignmentDao` — upsert, getBySourceId, deleteBySourceId, **getAssignmentsForProxy** (returns list of sourceIds assigned to a given proxyConfigId)
 
 **Modify: `storage/src/main/java/com/opentune/storage/OpenTuneDatabase.kt`**
-Add both entities, add DAO accessors. Bump DB version. Project uses `fallbackToDestructiveMigration`, so no explicit migration needed.
+
+Add both entities, add DAO accessors. Bump DB version. Project uses `fallbackToDestructiveMigration`.
 
 **Modify: `storage/src/main/java/com/opentune/storage/StorageBindings.kt`**
-Add `proxyConfigDao` and `proxyAssignmentDao` to the data class.
 
-### Phase 2: The Single-Source-of-Truth HTTP Agent
+Add `proxyConfigDao` and `proxyAssignmentDao`.
 
-**Modify: `provider-api/build.gradle.kts`**
-Add `implementation(libs.okhttp)` — both `:providers:emby` and `:player` already depend on `:provider-api`, so they get OkHttp transitively.
-
-**New file: `provider-api/src/main/java/com/opentune/provider/OkHttpAgent.kt`**
-```kotlin
-object OkHttpAgent {
-    fun buildClient(
-        proxyUrl: String? = null,
-        builderAction: OkHttpClient.Builder.() -> Unit = {},
-    ): OkHttpClient
-}
-```
-- Parses proxy URL string → `java.net.Proxy(HTTP, InetSocketAddress)`
-- Sets standard timeouts (30s connect, 120s read)
-- Accepts a builder lambda for provider-specific interceptors (auth headers, logging)
-- This is the **single source of truth** — both provider API calls and ExoPlayer streaming use it
-
-### Phase 3: Provider API Contract Change
-
-**Modify: `provider-api/src/main/java/com/opentune/provider/PlaybackContracts.kt`**
-Add `httpClient: OkHttpClient? = null` to `PlaybackSpec`. The provider passes its pre-built proxied client here; the player reuses it.
+### Phase 3: `OpenTuneProvider` Gets `supportsProxy` Flag
 
 **Modify: `provider-api/src/main/java/com/opentune/provider/ProviderContracts.kt`**
 
-1. Add `supportsProxy: Boolean` property to `OpenTuneProvider` interface (default `false` for backward compat):
+Add to `OpenTuneProvider` interface:
 ```kotlin
-interface OpenTuneProvider {
-    val providerType: String
-    val supportsProxy: Boolean get() = false  // NEW
-    // ... existing members
-}
+val supportsProxy: Boolean get() = false  // default: no proxy UI for this provider
 ```
 
-2. Change `OpenTuneProvider.createInstance` signature:
+**Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyProvider.kt`**
+
+```kotlin
+override val supportsProxy: Boolean = true
+```
+
+**SmbProvider** — leave at default `false`. No proxy UI will appear for SMB.
+
+### Phase 4: Provider API Contract — `createInstance` Accepts `OkHttpClient`
+
+**Modify: `provider-api/src/main/java/com/opentune/provider/PlaybackContracts.kt`**
+
+Add `httpClient: OkHttpClient? = null` to `PlaybackSpec`. The media provider passes the proxy provider's client here; the player reuses it.
+
+**Modify: `provider-api/src/main/java/com/opentune/provider/ProviderContracts.kt`**
+
+Change `createInstance` signature:
 ```kotlin
 fun createInstance(
     values: Map<String, String>,
     capabilities: CodecCapabilities,
-    proxyUrl: String? = null,  // NEW, default = null for backward compat
+    httpClient: OkHttpClient? = null,  // NEW — the proxied client from the assigned proxy provider
 ): OpenTuneProviderInstance
 ```
 
-**Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyProvider.kt`**
-Set `override val supportsProxy: Boolean = true`.
+### Phase 5: Coil Proxy Provider (First Implementation)
 
-**Modify: `providers/smb/src/main/java/com/opentune/smb/SmbProvider.kt`**
-Leave `supportsProxy` at default `false` — no proxy UI will appear for SMB.
+**New module: `providers/coil/`**
 
-### Phase 4: Emby Provider — Refactor to Shared Client
+```
+providers/coil/build.gradle.kts
+providers/coil/src/main/java/com/opentune/coil/CoilProxyProvider.kt
+providers/coil/src/main/java/com/opentune/coil/CoilProxyFieldsJson.kt
+```
+
+**`providers/coil/build.gradle.kts`** — depends on `:provider-api`, OkHttp, kotlinx-serialization.
+
+**`CoilProxyProvider.kt`** — implements `ProxyProvider`:
+- `proxyType = "coil"`
+- `getFieldsSpec()` returns fields like: host, port, username, password (or whatever Coil proxy needs)
+- `validateFields()` tests connectivity to the Coil proxy
+- `createClient()` builds an `OkHttpClient` that routes through the Coil proxy
+- Registered via ServiceLoader (`META-INF/services/com.opentune.provider.ProxyProvider`)
+
+**`CoilProxyFieldsJson.kt`** — serializable config blob (mirrors `EmbyServerFieldsJson` pattern).
+
+### Phase 6: Emby Provider — Accept Proxied Client
 
 **Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyClientFactory.kt`**
+
 Add an overload that accepts a pre-built `OkHttpClient`:
 ```kotlin
 fun create(client: OkHttpClient, baseUrl: String, accessToken: String?): EmbyApi
 ```
-Keep existing `create(baseUrl, accessToken, ...)` for `validateFields` (which runs before server is saved, so no proxy needed).
+Keep existing `create(baseUrl, accessToken, ...)` for `validateFields` (no proxy needed during validation).
 
 **Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyProvider.kt`**
+
 In `createInstance`:
-1. Call `OkHttpAgent.buildClient(proxyUrl) { add auth interceptors }`
-2. Create `EmbyApi` via new factory overload
-3. Pass both `api` and `httpClient` to `EmbyProviderInstance`
+1. Receive the `httpClient` from the registry
+2. If `httpClient != null`, use `EmbyClientFactory.create(httpClient, baseUrl, token)`
+3. If `httpClient == null`, use the existing `create(baseUrl, token, ...)` (direct connection)
+4. Pass the client (either shared or new) to `EmbyProviderInstance`
 
 **Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyProviderInstance.kt`**
-- Now holds a shared `EmbyApi` (created once at construction) instead of building `EmbyRepository` on every call
+
+- Now holds a shared `EmbyApi` (created once at construction)
 - Holds `httpClient: OkHttpClient` for `PlaybackSpec`
-- All methods (`loadBrowsePage`, `searchItems`, `loadDetail`, `resolvePlayback`) use the shared `api`
+- All methods use the shared `api`
 - `resolvePlayback` returns `PlaybackSpec(..., httpClient = httpClient)`
 
 **Modify: `providers/emby/src/main/java/com/opentune/emby/EmbyPlaybackHooks.kt`**
-Accept `EmbyApi` instead of raw credentials — reportPlaying/reportProgress/reportStopped call `api.reportXxx()`.
 
-**`EmbyRepository.kt` becomes unused** — delete it. Its thin wrapper methods are inlined into `EmbyProviderInstance`.
+Accept `EmbyApi` instead of raw credentials.
 
-### Phase 5: Wiring in the App Module
+**`EmbyRepository.kt` becomes unused** — delete it.
+
+### Phase 7: Wiring in the App Module
 
 **Modify: `app/src/main/java/com/opentune/app/providers/ProviderInstanceRegistry.kt`**
+
 - Add `proxyConfigDao` and `proxyAssignmentDao` constructor params
-- In `buildInstance()`: lookup `ProxyAssignmentEntity` for the sourceId → get `proxyUrl` from `ProxyConfigEntity`
-- Pass `proxyUrl` to `provider.createInstance(values, capabilities, proxyUrl)`
+- In `buildInstance()`:
+  1. Lookup `ProxyAssignmentEntity` for the sourceId → get `proxyConfigId`
+  2. If `proxyConfigId != null`, load `ProxyConfigEntity` → decode `fieldsJson` → find `ProxyProvider` → call `createClient(fields)` to get `OkHttpClient`
+  3. Pass the `httpClient` to `provider.createInstance(values, capabilities, httpClient)`
 - `buildInstance` becomes `suspend fun`
 
 **Modify: `app/src/main/java/com/opentune/app/OpenTuneApplication.kt`**
-Pass new DAOs to `ProviderInstanceRegistry`.
+
+- Create `ProxyProviderRegistry` via `discover()`, call `bootstrap()` on each
+- Pass new DAOs + `ProxyProviderRegistry` to `ProviderInstanceRegistry`
 
 **Modify: `app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt`**
+
 - `submitAdd`: after inserting `ServerEntity`, upsert `ProxyAssignmentEntity` if a proxy was selected
 - `submitEdit`: update `ProxyAssignmentEntity` if proxy selection changed
 - `removeServer`: cascade-delete `ProxyAssignmentEntity`
 
-### Phase 6: UI — Proxy Management + Per-Provider Selector
+### Phase 8: UI — Proxy Management + Per-Provider Selector
 
 **New file: `app/src/main/java/com/opentune/app/ui/config/ProxyManageRoute.kt`**
-- Lists all configured proxies with enable/disable toggle
-- "Add Proxy" button → shows a text field for name + URL
-- Delete proxy option (see "Delete proxy behavior" below)
-- Uses `ProxyConfigDao.observeAll()` as a Flow for reactive UI
 
-**Delete proxy behavior**
+- Lists all configured proxies showing their `displayName` + `proxyType` label
+- Enable/disable toggle per proxy
+- "Add Proxy" → navigates to `ProxyTypePickerRoute`
+- Delete proxy (see "Delete proxy behavior" below)
+- Uses `ProxyConfigDao.observeAll()` as Flow for reactive UI
 
-When a user deletes a named proxy (e.g. "Home Proxy"):
-1. **Cascade-clear assignments**: All `ProxyAssignmentEntity` rows referencing that proxy's ID are deleted, so affected providers revert to direct (non-proxied) connections. No provider data is lost — only the proxy routing is removed.
-2. **Show a snackbar/toast** listing how many providers were affected (e.g. "Proxy deleted. 2 servers now use direct connection.")
-3. **Invalidate ProxyImageLoader** for all affected sourceIds so cover art switches back to the default ImageLoader.
-4. **Active instances**: Currently-running provider instances still hold the old OkHttp client with the proxy baked in. They switch to direct only on the next `ProviderInstanceRegistry.getOrCreate()` call (e.g. after a reconnection or app restart). This is acceptable — it avoids mid-session network changes.
+**New file: `app/src/main/java/com/opentune/app/ui/config/ProxyTypePickerRoute.kt`**
 
-Implementation: `ProxyConfigDao` has a `delete(id)` method. Before calling it, query `ProxyAssignmentDao.getAssignmentsForProxy(id)` to get the list of affected `sourceId`s. Delete those assignments, invalidate image loaders, then delete the proxy config.
+Simple type picker listing all `proxyProvider.allProxies()` (e.g. "Coil"). Selecting one navigates to `ServerFormRoute(entityType = PROXY, entryType = selectedType)`.
 
-**Modify: `app/src/main/java/com/opentune/app/ui/config/ServerAddRoute.kt`**
-- After provider fields, conditionally render a "Proxy" section **only if** `app.providerRegistry.provider(providerType).supportsProxy == true`:
-  - Dropdown populated from `ProxyConfigDao.observeAll()` (filtering `isEnabled == true`)
-  - Options: "None (direct)" + each proxy name
-- Pass selected `proxyConfigId` to `ServerConfigRepository.submitAdd()`
+**Refactor: `app/src/main/java/com/opentune/app/ui/config/ServerFormRoute.kt`**
 
-**Modify: `app/src/main/java/com/opentune/app/ui/config/ServerEditRoute.kt`**
-- Conditionally render the "Proxy" section **only if** the provider's `supportsProxy == true`
-- Load current `ProxyAssignmentEntity` and pre-select the dropdown
-- Save updated assignment on submit
+Replaces `ServerAddRoute`, `ServerEditRoute`, `ProxyAddRoute`, and `ProxyEditRoute` with a single unified form composable:
+
+```kotlin
+enum class EntityType { SERVER, PROXY }
+
+@Composable
+fun ServerFormRoute(
+    entityType: EntityType,       // SERVER or PROXY
+    entryType: String,            // "emby", "smb", "coil", etc.
+    existingId: String? = null,   // null = add mode, non-null = edit mode
+    onDone: () -> Unit,
+)
+```
+
+Internal dispatch logic:
+- **Fields**: `entityType == SERVER` → `providerRegistry.provider(entryType).getFieldsSpec()`, `PROXY` → `proxyProviderRegistry.proxy(entryType).getFieldsSpec()`
+- **Validation**: calls the appropriate provider's `validateFields()`
+- **Submit add**: `SERVER` → `ServerConfigRepository.submitAdd()` + `ProxyAssignmentEntity`; `PROXY` → inserts `ProxyConfigEntity`
+- **Submit edit**: `SERVER` → `ServerConfigRepository.submitEdit()` + updates `ProxyAssignmentEntity`; `PROXY` → updates `ProxyConfigEntity`
+- **Draft storage**: keyed by `(entityType, entryType)` — same DataStore draft mechanism
+
+This reduces 4 form routes to 1 shared component + a small `ProxyTypePickerRoute`.
+
+**Within ServerFormRoute when `entityType == SERVER` and `existingId == null` (add mode) or `existingId != null` (edit mode)**:
+If the current media provider has `supportsProxy == true`, render an additional "Proxy" section after the provider fields:
+- Dropdown populated from `ProxyConfigDao.observeAll()` (filtering `isEnabled == true`)
+- Options: "None (direct)" + each proxy's `displayName`
+- For edit mode, load current `ProxyAssignmentEntity` and pre-select
+
+**Delete proxy behavior:**
+
+When a user deletes a named proxy config:
+1. **Cascade-clear assignments**: All `ProxyAssignmentEntity` rows referencing that proxy's ID are deleted. Affected media providers revert to direct connections. No provider data is lost.
+2. **User feedback**: Show a snackbar listing how many servers were affected (e.g. "Proxy deleted. 2 servers now use direct connection.")
+3. **Invalidate image loaders**: `ProxyImageLoader.invalidate(sourceId)` for each affected sourceId
+4. **Active instances**: Currently-running provider instances keep their old `OkHttpClient` until the next `ProviderInstanceRegistry.getOrCreate()` call. Avoids mid-session network disruption.
 
 **Modify: `app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt`**
-Add route for `ProxyManageRoute`. Add entry point from Settings or Home screen.
+
+Add routes for `ProxyManageRoute`, `ProxyTypePickerRoute`, `ServerFormRoute` (replaces existing server add/edit routes). Add entry point from Settings/Home.
+
+**Delete**: `app/src/main/java/com/opentune/app/ui/config/ServerAddRoute.kt` and `ServerEditRoute.kt` — replaced by `ServerFormRoute`.
 
 **Add string resources** in `app/src/main/res/values/strings.xml`:
 ```xml
 <string name="proxy_manage_title">Proxies</string>
 <string name="proxy_add_title">Add Proxy</string>
-<string name="proxy_name_hint">Proxy name</string>
-<string name="proxy_url_hint">http://192.168.1.100:8888</string>
 <string name="proxy_section_title">Proxy</string>
 <string name="proxy_none">None (direct connection)</string>
+<string name="proxy_select_type">Select proxy type</string>
 ```
 
-### Phase 7: Player Module — Reuse Provided HTTP Client
+### Phase 9: Player Module — Reuse Provided HTTP Client
 
 **Modify: `player/src/main/java/com/opentune/player/PlaybackSpecExt.kt`**
+
 ```kotlin
 internal fun PlaybackSpec.toMediaSource(context: Context): MediaSource {
-    // If provider supplied a client, reuse it
-    val okHttp = httpClient ?: run {
-        // Fallback: create inline client (current behavior for SMB/custom sources)
-        OkHttpClient.Builder().apply { ... }.build()
+    val factory = customMediaSourceFactory
+    if (factory != null) {
+        @Suppress("UNCHECKED_CAST")
+        return (factory as () -> MediaSource)()
     }
-    // If client was provided but has no auth headers baked in,
-    // add them from urlSpec.headers
+    val spec = checkNotNull(urlSpec) { "..." }
+
+    // Reuse the provided client, or fall back to creating one
+    val okHttp = httpClient ?: OkHttpClient.Builder().apply {
+        if (spec.headers.isNotEmpty()) {
+            addInterceptor { chain ->
+                val req = chain.request().newBuilder().apply {
+                    spec.headers.forEach { (k, v) -> header(k, v) }
+                }.build()
+                chain.proceed(req)
+            }
+        }
+    }.build()
+
+    // If a proxied client was provided and there are additional headers, wrap it
     val effectiveClient = if (httpClient != null && spec.headers.isNotEmpty()) {
-        okHttp.newBuilder().addInterceptor { chain -> ... }.build()
+        okHttp.newBuilder().addInterceptor { chain ->
+            val req = chain.request().newBuilder().apply {
+                spec.headers.forEach { (k, v) -> header(k, v) }
+            }.build()
+            chain.proceed(req)
+        }.build()
     } else {
         okHttp
     }
+
+    val dataSourceFactory = OkHttpDataSource.Factory(effectiveClient)
     // ... rest unchanged
 }
 ```
 
 **Modify: `player/src/main/java/com/opentune/player/subtitle/SubtitleController.kt`**
-In `selectFromSpec()` (line ~245), replace `DefaultHttpDataSource.Factory()` with:
+
+In `selectFromSpec()` (line ~245), replace `DefaultHttpDataSource.Factory()`:
 ```kotlin
 val httpFactory = if (specState.value.httpClient != null) {
     OkHttpDataSource.Factory(specState.value.httpClient)
@@ -218,49 +350,57 @@ val httpFactory = if (specState.value.httpClient != null) {
         .setDefaultRequestProperties(specState.value.subtitleHeaders)
 }
 ```
-Already has OkHttp dependency (via media3-okhttp in player build.gradle).
 
-### Phase 8: Coil Cover Art — Per-Source Proxied ImageLoader
+### Phase 10: Coil Cover Art — Per-Source Proxied ImageLoader
 
 **New file: `app/src/main/java/com/opentune/app/image/ProxyImageLoader.kt`**
+
 ```kotlin
 object ProxyImageLoader {
     private val loaders = mutableMapOf<String, ImageLoader>()
 
-    fun get(sourceId: String, proxyUrl: String?, app: Application): ImageLoader
+    fun get(sourceId: String, httpClient: OkHttpClient?, app: Application): ImageLoader
     fun invalidate(sourceId: String)
     fun clear()
 }
 ```
-- Builds an `ImageLoader` (Coil 2.x / 3.x) with a custom `OkHttpImageDownloader` using the proxied OkHttpClient
-- Caches ImageLoader instances keyed by sourceId
-- Invalidate on proxy config change or server removal
+
+- Builds an `ImageLoader` (Coil) with a custom `OkHttpImageDownloader` using the proxied `OkHttpClient`
+- Caches `ImageLoader` instances keyed by `sourceId`
+- Invalidate on proxy config change, proxy deletion, or server removal
 
 **Modify: `app/src/main/java/com/opentune/app/ui/catalog/MediaEntryComponent.kt`**
-Pass `sourceId` to the component. Use `ProxyImageLoader.get(sourceId, ...)` as `imageLoader` param for `AsyncImage`.
+
+Pass `sourceId` to the component. Use `ProxyImageLoader.get(sourceId, httpClient, app)` as `imageLoader` for `AsyncImage`.
 
 **Modify: `app/src/main/java/com/opentune/app/ui/catalog/ThumbEntryComponent.kt`**
+
 Same pattern — use proxied ImageLoader for thumbnail loading.
 
-**Note**: These components currently receive just the URL string. They need `sourceId` threaded through from the parent (BrowseScreen, DetailScreen, etc.). This is a moderate refactor but localized to the catalog UI layer.
+**Note**: These components currently receive just the URL string. They need `sourceId` threaded through from parent (BrowseScreen, DetailScreen, etc.). Moderate refactor but localized.
 
 ## Data Flow
 
 ```
 UI: ProxyManageRoute
-  └─ User adds proxy "Home Proxy" → ProxyConfigEntity saved
+  └─ User adds proxy → picks type "Coil" → fills Coil fields → validates → saves ProxyConfigEntity
 
 UI: ServerAddRoute
+  └─ (only shown if provider.supportsProxy == true)
   └─ User selects "Home Proxy" from dropdown
   └─ submitAdd() saves ServerEntity + ProxyAssignmentEntity
 
 ProviderInstanceRegistry.getOrCreate(sourceId)
-  └─ Reads ServerEntity + ProxyAssignmentEntity → resolves proxyUrl
-  └─ provider.createInstance(values, capabilities, proxyUrl)
+  └─ Reads ServerEntity + ProxyAssignmentEntity → gets proxyConfigId
+  └─ If proxyConfigId != null:
+       ├─ Loads ProxyConfigEntity → decodes fieldsJson
+       ├─ Finds ProxyProvider by proxyType
+       └─ proxyProvider.createClient(fields) → OkHttpClient
+  └─ provider.createInstance(values, capabilities, httpClient)
 
-EmbyProvider.createInstance(values, capabilities, proxyUrl)
-  └─ OkHttpAgent.buildClient(proxyUrl) { auth interceptors } → OkHttpClient
-  └─ EmbyApi = Retrofit with this client
+EmbyProvider.createInstance(values, capabilities, httpClient)
+  └─ If httpClient != null: EmbyApi = Retrofit with this client
+  └─ If httpClient == null: EmbyApi = Retrofit with default client (direct)
   └─ EmbyProviderInstance(fields, api, httpClient, capabilities)
 
 EmbyProviderInstance (all catalog methods)
@@ -274,7 +414,7 @@ OpenTunePlayerScreen
   └─ SubtitleController.selectFromSpec() → reuses spec.httpClient for subtitle URLs
 
 Coil ImageLoader
-  └─ ProxyImageLoader.get(sourceId) → ImageLoader with proxied OkHttp downloader
+  └─ ProxyImageLoader.get(sourceId, httpClient) → ImageLoader with proxied OkHttp downloader
   └─ MediaEntryComponent / ThumbEntryComponent → cover art through proxy
 ```
 
@@ -282,40 +422,44 @@ Coil ImageLoader
 
 | Traffic Type | Through Proxy? | How |
 |---|---|---|
-| Emby API calls (catalog, search, detail) | Yes | Shared OkHttpAgent client in EmbyApi/Retrofit |
-| Emby playback URL fetching | Yes | Same shared client |
-| ExoPlayer media streaming | Yes | PlaybackSpec.httpClient reused in toMediaSource() |
-| ExoPlayer subtitle sidecar loading | Yes | PlaybackSpec.httpClient reused in SubtitleController |
-| Emby playback hooks (report progress, etc.) | Yes | Shared EmbyApi |
-| Coil cover art / thumbnails | Yes | ProxyImageLoader with proxied OkHttpImageDownloader |
-| SMB protocol traffic | No | SMBJ raw protocol, not HTTP — intentionally excluded |
+| Emby API calls (catalog, search, detail) | Yes (if assigned) | Proxy provider's OkHttpClient via Retrofit |
+| Emby playback URL fetching | Yes (if assigned) | Same shared client |
+| ExoPlayer media streaming | Yes (if assigned) | PlaybackSpec.httpClient reused in toMediaSource() |
+| ExoPlayer subtitle sidecar loading | Yes (if assigned) | PlaybackSpec.httpClient reused in SubtitleController |
+| Emby playback hooks (report progress, etc.) | Yes (if assigned) | Shared EmbyApi built on proxy client |
+| Coil cover art / thumbnails | Yes (if assigned) | ProxyImageLoader with proxied OkHttpImageDownloader |
+| SMB protocol traffic | No | SMBJ raw protocol, not HTTP — `supportsProxy = false` |
 
 ## Critical Files to Modify
 
 | File | Change |
 |---|---|
+| `provider-api/.../ProxyProvider.kt` | **NEW** — proxy provider interface |
+| `provider-api/.../ProxyProviderRegistry.kt` | **NEW** — ServiceLoader registry |
+| `provider-api/.../PlaybackContracts.kt` | Add `httpClient` to PlaybackSpec |
+| `provider-api/.../ProviderContracts.kt` | Add `supportsProxy`, change `createInstance` sig |
+| `providers/coil/` | **NEW module** — first proxy provider impl |
 | `storage/.../ProxyConfigEntity.kt` | **NEW** — entity |
 | `storage/.../ProxyAssignmentEntity.kt` | **NEW** — entity |
 | `storage/.../Daos.kt` | Add ProxyConfigDao + ProxyAssignmentDao |
 | `storage/.../OpenTuneDatabase.kt` | Add entities, DAOs, bump version |
 | `storage/.../StorageBindings.kt` | Add DAOs |
-| `provider-api/.../OkHttpAgent.kt` | **NEW** — single-source HTTP client factory |
-| `provider-api/.../PlaybackContracts.kt` | Add `httpClient` to PlaybackSpec |
-| `provider-api/.../ProviderContracts.kt` | Add `proxyUrl` param to createInstance |
 | `providers/emby/.../EmbyClientFactory.kt` | Add pre-built client overload |
-| `providers/emby/.../EmbyProvider.kt` | Use OkHttpAgent in createInstance |
+| `providers/emby/.../EmbyProvider.kt` | `supportsProxy = true`, use provided client |
 | `providers/emby/.../EmbyProviderInstance.kt` | Hold shared api + httpClient |
 | `providers/emby/.../EmbyPlaybackHooks.kt` | Accept EmbyApi |
 | `providers/emby/.../EmbyRepository.kt` | **DELETE** |
 | `player/.../PlaybackSpecExt.kt` | Reuse spec.httpClient |
 | `player/.../subtitle/SubtitleController.kt` | Use spec.httpClient for subtitles |
-| `app/.../ProviderInstanceRegistry.kt` | Lookup + pass proxyUrl |
-| `app/.../OpenTuneApplication.kt` | Wire DAOs |
+| `app/.../ProviderInstanceRegistry.kt` | Lookup proxy → build client → pass to provider |
+| `app/.../OpenTuneApplication.kt` | Wire ProxyProviderRegistry + DAOs |
 | `app/.../ServerConfigRepository.kt` | Save/load proxy assignments |
 | `app/.../ProxyManageRoute.kt` | **NEW** — proxy management UI |
-| `app/.../ServerAddRoute.kt` | Add proxy selector dropdown |
-| `app/.../ServerEditRoute.kt` | Add proxy selector dropdown |
-| `app/.../OpenTuneNavHost.kt` | Add proxy manage route |
+| `app/.../ProxyTypePickerRoute.kt` | **NEW** — proxy type picker |
+| `app/.../ServerFormRoute.kt` | **NEW** — replaces ServerAddRoute + ServerEditRoute |
+| `app/.../ServerAddRoute.kt` | **DELETE** — replaced by ServerFormRoute |
+| `app/.../ServerEditRoute.kt` | **DELETE** — replaced by ServerFormRoute |
+| `app/.../OpenTuneNavHost.kt` | Add proxy routes, switch server add/edit to ServerFormRoute |
 | `app/.../ProxyImageLoader.kt` | **NEW** — per-source Coil ImageLoader |
 | `app/.../MediaEntryComponent.kt` | Use proxied ImageLoader |
 | `app/.../ThumbEntryComponent.kt` | Use proxied ImageLoader |
@@ -323,11 +467,12 @@ Coil ImageLoader
 ## Verification
 
 1. Build: `./gradlew assembleDebug` — all modules compile
-2. Add a proxy in the new Manage Proxies screen
-3. Add an Emby provider with the proxy selected
-4. Verify catalog browsing works (API calls through proxy)
-5. Play a video — verify media streaming uses the proxied client
-6. Enable external subtitles — verify sidecar subtitle loading uses the proxy
-7. Verify cover art loads through the proxy
-8. Test switching proxy assignment on an existing provider
-9. Test removing a proxy that's assigned to a provider
+2. Go to Proxy Management → Add a Coil proxy with test credentials
+3. Add an Emby provider — verify proxy dropdown appears
+4. Add an SMB provider — verify proxy section does NOT appear
+5. Assign the Coil proxy to the Emby server
+6. Verify catalog browsing works (API calls through proxy)
+7. Play a video — verify media streaming uses the proxied client
+8. Enable external subtitles — verify subtitle loading uses the proxy
+9. Verify cover art loads through the proxy
+10. Delete the proxy — verify affected servers revert to direct connection with a snackbar message
