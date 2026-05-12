@@ -1,8 +1,10 @@
-# Refactor Backend to Rust
+# Refactor Providers to Rust
 
 ## Context
 
-OpenTune currently has its backend (storage via Room, providers via JVM Kotlin) tightly coupled to the Android/JVM ecosystem. The goal is to move storage and providers to Rust, compiled as dynamic libraries (`.so`/`.dylib`), with a C-ABI boundary that allows the Kotlin/Swift app to call through. This makes the backend **platform-independent** — the same Rust code can serve Android, iOS, and macOS.
+OpenTune currently has its providers (Emby, SMB) implemented as JVM Kotlin modules, tightly coupled to the Android/Gradle build system. The goal is to move provider logic to Rust, compiled as dynamic libraries (`.so`/`.dylib`), with a C-ABI boundary that allows Kotlin (Android) or Swift (iOS/macOS) to call through. This makes the provider layer **platform-independent** — the same Rust code can serve all platforms.
+
+Storage stays per-platform: Room on Android, Core Data / SQLite on iOS/macOS.
 
 ## Architecture Overview
 
@@ -15,22 +17,17 @@ OpenTune currently has its backend (storage via Room, providers via JVM Kotlin) 
 │  │  Navigation      │    │                               │   │
 │  └────────┬─────────┘    │  ┌─────────────────────────┐  │   │
 │           │              │  │  libopentune_backend.so  │  │   │
-│           │              │  │  ┌─────────────────────┐ │  │   │
-│           ├──────────────┼─►│  │ Storage (SQLite)     │ │  │   │
-│           │              │  │  │ - Servers            │ │  │   │
-│           ├──────────────┼─►│  │ - MediaState         │ │  │   │
-│           │              │  │  │ - AppConfig          │ │  │   │
-│           ├──────────────┼─►│  │ - Thumbnail cache    │ │  │   │
-│           │              │  │  └─────────────────────┘ │  │   │
-│           ├──────────────┼─►│  │ Provider Registry      │ │  │   │
+│           ├──────────────┼─►│  │ Provider Registry      │  │   │
 │           │              │  │  │ ┌───────────────────┐ │  │   │
 │           ├──────────────┼─►│  │ │ EmbyProvider.so   │ │  │   │
 │           │              │  │  │ │ SmbProvider.so    │ │  │   │
-│           │              │  │  │ │ (future: more...) │ │  │   │
+│           ├──────────────┼─►│  │ │ (future: more...) │ │  │   │
 │           │              │  │  │ └───────────────────┘ │  │   │
 │           │              │  │  └─────────────────────────┘  │   │
 │           │              │  └───────────────────────────────┘   │
 │           │              └──────────────────────────────────────┘
+│           │
+│  Storage: Room (Android) / Core Data (iOS/macOS) — per-platform
 └───────────┼──────────────────────────────────────────────────────┘
             │
       All data crosses the C-ABI as JSON strings + primitive types
@@ -43,9 +40,8 @@ OpenTune currently has its backend (storage via Room, providers via JVM Kotlin) 
 Every public function in the Rust library is `#[no_mangle] pub extern "C"`. The interface uses:
 - **JSON strings** for all complex data (data classes, sealed classes, maps, lists)
 - **Primitives** for simple values (i64 for Long, i32 for Int, f64 for Float, bool for Boolean)
-- **Opaque pointers** for handles (ProviderInstance, DB connection, Stream)
+- **Opaque pointers** for handles (ProviderInstance, Stream)
 - **Callbacks** for async (the caller passes a function pointer + context, Rust calls it when done)
-- **CStr / null-terminated strings** for `&str` across the boundary
 - **Caller-allocated buffers** for `readAt` (the caller provides `*mut u8` and capacity)
 
 ### Memory Model
@@ -67,18 +63,11 @@ The Kotlin side wraps each FFI call in `suspendCancellableCoroutine { cont -> ..
 
 ### Dynamic Library Loading
 
-Providers are loaded with `dlopen` (Unix) / `LoadLibrary` (Windows):
+Providers are loaded with `dlopen` (Unix):
 1. App scans a `providers/` directory for `libopentune_provider_*.so` / `*.dylib`
 2. For each library, `dlopen` loads it, `dlsym` resolves the `opentune_provider_init` entry point
 3. The init function returns an `OpenTuneProviderC` vtable struct
 4. The registry stores vtables in a `HashMap<String, ProviderVTable>` keyed by `providerType`
-
-### SQLite for Storage
-
-Replace Room + DataStore with a single SQLite database:
-- `opentune.db` — same location on each platform (`<context>.getDatabasePath("opentune.db")` on Android, Application Support on macOS, Documents on iOS)
-- `libsqlite3` linked statically via `rusqlite` crate
-- AppConfig (previously DataStore) stored as key-value rows in the same DB
 
 ---
 
@@ -88,60 +77,20 @@ Replace Room + DataStore with a single SQLite database:
 
 ```c
 // --- Opaque handles ---
-typedef struct opentune_db_handle opentune_db_handle;
 typedef struct opentune_provider_instance opentune_provider_instance;
 typedef struct opentune_item_stream opentune_item_stream;
 
 // --- Strings (caller must free via opentune_free_string) ---
 void opentune_free_string(char* s);
 
-// --- Result wrappers ---
-// All functions return 0 on success, non-zero error code on failure.
-// On success, output parameters are written.
-// On error, error_message is written (caller must free).
+// --- Error codes ---
 typedef enum {
     OPENTUNE_OK = 0,
     OPENTUNE_ERR_INVALID_ARGS = 1,
     OPENTUNE_ERR_PROVIDER_NOT_FOUND = 2,
     OPENTUNE_ERR_NETWORK = 3,
-    OPENTUNE_ERR_STORAGE = 4,
     OPENTUNE_ERR_DECODE = 5,
 } opentune_error_code;
-
-// --- Storage API ---
-int opentune_db_init(const char* db_path, opentune_db_handle** out_db);
-int opentune_db_close(opentune_db_handle* db);
-
-// Server CRUD
-int opentune_server_insert(opentune_db_handle* db,
-    const char* source_id, const char* provider_type,
-    const char* display_name, const char* fields_json,
-    int64_t created_at_ms, int64_t updated_at_ms);
-int opentune_server_update(opentune_db_handle* db,
-    const char* source_id, const char* display_name,
-    const char* fields_json, int64_t updated_at_ms);
-int opentune_server_delete(opentune_db_handle* db, const char* source_id);
-int opentune_server_get_by_id(opentune_db_handle* db,
-    const char* source_id, char** out_json);       // JSON of ServerEntity
-int opentune_server_list_by_provider(opentune_db_handle* db,
-    const char* provider_type, char** out_json);    // JSON array of ServerEntity
-
-// MediaState CRUD
-int opentune_media_state_get(opentune_db_handle* db,
-    const char* provider_type, const char* source_id,
-    const char* item_id, char** out_json);
-int opentune_media_state_upsert(opentune_db_handle* db,
-    const char* provider_type, const char* source_id,
-    const char* item_id, /* ... all fields ... */);
-int opentune_media_state_delete_by_source(opentune_db_handle* db,
-    const char* source_id);
-int opentune_media_state_list_favorites(opentune_db_handle* db,
-    char** out_json);  // JSON array of MediaStateSnapshot
-
-// AppConfig (key-value)
-int opentune_config_get(opentune_db_handle* db, const char* key, char** out_value);
-int opentune_config_set(opentune_db_handle* db, const char* key, const char* value);
-int opentune_config_delete(opentune_db_handle* db, const char* key);
 
 // --- Provider Registry API ---
 
@@ -173,8 +122,6 @@ int opentune_provider_destroy_instance(opentune_provider_instance* instance);
 
 // --- Provider Instance API (all suspend in Kotlin → async callback in C) ---
 
-// These use a callback pattern:
-//   void (*result_cb)(void* ctx, int error_code, const char* json_result);
 typedef void (*browse_result_cb)(void*, int, const char*);
 typedef void (*detail_result_cb)(void*, int, const char*);
 typedef void (*playback_result_cb)(void*, int, const char*);
@@ -201,7 +148,6 @@ void opentune_instance_resolve_playback(
     void* cb_ctx, playback_result_cb cb);
 
 // --- ItemStream API ---
-// Caller allocates buffer, Rust fills it.
 int opentune_stream_read_at(
     opentune_item_stream* stream,
     int64_t position, uint8_t* buffer, int buffer_size);
@@ -212,35 +158,6 @@ int opentune_stream_close(opentune_item_stream* stream);
 ### JSON Data Contracts
 
 All complex types cross the boundary as JSON. The Kotlin side serializes/deserializes with `kotlinx.serialization`, the Rust side with `serde_json`. Both sides agree on the same JSON schema.
-
-**ServerEntity JSON:**
-```json
-{
-  "sourceId": "emby_abc123",
-  "providerType": "emby",
-  "displayName": "My Emby",
-  "fieldsJson": "{\"base_url\":\"http://...\",\"user_id\":\"...\",\"access_token\":\"...\"}",
-  "createdAtEpochMs": 1715000000000,
-  "updatedAtEpochMs": 1715000000000
-}
-```
-
-**MediaStateSnapshot JSON:**
-```json
-{
-  "providerType": "emby",
-  "sourceId": "emby_abc123",
-  "itemId": "12345",
-  "positionMs": 30000,
-  "playbackSpeed": 1.0,
-  "isFavorite": false,
-  "title": "The Matrix",
-  "type": "Movie",
-  "coverCachePath": null,
-  "selectedSubtitleTrackId": null,
-  "selectedAudioTrackId": null
-}
-```
 
 **ValidationResult JSON:**
 ```json
@@ -324,6 +241,19 @@ All complex types cross the boundary as JSON. The Kotlin side serializes/deseria
 }
 ```
 
+**ServerFieldSpec JSON:**
+```json
+{
+  "id": "base_url",
+  "labelKey": "server_field_base_url",
+  "kind": "SingleLineText",
+  "required": true,
+  "sensitive": false,
+  "order": 0,
+  "placeholderKey": null
+}
+```
+
 ---
 
 ## Rust Crate Structure
@@ -335,20 +265,13 @@ opentune-backend/
 ├── src/
 │   ├── lib.rs                    # #[no_mangle] C-ABI entry points
 │   ├── c_types.rs                # C-compatible type definitions (opaque structs)
-│   ├── error.rs                  # Result<T> → (error_code, *mut c_char) mapping
-│   ├── storage/
-│   │   ├── mod.rs                # StorageHandle, init/close
-│   │   ├── server.rs             # Server CRUD (rusqlite)
-│   │   ├── media_state.rs        # MediaState CRUD (rusqlite)
-│   │   └── config.rs             # AppConfig key-value (rusqlite)
+│   ├── error.rs                  # Result<T> → error_code mapping
 │   ├── provider/
 │   │   ├── mod.rs                # ProviderRegistry, discover/load vtables
 │   │   ├── vtable.rs             # OpenTuneProviderC vtable struct
 │   │   └── instance.rs           # InstanceManager (HashMap of instances)
 │   └── models/
 │       ├── mod.rs                # All data types with serde Serialize/Deserialize
-│       ├── server.rs
-│       ├── media_state.rs
 │       ├── catalog.rs            # MediaListItem, BrowsePageResult, MediaDetailModel, etc.
 │       ├── playback.rs           # PlaybackSpec, PlaybackUrlSpec, SubtitleTrack, etc.
 │       ├── provider.rs           # ServerFieldSpec, ValidationResult, etc.
@@ -424,17 +347,14 @@ pub fn load_plugin(path: &Path) -> Result<ProviderPlugin, Error> {
 object OpentuneBackend {
     init { System.loadLibrary("opentune_jni") }
 
-    external fun dbInit(dbPath: String): Long        // returns handle as Long
-    external fun dbClose(dbHandle: Long)
-
-    external fun serverInsert(dbHandle: Long, sourceId: String, ...): Int
-    external fun serverGetById(dbHandle: Long, sourceId: String): String?  // JSON string
-
     external fun providerDiscover(pluginsDir: String): Int
-    external fun providerList(dbHandle: Long): String  // JSON array
+    external fun providerList(): String  // JSON array
 
+    external fun providerGetFields(providerType: String): String
     external fun providerValidate(providerType: String, fieldsJson: String): String
+    external fun providerBootstrap(providerType: String, platformContextJson: String)
     external fun providerCreateInstance(providerType: String, fieldsJson: String, capsJson: String): Long
+    external fun providerDestroyInstance(instanceHandle: Long)
 
     // Async methods use callback registration
     external fun instanceLoadBrowsePage(
@@ -452,32 +372,35 @@ The JNI layer is thin: it translates Kotlin types to C types and calls the `libo
 ```kotlin
 // In a new :backend-ffi module
 
-class RustStorageBackend(dbHandle: Long) : StorageBackend {
-    override suspend fun insertServer(entity: ServerEntity) =
-        OpentuneBackend.serverInsert(dbHandle, entity.sourceId, ...)
-            .checkErrorCode()
-
-    override suspend fun getServersByProvider(type: String): List<ServerEntity> =
-        Json.decodeFromString<List<ServerEntity>>(
-            OpentuneBackend.serverListByProvider(dbHandle, type)
-        )
-    // ... etc
-}
-
 class RustProviderBackend(
     private val instanceHandle: Long
 ) : OpenTuneProviderInstance {
-    override suspend fun loadBrowsePage(...): BrowsePageResult =
+    override suspend fun loadBrowsePage(
+        location: String?, startIndex: Int, limit: Int
+    ): BrowsePageResult =
         suspendCancellableCoroutine { cont ->
-            OpentuneBackend.instanceLoadBrowsePage(instanceHandle, ...) { err, json ->
+            OpentuneBackend.instanceLoadBrowsePage(
+                instanceHandle, location, startIndex, limit
+            ) { err, json ->
                 if (err != 0) cont.resumeWithException(ProviderError(err))
                 else cont.resume(Json.decodeFromString(json))
             }
         }
-    // ... etc
+
+    override suspend fun resolvePlayback(
+        itemRef: String, startMs: Long
+    ): PlaybackSpec =
+        suspendCancellableCoroutine { cont ->
+            OpentuneBackend.instanceResolvePlayback(
+                instanceHandle, itemRef, startMs
+            ) { err, json ->
+                if (err != 0) cont.resumeWithException(ProviderError(err))
+                else cont.resume(Json.decodeFromString(json))
+            }
+        }
+    // ... searchItems, loadDetail
 }
 
-// The JsBackedProvider is NOT needed — Rust is the real backend.
 // The old ServiceLoader path can remain for a transition period.
 ```
 
@@ -506,29 +429,24 @@ class RustProviderBackend(
 
 ## Migration Strategy
 
-### Phase 1: Rust Storage Backend (standalone, behind a flag)
+### Phase 1: Rust Crate + C-ABI Foundation
 
 1. Create `opentune-backend/` Cargo workspace
-2. Implement SQLite storage with `rusqlite` matching the current Room schema exactly
-3. Generate C header with `cbindgen`
-4. Build JNI wrapper for Android
-5. Create Kotlin `RustStorageBackend` adapter
-6. Add a feature flag `useRustStorage = false` in `AppConfigStore`
-7. When `false`: use current Room (no change)
-8. When `true`: use Rust backend — migrate data by reading from Room, writing to SQLite
-9. Test: add a server, browse, play, check progress persistence
+2. Define all provider data types in Rust with serde (`models/`)
+3. Implement the C-ABI vtable layer (`c_types.rs`, `error.rs`)
+4. Implement `ProviderRegistry` with dlopen (`provider/`)
+5. Implement `InstanceManager` (`provider/instance.rs`)
+6. Implement `#[opentune_provider]` proc macro (`macros/`)
+7. Generate C header with `cbindgen`
+8. Build JNI wrapper for Android
 
-### Phase 2: Rust Provider API + Emby
+### Phase 2: Port Emby Provider
 
-1. Define all provider data types in Rust with serde
-2. Implement the C-ABI vtable layer
-3. Implement `#[opentune_provider]` proc macro
-4. Port Emby provider from Kotlin to Rust (reqwest for HTTP, same API calls)
-5. Compile Emby as a dynamic library
-6. Implement `dlopen` provider discovery in Rust
-7. Wire up `RustProviderBackend` Kotlin adapter
-8. Feature flag `useRustProviders = false/true`
-9. Test: Emby login, browse, playback — identical behavior to current Kotlin Emby
+1. Port Emby provider from Kotlin to Rust (reqwest for HTTP, same API calls)
+2. Compile Emby as a dynamic library
+3. Wire up `RustProviderBackend` Kotlin adapter
+4. Feature flag `useRustProviders = false/true`
+5. Test: Emby login, browse, playback — identical behavior to current Kotlin Emby
 
 ### Phase 3: Port SMB Provider
 
@@ -537,7 +455,7 @@ class RustProviderBackend(
 3. Test: SMB browse, playback, subtitle loading, cover extraction
 4. The SMB provider is the hardest because it uses Media3's custom DataSource —
    on the Rust side, `resolvePlayback` returns a `urlSpec` with `url: null` and
-   `customMediaSourceFactory: true`, signaling the Kotlin player layer to use
+   `needsCustomPipeline: true`, signaling the Kotlin player layer to use
    a Rust-backed stream. The `withStream` + `ItemStream` bridge is:
    - Rust creates `opentune_item_stream` handle
    - Kotlin wraps it in `ItemStreamMediaDataSource` for `MediaMetadataRetriever`
@@ -545,12 +463,11 @@ class RustProviderBackend(
 
 ### Phase 4: Remove Old JVM Backend
 
-1. Remove `:storage` Gradle module
-2. Remove `:providers:emby` and `:providers:smb` Gradle modules
-3. Remove `:provider-api` Gradle module (types now in Rust, Kotlin adapter re-exposes them)
-4. Set feature flags to `true` permanently
-5. Remove ServiceLoader discovery code
-6. Clean up dead code
+1. Remove `:providers:emby` and `:providers:smb` Gradle modules
+2. Remove `:provider-api` Gradle module (types now in Rust, Kotlin adapter re-exposes them)
+3. Set feature flag to `true` permanently
+4. Remove ServiceLoader discovery code
+5. Clean up dead code
 
 ---
 
@@ -562,7 +479,7 @@ class RustProviderBackend(
    ```toml
    [dependencies]
    opentune = "0.1"
-   reqwest = "0.12"  # or any HTTP library
+   reqwest = "0.12"  # or anyHTTP library
    ```
 
 2. **Template repository** — `cargo generate opentune/provider-template`
@@ -610,10 +527,6 @@ This is how you eventually get a Telegram provider written in Python (compiled v
 - `opentune-backend/src/lib.rs` — C-ABI entry points
 - `opentune-backend/src/c_types.rs` — opaque handle structs
 - `opentune-backend/src/error.rs` — error code mapping
-- `opentune-backend/src/storage/mod.rs` — StorageHandle, db init
-- `opentune-backend/src/storage/server.rs` — Server CRUD
-- `opentune-backend/src/storage/media_state.rs` — MediaState CRUD
-- `opentune-backend/src/storage/config.rs` — AppConfig KV store
 - `opentune-backend/src/provider/mod.rs` — ProviderRegistry, dlopen
 - `opentune-backend/src/provider/vtable.rs` — OpenTuneProviderC vtable
 - `opentune-backend/src/provider/instance.rs` — InstanceManager
@@ -631,17 +544,15 @@ This is how you eventually get a Telegram provider written in Python (compiled v
 
 ### Modified Android
 - `app/build.gradle.kts` — add `:backend-ffi` dependency, externalNativeBuild for CMake
-- [OpenTuneApplication.kt](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) — initialize Rust backend, pass db path + plugin dir
+- [OpenTuneApplication.kt](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) — initialize Rust backend, pass plugin dir
 - [OpenTuneProviderRegistry.kt](app/src/main/java/com/opentune/app/providers/OpenTuneProviderRegistry.kt) — delegate to Rust provider discovery
 - `app/src/main/java/com/opentune/app/providers/ProviderInstanceRegistry.kt` — delegate to Rust instance manager
-- `app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt` — delegate to Rust storage
 
 ### To Remove (Phase 4)
-- `storage/` — entire module
 - `providers/emby/` — entire module
 - `providers/smb/` — entire module
 - `provider-api/` — entire module
-- `:storage`, `:providers:emby`, `:providers:smb`, `:provider-api` from settings.gradle.kts
+- `:providers:emby`, `:providers:smb`, `:provider-api` from settings.gradle.kts
 
 ---
 
@@ -668,7 +579,7 @@ Rust returns `*mut c_char` for JSON strings. If Kotlin doesn't call `opentune_fr
 ### 5. tokio Runtime
 Rust async providers need a tokio runtime. Creating one per call is expensive.
 
-**Solution:** Create a single `tokio::runtime::Runtime` at `opentune_db_init` time. Store it in the `opentune_db_handle`. All async operations are spawned on this runtime. The runtime is dropped at `opentune_db_close`.
+**Solution:** Create a single `tokio::runtime::Runtime` at `opentune_backend_init` time (a new C-ABI entry point called once at app startup). Store it globally. All async operations are spawned on this runtime. The runtime is dropped at `opentune_backend_shutdown` (called on app teardown).
 
 ### 6. Cross-compilation Complexity
 Building Rust for Android (4 ABIs) + iOS (arm64 + simulator) + macOS (arm64 + x86_64) is non-trivial.
@@ -682,7 +593,6 @@ Building Rust for Android (4 ABIs) + iOS (arm64 + simulator) + macOS (arm64 + x8
 ```toml
 # Cargo.toml
 [dependencies]
-rusqlite = "0.37"           # SQLite with bundled mode
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"          # JSON serialization
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }  # HTTP for Emby
@@ -693,7 +603,6 @@ cbindgen = "0.28"            # C header generation (dev dependency)
 log = "0.4"                  # logging
 smb2 = "0.5"                 # SMB2 client (for SMB provider)
 
-# Provider plugins
 [workspace]
 members = [".", "providers/emby", "providers/smb", "macros"]
 ```
@@ -702,32 +611,31 @@ members = [".", "providers/emby", "providers/smb", "macros"]
 
 ## Verification
 
-### Phase 1 (Storage)
-1. Set `useRustStorage = true`
-2. Launch app — should initialize Rust SQLite at same path as Room
-3. Add an Emby server — verify data appears in `opentune.db` (open with SQLite browser)
-4. Browse, play a video, pause — verify position is saved
-5. Re-launch app — verify resume position is restored
-6. Toggle `useRustStorage = false` — verify old Room data is still there (no data loss)
+### Phase 1 (Foundation)
+1. Build `libopentune_backend.so` for Android (arm64-v8a)
+2. Load it from a minimal test app via JNI
+3. Call `opentune_provider_discover` with a directory containing no plugins — returns 0
+4. Call `opentune_provider_list` — returns `[]`
 
 ### Phase 2 (Emby Provider)
-1. Set `useRustProviders = true`
-2. Add Emby server via Rust backend
-3. Browse libraries — verify identical structure to current Kotlin Emby
-4. Open detail page — verify identical metadata
-5. Play video — verify playback starts, progress tick works
-6. Stop playback — verify session is reported to Emby server
+1. Build Emby as `libopentune_provider_emby.so`
+2. Place it in the plugins directory alongside the test app
+3. Call `opentune_provider_discover` — returns 1
+4. Call `opentune_provider_validate` with valid Emby credentials — returns `{"type":"success",...}`
+5. Create instance, call `loadBrowsePage` — returns valid MediaListItem JSON
+6. Integrate with real app via feature flag — browse Emby library, play video, verify playback hooks fire
 
 ### Phase 3 (SMB Provider)
-1. Add SMB server via Rust backend
-2. Browse shares — verify identical directory listing
-3. Play video — verify playback works via RustDataSource
-4. Verify subtitles load (sidecar file scan + download)
-5. Verify cover extraction works (withStream → MediaMetadataRetriever)
+1. Build SMB as `libopentune_provider_smb.so`
+2. Add SMB server via Rust backend
+3. Browse shares — verify identical directory listing to current Kotlin SMB
+4. Play video — verify playback works via RustDataSource
+5. Verify subtitles load (sidecar file scan + download)
+6. Verify cover extraction works (withStream → MediaMetadataRetriever)
 
 ### Phase 4 (Cleanup)
 1. Remove old modules, verify app builds and runs
 2. Run full test suite (if any exist)
 3. Test on Android TV device
 4. Test on macOS build (if applicable)
-5. Verify no memory leaks (Valgrind / Android profiler during extended use)
+5. Verify no memory leaks (Android profiler during extended use)
