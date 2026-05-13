@@ -11,7 +11,7 @@
 
 
 ## js providers
-- [ ] remove sidecar meta
+- [x] remove sidecar meta
 - [x] research thread safe
 - [ ] common.js
 - [ ] tester on host

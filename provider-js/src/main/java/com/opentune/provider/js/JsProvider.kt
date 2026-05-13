@@ -30,7 +30,11 @@ class JsProvider(
     private val hostApis: HostApis,
 ) : OpenTuneProvider {
 
-    override val providesCover: Boolean = true
+    override val providesCover: Boolean by lazy {
+        runWithEngine { engine ->
+            engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+        }
+    }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 

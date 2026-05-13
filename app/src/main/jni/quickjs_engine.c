@@ -181,6 +181,36 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeEvalSnippet(JNIEnv *env, jobje
     JS_FreeValue(ctx,r); return NULL;
 }
 
+/* ─── nativeEvalExpression ──────────────────────────────────────────────── */
+/* Evaluates a JS expression and returns its JSON.stringify'd value.
+   Returns NULL on null/undefined result. Returns error message on exception. */
+JNIEXPORT jstring JNICALL
+Java_com_opentune_provider_js_QuickJsEngine_nativeEvalExpression(JNIEnv *env, jobject thiz, jlong p, jstring code) {
+    JSContext *ctx=(JSContext*)(uintptr_t)p;
+    if(!ctx) return (*env)->NewStringUTF(env,"null context");
+    const char *c=(*env)->GetStringUTFChars(env,code,NULL);
+    JSValue r=JS_Eval(ctx,c,strlen(c),"<expr>",JS_EVAL_TYPE_GLOBAL);
+    (*env)->ReleaseStringUTFChars(env,code,c);
+    if(JS_IsException(r)){
+        char *m=exc_str(ctx); jstring jm=(*env)->NewStringUTF(env,m); free(m);
+        JS_FreeValue(ctx,r); return jm;
+    }
+    if(JS_IsNull(r)||JS_IsUndefined(r)){ JS_FreeValue(ctx,r); return NULL; }
+    JSValue global=JS_GetGlobalObject(ctx);
+    JSValue json_obj=JS_GetPropertyStr(ctx,global,"JSON");
+    JSValue stringify=JS_GetPropertyStr(ctx,json_obj,"stringify");
+    JSValue result=JS_Call(ctx,stringify,json_obj,1,&r);
+    JS_FreeValue(ctx,r); JS_FreeValue(ctx,stringify); JS_FreeValue(ctx,json_obj); JS_FreeValue(ctx,global);
+    if(JS_IsException(result)){
+        char *m=exc_str(ctx); jstring jm=(*env)->NewStringUTF(env,m); free(m);
+        JS_FreeValue(ctx,result); return jm;
+    }
+    size_t len; const char *s=JS_ToCStringLen(ctx,&len,result);
+    jstring out=(*env)->NewStringUTF(env,s);
+    JS_FreeCString(ctx,s); JS_FreeValue(ctx,result);
+    return out;
+}
+
 /* ─── nativeExecutePendingJobs ──────────────────────────────────────────── */
 JNIEXPORT jint JNICALL
 Java_com_opentune_provider_js_QuickJsEngine_nativeExecutePendingJobs(JNIEnv *env, jobject thiz, jlong p, jint max) {

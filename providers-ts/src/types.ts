@@ -155,6 +155,7 @@ export interface CodecCapabilities {
 
 /** Exposed on globalThis.opentuneProvider by emby/index.ts */
 export interface OpenTuneProviderBridge {
+  providesCover: boolean;
   getFieldsSpec(): Promise<ServerFieldSpec[]>;
   validateFields(args: { values: Record<string, string> }): Promise<ValidationResult>;
 

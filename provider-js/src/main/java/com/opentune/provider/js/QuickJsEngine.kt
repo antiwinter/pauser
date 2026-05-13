@@ -62,6 +62,14 @@ class QuickJsEngine(
         pumpJobs()
     }
 
+    /**
+     * Evaluates [jsCode] as a JS expression and returns its JSON.stringify'd value,
+     * or null if the result is null/undefined. Throws if the expression throws.
+     */
+    suspend fun evalExpression(jsCode: String): String? = withContext(jsDispatcher) {
+        nativeEvalExpression(ctxPtr, jsCode)
+    }
+
     fun close() {
         engineScope.launch(jsDispatcher) {
             if (ctxPtr != 0L) {
@@ -165,6 +173,7 @@ class QuickJsEngine(
     private external fun nativeDestroyContext(ctxPtr: Long)
     private external fun nativeEvalBundle(ctxPtr: Long, jsCode: String): String?
     private external fun nativeEvalSnippet(ctxPtr: Long, jsCode: String): String?
+    private external fun nativeEvalExpression(ctxPtr: Long, jsCode: String): String?
     private external fun nativeExecutePendingJobs(ctxPtr: Long, maxJobs: Int): Int
     private external fun nativeCallMethod(ctxPtr: Long, method: String, argsJson: String, callbackKey: Long): String?
     private external fun nativeResolveHostCall(ctxPtr: Long, key: Long, resultJson: String?): String?
