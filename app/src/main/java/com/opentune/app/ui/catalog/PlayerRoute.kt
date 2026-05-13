@@ -26,21 +26,21 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PlayerRoute(
     app: OpenTuneApplication,
-    providerType: String,
+    protocol: String,
     sourceId: String,
     itemRefDecoded: String,
     startMs: Long,
     onExit: () -> Unit,
 ) {
-    val stateKey = remember(providerType, sourceId, itemRefDecoded) {
-        MediaStateKey(providerType, sourceId, itemRefDecoded)
+    val stateKey = remember(protocol, sourceId, itemRefDecoded) {
+        MediaStateKey(protocol, sourceId, itemRefDecoded)
     }
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var initialSubtitleTrackId by remember { mutableStateOf<String?>(null) }
     var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
-    LaunchedEffect(providerType, sourceId, itemRefDecoded, startMs) {
+    LaunchedEffect(protocol, sourceId, itemRefDecoded, startMs) {
         spec = null
         error = null
         try {
@@ -48,7 +48,7 @@ fun PlayerRoute(
                 val inst = app.instanceRegistry.getOrCreate(sourceId)
                     ?: throw IllegalStateException("No provider instance for $sourceId")
                 val resolvedSpec = inst.resolvePlayback(itemRefDecoded, startMs)
-                val savedState = app.storageBindings.mediaStateStore.get(providerType, sourceId, itemRefDecoded)
+                val savedState = app.storageBindings.mediaStateStore.get(protocol, sourceId, itemRefDecoded)
                 val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
                 initialSubtitleTrackId = savedState?.selectedSubtitleTrackId
                 initialSubtitlePrefs = subtitlePrefs

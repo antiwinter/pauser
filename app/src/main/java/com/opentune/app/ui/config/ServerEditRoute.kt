@@ -39,23 +39,23 @@ private const val LOG_TAG = "OpenTuneServerEdit"
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ServerEditRoute(
-    providerType: String,
+    protocol: String,
     sourceId: String,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerType) {
-        app.providerRegistry.provider(providerType).getFieldsSpec().sortedBy { it.order }
+    val fields = remember(protocol) {
+        app.providerRegistry.provider(protocol).getFieldsSpec().sortedBy { it.order }
     }
     var values by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(providerType, sourceId) {
+    LaunchedEffect(protocol, sourceId) {
         loaded = false
         val initial = withContext(Dispatchers.IO) {
-            ServerConfigRepository.loadEditFields(providerType, app, sourceId)
+            ServerConfigRepository.loadEditFields(protocol, app, sourceId)
         }
         values = fields.associate { it.id to (initial[it.id] ?: "") }
         loaded = true
@@ -105,7 +105,7 @@ fun ServerEditRoute(
                 scope.launch {
                     error = null
                     val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitEdit(providerType, sourceId, values, app)
+                        ServerConfigRepository.submitEdit(protocol, sourceId, values, app)
                     }
                     when (result) {
                         is SubmitResult.Success -> onDone()

@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "servers")
 data class ServerEntity(
     @PrimaryKey val sourceId: String,
-    val providerType: String,
+    val protocol: String,
     val displayName: String,
     val fieldsJson: String,
     val createdAtEpochMs: Long,
@@ -18,7 +18,7 @@ data class ServerEntity(
     primaryKeys = ["sourceId", "itemId"],
 )
 data class MediaStateEntity(
-    val providerType: String,
+    val protocol: String,
     val sourceId: String,
     val itemId: String,
     val positionMs: Long = 0L,

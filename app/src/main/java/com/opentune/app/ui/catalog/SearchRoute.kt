@@ -22,7 +22,7 @@ import com.opentune.storage.TitleLang
 fun SearchRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
-    providerType: String,
+    protocol: String,
     sourceId: String,
     scopeLocationEncoded: String,
 ) {
@@ -33,7 +33,7 @@ fun SearchRoute(
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    LaunchedEffect(providerType, sourceId) {
+    LaunchedEffect(protocol, sourceId) {
         try {
             instance = app.instanceRegistry.getOrCreate(sourceId)
                 ?: throw IllegalStateException("No instance for $sourceId")
@@ -42,7 +42,7 @@ fun SearchRoute(
         }
     }
 
-    val coverExtractor = rememberCoverExtractor(app, providerType, sourceId, instance, results)
+    val coverExtractor = rememberCoverExtractor(app, protocol, sourceId, instance, results)
 
     when {
         error != null -> Text("Error: $error")
@@ -55,8 +55,8 @@ fun SearchRoute(
                 searchFn = { query -> inst.searchItems(scopeDecoded, query) },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
-                onOpenBrowse = { raw -> nav.navigate(Routes.browse(providerType, sourceId, raw)) },
-                onOpenDetail = { raw -> nav.navigate(Routes.detail(providerType, sourceId, raw)) },
+                onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, sourceId, raw)) },
+                onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
                 onItemsLoaded = coverExtractor.onItemsLoaded,
             )
         }

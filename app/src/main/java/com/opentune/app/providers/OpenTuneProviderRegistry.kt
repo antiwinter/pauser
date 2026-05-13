@@ -18,11 +18,11 @@ class OpenTuneProviderRegistry private constructor(
     }
 
     fun register(provider: OpenTuneProvider) {
-        providersById[provider.providerType] = provider
+        providersById[provider.protocol] = provider
     }
 
-    fun provider(providerType: String): OpenTuneProvider =
-        providersById[providerType] ?: error("Unknown provider: $providerType")
+    fun provider(protocol: String): OpenTuneProvider =
+        providersById[protocol] ?: error("Unknown provider: $protocol")
 
     fun allProviders(): Collection<OpenTuneProvider> = providersById.values
 
@@ -31,7 +31,7 @@ class OpenTuneProviderRegistry private constructor(
             val providers = ServiceLoader
                 .load(OpenTuneProvider::class.java, OpenTuneProvider::class.java.classLoader)
                 .toList()
-            return OpenTuneProviderRegistry(providers.associateBy { it.providerType }.toMutableMap())
+            return OpenTuneProviderRegistry(providers.associateBy { it.protocol }.toMutableMap())
         }
     }
 }

@@ -14,7 +14,7 @@ export default [
       terser(),
     ],
     output: {
-      file:   'dist/emby-provider.js',
+      file:   'dist/emby.js',
       format: 'iife',
       name:   'opentuneProvider', // sets globalThis.opentuneProvider in QuickJS
       strict: false,              // QuickJS bundle does not need the 'use strict' wrapper

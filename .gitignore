@@ -20,3 +20,4 @@ Thumbs.db
 test/.env
 files/
 node_modules/
+providers-ts/dist/

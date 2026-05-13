@@ -34,7 +34,7 @@ data class CoverExtractor(
 /**
  * Remembers cover extraction state for a single source.
  *
- * When [OpenTuneApplication.providerRegistry.provider(providerType).providesCover]
+ * When [OpenTuneApplication.providerRegistry.provider(protocol).providesCover]
  * is true the returned [CoverExtractor] holds nulls — no work is done.
  *
  * When false, each batch supplied via [CoverExtractor.onItemsLoaded] is queued
@@ -46,12 +46,12 @@ data class CoverExtractor(
 @Composable
 fun rememberCoverExtractor(
     app: OpenTuneApplication,
-    providerType: String,
+    protocol: String,
     sourceId: String,
     instance: OpenTuneProviderInstance?,
     items: SnapshotStateList<MediaListItem>,
 ): CoverExtractor {
-    val provider = remember(providerType) { app.providerRegistry.provider(providerType) }
+    val provider = remember(protocol) { app.providerRegistry.provider(protocol) }
 
     if (provider.providesCover || instance == null) {
         return remember { CoverExtractor(onItemsLoaded = null) }
@@ -72,7 +72,7 @@ fun rememberCoverExtractor(
 
                     // 1. Check Room cache
                     val cached = app.storageBindings.mediaStateStore
-                        .get(providerType, sourceId, item.id)?.coverCachePath
+                        .get(protocol, sourceId, item.id)?.coverCachePath
                     when {
                         cached == MediaStateEntity.COVER_FAILED -> return@withPermit
                         cached != null -> {
@@ -85,7 +85,7 @@ fun rememberCoverExtractor(
                     val diskCached = app.storageBindings.thumbnailDiskCache.get(sourceId, item.id)
                     if (diskCached != null) {
                         app.storageBindings.mediaStateStore.upsertCoverCache(
-                            providerType, sourceId, item.id, diskCached,
+                            protocol, sourceId, item.id, diskCached,
                         )
                         updateItemCover(items, item.id, MediaArt.LocalFile(diskCached))
                         return@withPermit
@@ -105,18 +105,18 @@ fun rememberCoverExtractor(
                         if (bytes != null) {
                             val path = app.storageBindings.thumbnailDiskCache.put(sourceId, item.id, bytes)
                             app.storageBindings.mediaStateStore.upsertCoverCache(
-                                providerType, sourceId, item.id, path,
+                                protocol, sourceId, item.id, path,
                             )
                             updateItemCover(items, item.id, MediaArt.LocalFile(path))
                         } else {
                             app.storageBindings.mediaStateStore.upsertCoverCache(
-                                providerType, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                                protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
                             )
                         }
                     } catch (e: Exception) {
                         Log.w(LOG_TAG, "Cover extraction failed for ${item.id}", e)
                         app.storageBindings.mediaStateStore.upsertCoverCache(
-                            providerType, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                            protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
                         )
                     }
                 }

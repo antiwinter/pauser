@@ -28,26 +28,26 @@ object Routes {
     const val DETAIL = "detail/{provider}/{sourceId}/{itemRef}"
     const val PLAYER = "player/{provider}/{sourceId}/{itemRef}/{startMs}"
     const val SEARCH = "search/{provider}/{sourceId}/{scopeLocation}"
-    const val PROVIDER_ADD = "provider_add/{providerType}"
-    const val PROVIDER_EDIT = "provider_edit/{providerType}/{sourceId}"
+    const val PROVIDER_ADD = "provider_add/{protocol}"
+    const val PROVIDER_EDIT = "provider_edit/{protocol}/{sourceId}"
     const val SETTINGS = "settings"
 
-    fun providerAdd(providerType: String) = "provider_add/$providerType"
+    fun providerAdd(protocol: String) = "provider_add/$protocol"
 
-    fun providerEdit(providerType: String, sourceId: String) =
-        "provider_edit/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}"
+    fun providerEdit(protocol: String, sourceId: String) =
+        "provider_edit/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}"
 
-    fun browse(providerType: String, sourceId: String, locationRaw: String) =
-        "browse/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
+    fun browse(protocol: String, sourceId: String, locationRaw: String) =
+        "browse/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
 
-    fun detail(providerType: String, sourceId: String, itemRefRaw: String) =
-        "detail/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun detail(protocol: String, sourceId: String, itemRefRaw: String) =
+        "detail/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 
-    fun player(providerType: String, sourceId: String, itemRefRaw: String, startMs: Long) =
-        "player/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
+    fun player(protocol: String, sourceId: String, itemRefRaw: String, startMs: Long) =
+        "player/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
 
-    fun search(providerType: String, sourceId: String, scopeLocationRaw: String) =
-        "search/$providerType/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+    fun search(protocol: String, sourceId: String, scopeLocationRaw: String) =
+        "search/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
 }
 
 @Composable
@@ -67,25 +67,25 @@ fun OpenTuneNavHost() {
         }
         composable(
             Routes.PROVIDER_ADD,
-            listOf(navArgument("providerType") { type = NavType.StringType }),
+            listOf(navArgument("protocol") { type = NavType.StringType }),
         ) {
-            val providerType = it.arguments!!.getString("providerType")!!
+            val protocol = it.arguments!!.getString("protocol")!!
             ServerAddRoute(
-                providerType = providerType,
+                protocol = protocol,
                 onDone = { nav.popBackStack() },
             )
         }
         composable(
             Routes.PROVIDER_EDIT,
             listOf(
-                navArgument("providerType") { type = NavType.StringType },
+                navArgument("protocol") { type = NavType.StringType },
                 navArgument("sourceId") { type = NavType.StringType },
             ),
         ) {
-            val providerType = it.arguments!!.getString("providerType")!!
+            val protocol = it.arguments!!.getString("protocol")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
             ServerEditRoute(
-                providerType = providerType,
+                protocol = protocol,
                 sourceId = sourceId,
                 onDone = { nav.popBackStack() },
             )
@@ -98,13 +98,13 @@ fun OpenTuneNavHost() {
                 navArgument("location") { type = NavType.StringType },
             ),
         ) {
-            val providerType = it.arguments!!.getString("provider")!!
+            val protocol = it.arguments!!.getString("provider")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
             val location = it.arguments!!.getString("location")!!
             BrowseRoute(
                 nav = nav,
                 app = app,
-                providerType = providerType,
+                protocol = protocol,
                 sourceId = sourceId,
                 locationEncoded = location,
             )
@@ -117,13 +117,13 @@ fun OpenTuneNavHost() {
                 navArgument("itemRef") { type = NavType.StringType },
             ),
         ) {
-            val providerType = it.arguments!!.getString("provider")!!
+            val protocol = it.arguments!!.getString("provider")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             DetailRoute(
                 nav = nav,
                 app = app,
-                providerType = providerType,
+                protocol = protocol,
                 sourceId = sourceId,
                 itemRefEncoded = itemRef,
             )
@@ -136,13 +136,13 @@ fun OpenTuneNavHost() {
                 navArgument("scopeLocation") { type = NavType.StringType },
             ),
         ) {
-            val providerType = it.arguments!!.getString("provider")!!
+            val protocol = it.arguments!!.getString("provider")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
             val scope = it.arguments!!.getString("scopeLocation")!!
             SearchRoute(
                 nav = nav,
                 app = app,
-                providerType = providerType,
+                protocol = protocol,
                 sourceId = sourceId,
                 scopeLocationEncoded = scope,
             )
@@ -156,14 +156,14 @@ fun OpenTuneNavHost() {
                 navArgument("startMs") { type = NavType.LongType },
             ),
         ) {
-            val providerType = it.arguments!!.getString("provider")!!
+            val protocol = it.arguments!!.getString("provider")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             val startMs = it.arguments!!.getLong("startMs")
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
             PlayerRoute(
                 app = app,
-                providerType = providerType,
+                protocol = protocol,
                 sourceId = sourceId,
                 itemRefDecoded = itemRefDecoded,
                 startMs = startMs,

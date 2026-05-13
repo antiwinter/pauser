@@ -36,13 +36,13 @@ public class OpenTuneDatabase_Impl : OpenTuneDatabase() {
   }
 
   protected override fun createOpenDelegate(): RoomOpenDelegate {
-    val _openDelegate: RoomOpenDelegate = object : RoomOpenDelegate(7,
-        "9be40048749ff0516b6f4b24e0f4ac8e", "0c0c2424b9f370bb9aad099f8ead6882") {
+    val _openDelegate: RoomOpenDelegate = object : RoomOpenDelegate(8,
+        "0591b339408fdd286870823720e12e70", "808411652f51d448d63cd2e0725f602a") {
       public override fun createAllTables(connection: SQLiteConnection) {
-        connection.execSQL("CREATE TABLE IF NOT EXISTS `servers` (`sourceId` TEXT NOT NULL, `providerType` TEXT NOT NULL, `displayName` TEXT NOT NULL, `fieldsJson` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`sourceId`))")
-        connection.execSQL("CREATE TABLE IF NOT EXISTS `media_state` (`providerType` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `itemId` TEXT NOT NULL, `positionMs` INTEGER NOT NULL, `playbackSpeed` REAL NOT NULL, `isFavorite` INTEGER NOT NULL, `title` TEXT, `type` TEXT, `coverCachePath` TEXT, `selectedSubtitleTrackId` TEXT, `selectedAudioTrackId` TEXT, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`sourceId`, `itemId`))")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `servers` (`sourceId` TEXT NOT NULL, `protocol` TEXT NOT NULL, `displayName` TEXT NOT NULL, `fieldsJson` TEXT NOT NULL, `createdAtEpochMs` INTEGER NOT NULL, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`sourceId`))")
+        connection.execSQL("CREATE TABLE IF NOT EXISTS `media_state` (`protocol` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `itemId` TEXT NOT NULL, `positionMs` INTEGER NOT NULL, `playbackSpeed` REAL NOT NULL, `isFavorite` INTEGER NOT NULL, `title` TEXT, `type` TEXT, `coverCachePath` TEXT, `selectedSubtitleTrackId` TEXT, `selectedAudioTrackId` TEXT, `updatedAtEpochMs` INTEGER NOT NULL, PRIMARY KEY(`sourceId`, `itemId`))")
         connection.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)")
-        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9be40048749ff0516b6f4b24e0f4ac8e')")
+        connection.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0591b339408fdd286870823720e12e70')")
       }
 
       public override fun dropAllTables(connection: SQLiteConnection) {
@@ -69,7 +69,7 @@ public class OpenTuneDatabase_Impl : OpenTuneDatabase() {
         val _columnsServers: MutableMap<String, TableInfo.Column> = mutableMapOf()
         _columnsServers.put("sourceId", TableInfo.Column("sourceId", "TEXT", true, 1, null,
             TableInfo.CREATED_FROM_ENTITY))
-        _columnsServers.put("providerType", TableInfo.Column("providerType", "TEXT", true, 0, null,
+        _columnsServers.put("protocol", TableInfo.Column("protocol", "TEXT", true, 0, null,
             TableInfo.CREATED_FROM_ENTITY))
         _columnsServers.put("displayName", TableInfo.Column("displayName", "TEXT", true, 0, null,
             TableInfo.CREATED_FROM_ENTITY))
@@ -94,8 +94,8 @@ public class OpenTuneDatabase_Impl : OpenTuneDatabase() {
               |""".trimMargin() + _existingServers)
         }
         val _columnsMediaState: MutableMap<String, TableInfo.Column> = mutableMapOf()
-        _columnsMediaState.put("providerType", TableInfo.Column("providerType", "TEXT", true, 0,
-            null, TableInfo.CREATED_FROM_ENTITY))
+        _columnsMediaState.put("protocol", TableInfo.Column("protocol", "TEXT", true, 0, null,
+            TableInfo.CREATED_FROM_ENTITY))
         _columnsMediaState.put("sourceId", TableInfo.Column("sourceId", "TEXT", true, 1, null,
             TableInfo.CREATED_FROM_ENTITY))
         _columnsMediaState.put("itemId", TableInfo.Column("itemId", "TEXT", true, 2, null,

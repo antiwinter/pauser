@@ -20,15 +20,18 @@ import kotlinx.serialization.json.put
  * The JS bundle must export `globalThis.opentuneProvider` conforming to the
  * bridge protocol defined in `providers-ts/src/types.ts`.
  *
- * @param providerType  The stable identifier declared in the JS bundle (e.g. "emby").
- * @param jsBundle      The full IIFE JavaScript bundle source code.
- * @param hostApis      Host API implementations (http, crypto, config).
+ * @param assetPath  The asset filename of the JS bundle (e.g. "emby.js").
+ *                   The [protocol] is derived by stripping the ".js" extension.
+ * @param jsBundle   The full IIFE JavaScript bundle source code.
+ * @param hostApis   Host API implementations (http, crypto, config).
  */
 class JsProvider(
-    override val providerType: String,
+    private val assetPath: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
 ) : OpenTuneProvider {
+
+    override val protocol: String = assetPath.removeSuffix(".js")
 
     override val providesCover: Boolean by lazy {
         runWithEngine { engine ->
@@ -75,7 +78,7 @@ class JsProvider(
             if (success) {
                 ValidationResult.Success(
                     hash        = obj["hash"]?.jsonPrimitive?.content ?: "",
-                    displayName = obj["displayName"]?.jsonPrimitive?.content ?: providerType,
+                    displayName = obj["displayName"]?.jsonPrimitive?.content ?: protocol,
                     fieldsJson  = obj["fieldsJson"]?.jsonPrimitive?.content ?: resultJson,
                 )
             } else {
@@ -90,7 +93,7 @@ class JsProvider(
 
     override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
         return JsProviderInstance(
-            providerType = providerType,
+            protocol = protocol,
             jsBundle     = jsBundle,
             hostApis     = hostApis,
             values       = values,

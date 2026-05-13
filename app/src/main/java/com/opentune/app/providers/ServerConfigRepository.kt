@@ -14,31 +14,31 @@ object ServerConfigRepository {
 
     // --- Draft storage via DataStore ---
 
-    suspend fun loadAddDraft(providerType: String, app: OpenTuneApplication): Map<String, String> =
-        app.storageBindings.appConfigStore.loadDraft(providerType)
+    suspend fun loadAddDraft(protocol: String, app: OpenTuneApplication): Map<String, String> =
+        app.storageBindings.appConfigStore.loadDraft(protocol)
 
-    suspend fun saveAddDraft(providerType: String, app: OpenTuneApplication, values: Map<String, String>) =
-        app.storageBindings.appConfigStore.saveDraft(providerType, values)
+    suspend fun saveAddDraft(protocol: String, app: OpenTuneApplication, values: Map<String, String>) =
+        app.storageBindings.appConfigStore.saveDraft(protocol, values)
 
-    suspend fun clearAddDraft(providerType: String, app: OpenTuneApplication) =
-        app.storageBindings.appConfigStore.clearDraft(providerType)
+    suspend fun clearAddDraft(protocol: String, app: OpenTuneApplication) =
+        app.storageBindings.appConfigStore.clearDraft(protocol)
 
     // --- Server add ---
 
     suspend fun submitAdd(
-        providerType: String,
+        protocol: String,
         values: Map<String, String>,
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
-        val provider = app.providerRegistry.provider(providerType)
+        val provider = app.providerRegistry.provider(protocol)
         when (val result = provider.validateFields(values)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
-                val sourceId = "${providerType}_${result.hash}"
+                val sourceId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
                 val entity = ServerEntity(
                     sourceId = sourceId,
-                    providerType = providerType,
+                    protocol = protocol,
                     displayName = result.displayName,
                     fieldsJson = result.fieldsJson,
                     createdAtEpochMs = now,
@@ -58,7 +58,7 @@ object ServerConfigRepository {
     // --- Server edit ---
 
     suspend fun loadEditFields(
-        providerType: String,
+        protocol: String,
         app: OpenTuneApplication,
         sourceId: String,
     ): Map<String, String> = withContext(Dispatchers.IO) {
@@ -66,21 +66,21 @@ object ServerConfigRepository {
         val stored = runCatching {
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrElse { emptyMap() }
-        val spec = app.providerRegistry.provider(providerType).getFieldsSpec()
+        val spec = app.providerRegistry.provider(protocol).getFieldsSpec()
         spec.associate { it.id to (stored[it.id] ?: "") }
     }
 
     suspend fun submitEdit(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         values: Map<String, String>,
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
-        val provider = app.providerRegistry.provider(providerType)
+        val provider = app.providerRegistry.provider(protocol)
         when (val result = provider.validateFields(values)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
-                val newSourceId = "${providerType}_${result.hash}"
+                val newSourceId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
                 if (newSourceId == sourceId) {
                     // Same identity — update fields only
@@ -102,7 +102,7 @@ object ServerConfigRepository {
                     // Identity changed — insert new, cascade-delete old
                     val newEntity = ServerEntity(
                         sourceId = newSourceId,
-                        providerType = providerType,
+                        protocol = protocol,
                         displayName = result.displayName,
                         fieldsJson = result.fieldsJson,
                         createdAtEpochMs = now,

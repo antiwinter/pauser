@@ -3,13 +3,13 @@ package com.opentune.storage
 import kotlinx.coroutines.flow.Flow
 
 data class MediaStateKey(
-    val providerType: String,
+    val protocol: String,
     val sourceId: String,
     val itemRef: String,
 )
 
 data class MediaStateSnapshot(
-    val providerType: String,
+    val protocol: String,
     val sourceId: String,
     val itemId: String,
     val positionMs: Long,
@@ -23,39 +23,39 @@ data class MediaStateSnapshot(
 )
 
 interface UserMediaStateStore {
-    suspend fun get(providerType: String, sourceId: String, itemId: String): MediaStateSnapshot?
-    suspend fun upsertPosition(providerType: String, sourceId: String, itemId: String, positionMs: Long)
-    suspend fun upsertSpeed(providerType: String, sourceId: String, itemId: String, speed: Float)
+    suspend fun get(protocol: String, sourceId: String, itemId: String): MediaStateSnapshot?
+    suspend fun upsertPosition(protocol: String, sourceId: String, itemId: String, positionMs: Long)
+    suspend fun upsertSpeed(protocol: String, sourceId: String, itemId: String, speed: Float)
     suspend fun upsertFavorite(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         isFavorite: Boolean,
         title: String? = null,
         type: String? = null,
     )
-    suspend fun upsertCoverCache(providerType: String, sourceId: String, itemId: String, path: String?)
-    suspend fun upsertSubtitleTrack(providerType: String, sourceId: String, itemId: String, trackId: String?)
-    suspend fun upsertAudioTrack(providerType: String, sourceId: String, itemId: String, trackId: String?)
-    fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>>
+    suspend fun upsertCoverCache(protocol: String, sourceId: String, itemId: String, path: String?)
+    suspend fun upsertSubtitleTrack(protocol: String, sourceId: String, itemId: String, trackId: String?)
+    suspend fun upsertAudioTrack(protocol: String, sourceId: String, itemId: String, trackId: String?)
+    fun observeForSource(protocol: String, sourceId: String): Flow<List<MediaStateSnapshot>>
     fun observeAllFavorites(): Flow<List<MediaStateSnapshot>>
     suspend fun deleteBySource(sourceId: String)
 }
 
 suspend fun UserMediaStateStore.get(key: MediaStateKey): MediaStateSnapshot? =
-    get(key.providerType, key.sourceId, key.itemRef)
+    get(key.protocol, key.sourceId, key.itemRef)
 
 suspend fun UserMediaStateStore.upsertPosition(key: MediaStateKey, positionMs: Long) =
-    upsertPosition(key.providerType, key.sourceId, key.itemRef, positionMs)
+    upsertPosition(key.protocol, key.sourceId, key.itemRef, positionMs)
 
 suspend fun UserMediaStateStore.upsertSpeed(key: MediaStateKey, speed: Float) =
-    upsertSpeed(key.providerType, key.sourceId, key.itemRef, speed)
+    upsertSpeed(key.protocol, key.sourceId, key.itemRef, speed)
 
 suspend fun UserMediaStateStore.upsertFavorite(key: MediaStateKey, isFavorite: Boolean) =
-    upsertFavorite(key.providerType, key.sourceId, key.itemRef, isFavorite)
+    upsertFavorite(key.protocol, key.sourceId, key.itemRef, isFavorite)
 
 suspend fun UserMediaStateStore.upsertSubtitleTrack(key: MediaStateKey, trackId: String?) =
-    upsertSubtitleTrack(key.providerType, key.sourceId, key.itemRef, trackId)
+    upsertSubtitleTrack(key.protocol, key.sourceId, key.itemRef, trackId)
 
 suspend fun UserMediaStateStore.upsertAudioTrack(key: MediaStateKey, trackId: String?) =
-    upsertAudioTrack(key.providerType, key.sourceId, key.itemRef, trackId)
+    upsertAudioTrack(key.protocol, key.sourceId, key.itemRef, trackId)

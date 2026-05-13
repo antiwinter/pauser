@@ -38,8 +38,8 @@ fun HomeRoute(
         coroutineScope {
             providers.forEach { provider ->
                 launch {
-                    app.storageBindings.serverDao.observeByProvider(provider.providerType).collect { list ->
-                        serversByType = serversByType + (provider.providerType to list)
+                    app.storageBindings.serverDao.observeByProvider(provider.protocol).collect { list ->
+                        serversByType = serversByType + (provider.protocol to list)
                         launch { app.instanceRegistry.populateEager(list) }
                     }
                 }
@@ -53,15 +53,15 @@ fun HomeRoute(
     ) {
         Text(stringResource(R.string.home_title))
         providers.forEach { provider ->
-            Button(onClick = { onAddProvider(provider.providerType) }) {
-                Text(stringResource(R.string.home_add_provider, provider.providerType))
+            Button(onClick = { onAddProvider(provider.protocol) }) {
+                Text(stringResource(R.string.home_add_provider, provider.protocol))
             }
         }
         providers.forEach { provider ->
-            (serversByType[provider.providerType] ?: emptyList()).forEach { s ->
+            (serversByType[provider.protocol] ?: emptyList()).forEach { s ->
                 Button(
-                    onClick = { onOpenBrowse(provider.providerType, s.sourceId, "") },
-                    modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.providerType, s.sourceId) },
+                    onClick = { onOpenBrowse(provider.protocol, s.sourceId, "") },
+                    modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, s.sourceId) },
                 ) {
                     Text(s.displayName)
                 }

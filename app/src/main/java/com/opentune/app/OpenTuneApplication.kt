@@ -61,13 +61,12 @@ class OpenTuneApplication : Application() {
         assets.list("")
             ?.filter { it.endsWith("-provider.js") }
             ?.forEach { bundleFile ->
-                val providerType = bundleFile.removeSuffix("-provider.js")
                 val bundle = assets.open(bundleFile).use { it.readBytes().toString(Charsets.UTF_8) }
                 registry.register(
                     JsProvider(
-                        providerType = providerType,
-                        jsBundle     = bundle,
-                        hostApis     = hostApis,
+                        assetPath = bundleFile,
+                        jsBundle  = bundle,
+                        hostApis  = hostApis,
                     )
                 )
             }

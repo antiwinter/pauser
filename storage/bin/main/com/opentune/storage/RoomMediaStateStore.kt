@@ -9,7 +9,7 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
 
     private fun MediaStateEntity.toSnapshot(): MediaStateSnapshot =
         MediaStateSnapshot(
-            providerType = providerType,
+            protocol = protocol,
             sourceId = sourceId,
             itemId = itemId,
             positionMs = positionMs,
@@ -22,12 +22,12 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
             selectedAudioTrackId = selectedAudioTrackId,
         )
 
-    private suspend fun ensureRow(providerType: String, sourceId: String, itemId: String) {
-        val exists = dao.get(providerType, sourceId, itemId)
+    private suspend fun ensureRow(protocol: String, sourceId: String, itemId: String) {
+        val exists = dao.get(protocol, sourceId, itemId)
         if (exists == null) {
             dao.upsert(
                 MediaStateEntity(
-                    providerType = providerType,
+                    protocol = protocol,
                     sourceId = sourceId,
                     itemId = itemId,
                     updatedAtEpochMs = System.currentTimeMillis(),
@@ -36,73 +36,73 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
         }
     }
 
-    override suspend fun get(providerType: String, sourceId: String, itemId: String): MediaStateSnapshot? =
-        dao.get(providerType, sourceId, itemId)?.toSnapshot()
+    override suspend fun get(protocol: String, sourceId: String, itemId: String): MediaStateSnapshot? =
+        dao.get(protocol, sourceId, itemId)?.toSnapshot()
 
     override suspend fun upsertPosition(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         positionMs: Long,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updatePosition(providerType, sourceId, itemId, positionMs, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updatePosition(protocol, sourceId, itemId, positionMs, System.currentTimeMillis())
     }
 
     override suspend fun upsertSpeed(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         speed: Float,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updateSpeed(providerType, sourceId, itemId, speed, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updateSpeed(protocol, sourceId, itemId, speed, System.currentTimeMillis())
     }
 
     override suspend fun upsertFavorite(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         isFavorite: Boolean,
         title: String?,
         type: String?,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updateFavorite(providerType, sourceId, itemId, isFavorite, title, type, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updateFavorite(protocol, sourceId, itemId, isFavorite, title, type, System.currentTimeMillis())
     }
 
     override suspend fun upsertCoverCache(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         path: String?,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updateCoverCache(providerType, sourceId, itemId, path, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updateCoverCache(protocol, sourceId, itemId, path, System.currentTimeMillis())
     }
 
     override suspend fun upsertSubtitleTrack(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         trackId: String?,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updateSubtitleTrack(providerType, sourceId, itemId, trackId, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updateSubtitleTrack(protocol, sourceId, itemId, trackId, System.currentTimeMillis())
     }
 
     override suspend fun upsertAudioTrack(
-        providerType: String,
+        protocol: String,
         sourceId: String,
         itemId: String,
         trackId: String?,
     ) {
-        ensureRow(providerType, sourceId, itemId)
-        dao.updateAudioTrack(providerType, sourceId, itemId, trackId, System.currentTimeMillis())
+        ensureRow(protocol, sourceId, itemId)
+        dao.updateAudioTrack(protocol, sourceId, itemId, trackId, System.currentTimeMillis())
     }
 
-    override fun observeForSource(providerType: String, sourceId: String): Flow<List<MediaStateSnapshot>> =
-        dao.observeForSource(providerType, sourceId).map { list -> list.map { it.toSnapshot() } }
+    override fun observeForSource(protocol: String, sourceId: String): Flow<List<MediaStateSnapshot>> =
+        dao.observeForSource(protocol, sourceId).map { list -> list.map { it.toSnapshot() } }
 
     override fun observeAllFavorites(): Flow<List<MediaStateSnapshot>> =
         dao.observeAllFavorites().map { list -> list.map { it.toSnapshot() } }

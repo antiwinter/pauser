@@ -31,7 +31,7 @@ import kotlinx.serialization.json.put
  * so JS state (instance credentials) is fully isolated.
  */
 class JsProviderInstance(
-    private val providerType: String,
+    private val protocol: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
     private val values: Map<String, String>,

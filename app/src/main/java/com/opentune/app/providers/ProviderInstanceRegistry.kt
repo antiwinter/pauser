@@ -55,7 +55,7 @@ class ProviderInstanceRegistry(
     }
 
     private fun buildInstance(entity: ServerEntity): OpenTuneProviderInstance? {
-        val provider = runCatching { providerRegistry.provider(entity.providerType) }.getOrNull()
+        val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()
             ?: return null
         val values = runCatching {
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)

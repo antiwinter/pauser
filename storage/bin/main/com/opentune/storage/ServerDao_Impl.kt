@@ -33,11 +33,11 @@ public class ServerDao_Impl(
     this.__db = __db
     this.__insertAdapterOfServerEntity = object : EntityInsertAdapter<ServerEntity>() {
       protected override fun createQuery(): String =
-          "INSERT OR ABORT INTO `servers` (`sourceId`,`providerType`,`displayName`,`fieldsJson`,`createdAtEpochMs`,`updatedAtEpochMs`) VALUES (?,?,?,?,?,?)"
+          "INSERT OR ABORT INTO `servers` (`sourceId`,`protocol`,`displayName`,`fieldsJson`,`createdAtEpochMs`,`updatedAtEpochMs`) VALUES (?,?,?,?,?,?)"
 
       protected override fun bind(statement: SQLiteStatement, entity: ServerEntity) {
         statement.bindText(1, entity.sourceId)
-        statement.bindText(2, entity.providerType)
+        statement.bindText(2, entity.protocol)
         statement.bindText(3, entity.displayName)
         statement.bindText(4, entity.fieldsJson)
         statement.bindLong(5, entity.createdAtEpochMs)
@@ -46,11 +46,11 @@ public class ServerDao_Impl(
     }
     this.__updateAdapterOfServerEntity = object : EntityDeleteOrUpdateAdapter<ServerEntity>() {
       protected override fun createQuery(): String =
-          "UPDATE OR ABORT `servers` SET `sourceId` = ?,`providerType` = ?,`displayName` = ?,`fieldsJson` = ?,`createdAtEpochMs` = ?,`updatedAtEpochMs` = ? WHERE `sourceId` = ?"
+          "UPDATE OR ABORT `servers` SET `sourceId` = ?,`protocol` = ?,`displayName` = ?,`fieldsJson` = ?,`createdAtEpochMs` = ?,`updatedAtEpochMs` = ? WHERE `sourceId` = ?"
 
       protected override fun bind(statement: SQLiteStatement, entity: ServerEntity) {
         statement.bindText(1, entity.sourceId)
-        statement.bindText(2, entity.providerType)
+        statement.bindText(2, entity.protocol)
         statement.bindText(3, entity.displayName)
         statement.bindText(4, entity.fieldsJson)
         statement.bindLong(5, entity.createdAtEpochMs)
@@ -70,15 +70,15 @@ public class ServerDao_Impl(
     __updateAdapterOfServerEntity.handle(_connection, server)
   }
 
-  public override fun observeByProvider(providerType: String): Flow<List<ServerEntity>> {
-    val _sql: String = "SELECT * FROM servers WHERE providerType = ? ORDER BY createdAtEpochMs ASC"
+  public override fun observeByProvider(protocol: String): Flow<List<ServerEntity>> {
+    val _sql: String = "SELECT * FROM servers WHERE protocol = ? ORDER BY createdAtEpochMs ASC"
     return createFlow(__db, false, arrayOf("servers")) { _connection ->
       val _stmt: SQLiteStatement = _connection.prepare(_sql)
       try {
         var _argIndex: Int = 1
-        _stmt.bindText(_argIndex, providerType)
+        _stmt.bindText(_argIndex, protocol)
         val _columnIndexOfSourceId: Int = getColumnIndexOrThrow(_stmt, "sourceId")
-        val _columnIndexOfProviderType: Int = getColumnIndexOrThrow(_stmt, "providerType")
+        val _columnIndexOfProtocol: Int = getColumnIndexOrThrow(_stmt, "protocol")
         val _columnIndexOfDisplayName: Int = getColumnIndexOrThrow(_stmt, "displayName")
         val _columnIndexOfFieldsJson: Int = getColumnIndexOrThrow(_stmt, "fieldsJson")
         val _columnIndexOfCreatedAtEpochMs: Int = getColumnIndexOrThrow(_stmt, "createdAtEpochMs")
@@ -88,8 +88,8 @@ public class ServerDao_Impl(
           val _item: ServerEntity
           val _tmpSourceId: String
           _tmpSourceId = _stmt.getText(_columnIndexOfSourceId)
-          val _tmpProviderType: String
-          _tmpProviderType = _stmt.getText(_columnIndexOfProviderType)
+          val _tmpProtocol: String
+          _tmpProtocol = _stmt.getText(_columnIndexOfProtocol)
           val _tmpDisplayName: String
           _tmpDisplayName = _stmt.getText(_columnIndexOfDisplayName)
           val _tmpFieldsJson: String
@@ -99,7 +99,7 @@ public class ServerDao_Impl(
           val _tmpUpdatedAtEpochMs: Long
           _tmpUpdatedAtEpochMs = _stmt.getLong(_columnIndexOfUpdatedAtEpochMs)
           _item =
-              ServerEntity(_tmpSourceId,_tmpProviderType,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
+              ServerEntity(_tmpSourceId,_tmpProtocol,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
           _result.add(_item)
         }
         _result
@@ -115,7 +115,7 @@ public class ServerDao_Impl(
       val _stmt: SQLiteStatement = _connection.prepare(_sql)
       try {
         val _columnIndexOfSourceId: Int = getColumnIndexOrThrow(_stmt, "sourceId")
-        val _columnIndexOfProviderType: Int = getColumnIndexOrThrow(_stmt, "providerType")
+        val _columnIndexOfProtocol: Int = getColumnIndexOrThrow(_stmt, "protocol")
         val _columnIndexOfDisplayName: Int = getColumnIndexOrThrow(_stmt, "displayName")
         val _columnIndexOfFieldsJson: Int = getColumnIndexOrThrow(_stmt, "fieldsJson")
         val _columnIndexOfCreatedAtEpochMs: Int = getColumnIndexOrThrow(_stmt, "createdAtEpochMs")
@@ -125,8 +125,8 @@ public class ServerDao_Impl(
           val _item: ServerEntity
           val _tmpSourceId: String
           _tmpSourceId = _stmt.getText(_columnIndexOfSourceId)
-          val _tmpProviderType: String
-          _tmpProviderType = _stmt.getText(_columnIndexOfProviderType)
+          val _tmpProtocol: String
+          _tmpProtocol = _stmt.getText(_columnIndexOfProtocol)
           val _tmpDisplayName: String
           _tmpDisplayName = _stmt.getText(_columnIndexOfDisplayName)
           val _tmpFieldsJson: String
@@ -136,7 +136,7 @@ public class ServerDao_Impl(
           val _tmpUpdatedAtEpochMs: Long
           _tmpUpdatedAtEpochMs = _stmt.getLong(_columnIndexOfUpdatedAtEpochMs)
           _item =
-              ServerEntity(_tmpSourceId,_tmpProviderType,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
+              ServerEntity(_tmpSourceId,_tmpProtocol,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
           _result.add(_item)
         }
         _result
@@ -154,7 +154,7 @@ public class ServerDao_Impl(
         var _argIndex: Int = 1
         _stmt.bindText(_argIndex, sourceId)
         val _columnIndexOfSourceId: Int = getColumnIndexOrThrow(_stmt, "sourceId")
-        val _columnIndexOfProviderType: Int = getColumnIndexOrThrow(_stmt, "providerType")
+        val _columnIndexOfProtocol: Int = getColumnIndexOrThrow(_stmt, "protocol")
         val _columnIndexOfDisplayName: Int = getColumnIndexOrThrow(_stmt, "displayName")
         val _columnIndexOfFieldsJson: Int = getColumnIndexOrThrow(_stmt, "fieldsJson")
         val _columnIndexOfCreatedAtEpochMs: Int = getColumnIndexOrThrow(_stmt, "createdAtEpochMs")
@@ -163,8 +163,8 @@ public class ServerDao_Impl(
         if (_stmt.step()) {
           val _tmpSourceId: String
           _tmpSourceId = _stmt.getText(_columnIndexOfSourceId)
-          val _tmpProviderType: String
-          _tmpProviderType = _stmt.getText(_columnIndexOfProviderType)
+          val _tmpProtocol: String
+          _tmpProtocol = _stmt.getText(_columnIndexOfProtocol)
           val _tmpDisplayName: String
           _tmpDisplayName = _stmt.getText(_columnIndexOfDisplayName)
           val _tmpFieldsJson: String
@@ -174,7 +174,7 @@ public class ServerDao_Impl(
           val _tmpUpdatedAtEpochMs: Long
           _tmpUpdatedAtEpochMs = _stmt.getLong(_columnIndexOfUpdatedAtEpochMs)
           _result =
-              ServerEntity(_tmpSourceId,_tmpProviderType,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
+              ServerEntity(_tmpSourceId,_tmpProtocol,_tmpDisplayName,_tmpFieldsJson,_tmpCreatedAtEpochMs,_tmpUpdatedAtEpochMs)
         } else {
           _result = null
         }

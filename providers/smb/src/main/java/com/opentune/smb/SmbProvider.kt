@@ -16,7 +16,7 @@ class SmbProvider : OpenTuneProvider {
 
     @Volatile private var subtitleCacheDir: File = File("")
 
-    override val providerType: String = PROVIDER_TYPE
+    override val protocol: String = "smb"
     override val providesCover: Boolean = false
 
     override fun bootstrap(context: PlatformContext) {
@@ -109,8 +109,6 @@ class SmbProvider : OpenTuneProvider {
     }
 
     companion object {
-        const val PROVIDER_TYPE = "smb"
-
         private fun sha256(s: String): String {
             val digest = MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8))
             return digest.joinToString("") { b -> "%02x".format(b) }

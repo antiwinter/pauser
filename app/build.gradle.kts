@@ -53,9 +53,10 @@ android {
 dependencies {
     implementation(project(":provider-api"))
     implementation(project(":provider-js"))
-    implementation(project(":providers:emby"))
+
     implementation(project(":player"))
     implementation(project(":storage"))
+    implementation(project(":providers:emby"))
     implementation(project(":providers:smb"))
 
     implementation(libs.androidx.core.ktx)

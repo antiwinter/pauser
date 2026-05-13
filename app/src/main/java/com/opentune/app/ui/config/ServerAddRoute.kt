@@ -48,12 +48,12 @@ private const val LOG_TAG = "OpenTuneServerAdd"
 @OptIn(ExperimentalTvMaterial3Api::class, FlowPreview::class)
 @Composable
 fun ServerAddRoute(
-    providerType: String,
+    protocol: String,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val fields = remember(providerType) {
-        app.providerRegistry.provider(providerType).getFieldsSpec().sortedBy { it.order }
+    val fields = remember(protocol) {
+        app.providerRegistry.provider(protocol).getFieldsSpec().sortedBy { it.order }
     }
     var values by remember {
         mutableStateOf(fields.associate { it.id to "" })
@@ -62,18 +62,18 @@ fun ServerAddRoute(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(providerType) {
-        val initial = ServerConfigRepository.loadAddDraft(providerType, app)
+    LaunchedEffect(protocol) {
+        val initial = ServerConfigRepository.loadAddDraft(protocol, app)
         values = fields.associate { it.id to (initial[it.id] ?: "") }
     }
 
-    LaunchedEffect(providerType, fields) {
+    LaunchedEffect(protocol, fields) {
         snapshotFlow { values }
             .distinctUntilChanged()
             .debounce(600)
             .collect { v ->
                 withContext(Dispatchers.IO) {
-                    ServerConfigRepository.saveAddDraft(providerType, app, v)
+                    ServerConfigRepository.saveAddDraft(protocol, app, v)
                 }
             }
     }
@@ -122,12 +122,12 @@ fun ServerAddRoute(
                     isLoading = true
                     try {
                         val result = withContext(Dispatchers.IO) {
-                            ServerConfigRepository.submitAdd(providerType, values, app)
+                            ServerConfigRepository.submitAdd(protocol, values, app)
                         }
                         when (result) {
                             is SubmitResult.Success -> {
                                 withContext(Dispatchers.IO) {
-                                    ServerConfigRepository.clearAddDraft(providerType, app)
+                                    ServerConfigRepository.clearAddDraft(protocol, app)
                                 }
                                 onDone()
                             }

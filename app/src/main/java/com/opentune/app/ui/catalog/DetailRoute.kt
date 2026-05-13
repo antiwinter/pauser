@@ -32,14 +32,14 @@ private const val LOG_TAG = "OT_Detail"
 fun DetailRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
-    providerType: String,
+    protocol: String,
     sourceId: String,
     itemRefEncoded: String,
 ) {
     val itemRefDecoded = remember(itemRefEncoded) { CatalogNav.decodeSegment(itemRefEncoded) }
     val scope = rememberCoroutineScope()
-    val stateKey = remember(providerType, sourceId, itemRefDecoded) {
-        MediaStateKey(providerType, sourceId, itemRefDecoded)
+    val stateKey = remember(protocol, sourceId, itemRefDecoded) {
+        MediaStateKey(protocol, sourceId, itemRefDecoded)
     }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -57,7 +57,7 @@ fun DetailRoute(
     var totalEpisodes by remember { mutableIntStateOf(0) }
     var episodePage by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(providerType, sourceId, itemRefDecoded) {
+    LaunchedEffect(protocol, sourceId, itemRefDecoded) {
         loading = true
         error = null
         seasons = null
@@ -119,10 +119,10 @@ fun DetailRoute(
             episodePage = episodePage,
             onBack = { nav.popBackStack() },
             onPlayFromStart = {
-                nav.navigate(Routes.player(providerType, sourceId, itemRefDecoded, 0L))
+                nav.navigate(Routes.player(protocol, sourceId, itemRefDecoded, 0L))
             },
             onResume = {
-                nav.navigate(Routes.player(providerType, sourceId, itemRefDecoded, resumeMs))
+                nav.navigate(Routes.player(protocol, sourceId, itemRefDecoded, resumeMs))
             },
             onToggleFavorite = {
                 scope.launch {
@@ -141,7 +141,7 @@ fun DetailRoute(
             onSelectSeason = { index -> selectedSeasonIndex = index; episodePage = 0 },
             onSelectEpisode = { episode ->
                 val startMs = episode.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(providerType, sourceId, episode.id, startMs))
+                nav.navigate(Routes.player(protocol, sourceId, episode.id, startMs))
             },
             onSelectPage = { page -> episodePage = page },
         )

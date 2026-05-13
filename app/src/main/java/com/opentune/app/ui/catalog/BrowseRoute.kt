@@ -36,7 +36,7 @@ sealed interface BrowseState {
 fun BrowseRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
-    providerType: String,
+    protocol: String,
     sourceId: String,
     locationEncoded: String,
 ) {
@@ -47,7 +47,7 @@ fun BrowseRoute(
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    LaunchedEffect(app, providerType, sourceId) {
+    LaunchedEffect(app, protocol, sourceId) {
         state = BrowseState.Loading
         items.clear()
         val instance = app.instanceRegistry.getOrCreate(sourceId)
@@ -60,7 +60,7 @@ fun BrowseRoute(
     }
 
     val instance = (state as? BrowseState.Ready)?.instance
-    val coverExtractor = rememberCoverExtractor(app, providerType, sourceId, instance, items)
+    val coverExtractor = rememberCoverExtractor(app, protocol, sourceId, instance, items)
 
     when (val s = state) {
         is BrowseState.Loading -> Text("Loading\u2026")
@@ -72,7 +72,7 @@ fun BrowseRoute(
             subtitle = locationDecoded,
             titleLang = titleLang,
             onBack = { nav.popBackStack() },
-            onSearch = { nav.navigate(Routes.search(providerType, sourceId, locationDecoded)) },
+            onSearch = { nav.navigate(Routes.search(protocol, sourceId, locationDecoded)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onOpenBrowseLocation = { folderId ->
                 scope.launch {
@@ -82,17 +82,17 @@ fun BrowseRoute(
                         }
                         val firstItem = page.items.firstOrNull()
                         if (page.totalCount == 1 && firstItem?.kind == MediaEntryKind.Playable) {
-                            nav.navigate(Routes.detail(providerType, sourceId, firstItem.id))
+                            nav.navigate(Routes.detail(protocol, sourceId, firstItem.id))
                         } else {
-                            nav.navigate(Routes.browse(providerType, sourceId, folderId))
+                            nav.navigate(Routes.browse(protocol, sourceId, folderId))
                         }
                     } catch (e: Exception) {
                         Log.e(LOG_TAG, "auto-nav check failed for $folderId", e)
-                        nav.navigate(Routes.browse(providerType, sourceId, folderId))
+                        nav.navigate(Routes.browse(protocol, sourceId, folderId))
                     }
                 }
             },
-            onOpenDetail = { raw -> nav.navigate(Routes.detail(providerType, sourceId, raw)) },
+            onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
             onItemsLoaded = coverExtractor.onItemsLoaded,
         )
     }

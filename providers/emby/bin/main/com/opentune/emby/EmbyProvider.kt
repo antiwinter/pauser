@@ -25,7 +25,7 @@ class EmbyProvider : OpenTuneProvider {
 
     @Volatile private var deviceName: String = "Android TV"
 
-    override val providerType: String = PROVIDER_TYPE
+    override val protocol: String = "emby-kt"
     override val providesCover: Boolean = true
 
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
@@ -157,7 +157,6 @@ class EmbyProvider : OpenTuneProvider {
     }
 
     companion object {
-        const val PROVIDER_TYPE = "emby"
 
         private fun sqrtApprox(n: Int, align: Int): Int {
             var w = sqrt(n.toDouble()).toInt() / align * align

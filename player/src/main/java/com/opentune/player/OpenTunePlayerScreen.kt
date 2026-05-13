@@ -197,7 +197,7 @@ fun OpenTunePlayerScreen(
         audioDecoderName = null
         val savedSpeed = withContext(Dispatchers.IO) {
             mediaStateStore.get(
-                instanceKey.providerType,
+                instanceKey.protocol,
                 instanceKey.sourceId,
                 instanceKey.itemRef,
             )?.playbackSpeed ?: 1f

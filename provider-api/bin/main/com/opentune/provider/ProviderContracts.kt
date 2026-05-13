@@ -37,7 +37,7 @@ sealed class ValidationResult {
     /**
      * Provider connected, authenticated, and derived a stable identity.
      * [fieldsJson] is the opaque credential blob to be stored in [com.opentune.storage.ServerEntity];
-     * [hash] is used by the app to compute sourceId = "${providerType}_${hash}".
+     * [hash] is used by the app to compute sourceId = "${protocol}_${hash}".
      */
     data class Success(
         val hash: String,
@@ -61,7 +61,7 @@ sealed class SubmitResult {
  * Does not hold server state or store references.
  */
 interface OpenTuneProvider {
-    val providerType: String
+    val protocol: String
 
     /**
      * True if catalog list items carry HTTP cover art directly (e.g. Emby).
