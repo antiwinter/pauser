@@ -5,7 +5,7 @@ import com.opentune.provider.OpenTuneProvider
 import java.util.ServiceLoader
 
 class OpenTuneProviderRegistry private constructor(
-    private val providersById: Map<String, OpenTuneProvider>,
+    private val providersById: MutableMap<String, OpenTuneProvider>,
 ) {
     @Volatile var codecCapabilities: CodecCapabilities = CodecCapabilities(
         supportedVideoMimeTypes = listOf("video/avc"),
@@ -15,6 +15,10 @@ class OpenTuneProviderRegistry private constructor(
 
     fun setCapabilities(capabilities: CodecCapabilities) {
         this.codecCapabilities = capabilities
+    }
+
+    fun register(provider: OpenTuneProvider) {
+        providersById[provider.providerType] = provider
     }
 
     fun provider(providerType: String): OpenTuneProvider =
@@ -27,7 +31,7 @@ class OpenTuneProviderRegistry private constructor(
             val providers = ServiceLoader
                 .load(OpenTuneProvider::class.java, OpenTuneProvider::class.java.classLoader)
                 .toList()
-            return OpenTuneProviderRegistry(providers.associateBy { it.providerType })
+            return OpenTuneProviderRegistry(providers.associateBy { it.providerType }.toMutableMap())
         }
     }
 }

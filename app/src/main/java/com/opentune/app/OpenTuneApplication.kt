@@ -6,6 +6,10 @@ import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
 import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.js.HostApis
+import com.opentune.provider.js.JsProvider
+import com.opentune.provider.js.JsProviderMeta
+import kotlinx.serialization.json.Json
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.RoomMediaStateStore
@@ -39,6 +43,7 @@ class OpenTuneApplication : Application() {
             thumbnailDiskCache = ThumbnailDiskCache(File(cacheDir, "covers")),
         )
         providerRegistry = OpenTuneProviderRegistry.discover()
+        registerJsProviders(providerRegistry)
         instanceRegistry = ProviderInstanceRegistry(
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,
@@ -46,6 +51,36 @@ class OpenTuneApplication : Application() {
         val platformContext = AndroidPlatformContext(this)
         providerRegistry.allProviders().forEach { it.bootstrap(platformContext) }
         providerRegistry.setCapabilities(buildCodecCapabilities())
+    }
+
+    private fun registerJsProviders(registry: OpenTuneProviderRegistry) {
+        val platformContext = AndroidPlatformContext(this)
+        val hostApis = HostApis(
+            deviceName    = platformContext.deviceName,
+            deviceId      = platformContext.deviceId,
+            clientVersion = platformContext.clientVersion,
+        )
+        val json = Json { ignoreUnknownKeys = true }
+        assets.list("")
+            ?.filter { it.endsWith("-provider.js") }
+            ?.forEach { bundleFile ->
+                val metaFile = bundleFile.replace(".js", ".meta.json")
+                val metaJson = try {
+                    assets.open(metaFile).use { it.readBytes().toString(Charsets.UTF_8) }
+                } catch (_: Exception) {
+                    return@forEach // no meta = skip
+                }
+                val meta = json.decodeFromString<JsProviderMeta>(metaJson)
+                val bundle = assets.open(bundleFile).use { it.readBytes().toString(Charsets.UTF_8) }
+                registry.register(
+                    JsProvider(
+                        providerType  = meta.providerType,
+                        providesCover = meta.providesCover,
+                        jsBundle      = bundle,
+                        hostApis      = hostApis,
+                    )
+                )
+            }
     }
 
     private fun buildCodecCapabilities(): CodecCapabilities {

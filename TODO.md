@@ -1,13 +1,22 @@
 # TODOs
 - [x] fix audio in background
 - [x] folder, single media folder, series
-- [ ] sprite
+- [ ] eliminate instance concept, rename provider methods
 - [ ] proxy server
-- [ ] telegram, auto-proxy
+- [ ] telegram, auto-proxy, extent add server screen & process
+- [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 - [-] collapse imports
+
+## js providers
+- [ ] remove sidecar meta
+- [x] research thread safe
+- [ ] common.js
+- [ ] tester on host
+- [ ] quickjs exclude std & os
 
 ## Player
 - [x] pagedown -> menu
+- [ ] sprite
 - [ ] merge infoOSD w/ playbackOverlay,when buffering: show playbackOverlay, allow pause
 - [ ] next episode
 - [x] emby resolve external

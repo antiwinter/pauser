@@ -19,3 +19,4 @@ Thumbs.db
 1
 test/.env
 files/
+node_modules/

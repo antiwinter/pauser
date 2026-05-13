@@ -125,8 +125,7 @@ class SmbProviderInstance(
                 customMediaSourceFactory = { progressiveFactory.createMediaSource(mediaItem) },
                 displayTitle = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
-                hooks = SmbPlaybackHooks,
-                onPlaybackDispose = { session.close() },
+                hooks = SmbPlaybackHooks(session),
                 subtitleTracks = subtitleTracks,
             )
         }

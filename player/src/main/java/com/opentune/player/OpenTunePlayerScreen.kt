@@ -177,7 +177,7 @@ fun OpenTunePlayerScreen(
             withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
             s.hooks.onStop(pos)
             withContext(Dispatchers.Main) { exo.release() }
-            s.onPlaybackDispose()
+            s.hooks.onDispose()
         }
         if (userInitiatedExit) {
             withContext(Dispatchers.Main) { onExitState.value() }
