@@ -21,3 +21,7 @@ test/.env
 files/
 node_modules/
 providers-ts/dist/
+provider-api/bin/
+providers/emby/bin/
+storage/bin/
+
