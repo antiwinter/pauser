@@ -20,6 +20,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Install NDK
+        run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;30.0.14904198"
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
@@ -39,6 +42,9 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
+
+      - name: Install NDK
+        run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;30.0.14904198"
 
       - name: Build release APK (unsigned)
         run: ./gradlew assembleRelease

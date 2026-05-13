@@ -18,12 +18,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Include all ABIs in debug so emulators work
+        }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            ndk {
+                abiFilters += setOf("arm64-v8a")
+            }
         }
     }
 

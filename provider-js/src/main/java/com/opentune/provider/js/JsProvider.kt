@@ -96,7 +96,7 @@ class JsProvider(
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private fun <T> runWithEngine(block: (QuickJsEngine) -> T): T {
+    private fun <T> runWithEngine(block: suspend (QuickJsEngine) -> T): T {
         val engine = QuickJsEngine(hostApis)
         return try {
             kotlinx.coroutines.runBlocking {

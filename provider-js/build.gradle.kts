@@ -1,18 +1,18 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.opentune.provider.js"
     compileSdk = 35
+    ndkVersion = "30.0.14904198"
 
     defaultConfig {
         minSdk = 21
         externalNativeBuild {
             cmake {
                 cppFlags("")
-                arguments("-DANDROID_STL=c_shared")
+                arguments("-DANDROID_STL=c++_shared")
             }
         }
     }
@@ -39,4 +39,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    implementation("androidx.annotation:annotation:1.9.1")
 }
