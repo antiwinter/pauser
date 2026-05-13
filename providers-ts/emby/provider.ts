@@ -54,13 +54,18 @@ export async function validateFields(values: Record<string, string>): Promise<Va
 let globalDeviceProfile: DeviceProfile | null = null;
 let globalCapabilities: CodecCapabilities | null = null;
 
+/** @deprecated Called only by temp engines for validateFields in JsProvider. */
 export function bootstrap(caps: CodecCapabilities, deviceName: string, deviceId: string, clientVersion: string): void {
   globalCapabilities = caps;
   setGlobalAuth({ clientName: 'OpenTune', deviceName, deviceId, clientVersion });
   globalDeviceProfile = buildDeviceProfile(caps, deviceName);
 }
 
-export function makeInstanceState(values: Record<string, string>): EmbyInstanceState {
+export function makeInstanceState(
+  values: Record<string, string>,
+  capabilities: CodecCapabilities,
+  deviceName: string,
+): EmbyInstanceState {
   const credentials: EmbyCredentials = {
     baseUrl:     values['base_url']     ?? '',
     userId:      values['user_id']      ?? '',
@@ -71,13 +76,6 @@ export function makeInstanceState(values: Record<string, string>): EmbyInstanceS
   if (!credentials.userId)      throw new Error('Missing user_id');
   if (!credentials.accessToken) throw new Error('Missing access_token');
 
-  const caps = globalCapabilities ?? {
-    videoMimes: ['video/avc'],
-    audioMimes: ['audio/mp4a-latm'],
-    subtitleFormats: ['srt'],
-    maxVideoPixels: 1920 * 1080,
-  };
-  const profile = globalDeviceProfile ?? buildDeviceProfile(caps, 'Android');
-
-  return { credentials, deviceProfile: profile, capabilities: caps };
+  const profile = buildDeviceProfile(capabilities, deviceName);
+  return { credentials, deviceProfile: profile, capabilities };
 }

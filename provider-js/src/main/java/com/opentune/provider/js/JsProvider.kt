@@ -26,10 +26,11 @@ import kotlinx.serialization.json.put
  */
 class JsProvider(
     override val providerType: String,
-    override val providesCover: Boolean,
     private val jsBundle: String,
     private val hostApis: HostApis,
 ) : OpenTuneProvider {
+
+    override val providesCover: Boolean = true
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -58,7 +59,9 @@ class JsProvider(
 
     override suspend fun validateFields(values: Map<String, String>): ValidationResult {
         return try {
-            val argsJson = buildJsonObject { values.forEach { (k, v) -> put(k, v) } }.toString()
+            val argsJson = buildJsonObject {
+                put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
+            }.toString()
             val resultJson = withEngine { engine ->
                 engine.callMethod("validateFields", argsJson)
             } ?: return ValidationResult.Error("Validation returned null")

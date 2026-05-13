@@ -6,28 +6,14 @@
  * Run after rollup: `rollup -c && node scripts/check-bundle-size.js`
  */
 
-import { readdirSync, statSync, copyFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { readdirSync, statSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 const ROOT_DIR   = new URL('..', import.meta.url).pathname;
 const DIST_DIR   = join(ROOT_DIR, 'dist');
 const MAX_BYTES  = 150 * 1024; // 150 KB
 
 mkdirSync(DIST_DIR, { recursive: true });
-
-// Copy each provider's meta.json alongside its bundle in dist/
-// Convention: emby/meta.json → dist/emby-provider.meta.json
-for (const providerDir of readdirSync(ROOT_DIR, { withFileTypes: true })) {
-  if (!providerDir.isDirectory()) continue;
-  const metaSrc = join(ROOT_DIR, providerDir.name, 'meta.json');
-  try {
-    statSync(metaSrc);
-  } catch {
-    continue; // no meta.json for this dir
-  }
-  const metaDst = join(DIST_DIR, `${providerDir.name}-provider.meta.json`);
-  copyFileSync(metaSrc, metaDst);
-}
 
 let failed = false;
 

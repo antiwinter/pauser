@@ -6,13 +6,16 @@
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 - [-] collapse imports
+- [ ] check if same local cache used for smb subtitles as thumb
+- [ ] service worker like mechanism to map files/smb to url
+
 
 ## js providers
 - [ ] remove sidecar meta
 - [x] research thread safe
 - [ ] common.js
 - [ ] tester on host
-- [ ] quickjs exclude std & os
+- [x] quickjs exclude std & os
 
 ## Player
 - [x] pagedown -> menu
@@ -23,5 +26,4 @@
 - [x] srt/vss/ass as profile
 - [x] IME still shown
 - [x] investigate initialPositionMs
-- [ ] check if same local cache used for smb subtitles as thumb
 - [x] overlay control logic is verbose and messy and too stateful

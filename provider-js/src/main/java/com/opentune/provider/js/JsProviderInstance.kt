@@ -41,39 +41,38 @@ class JsProviderInstance(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
     private lateinit var engine: QuickJsEngine
-    /** Integer instance ID returned by the JS bridge shim. */
-    private var instanceId: Int = -1
+    private var initialized = false
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     private suspend fun ensureReady() {
-        if (instanceId >= 0) return
+        if (initialized) return
         engine = QuickJsEngine(hostApis)
         engine.init()
         engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
         engine.evalBundle(jsBundle)
 
-        /* bootstrap(capabilities) — pass supported codec info to JS */
-        val capsJson = buildJsonObject {
-            put("videoMimes", kotlinx.serialization.json.JsonArray(
-                capabilities.supportedVideoMimeTypes.map { kotlinx.serialization.json.JsonPrimitive(it) }
-            ))
-            put("audioMimes", kotlinx.serialization.json.JsonArray(
-                capabilities.supportedAudioMimeTypes.map { kotlinx.serialization.json.JsonPrimitive(it) }
-            ))
-            put("subtitleFormats", kotlinx.serialization.json.JsonArray(
-                capabilities.supportedSubtitleFormats.map { kotlinx.serialization.json.JsonPrimitive(it) }
-            ))
-            put("maxVideoPixels", capabilities.maxVideoPixels)
+        /* init({ credentials, capabilities, deviceName, deviceId, clientVersion }) */
+        val initArgs = buildJsonObject {
+            put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
+            put("capabilities", buildJsonObject {
+                put("videoMimes", kotlinx.serialization.json.JsonArray(
+                    capabilities.supportedVideoMimeTypes.map { kotlinx.serialization.json.JsonPrimitive(it) }
+                ))
+                put("audioMimes", kotlinx.serialization.json.JsonArray(
+                    capabilities.supportedAudioMimeTypes.map { kotlinx.serialization.json.JsonPrimitive(it) }
+                ))
+                put("subtitleFormats", kotlinx.serialization.json.JsonArray(
+                    capabilities.supportedSubtitleFormats.map { kotlinx.serialization.json.JsonPrimitive(it) }
+                ))
+                put("maxVideoPixels", capabilities.maxVideoPixels)
+            })
+            put("deviceName", hostApis.deviceName)
+            put("deviceId", hostApis.deviceId)
+            put("clientVersion", hostApis.clientVersion)
         }
-        engine.callMethod("bootstrap", capsJson.toString())
-
-        /* createInstance(values) → instanceId integer */
-        val fieldsJson = buildJsonObject { values.forEach { (k, v) -> put(k, v) } }.toString()
-        val idStr = engine.callMethod("createInstance", fieldsJson)
-            ?: error("createInstance returned null")
-        instanceId = idStr.trim('"').toIntOrNull()
-            ?: error("createInstance did not return an integer, got: $idStr")
+        engine.callMethod("init", initArgs.toString())
+        initialized = true
     }
 
     // ── OpenTuneProviderInstance ───────────────────────────────────────────
@@ -81,7 +80,6 @@ class JsProviderInstance(
     override suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult {
         ensureReady()
         val args = buildJsonObject {
-            put("instanceId", instanceId)
             if (location != null) put("location", location) else put("location", JsonNull)
             put("startIndex", startIndex)
             put("limit", limit)
@@ -98,7 +96,6 @@ class JsProviderInstance(
     override suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem> {
         ensureReady()
         val args = buildJsonObject {
-            put("instanceId", instanceId)
             put("scopeLocation", scopeLocation)
             put("query", query)
         }
@@ -110,7 +107,6 @@ class JsProviderInstance(
     override suspend fun loadDetail(itemRef: String): MediaDetailModel {
         ensureReady()
         val args = buildJsonObject {
-            put("instanceId", instanceId)
             put("itemRef", itemRef)
         }
         val resultJson = engine.callMethod("loadDetail", args.toString())
@@ -121,7 +117,6 @@ class JsProviderInstance(
     override suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec {
         ensureReady()
         val args = buildJsonObject {
-            put("instanceId", instanceId)
             put("itemRef", itemRef)
             put("startMs", startMs)
         }
@@ -236,7 +231,6 @@ class JsProviderInstance(
            We implement the hooks as additional JS calls into the same instance. */
         val hooks = JsPlaybackHooks(
             engine       = engine,
-            instanceId   = instanceId,
             hooksStateJson = obj["hooksState"]?.toString() ?: "{}",
         )
 
@@ -257,7 +251,6 @@ class JsProviderInstance(
  */
 private class JsPlaybackHooks(
     private val engine: QuickJsEngine,
-    private val instanceId: Int,
     private val hooksStateJson: String,
 ) : OpenTunePlaybackHooks {
 
@@ -265,7 +258,6 @@ private class JsPlaybackHooks(
 
     override suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float) {
         callHook("onPlaybackReady", buildJsonObject {
-            put("instanceId", instanceId)
             put("hooksState", json.parseToJsonElement(hooksStateJson))
             put("positionMs", positionMs)
             put("playbackRate", playbackRate)
@@ -274,7 +266,6 @@ private class JsPlaybackHooks(
 
     override suspend fun onProgressTick(positionMs: Long, playbackRate: Float) {
         callHook("onProgressTick", buildJsonObject {
-            put("instanceId", instanceId)
             put("hooksState", json.parseToJsonElement(hooksStateJson))
             put("positionMs", positionMs)
             put("playbackRate", playbackRate)
@@ -283,7 +274,6 @@ private class JsPlaybackHooks(
 
     override suspend fun onStop(positionMs: Long) {
         callHook("onStop", buildJsonObject {
-            put("instanceId", instanceId)
             put("hooksState", json.parseToJsonElement(hooksStateJson))
             put("positionMs", positionMs)
         })

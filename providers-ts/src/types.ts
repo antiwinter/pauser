@@ -153,50 +153,50 @@ export interface CodecCapabilities {
 
 // ── Bridge protocol ───────────────────────────────────────────────────────────
 
-/** Exposed on globalThis.opentuneProvider by bridge.ts */
+/** Exposed on globalThis.opentuneProvider by emby/index.ts */
 export interface OpenTuneProviderBridge {
-  getFieldsSpec(args: Record<string, never>): Promise<ServerFieldSpec[]>;
-  validateFields(args: Record<string, string>): Promise<ValidationResult>;
-  bootstrap(args: CodecCapabilities): Promise<void>;
-  createInstance(args: Record<string, string>): Promise<number>;
+  getFieldsSpec(): Promise<ServerFieldSpec[]>;
+  validateFields(args: { values: Record<string, string> }): Promise<ValidationResult>;
+
+  init(args: {
+    credentials: Record<string, string>;
+    capabilities: CodecCapabilities;
+    deviceName: string;
+    deviceId: string;
+    clientVersion: string;
+  }): Promise<void>;
 
   loadBrowsePage(args: {
-    instanceId: number;
     location: string | null;
     startIndex: number;
     limit: number;
   }): Promise<BrowsePageResult>;
 
   searchItems(args: {
-    instanceId: number;
     scopeLocation: string;
     query: string;
   }): Promise<MediaListItem[]>;
 
-  loadDetail(args: { instanceId: number; itemRef: string }): Promise<MediaDetailModel>;
+  loadDetail(args: { itemRef: string }): Promise<MediaDetailModel>;
 
   resolvePlayback(args: {
-    instanceId: number;
     itemRef: string;
     startMs: number;
   }): Promise<PlaybackSpec>;
 
   onPlaybackReady(args: {
-    instanceId: number;
     hooksState: HooksState;
     positionMs: number;
     playbackRate: number;
   }): Promise<void>;
 
   onProgressTick(args: {
-    instanceId: number;
     hooksState: HooksState;
     positionMs: number;
     playbackRate: number;
   }): Promise<void>;
 
   onStop(args: {
-    instanceId: number;
     hooksState: HooksState;
     positionMs: number;
   }): Promise<void>;

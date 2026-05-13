@@ -6,7 +6,7 @@ import quickjsCompat from './rollup-plugin-quickjs-compat.js';
 /** @type {import('rollup').RollupOptions[]} */
 export default [
   {
-    input: 'emby/bridge.ts',
+    input: 'emby/index.ts',
     plugins: [
       quickjsCompat(), // must be first — blocks forbidden imports before resolution
       nodeResolve({ preferBuiltins: false }),

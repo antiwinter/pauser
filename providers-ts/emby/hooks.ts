@@ -2,8 +2,10 @@
  * hooks.ts — Emby playback progress reporting hooks.
  * Mirrors EmbyPlaybackHooks.kt.
  */
-import { EmbyApi } from './api.js';
+import { EmbyApi, setGlobalAuth } from './api.js';
 import type { DeviceProfile } from './dto.js';
+
+export { setGlobalAuth as setDeviceAuth };
 
 export interface EmbyHooksState {
   itemId: string;
