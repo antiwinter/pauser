@@ -35,7 +35,7 @@ kotlin {
 }
 
 dependencies {
-    api(project(":provider-api"))
+    api(project(":contracts"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

@@ -51,7 +51,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":provider-api"))
+    implementation(project(":contracts"))
     implementation(project(":provider-js"))
 
     implementation(project(":player"))

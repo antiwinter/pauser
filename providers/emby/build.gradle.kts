@@ -8,7 +8,7 @@ kotlin {
 }
 
 dependencies {
-    api(project(":provider-api"))
+    api(project(":contracts"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)

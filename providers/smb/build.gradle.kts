@@ -18,7 +18,7 @@ android {
 }
 
 dependencies {
-    api(project(":provider-api"))
+    api(project(":contracts"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.media3.datasource)
