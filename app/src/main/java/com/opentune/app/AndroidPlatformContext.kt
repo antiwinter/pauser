@@ -3,11 +3,11 @@ package com.opentune.app
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
-import com.opentune.provider.PlatformContext
+import com.opentune.provider.PlatformInfo
 import java.io.File
 import java.util.UUID
 
-class AndroidPlatformContext(private val androidContext: Context) : PlatformContext {
+class AndroidPlatformInfo(private val androidContext: Context) : PlatformInfo {
     override val deviceName: String
         get() = Build.MODEL.ifBlank { "Android" }
 

@@ -3,7 +3,7 @@ package com.opentune.smb
 import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.PlatformContext
+import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.ServerFieldSpec
 import com.opentune.provider.ValidationResult
@@ -14,14 +14,8 @@ import java.security.MessageDigest
 
 class SmbProvider : OpenTuneProvider {
 
-    @Volatile private var subtitleCacheDir: File = File("")
-
     override val protocol: String = "smb"
     override val providesCover: Boolean = false
-
-    override fun bootstrap(context: PlatformContext) {
-        subtitleCacheDir = File(context.cacheDir, "opentune_subtitles")
-    }
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(
             id = "host",
@@ -105,7 +99,7 @@ class SmbProvider : OpenTuneProvider {
             password = values["password"] ?: error("Missing password"),
             domain = values["domain"],
         )
-        return SmbProviderInstance(fields = fields, subtitleCacheDir = subtitleCacheDir)
+        return SmbProviderInstance(fields = fields, subtitleCacheDir = java.io.File(PlatformInfoHolder.get().cacheDir, "opentune_subtitles"))
     }
 
     companion object {

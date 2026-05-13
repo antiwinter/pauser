@@ -12,7 +12,7 @@ import com.opentune.emby.dto.TranscodingProfile
 import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.PlatformContext
+import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.ServerFieldSpec
 import com.opentune.provider.ValidationResult
@@ -22,8 +22,6 @@ import java.security.MessageDigest
 import kotlin.math.sqrt
 
 class EmbyProvider : OpenTuneProvider {
-
-    @Volatile private var deviceName: String = "Android TV"
 
     override val protocol: String = "emby-kt"
     override val providesCover: Boolean = true
@@ -91,19 +89,16 @@ class EmbyProvider : OpenTuneProvider {
             accessToken = values["access_token"] ?: error("Missing access_token"),
             serverId = values["server_id"]?.ifEmpty { null },
         )
-        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities)
-    }
-
-    override fun bootstrap(context: PlatformContext) {
-        deviceName = context.deviceName
+        val info = PlatformInfoHolder.get()
         EmbyClientIdentificationStore.install(
             EmbyClientIdentification(
                 clientName = "OpenTune",
-                deviceName = context.deviceName,
-                deviceId = context.deviceId,
-                clientVersion = context.clientVersion,
+                deviceName = info.deviceName,
+                deviceId = info.deviceId,
+                clientVersion = info.clientVersion,
             ),
         )
+        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities)
     }
 
     private fun buildDeviceProfile(caps: CodecCapabilities): DeviceProfile {
@@ -129,7 +124,7 @@ class EmbyProvider : OpenTuneProvider {
 
         val v = videoCodecCsv.ifBlank { "h264" }
         val a = audioCodecCsv.ifBlank { "aac" }
-        val model = deviceName
+        val model = PlatformInfoHolder.get().deviceName
 
         return DeviceProfile(
             name = "OpenTune Android TV",

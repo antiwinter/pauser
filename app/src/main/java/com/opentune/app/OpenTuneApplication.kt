@@ -6,6 +6,7 @@ import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
 import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.js.HostApis
 import com.opentune.provider.js.JsProvider
 import com.opentune.storage.OpenTuneDatabase
@@ -40,24 +41,19 @@ class OpenTuneApplication : Application() {
             appConfigStore = DataStoreAppConfigStore(applicationContext),
             thumbnailDiskCache = ThumbnailDiskCache(File(cacheDir, "covers")),
         )
+        val platformInfo = AndroidPlatformInfo(this)
+        PlatformInfoHolder.set(platformInfo)
         providerRegistry = OpenTuneProviderRegistry.discover()
         registerJsProviders(providerRegistry)
         instanceRegistry = ProviderInstanceRegistry(
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,
         )
-        val platformContext = AndroidPlatformContext(this)
-        providerRegistry.allProviders().forEach { it.bootstrap(platformContext) }
         providerRegistry.setCapabilities(buildCodecCapabilities())
     }
 
     private fun registerJsProviders(registry: OpenTuneProviderRegistry) {
-        val platformContext = AndroidPlatformContext(this)
-        val hostApis = HostApis(
-            deviceName    = platformContext.deviceName,
-            deviceId      = platformContext.deviceId,
-            clientVersion = platformContext.clientVersion,
-        )
+        val hostApis = HostApis()
         assets.list("")
             ?.filter { it.endsWith("-provider.js") }
             ?.forEach { bundleFile ->

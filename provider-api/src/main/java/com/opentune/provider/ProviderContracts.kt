@@ -85,8 +85,6 @@ interface OpenTuneProvider {
      */
     fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance
 
-    /** One-time bootstrap (e.g. install HTTP client identification). */
-    fun bootstrap(context: PlatformContext) {}
 }
 
 // --- Provider instance ---

@@ -40,17 +40,15 @@ let state: EmbyInstanceState | null = null;
   async init(args: {
     credentials: Record<string, string>;
     capabilities: CodecCapabilities;
-    deviceName: string;
-    deviceId: string;
-    clientVersion: string;
   }): Promise<void> {
+    const info = await host.platform.getPlatformInfo();
     setDeviceAuth({
       clientName: 'OpenTune',
-      deviceName: args.deviceName,
-      deviceId: args.deviceId,
-      clientVersion: args.clientVersion,
+      deviceName: info.deviceName,
+      deviceId: info.deviceId,
+      clientVersion: info.clientVersion,
     });
-    state = makeInstanceState(args.credentials, args.capabilities, args.deviceName);
+    state = makeInstanceState(args.credentials, args.capabilities, info.deviceName);
   },
 
   // ── Instance methods ──────────────────────────────────────────────────

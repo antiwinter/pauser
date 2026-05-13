@@ -20,11 +20,7 @@ import java.security.MessageDigest
  *
  * Each method returns a JSON string (or null) that will be used to resolve the JS Promise.
  */
-class HostApis(
-    val deviceName: String,
-    val deviceId: String,
-    val clientVersion: String,
-) {
+class HostApis {
     private val json = Json { ignoreUnknownKeys = true }
 
     // ── http ───────────────────────────────────────────────────────────────
@@ -89,22 +85,19 @@ class HostApis(
         }
     }
 
-    // ── config ─────────────────────────────────────────────────────────────
+    // ── platform ─────────────────────────────────────────────────────────────
 
-    fun handleConfig(name: String, argsJson: String): String? {
-        val args = json.parseToJsonElement(argsJson).jsonObject
+    fun handlePlatform(name: String, @Suppress("UNUSED_PARAMETER") argsJson: String): String? {
         return when (name) {
-            "get" -> {
-                val key = args["key"]?.jsonPrimitive?.content ?: ""
-                val value = when (key) {
-                    "deviceName"    -> deviceName
-                    "deviceId"      -> deviceId
-                    "clientVersion" -> clientVersion
-                    else            -> throw IllegalArgumentException("Unknown config key: $key")
-                }
-                JsonPrimitive(value).toString()
+            "getPlatformInfo" -> {
+                val info = com.opentune.provider.PlatformInfoHolder.get()
+                buildJsonObject {
+                    put("deviceName", info.deviceName)
+                    put("deviceId", info.deviceId)
+                    put("clientVersion", info.clientVersion)
+                }.toString()
             }
-            else -> throw IllegalArgumentException("Unknown config method: $name")
+            else -> throw IllegalArgumentException("Unknown platform method: $name")
         }
     }
 }

@@ -15,6 +15,7 @@
 - [x] research thread safe
 - [ ] common.js
 - [ ] tester on host
+- [ ] file arch
 - [x] quickjs exclude std & os
 
 ## Player

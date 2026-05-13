@@ -28,9 +28,15 @@ export interface HostAPI {
   crypto: {
     sha256(args: { input: string }): Promise<string>;
   };
-  config: {
-    get(args: { key: string }): Promise<string>;
+  platform: {
+    getPlatformInfo(args?: null): Promise<PlatformInfo>;
   };
+}
+
+export interface PlatformInfo {
+  deviceName: string;
+  deviceId: string;
+  clientVersion: string;
 }
 
 /** Injected by QuickJsEngine before the bundle runs. Available as a global. */
@@ -162,9 +168,6 @@ export interface OpenTuneProviderBridge {
   init(args: {
     credentials: Record<string, string>;
     capabilities: CodecCapabilities;
-    deviceName: string;
-    deviceId: string;
-    clientVersion: string;
   }): Promise<void>;
 
   loadBrowsePage(args: {

@@ -3,7 +3,6 @@ package com.opentune.provider.js
 import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.PlatformContext
 import com.opentune.provider.ServerFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.serialization.json.Json
@@ -41,16 +40,6 @@ class JsProvider(
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    // ── Bootstrap ──────────────────────────────────────────────────────────
-
-    /**
-     * Called once per app start. Creates a shared QuickJS context for
-     * validation/bootstrap calls. Each [createInstance] creates a new context.
-     */
-    override fun bootstrap(context: PlatformContext) {
-        /* No-op: bootstrap logic is handled in the JS bundle's `bootstrap` call
-           from JsProviderInstance. PlatformContext is stored in hostApis. */
-    }
 
     // ── Field spec ─────────────────────────────────────────────────────────
 
@@ -177,9 +166,9 @@ class JsProvider(
     });
   }
   globalThis.host = {
-    http:   ns('http'),
-    crypto: ns('crypto'),
-    config: ns('config'),
+    http:     ns('http'),
+    crypto:   ns('crypto'),
+    platform: ns('platform'),
   };
 })();
 """

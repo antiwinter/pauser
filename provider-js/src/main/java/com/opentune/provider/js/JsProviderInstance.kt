@@ -67,9 +67,6 @@ class JsProviderInstance(
                 ))
                 put("maxVideoPixels", capabilities.maxVideoPixels)
             })
-            put("deviceName", hostApis.deviceName)
-            put("deviceId", hostApis.deviceId)
-            put("clientVersion", hostApis.clientVersion)
         }
         engine.callMethod("init", initArgs.toString())
         initialized = true
