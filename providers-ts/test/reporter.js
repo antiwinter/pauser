@@ -16,9 +16,10 @@ export class SkipError extends NAError {
 }
 
 export class Reporter {
-  constructor({ json = false, color = process.stdout.isTTY && !process.env.NO_COLOR } = {}) {
+  constructor({ json = false, color = process.stdout.isTTY && !process.env.NO_COLOR, filter = null } = {}) {
     this.json = json;
     this.chalk = new Chalk({ level: color ? undefined : 0 });
+    this.filter = filter ? filter.toLowerCase() : null;
     this.categories = [];
     this._current = null;
     this.meta = {};
@@ -53,6 +54,11 @@ export class Reporter {
 
   async step(name, fn) {
     const started = performance.now();
+    const matches = !this.filter || name.toLowerCase().includes(this.filter);
+    if (!matches) {
+      // Still execute so context-building side-effects happen; never record or throw.
+      try { return await fn(); } catch { return undefined; }
+    }
     try {
       const detail = await fn();
       this.record({ name, status: 'pass', durationMs: performance.now() - started, detail });

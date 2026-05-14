@@ -38,11 +38,12 @@ const program = new Command()
   .option('--list', 'list implemented providers')
   .option('--no-color', 'disable colored terminal output')
   .option('--no-ffprobe', 'disable ffprobe media validation checks')
+  .option('--case <substring>', 'run only test steps whose name contains this substring (case-insensitive)')
   .parse();
 
 const options = program.opts();
 const provider = program.args[0];
-const reporter = new Reporter({ json: options.json, color: options.color });
+const reporter = new Reporter({ json: options.json, color: options.color, filter: options.case ?? null });
 
 try {
   if (options.list) {
@@ -155,7 +156,7 @@ async function run(providerName, opts, out) {
     const catalogContext = await runCatalogChecks(out, instanceRunner, { providesCover, ffprobe });
 
     await runDetailChecks(out, instanceRunner, {
-      firstItem: catalogContext.firstItem,
+      firstItem: catalogContext.playableItem ?? catalogContext.firstItem,
       ffprobe,
     });
 

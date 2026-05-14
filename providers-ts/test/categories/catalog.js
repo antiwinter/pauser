@@ -76,10 +76,19 @@ export async function runCatalogChecks(reporter, runner, opts) {
   });
 
   // ── Pagination ─────────────────────────────────────────────────────────────
+  // Root-level listings may be view/library enumerations that don't paginate.
+  // Find the first container in root that has enough children to paginate through.
+
+  const paginationContainer = await findPaginationContainer(runner, rootList);
 
   await reporter.step(`listEntry page size is respected (limit=${PAGINATION_PAGE_SIZE})`, async () => {
+    if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page = parseJsonResult(
-      await runner.callMethod('listEntry', { location: null, startIndex: 0, limit: PAGINATION_PAGE_SIZE }),
+      await runner.callMethod('listEntry', {
+        location: paginationContainer.id,
+        startIndex: 0,
+        limit: PAGINATION_PAGE_SIZE,
+      }),
       'listEntry page 1',
     );
     validateEntryList(page, 'page 1');
@@ -87,16 +96,17 @@ export async function runCatalogChecks(reporter, runner, opts) {
       page.items.length <= PAGINATION_PAGE_SIZE,
       `page 1 returned ${page.items.length} items, expected ≤ ${PAGINATION_PAGE_SIZE}`,
     );
-    return `page 1: ${page.items.length} item(s)`;
+    return `page 1: ${page.items.length} item(s) in "${paginationContainer.title}"`;
   });
 
   await reporter.step('listEntry page 2 is non-empty when totalCount > page size', async () => {
-    if (!rootList) throw new NAError('root list not loaded');
-    if (rootList.totalCount <= PAGINATION_PAGE_SIZE) {
-      throw new NAError(`totalCount=${rootList.totalCount} ≤ ${PAGINATION_PAGE_SIZE} — single page`);
-    }
+    if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page2 = parseJsonResult(
-      await runner.callMethod('listEntry', { location: null, startIndex: PAGINATION_PAGE_SIZE, limit: PAGINATION_PAGE_SIZE }),
+      await runner.callMethod('listEntry', {
+        location: paginationContainer.id,
+        startIndex: PAGINATION_PAGE_SIZE,
+        limit: PAGINATION_PAGE_SIZE,
+      }),
       'listEntry page 2',
     );
     validateEntryList(page2, 'page 2');
@@ -105,16 +115,21 @@ export async function runCatalogChecks(reporter, runner, opts) {
   });
 
   await reporter.step('no duplicate IDs across page 1 and page 2', async () => {
-    if (!rootList) throw new NAError('root list not loaded');
-    if (rootList.totalCount <= PAGINATION_PAGE_SIZE) {
-      throw new NAError(`totalCount=${rootList.totalCount} ≤ ${PAGINATION_PAGE_SIZE} — single page`);
-    }
+    if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page1 = parseJsonResult(
-      await runner.callMethod('listEntry', { location: null, startIndex: 0, limit: PAGINATION_PAGE_SIZE }),
+      await runner.callMethod('listEntry', {
+        location: paginationContainer.id,
+        startIndex: 0,
+        limit: PAGINATION_PAGE_SIZE,
+      }),
       'listEntry dup-check page 1',
     );
     const page2 = parseJsonResult(
-      await runner.callMethod('listEntry', { location: null, startIndex: PAGINATION_PAGE_SIZE, limit: PAGINATION_PAGE_SIZE }),
+      await runner.callMethod('listEntry', {
+        location: paginationContainer.id,
+        startIndex: PAGINATION_PAGE_SIZE,
+        limit: PAGINATION_PAGE_SIZE,
+      }),
       'listEntry dup-check page 2',
     );
     const ids1 = new Set(page1.items.map((i) => i.id));
@@ -126,7 +141,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
   // ── Series / Season rules ──────────────────────────────────────────────────
   // Use search to find a Series rather than relying on root list order.
 
-  const seriesItem = await findSeriesViaSearch(runner);
+  const seriesItem = await findSeriesViaSearch(runner, rootList);
   context.seriesItem = seriesItem;
 
   await reporter.step('Series children are Season or Episode only', async () => {
@@ -153,7 +168,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     }
   }
   if (!seasonItem) {
-    seasonItem = await findSeasonViaSearch(runner);
+    seasonItem = await findSeasonViaSearch(runner, rootList);
   }
   context.seasonItem = seasonItem;
 
@@ -322,22 +337,61 @@ function findByType(items, type) {
   return items.find((item) => item.type === type) ?? null;
 }
 
-async function findSeriesViaSearch(runner) {
-  const result = parseJsonResult(
-    await runner.callMethod('search', { scopeLocation: '', query: '' }),
-    'search(series lookup)',
-  );
-  if (!Array.isArray(result)) return null;
-  return result.find((item) => item.type === 'Series') ?? null;
+/**
+ * Find a container (Folder/Series/Season) that has more than PAGINATION_PAGE_SIZE
+ * children so pagination can be meaningfully tested.
+ */
+async function findPaginationContainer(runner, rootList) {
+  if (!rootList) return null;
+  for (const item of rootList.items) {
+    if (!CONTAINER_TYPES.has(item.type)) continue;
+    try {
+      const probe = parseJsonResult(
+        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: PAGINATION_PAGE_SIZE + 1 }),
+        `listEntry probe(${item.id})`,
+      );
+      if (probe.totalCount > PAGINATION_PAGE_SIZE) return item;
+    } catch {
+      // Non-browsable container — skip
+    }
+  }
+  return null;
 }
 
-async function findSeasonViaSearch(runner) {
-  const result = parseJsonResult(
-    await runner.callMethod('search', { scopeLocation: '', query: '' }),
-    'search(season lookup)',
-  );
-  if (!Array.isArray(result)) return null;
-  return result.find((item) => item.type === 'Season') ?? null;
+/**
+ * Try search first; if the provider returns nothing (e.g. Emby rejects empty queries),
+ * fall back to depth-first browsing through the catalog.
+ */
+async function findSeriesViaSearch(runner, rootList) {
+  try {
+    const result = parseJsonResult(
+      await runner.callMethod('search', { scopeLocation: '', query: '' }),
+      'search(series lookup)',
+    );
+    if (Array.isArray(result) && result.length > 0) {
+      const found = result.find((item) => item.type === 'Series');
+      if (found) return found;
+    }
+  } catch {
+    // search failed — fall through to BFS
+  }
+  return findByTypeBFS(runner, rootList, 'Series');
+}
+
+async function findSeasonViaSearch(runner, rootList) {
+  try {
+    const result = parseJsonResult(
+      await runner.callMethod('search', { scopeLocation: '', query: '' }),
+      'search(season lookup)',
+    );
+    if (Array.isArray(result) && result.length > 0) {
+      const found = result.find((item) => item.type === 'Season');
+      if (found) return found;
+    }
+  } catch {
+    // search failed — fall through to BFS
+  }
+  return findByTypeBFS(runner, rootList, 'Season');
 }
 
 async function fetchAllChildren(runner, parentId) {
@@ -349,14 +403,53 @@ async function fetchAllChildren(runner, parentId) {
   return list.items;
 }
 
-async function findPlayableItem(runner, rootList) {
+/**
+ * Depth-first search: dive into the first container immediately rather than
+ * exhausting all siblings at the same level (which is what BFS would do).
+ * This reaches Episodes/Series/Seasons much faster in deep catalog hierarchies.
+ */
+async function findByTypeBFS(runner, rootList, type) {
   if (!rootList) return null;
-  const queue = [...rootList.items];
+  // Use a stack (DFS) so we go deep into the first branch first.
+  const stack = [...rootList.items].reverse();
   const seen = new Set();
   let scanned = 0;
 
-  while (queue.length > 0 && scanned < 60) {
-    const item = queue.shift();
+  while (stack.length > 0 && scanned < 200) {
+    const item = stack.pop();
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    scanned += 1;
+
+    if (item.type === type) return item;
+    if (!CONTAINER_TYPES.has(item.type)) continue;
+
+    try {
+      const childList = parseJsonResult(
+        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: 50 }),
+        `listEntry(${item.id})`,
+      );
+      // Push in reverse so the first child is on top of the stack (DFS order)
+      for (let i = childList.items.length - 1; i >= 0; i--) {
+        stack.push(childList.items[i]);
+      }
+    } catch {
+      // Non-browsable container — skip
+    }
+  }
+
+  return null;
+}
+
+async function findPlayableItem(runner, rootList) {
+  if (!rootList) return null;
+  // Use DFS stack so we reach playable items quickly in deep hierarchies.
+  const stack = [...rootList.items].reverse();
+  const seen = new Set();
+  let scanned = 0;
+
+  while (stack.length > 0 && scanned < 200) {
+    const item = stack.pop();
     if (!item || seen.has(item.id)) continue;
     seen.add(item.id);
     scanned += 1;
@@ -366,10 +459,12 @@ async function findPlayableItem(runner, rootList) {
 
     try {
       const childList = parseJsonResult(
-        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: 20 }),
+        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: 50 }),
         `listEntry(${item.id})`,
       );
-      queue.push(...childList.items);
+      for (let i = childList.items.length - 1; i >= 0; i--) {
+        stack.push(childList.items[i]);
+      }
     } catch {
       // Non-browsable container — skip
     }

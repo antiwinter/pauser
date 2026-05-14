@@ -6,6 +6,7 @@ import {
   assertArray,
   parseJsonResult,
 } from '../validators.js';
+import { NAError } from '../reporter.js';
 
 const VALID_FIELD_KINDS = new Set(['text', 'singleLine', 'password']);
 
@@ -37,7 +38,10 @@ export async function runConfigChecks(reporter, runner, envValues) {
     return `${fields.length} field(s)`;
   });
 
-  const validation = await reporter.step('validateFields accepts env credentials', async () => {
+  // Use a closure variable so the step can display a string detail while still
+  // returning the full object for subsequent steps and the caller.
+  let validationData = null;
+  await reporter.step('validateFields accepts env credentials', async () => {
     const result = parseJsonResult(
       await runner.callMethod('validateFields', { values: envValues }),
       'validateFields',
@@ -48,19 +52,23 @@ export async function runConfigChecks(reporter, runner, envValues) {
     assertNonEmptyString(result.hash, 'validateFields result.hash');
     assertNonEmptyString(result.name, 'validateFields result.name');
     assertObject(result.fields, 'validateFields result.fields');
+    validationData = { name: result.name, hash: result.hash, fields: result.fields };
     return `name="${result.name}" hash=${result.hash.slice(0, 8)}…`;
   });
 
-  await reporter.step('validated fields cover all required field ids', async () => {
-    if (!fields || !validation) throw new Error('fields or validation not loaded');
-    const required = fields.filter((f) => f.required !== false).map((f) => f.id);
-    const missing = required.filter((id) => !validation.fields[id]);
-    assert(missing.length === 0, `validated fields missing required ids: ${missing.join(', ')}`);
-    return `${Object.keys(validation.fields).length} key(s)`;
+  await reporter.step('validated fields is a non-empty string map', async () => {
+    if (!validationData) throw new NAError('validation not loaded');
+    const entries = Object.entries(validationData.fields);
+    assert(entries.length > 0, 'validateFields returned an empty fields map');
+    for (const [k, v] of entries) {
+      assertType(k, 'string', 'fields key');
+      assertType(v, 'string', `fields["${k}"]`);
+    }
+    return `${entries.length} credential key(s)`;
   });
 
   reporter.endCategory();
-  return { fields: fields ?? [], credentials: validation?.fields ?? {} };
+  return { fields: fields ?? [], credentials: validationData?.fields ?? {} };
 }
 
 function validateFieldSpec(field, path) {

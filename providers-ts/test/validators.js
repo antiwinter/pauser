@@ -73,8 +73,8 @@ export function ffprobeAvailable() {
 
 /**
  * Run ffprobe on a URL and return parsed stream info.
- * Returns null (N/A) if ffprobe is not available.
- * Throws if ffprobe exits non-zero or returns no streams.
+ * Throws NAError if ffprobe is not available.
+ * Throws Error if ffprobe exits non-zero or returns no streams.
  *
  * @param {string} url
  * @param {Record<string,string>} headers  passed via -headers "Key: Value\r\n..."
@@ -90,18 +90,31 @@ export async function checkMediaWithFfprobe(url, headers = {}, opts = {}) {
     .map(([k, v]) => `${k}: ${v}\r\n`)
     .join('');
 
+  // For images a tiny probesize is sufficient; for video/audio allow more data.
+  // Both limits prevent ffprobe from hanging on slow or large HTTP responses.
+  const isImageCheck = opts.expectImage && !opts.expectVideo && !opts.expectAudio;
+  const probesize = isImageCheck ? '131072' : '5242880';  // 128 KB for images, 5 MB for media
+  const analyzeDuration = isImageCheck ? '0' : '1000000'; // 0 µs for images, 1 s for media
+
   const args = [
     '-v', 'error',
+    '-probesize', probesize,
+    '-analyzeduration', analyzeDuration,
     '-show_streams',
     '-print_format', 'json',
     ...(headerArg ? ['-headers', headerArg] : []),
     url,
   ];
 
-  const result = spawnSync(binary, args, { encoding: 'utf8', stdio: 'pipe', timeout: 30_000 });
+  const result = spawnSync(binary, args, { encoding: 'utf8', stdio: 'pipe', timeout: 20_000 });
 
   if (result.status !== 0) {
-    const errMsg = (result.stderr || result.stdout || '').trim().split('\n')[0] ?? 'unknown error';
+    // Timeout: result.status is null and result.signal is set
+    if (result.signal || result.status == null) {
+      throw new Error(`ffprobe timed out probing ${url}`);
+    }
+    const stderr = (result.stderr ?? '').trim();
+    const errMsg = stderr.split('\n').find((l) => l.trim().length > 0) ?? 'unknown error';
     throw new Error(`ffprobe failed for ${url}: ${errMsg}`);
   }
 
