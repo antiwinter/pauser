@@ -9,7 +9,7 @@
     "test": "node test/cli.js"
   },
   "devDependencies": {
-    "@jitl/quickjs-ng-wasmfile-release-asyncify": "^0.32.0",
+    "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^1.0.0",

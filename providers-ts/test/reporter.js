@@ -1,6 +1,14 @@
 import { Chalk } from 'chalk';
 
-export class SkipError extends Error {
+export class NAError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NAError';
+  }
+}
+
+/** @deprecated Use NAError instead */
+export class SkipError extends NAError {
   constructor(message) {
     super(message);
     this.name = 'SkipError';
@@ -11,7 +19,8 @@ export class Reporter {
   constructor({ json = false, color = process.stdout.isTTY && !process.env.NO_COLOR } = {}) {
     this.json = json;
     this.chalk = new Chalk({ level: color ? undefined : 0 });
-    this.results = [];
+    this.categories = [];
+    this._current = null;
     this.meta = {};
   }
 
@@ -27,6 +36,21 @@ export class Reporter {
     if (!this.json) console.log(this.chalk.cyan(message));
   }
 
+  beginCategory(name, apis = []) {
+    const cat = { name, apis, results: [] };
+    this.categories.push(cat);
+    this._current = cat;
+    if (!this.json) {
+      console.log();
+      const apisLabel = apis.length > 0 ? this.chalk.dim(` [${apis.join(', ')}]`) : '';
+      console.log(this.chalk.bold.cyan(`▸ ${name}`) + apisLabel);
+    }
+  }
+
+  endCategory() {
+    this._current = null;
+  }
+
   async step(name, fn) {
     const started = performance.now();
     try {
@@ -34,7 +58,7 @@ export class Reporter {
       this.record({ name, status: 'pass', durationMs: performance.now() - started, detail });
       return detail;
     } catch (error) {
-      const status = error instanceof SkipError ? 'skip' : 'fail';
+      const status = error instanceof NAError ? 'na' : 'fail';
       this.record({ name, status, durationMs: performance.now() - started, error });
       if (status === 'fail') throw error;
       return undefined;
@@ -42,56 +66,95 @@ export class Reporter {
   }
 
   record(result) {
-    this.results.push({
+    const entry = {
       name: result.name,
       status: result.status,
       durationMs: Math.round(result.durationMs),
       detail: result.detail,
       error: result.error ? formatError(result.error) : undefined,
-    });
+    };
+
+    if (this._current) {
+      this._current.results.push(entry);
+    } else {
+      // Uncategorized — put in a synthetic first category
+      if (this.categories.length === 0 || this.categories[0].name !== '') {
+        this.categories.unshift({ name: '', apis: [], results: [] });
+      }
+      this.categories[0].results.push(entry);
+    }
 
     if (this.json) return;
 
-    const statusText = result.status === 'pass'
-      ? this.chalk.green('PASS')
-      : result.status === 'skip'
-        ? this.chalk.yellow('SKIP')
-        : this.chalk.red('FAIL');
-    const duration = this.chalk.dim(`${Math.round(result.durationMs)}ms`);
-    console.log(`${statusText} ${result.name} ${duration}`);
+    const c = this.chalk;
+    const statusText =
+      result.status === 'pass' ? c.green('PASS') :
+      result.status === 'na'   ? c.yellow('N/A ') :
+                                  c.red('FAIL');
+    const duration = c.dim(`${Math.round(result.durationMs)}ms`);
+    console.log(`  ${statusText}  ${result.name} ${duration}`);
     if (typeof result.detail === 'string' || typeof result.detail === 'number') {
-      console.log(`     ${this.chalk.dim(String(result.detail))}`);
+      console.log(`        ${c.dim(String(result.detail))}`);
     }
     if (result.error) {
-      const colorize = result.status === 'skip' ? this.chalk.yellow : this.chalk.red;
-      console.log(`     ${colorize(formatError(result.error))}`);
+      const colorize = result.status === 'na' ? c.yellow : c.red;
+      console.log(`        ${colorize(formatError(result.error))}`);
     }
   }
 
   finish() {
     const summary = this.summary();
+
     if (this.json) {
-      console.log(JSON.stringify({ ...summary, meta: this.meta, results: this.results }, null, 2));
+      console.log(JSON.stringify({ ...summary, meta: this.meta, categories: this.categories }, null, 2));
       return summary;
     }
 
-    this.line();
+    const c = this.chalk;
+    console.log();
+    c.bold.cyan('Summary');
     this.heading('Summary');
-    this.line(
-      `${this.chalk.green(`${summary.pass} passed`)}, ` +
-      `${this.chalk.yellow(`${summary.skip} skipped`)}, ` +
-      `${summary.fail > 0 ? this.chalk.red(`${summary.fail} failed`) : this.chalk.dim(`${summary.fail} failed`)}`,
-    );
+
+    // Per-category table
+    const rows = this.categories.filter((cat) => cat.name !== '' || cat.results.length > 0);
+    if (rows.length > 1) {
+      const nameWidth = Math.max(8, ...rows.map((r) => r.name.length));
+      const header = `  ${'Category'.padEnd(nameWidth)}  PASS   N/A  FAIL`;
+      console.log(c.dim(header));
+      console.log(c.dim('  ' + '─'.repeat(header.length - 2)));
+      for (const cat of rows) {
+        const pass = cat.results.filter((r) => r.status === 'pass').length;
+        const na   = cat.results.filter((r) => r.status === 'na').length;
+        const fail = cat.results.filter((r) => r.status === 'fail').length;
+        const name = cat.name.padEnd(nameWidth);
+        const passStr = String(pass).padStart(4);
+        const naStr   = String(na).padStart(5);
+        const failStr = fail > 0 ? c.red(String(fail).padStart(5)) : c.dim(String(fail).padStart(5));
+        console.log(`  ${name}  ${c.green(passStr)} ${naStr} ${failStr}`);
+      }
+      console.log(c.dim('  ' + '─'.repeat(header.length - 2)));
+    }
+
+    const passStr = c.green(`${summary.pass} passed`);
+    const naStr   = c.yellow(`${summary.na} N/A`);
+    const failStr = summary.fail > 0 ? c.red(`${summary.fail} failed`) : c.dim(`${summary.fail} failed`);
+    console.log(`  ${passStr},  ${naStr},  ${failStr}`);
+
     return summary;
   }
 
   summary() {
-    return this.results.reduce((acc, result) => {
-      acc[result.status] += 1;
-      return acc;
-    }, { pass: 0, skip: 0, fail: 0 });
+    const all = this.categories.flatMap((c) => c.results);
+    return all.reduce(
+      (acc, result) => {
+        if (result.status === 'pass') acc.pass += 1;
+        else if (result.status === 'na') acc.na += 1;
+        else acc.fail += 1;
+        return acc;
+      },
+      { pass: 0, na: 0, fail: 0 },
+    );
   }
-
 }
 
 function formatError(error) {

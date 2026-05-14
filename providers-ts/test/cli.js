@@ -13,18 +13,19 @@ import {
   readEnvFile,
   writeEnvFile,
 } from './env.js';
-import { Reporter, SkipError } from './reporter.js';
-import {
-  checkBridge,
-  loadFieldsSpec,
-  runInstanceSmoke,
-  validateProvider,
-} from './contract.js';
+import { Reporter, NAError } from './reporter.js';
+import { ffprobeAvailable } from './validators.js';
+import { runBridgeChecks } from './categories/bridge.js';
+import { runConfigChecks } from './categories/config.js';
+import { runCatalogChecks } from './categories/catalog.js';
+import { runDetailChecks } from './categories/detail.js';
+import { runPlaybackChecks } from './categories/playback.js';
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = dirname(testDir);
 const providersDir = join(rootDir, 'providers');
 const distDir = join(rootDir, 'dist');
+const quickJsRuntimeName = '@jitl/quickjs-ng-wasmfile-release-sync';
 
 const program = new Command()
   .name('provider-test')
@@ -36,6 +37,7 @@ const program = new Command()
   .option('--json', 'print machine-readable JSON output')
   .option('--list', 'list implemented providers')
   .option('--no-color', 'disable colored terminal output')
+  .option('--no-ffprobe', 'disable ffprobe media validation checks')
   .parse();
 
 const options = program.opts();
@@ -80,21 +82,29 @@ async function run(providerName, opts, out) {
     throw new Error(`Provider "${providerName}" not found at ${entryPath}`);
   }
 
+  // Detect ffprobe once — used by catalog, detail and playback checks
+  const ffprobe = opts.ffprobe !== false && ffprobeAvailable() != null;
+
   out.setMeta({
     provider: providerName,
     bundlePath,
     envPath,
-    quickjs: '@jitl/quickjs-ng-wasmfile-release-asyncify',
+    quickjs: quickJsRuntimeName,
+    ffprobe,
   });
 
   out.heading(`Provider: ${providerName}`);
-  out.line(`Bundle: ${bundlePath}`);
-  out.line(`Env: ${envPath}`);
-  out.line('QuickJS: @jitl/quickjs-ng-wasmfile-release-asyncify');
+  out.line(`Bundle:   ${bundlePath}`);
+  out.line(`Env:      ${envPath}`);
+  out.line(`QuickJS:  ${quickJsRuntimeName}`);
+  out.line(`ffprobe:  ${ffprobe ? 'enabled' : 'disabled'}`);
   out.line();
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   await out.step('build provider bundles', async () => {
-    const result = spawnSync('npm', ['run', 'build'], {
+    const command = packageManagerCommand();
+    const result = spawnSync(command.bin, command.args, {
       cwd: rootDir,
       encoding: 'utf8',
       stdio: opts.json ? 'pipe' : 'inherit',
@@ -106,62 +116,81 @@ async function run(providerName, opts, out) {
 
   const bundle = await readFile(bundlePath, 'utf8');
   const hostApis = new HostApis();
-  const providerRunner = new QuickJsProviderRunner({
-    bundle,
-    hostApis,
-    filename: bundlePath,
-  });
 
-  let fields;
-  let envValues;
-  let validation;
+  // ── Phase 1: bridge + config (stateless runner) ────────────────────────────
+
+  const configRunner = new QuickJsProviderRunner({ bundle, hostApis, filename: bundlePath });
+  let credentials;
+  let providesCover = false;
+
   try {
-    await providerRunner.init();
-    await checkBridge(out, providerRunner);
-    fields = await loadFieldsSpec(out, providerRunner);
-    envValues = await loadCredentials(out, fields, envPath, opts);
+    await configRunner.init();
 
+    const bridgeResult = await runBridgeChecks(out, configRunner);
+    providesCover = bridgeResult.providesCover;
+
+    const envValues = await loadCredentials(out, configRunner, envPath, opts);
     if (!envValues) {
       out.finish();
       process.exit(0);
     }
 
-    validation = await validateProvider(out, providerRunner, envValues);
-    await writeEnvFile(envPath, { ...envValues, ...validation.fields });
+    const configResult = await runConfigChecks(out, configRunner, envValues);
+    credentials = configResult.credentials;
+    await writeEnvFile(envPath, { ...envValues, ...credentials });
   } finally {
-    providerRunner.dispose();
+    configRunner.dispose();
   }
 
-  const instanceRunner = new QuickJsProviderRunner({
-    bundle,
-    hostApis,
-    filename: bundlePath,
-  });
+  // ── Phase 2: instance checks (initialized runner) ─────────────────────────
+
+  const instanceRunner = new QuickJsProviderRunner({ bundle, hostApis, filename: bundlePath });
   try {
     await instanceRunner.init();
-    await runInstanceSmoke(out, instanceRunner, validation.fields, opts);
+    await instanceRunner.callMethod('init', {
+      credentials,
+      capabilities: defaultCapabilities(),
+    });
+
+    const catalogContext = await runCatalogChecks(out, instanceRunner, { providesCover, ffprobe });
+
+    await runDetailChecks(out, instanceRunner, {
+      firstItem: catalogContext.firstItem,
+      ffprobe,
+    });
+
+    await runPlaybackChecks(out, instanceRunner, {
+      playableItem: catalogContext.playableItem,
+      hooks: opts.hooks ?? false,
+      ffprobe,
+    });
   } finally {
     instanceRunner.dispose();
   }
 }
 
-async function loadCredentials(out, fields, envPath, opts) {
+async function loadCredentials(out, runner, envPath, opts) {
+  // Read fields directly (infrastructure step, not a test assertion) so we
+  // know which fields are required before running the formal Config category.
+  const rawFieldsJson = await runner.callMethod('getFieldsSpec', {});
+  const rawFields = typeof rawFieldsJson === 'string' ? JSON.parse(rawFieldsJson) : rawFieldsJson;
+
   const values = await out.step('load provider credentials', async () => {
-    let values = opts.freshAuth ? {} : await readEnvFile(envPath);
+    let vals = opts.freshAuth ? {} : await readEnvFile(envPath);
     if (opts.freshAuth && opts.prompt) {
-      values = await promptForMissingFields(fields, values);
+      vals = await promptForMissingFields(rawFields, vals);
     }
 
-    const missing = missingRequiredFields(fields, values);
+    const missing = missingRequiredFields(rawFields, vals);
     if (missing.length > 0) {
       if (!opts.prompt) {
-        throw new SkipError(`missing required env values: ${missing.join(', ')}`);
+        throw new NAError(`missing required env values: ${missing.join(', ')}`);
       }
-      values = await promptForMissingFields(fields, values);
+      vals = await promptForMissingFields(rawFields, vals);
     }
 
-    await writeEnvFile(envPath, values);
-    return values;
+    await writeEnvFile(envPath, vals);
+    return vals;
   });
 
   if (values == null) return null;
@@ -182,4 +211,20 @@ function assertProviderName(providerName) {
   if (!/^[a-z0-9_-]+$/i.test(providerName)) {
     throw new Error(`Invalid provider name: ${providerName}`);
   }
+}
+
+function defaultCapabilities() {
+  return {
+    videoMime: ['video/mp4', 'video/webm', 'video/x-matroska'],
+    audioMime: ['audio/mp4', 'audio/mpeg', 'audio/opus'],
+    subtitleFormats: ['srt', 'vtt', 'ass'],
+    maxPixels: 3840 * 2160,
+  };
+}
+
+function packageManagerCommand() {
+  const userAgent = process.env.npm_config_user_agent ?? '';
+  if (userAgent.startsWith('yarn/')) return { bin: 'yarn', args: ['run', 'build'] };
+  if (userAgent.startsWith('pnpm/')) return { bin: 'pnpm', args: ['run', 'build'] };
+  return { bin: 'npm', args: ['run', 'build'] };
 }

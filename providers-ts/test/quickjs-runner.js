@@ -1,6 +1,6 @@
-import quickJsVariant from '@jitl/quickjs-ng-wasmfile-release-asyncify';
+import quickJsVariant from '@jitl/quickjs-ng-wasmfile-release-sync';
 import {
-  newQuickJSAsyncWASMModuleFromVariant,
+  newQuickJSWASMModuleFromVariant,
   shouldInterruptAfterDeadline,
 } from 'quickjs-emscripten-core';
 
@@ -88,22 +88,42 @@ export class QuickJsProviderRunner {
   }
 
   installHostDispatch() {
-    const rawDispatch = this.vm.newAsyncifiedFunction('__hostDispatchRaw', async (nsHandle, nameHandle, argsHandle) => {
+    const dispatch = this.vm.newFunction('__hostDispatchRaw', (nsHandle, nameHandle, argsHandle) => {
       const namespace = this.vm.getString(nsHandle);
       const name = this.vm.getString(nameHandle);
       const argsJson = this.vm.getString(argsHandle);
-      const resultJson = await this.hostApis.dispatch(namespace, name, argsJson);
-      return resultJson == null ? this.vm.null : this.vm.newString(resultJson);
+      const deferred = this.vm.newPromise();
+
+      this.hostApis.dispatch(namespace, name, argsJson).then(
+        (resultJson) => {
+          const valueHandle = resultJson == null ? this.vm.null : this.vm.newString(resultJson);
+          try {
+            deferred.resolve(valueHandle);
+          } finally {
+            if (valueHandle !== this.vm.null) valueHandle.dispose();
+          }
+        },
+        (error) => {
+          const errorHandle = this.vm.newError(error?.message ?? String(error));
+          try {
+            deferred.reject(errorHandle);
+          } finally {
+            errorHandle.dispose();
+          }
+        },
+      );
+
+      return deferred.handle;
     });
-    this.vm.setProp(this.vm.global, '__hostDispatchRaw', rawDispatch);
-    rawDispatch.dispose();
+    this.vm.setProp(this.vm.global, '__hostDispatchRaw', dispatch);
+    dispatch.dispose();
   }
 
   async evalImmediate(code, filename, options = {}) {
     this.vm.runtime.setInterruptHandler(shouldInterruptAfterDeadline(Date.now() + this.timeoutMs));
     let result;
     try {
-      result = await this.vm.evalCodeAsync(code, filename, {
+      result = this.vm.evalCode(code, filename, {
         type: 'global',
         strict: false,
         ...options,
@@ -123,7 +143,7 @@ export class QuickJsProviderRunner {
     this.vm.runtime.setInterruptHandler(shouldInterruptAfterDeadline(Date.now() + this.timeoutMs));
     let result;
     try {
-      result = await this.vm.evalCodeAsync(code, filename, { type: 'global' });
+      result = this.vm.evalCode(code, filename, { type: 'global' });
     } finally {
       this.vm.runtime.removeInterruptHandler();
     }
@@ -172,6 +192,6 @@ export class QuickJsProviderRunner {
 }
 
 function getQuickJsModule() {
-  quickJsModulePromise ??= newQuickJSAsyncWASMModuleFromVariant(quickJsVariant);
+  quickJsModulePromise ??= newQuickJSWASMModuleFromVariant(quickJsVariant);
   return quickJsModulePromise;
 }
