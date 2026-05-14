@@ -1,7 +1,6 @@
 package com.opentune.app.ui.catalog
 
 import android.media.MediaMetadataRetriever
-import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +36,12 @@ data class CoverExtractor(
  * is true the returned [CoverExtractor] holds nulls — no work is done.
  *
  * When false, each batch supplied via [CoverExtractor.onItemsLoaded] is queued
- * for background stream extraction (bounded to 4 concurrent jobs). Results are
- * persisted to [com.opentune.storage.thumb.ThumbnailDiskCache] and
+ * for background extraction (bounded to 4 concurrent jobs). Each item calls
+ * [OpenTuneProviderInstance.getPlaybackSpec] to resolve a media URL (same contract
+ * as the player), passes [PlaybackSpec.url] to [MediaMetadataRetriever.setDataSource],
+ * then calls [PlaybackSpec.hooks.onDispose] to release any resources the provider
+ * allocated (e.g. SMB stream tokens). Results are persisted to
+ * [com.opentune.storage.thumb.ThumbnailDiskCache] and
  * [com.opentune.storage.UserMediaStateStore], and exposed reactively via
  * [EntryInfo.cover] on the list.
  */
@@ -90,19 +93,28 @@ fun rememberCoverExtractor(
                         return@withPermit
                     }
 
-                    // 3. Extract from stream
+                    // 3. Resolve the media URL via getPlaybackSpec — same path the player uses.
+                    //    MMR reads the embedded picture from spec.url + spec.headers.
+                    //    spec.hooks.onDispose() releases any provider resources (e.g. SMB tokens).
+                    val spec = try {
+                        instance.getPlaybackSpec(item.id, 0)
+                    } catch (e: Exception) {
+                        Log.w(LOG_TAG, "getPlaybackSpec failed for cover extraction: ${item.id}", e)
+                        app.storageBindings.mediaStateStore.upsertCoverCache(
+                            protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                        )
+                        return@withPermit
+                    }
+
                     try {
-                        val bytes = instance.withStream(item.id) { stream ->
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                val dataSource = ItemStreamMediaDataSource(stream)
-                                MediaMetadataRetriever().use { r ->
-                                    r.setDataSource(dataSource)
-                                    r.embeddedPicture
-                                }
-                            } else null
+                        val bytes = MediaMetadataRetriever().use { mmr ->
+                            mmr.setDataSource(spec.url, spec.headers)
+                            mmr.embeddedPicture
                         }
                         if (bytes != null) {
-                            val path = app.storageBindings.thumbnailDiskCache.put(sourceId, item.id, bytes)
+                            val path = app.storageBindings.thumbnailDiskCache.put(
+                                sourceId, item.id, bytes,
+                            )
                             app.storageBindings.mediaStateStore.upsertCoverCache(
                                 protocol, sourceId, item.id, path,
                             )
@@ -117,6 +129,8 @@ fun rememberCoverExtractor(
                         app.storageBindings.mediaStateStore.upsertCoverCache(
                             protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
                         )
+                    } finally {
+                        spec.hooks.onDispose()
                     }
                 }
             }

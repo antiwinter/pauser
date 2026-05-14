@@ -1,11 +1,6 @@
 package com.opentune.smb
 
-import android.net.Uri
 import android.util.Log
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
@@ -15,28 +10,19 @@ import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
-import com.opentune.provider.ItemStream
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
+import com.opentune.provider.ProviderStream
+import com.opentune.provider.StreamRegistrarHolder
 import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.security.MessageDigest
 import java.util.EnumSet
 
-private const val SMB_PLAYER_LOG = "OpenTunePlayer"
+private const val SMB_LOG = "OpenTunePlayer"
 
-private fun sha256hex(input: String): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    return digest.digest(input.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
-}
-
-@UnstableApi
 class SmbProviderInstance(
     private val fields: SmbServerFieldsJson,
-    private val subtitleCacheDir: File,
 ) : OpenTuneProviderInstance {
 
     private fun credentials() = SmbCredentials(
@@ -98,65 +84,77 @@ class SmbProviderInstance(
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         return withContext(Dispatchers.IO) {
-            val session = SmbSession.open(credentials())
-            val share = session.share
             val pathWin = itemRef.replace('/', '\\')
-            val factory = DataSource.Factory {
-                Log.d(SMB_PLAYER_LOG, "[smb] createDataSource pathWin=$pathWin")
-                SmbDataSource(share, pathWin)
-            }
-            val progressiveFactory = ProgressiveMediaSource.Factory(factory)
-            val mediaItem = MediaItem.fromUri(Uri.parse("https://local.invalid/video"))
+            val registrar = StreamRegistrarHolder.get()
+            val videoUrl = registrar.registerStream(this@SmbProviderInstance, pathWin)
+            Log.d(SMB_LOG, "[smb] registered video stream url=$videoUrl")
 
-            val rawSubtitles = findSidecarSubtitles(share, itemRef)
-            val subtitleTracks = buildList {
-                for (track in rawSubtitles) {
-                    val smbPath = track.externalRef ?: continue
-                    val cached = downloadSubtitleToCache(smbPath) ?: continue
-                    add(track.copy(externalRef = cached))
+            // Scan for sidecar subtitles using a short-lived session.
+            val subtitleTracks = runCatching {
+                val session = SmbSession.open(credentials())
+                try {
+                    val rawSubtitles = findSidecarSubtitles(session.share, itemRef)
+                    rawSubtitles.mapNotNull { track ->
+                        val smbPath = track.externalRef?.replace('/', '\\') ?: return@mapNotNull null
+                        val url = registrar.registerStream(this@SmbProviderInstance, smbPath)
+                        Log.d(SMB_LOG, "[smb] registered subtitle stream url=$url")
+                        track.copy(externalRef = url)
+                    }
+                } finally {
+                    session.close()
                 }
+            }.getOrElse { e ->
+                Log.w(SMB_LOG, "[smb] subtitle scan failed", e)
+                emptyList()
             }
+
+            val allTokenUrls = listOf(videoUrl) + subtitleTracks.mapNotNull { it.externalRef }
 
             PlaybackSpec(
-                url = null,
+                url = videoUrl,
                 headers = emptyMap(),
                 mimeType = null,
-                customMediaSourceFactory = { progressiveFactory.createMediaSource(mediaItem) },
                 title = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
-                hooks = SmbPlaybackHooks(session),
+                hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
             )
         }
     }
 
-    override suspend fun <T> withStream(itemRef: String, block: suspend (ItemStream) -> T): T? {
+    /**
+     * Opens a random-access stream for [itemRef].
+     * Called by [OpenTuneServer] for each incoming HTTP range request — each call opens
+     * its own SMB session and file handle.
+     */
+    override suspend fun openStream(itemRef: String): ProviderStream {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
-            val share = session.share
-            val pathWin = itemRef.replace('/', '\\')
-            val smbFile = share.openFile(
-                pathWin,
+            val smbFile = session.share.openFile(
+                itemRef,
                 EnumSet.of(AccessMask.GENERIC_READ), null,
                 EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
                 SMB2CreateDisposition.FILE_OPEN, null,
             )
-            try {
-                block(SmbItemStream(smbFile))
-            } finally {
-                runCatching { smbFile.close() }
-                session.close()
-            }
+            SmbProviderStream(smbFile, session)
         }
     }
 
-    private class SmbItemStream(private val file: SmbFile) : ItemStream {
+    private class SmbProviderStream(
+        private val file: SmbFile,
+        private val session: SmbSession,
+    ) : ProviderStream {
         override suspend fun getSize(): Long =
             file.getFileInformation(FileStandardInformation::class.java).endOfFile
 
         override suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
             val r = file.read(buffer, position, offset, size)
             return if (r == -1) 0 else r
+        }
+
+        override fun close() {
+            runCatching { file.close() }
+            session.close()
         }
     }
 
@@ -174,40 +172,23 @@ class SmbProviderInstance(
         )
     }
 
-    private fun findSidecarSubtitles(share: com.hierynomus.smbj.share.DiskShare, itemRef: String): List<SubtitleTrack> {
+    private fun findSidecarSubtitles(
+        share: com.hierynomus.smbj.share.DiskShare,
+        itemRef: String,
+    ): List<SubtitleTrack> {
         val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
         val parentFolder = itemRef.substringBeforeLast('/', "")
-        return runCatching {
-            share.listDirectory(parentFolder)
-                .filter { !it.isDirectory && subtitleExts.any { ext -> it.name.lowercase().endsWith(ext) } }
-                .map { entry ->
-                    SubtitleTrack(
-                        trackId = entry.path,
-                        label = entry.name,
-                        language = null,
-                        isDefault = false,
-                        isForced = false,
-                        externalRef = entry.path,
-                    )
-                }
-        }.getOrElse { emptyList() }
-    }
-
-    private suspend fun downloadSubtitleToCache(subtitleRef: String): String? {
-        return withStream(subtitleRef) { stream ->
-            val size = stream.getSize()
-            if (size > 5 * 1024 * 1024) {
-                Log.w(SMB_PLAYER_LOG, "Subtitle file too large (${size}B), skipping: $subtitleRef")
-                return@withStream null
+        return share.listDirectory(parentFolder)
+            .filter { !it.isDirectory && subtitleExts.any { ext -> it.name.lowercase().endsWith(ext) } }
+            .map { entry ->
+                SubtitleTrack(
+                    trackId = entry.path,
+                    label = entry.name,
+                    language = null,
+                    isDefault = false,
+                    isForced = false,
+                    externalRef = entry.path,
+                )
             }
-            val ext = subtitleRef.substringAfterLast('.', "srt").lowercase()
-            val hash = sha256hex(subtitleRef).take(16)
-            val cacheFile = File(subtitleCacheDir, "$hash.$ext")
-            cacheFile.parentFile?.mkdirs()
-            val bytes = ByteArray(size.toInt())
-            stream.readAt(0L, bytes, 0, bytes.size)
-            cacheFile.writeBytes(bytes)
-            cacheFile.absolutePath
-        }
     }
 }

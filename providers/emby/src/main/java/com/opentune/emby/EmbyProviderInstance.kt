@@ -255,7 +255,6 @@ class EmbyProviderInstance(
                 url = url,
                 headers = headers,
                 mimeType = mimeType,
-                customMediaSourceFactory = null,
                 title = title,
                 durationMs = null,
                 hooks = hooks,

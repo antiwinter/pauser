@@ -244,10 +244,9 @@ class JsProviderInstance(
             ?: ""
 
         return PlaybackSpec(
-            url = url,
+            url = requireNotNull(url) { "JS provider returned null URL in getPlaybackSpec" },
             headers = headers,
             mimeType = mimeType,
-            customMediaSourceFactory = null,
             title = title,
             durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
             hooks = hooks,

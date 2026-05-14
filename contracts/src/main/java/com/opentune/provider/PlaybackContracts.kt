@@ -17,17 +17,11 @@ interface OpenTunePlaybackHooks {
 }
 
 data class PlaybackSpec(
-    /** HTTP(S) stream URL. Null when [customMediaSourceFactory] is used (e.g. SMB). */
-    val url: String? = null,
+    /** HTTP(S) stream URL. Always non-null; SMB uses a loopback URL from [OpenTuneServer]. */
+    val url: String,
     /** Default request headers for [url] and for external subtitle HTTP loads. */
     val headers: Map<String, String> = emptyMap(),
     val mimeType: String? = null,
-    /**
-     * For Android-only providers that cannot be expressed as a URL (e.g. SMB via SmbDataSource).
-     * Typed as `() -> Any` so contracts have zero Media3 imports; the player module casts to
-     * `() -> MediaSource`.
-     */
-    val customMediaSourceFactory: (() -> Any)? = null,
     val title: String,
     val durationMs: Long?,
     val hooks: OpenTunePlaybackHooks,

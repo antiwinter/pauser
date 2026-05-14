@@ -1,9 +1,15 @@
 package com.opentune.smb
 
 import com.opentune.provider.OpenTunePlaybackHooks
+import com.opentune.provider.StreamRegistrarHolder
 
-/** SMB local files — no server session reporting. Closes the TCP session on [onDispose]. */
-class SmbPlaybackHooks(private val session: SmbSession) : OpenTunePlaybackHooks {
+/**
+ * Revokes all stream tokens registered for this playback session when ExoPlayer is released.
+ * Token revocation removes the entries from [OpenTuneServer]'s registry so subsequent requests
+ * return 404 and outstanding SMB sessions tied to those streams are closed by the server.
+ */
+class SmbPlaybackHooks(private val tokenUrls: List<String>) : OpenTunePlaybackHooks {
+
     override fun progressIntervalMs(): Long = 0L
 
     override suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float) = Unit
@@ -13,6 +19,7 @@ class SmbPlaybackHooks(private val session: SmbSession) : OpenTunePlaybackHooks 
     override suspend fun onStop(positionMs: Long) = Unit
 
     override fun onDispose() {
-        session.close()
+        val registrar = StreamRegistrarHolder.get()
+        tokenUrls.forEach { registrar.revokeToken(it) }
     }
 }

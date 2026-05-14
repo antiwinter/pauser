@@ -1,10 +1,10 @@
 # TODOs
 - [x] fix audio in background
 - [x] folder, single media folder, series
-- [ ] eliminate instance concept, rename provider methods
-- [ ] service worker like mechanism to map files/smb to url
-- [ ] customMediaSourceFactory
-- [ ] proxy server
+- [x] eliminate instance concept, rename provider methods
+- [x] service worker like mechanism to map files/smb to url
+- [x] customMediaSourceFactory
+- [ ] proxy provider
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 - [-] collapse imports

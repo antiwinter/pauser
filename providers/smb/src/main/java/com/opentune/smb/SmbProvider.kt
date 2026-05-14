@@ -3,13 +3,11 @@ package com.opentune.smb
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.ServerFieldKind
 import com.opentune.provider.ServerFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.security.MessageDigest
 
 class SmbProvider : OpenTuneProvider {
@@ -99,7 +97,7 @@ class SmbProvider : OpenTuneProvider {
             password = values["password"] ?: error("Missing password"),
             domain = values["domain"],
         )
-        return SmbProviderInstance(fields = fields, subtitleCacheDir = java.io.File(PlatformInfoHolder.get().cacheDir, "opentune_subtitles"))
+        return SmbProviderInstance(fields = fields)
     }
 
     companion object {

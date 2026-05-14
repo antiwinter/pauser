@@ -3,15 +3,19 @@ package com.opentune.provider
 // --- Streaming ---
 
 /**
- * Random-access byte-stream abstraction for local/network files.
- * No Closeable — the implementing [OpenTuneProviderInstance.withStream] owns the lifecycle.
+ * Random-access byte-stream for a single provider resource.
+ * Callers **must** call [close] when done; the stream does not participate in any outer lifecycle.
+ * Used exclusively by [OpenTuneServer] route handlers — never imported by player or UI code.
  */
-interface ItemStream {
+interface ProviderStream {
+    /** Total byte length of the resource. */
+    suspend fun getSize(): Long
     /** Reads [size] bytes from [position] into [buffer] at [offset]. Returns bytes actually read (0 = EOF). */
     suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int
-    /** Total byte length of the stream. */
-    suspend fun getSize(): Long
+    /** Closes the underlying connection / file handle. */
+    fun close()
 }
+
 
 // --- Field specs (moved from ConfigContracts.kt) ---
 enum class ServerFieldKind {
@@ -101,8 +105,10 @@ interface OpenTuneProviderInstance {
     suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
 
     /**
-     * Opens a random-access stream for [itemRef], calls [block] with it, and closes the stream.
-     * Returns null if this provider does not support streaming (default).
+     * Opens a random-access [ProviderStream] for [itemRef].
+     * Returns null if this provider does not support direct byte streaming (default — Emby, JS).
+     * The caller ([OpenTuneServer]) is responsible for calling [ProviderStream.close].
      */
-    suspend fun <T> withStream(itemRef: String, block: suspend (ItemStream) -> T): T? = null
+    suspend fun openStream(itemRef: String): ProviderStream? = null
+
 }

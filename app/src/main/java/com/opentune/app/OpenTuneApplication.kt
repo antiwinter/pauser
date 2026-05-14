@@ -5,8 +5,10 @@ import android.media.MediaCodecList
 import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
+import com.opentune.app.server.OpenTuneServer
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlatformInfoHolder
+import com.opentune.provider.StreamRegistrarHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.RoomMediaStateStore
@@ -27,8 +29,15 @@ class OpenTuneApplication : Application() {
     lateinit var instanceRegistry: ProviderInstanceRegistry
         private set
 
+    lateinit var openTuneServer: OpenTuneServer
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        openTuneServer = OpenTuneServer().also {
+            it.start()
+            StreamRegistrarHolder.set(it)
+        }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
             name = getDatabasePath("opentune.db").absolutePath,

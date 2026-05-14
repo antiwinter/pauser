@@ -1,6 +1,5 @@
 package com.opentune.player
 
-import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -11,13 +10,7 @@ import com.opentune.provider.PlaybackSpec
 import okhttp3.OkHttpClient
 
 @UnstableApi
-internal fun PlaybackSpec.toMediaSource(context: Context): MediaSource {
-    val factory = customMediaSourceFactory
-    if (factory != null) {
-        @Suppress("UNCHECKED_CAST")
-        return (factory as () -> MediaSource)()
-    }
-    val streamUrl = checkNotNull(url) { "PlaybackSpec has neither url nor customMediaSourceFactory" }
+internal fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
     val okHttp = OkHttpClient.Builder()
         .apply {
             if (headers.isNotEmpty()) {
@@ -33,7 +26,7 @@ internal fun PlaybackSpec.toMediaSource(context: Context): MediaSource {
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
     val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     val mediaItem = MediaItem.Builder()
-        .setUri(Uri.parse(streamUrl))
+        .setUri(Uri.parse(url))
         .apply { mimeType?.let { setMimeType(it) } }
         .build()
     return mediaSourceFactory.createMediaSource(mediaItem)
