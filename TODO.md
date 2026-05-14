@@ -2,12 +2,14 @@
 - [x] fix audio in background
 - [x] folder, single media folder, series
 - [ ] eliminate instance concept, rename provider methods
+- [ ] service worker like mechanism to map files/smb to url
+- [ ] customMediaSourceFactory
 - [ ] proxy server
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 - [-] collapse imports
 - [ ] check if same local cache used for smb subtitles as thumb
-- [ ] service worker like mechanism to map files/smb to url
+- [ ] remove opentune naming
 
 
 ## js providers
@@ -15,7 +17,7 @@
 - [x] research thread safe
 - [ ] common.js
 - [ ] tester on host
-- [ ] file arch
+- [ ] ts file arch
 - [x] quickjs exclude std & os
 
 ## Player
