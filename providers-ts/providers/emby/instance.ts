@@ -5,7 +5,7 @@
 import { EmbyApi, BROWSE_FIELDS, DETAIL_FIELDS } from './api.js';
 import { toListItem } from './mapper.js';
 import { imageUrl, resolvePlaybackUrl, playMethod } from './urls.js';
-import { playbackMimeTypeFromContainers } from '../src/playbackMimeType.js';
+import { fmtToMime } from '../../utils/mimes.js';
 import type { DeviceProfile } from './dto.js';
 import type {
   EntryDetail,
@@ -14,7 +14,7 @@ import type {
   PlaybackSpec,
   SubtitleTrack,
   PlatformCapabilities,
-} from '../src/types.js';
+} from '../../utils/types.js';
 
 const CONTAINER_TYPES = new Set([
   'Folder', 'BoxSet', 'MusicAlbum', 'MusicArtist',
@@ -172,7 +172,11 @@ export async function getPlaybackSpec(
 
   const url = resolvePlaybackUrl(credentials.baseUrl, source);
   const method = playMethod(source);
-  const mimeType = playbackMimeTypeFromContainers(source.TranscodingContainer, source.Container);
+  const rawContainer =
+    (source.TranscodingContainer && source.TranscodingContainer.trim()) ||
+    (source.Container && source.Container.trim()) ||
+    '';
+  const mimeType = rawContainer ? fmtToMime(rawContainer) : null;
   const item = await api.getItem(itemRef);
   const title = item.Name ?? itemRef;
   const headers = { 'X-Emby-Token': credentials.accessToken };

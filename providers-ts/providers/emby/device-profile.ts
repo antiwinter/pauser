@@ -2,7 +2,7 @@
  * device-profile.ts — Builds the Emby DeviceProfile from codec capabilities.
  * Mirrors EmbyProvider.buildDeviceProfile() in Kotlin.
  */
-import type { PlatformCapabilities } from '../src/types.js';
+import type { PlatformCapabilities } from '../../utils/types.js';
 import type {
   DeviceProfile,
   DirectPlayProfile,

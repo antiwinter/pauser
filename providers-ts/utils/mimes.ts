@@ -2,18 +2,7 @@
  * Shared container → MIME hints for ExoPlayer (mirrors Kotlin `PlaybackMimeTypes` in contracts).
  */
 
-export function playbackMimeTypeFromContainers(
-  transcodingContainer: string | null | undefined,
-  container: string | null | undefined,
-): string | null {
-  const c = (transcodingContainer && transcodingContainer.trim())
-    || (container && container.trim())
-    || '';
-  if (!c) return null;
-  return playbackMimeTypeFromRawFormat(c);
-}
-
-export function playbackMimeTypeFromRawFormat(raw: string): string | null {
+export function fmtToMime(raw: string): string | null {
   switch (raw.toLowerCase()) {
     case 'm3u8':
     case 'hls':

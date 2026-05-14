@@ -8,7 +8,7 @@ class JsProviderLoader : OpenTuneProviderLoader {
         val assets = AssetManagerHolder.get()
         val hostApis = HostApis()
         assets.list("")
-            ?.filter { it.endsWith("-provider.js") }
+            ?.filter { it.endsWith(".js") }
             ?.forEach { bundleFile ->
                 val bundle = assets.open(bundleFile).use { it.readBytes().toString(Charsets.UTF_8) }
                 register(JsProvider(assetPath = bundleFile, jsBundle = bundle, hostApis = hostApis))

@@ -3,7 +3,7 @@
  * Mirrors EmbyProviderInstance.toListItem() in Kotlin.
  */
 import type { BaseItemDto } from './dto.js';
-import type { EntryInfo, EntryType } from '../src/types.js';
+import type { EntryInfo, EntryType } from '../../utils/types.js';
 import { imageUrl } from './urls.js';
 
 const CONTAINER_TYPES = new Set([

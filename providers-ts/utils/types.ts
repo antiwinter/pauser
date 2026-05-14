@@ -153,7 +153,7 @@ export interface PlatformCapabilities {
 
 // ── Bridge protocol ───────────────────────────────────────────────────────────
 
-/** Exposed on globalThis.opentuneProvider by emby/index.ts */
+/** Exposed on globalThis.opentuneProvider by providers/emby/index.ts */
 export interface OpenTuneProviderBridge {
   providesCover: boolean;
   getFieldsSpec(): Promise<ServerFieldSpec[]>;

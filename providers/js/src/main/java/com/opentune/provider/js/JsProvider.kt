@@ -17,7 +17,7 @@ import kotlinx.serialization.json.put
  * An [OpenTuneProvider] backed by a JavaScript bundle running inside QuickJS.
  *
  * The JS bundle must export `globalThis.opentuneProvider` conforming to the
- * bridge protocol defined in `providers-ts/src/types.ts`.
+ * bridge protocol defined in `providers-ts/utils/types.ts`.
  *
  * @param assetPath  The asset filename of the JS bundle (e.g. "emby.js").
  *                   The [protocol] is derived by stripping the ".js" extension.

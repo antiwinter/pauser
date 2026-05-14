@@ -17,7 +17,7 @@ import type {
   EntryDetail,
   PlaybackSpec,
   PlatformCapabilities,
-} from '../src/types.js';
+} from '../../utils/types.js';
 
 let state: EmbyInstanceState | null = null;
 

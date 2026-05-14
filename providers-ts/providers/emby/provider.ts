@@ -5,7 +5,7 @@
 import { EmbyApi } from './api.js';
 import { normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { ServerFieldSpec, ValidationResult, PlatformCapabilities } from '../src/types.js';
+import type { ServerFieldSpec, ValidationResult, PlatformCapabilities } from '../../utils/types.js';
 import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
 
 export function getFieldsSpec(): ServerFieldSpec[] {
