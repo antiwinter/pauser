@@ -1,6 +1,6 @@
 package com.opentune.smb
 
-import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlatformInfoHolder
@@ -73,25 +73,25 @@ class SmbProvider : OpenTuneProvider {
                     ),
                 )
                 session.close()
-                val fields = SmbServerFieldsJson(
-                    host = host,
-                    shareName = shareName,
-                    username = username,
-                    password = password,
-                    domain = domain,
-                )
                 val hash = sha256("$host$shareName")
+                val fields = buildMap {
+                    put("host", host)
+                    put("share_name", shareName)
+                    put("username", username)
+                    put("password", password)
+                    domain?.let { put("domain", it) }
+                }
                 ValidationResult.Success(
                     hash = hash,
-                    displayName = shareName,
-                    fieldsJson = SmbServerFieldsJson.encode(fields),
+                    name = shareName,
+                    fields = fields,
                 )
             } catch (e: Exception) {
                 ValidationResult.Error(e.message ?: "SMB validation failed")
             }
         }
 
-    override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
+    override fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance {
         val fields = SmbServerFieldsJson(
             host = values["host"] ?: error("Missing host"),
             shareName = values["share_name"] ?: error("Missing share_name"),

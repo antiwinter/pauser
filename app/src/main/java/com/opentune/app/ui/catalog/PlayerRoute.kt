@@ -47,7 +47,7 @@ fun PlayerRoute(
             withContext(Dispatchers.IO) {
                 val inst = app.instanceRegistry.getOrCreate(sourceId)
                     ?: throw IllegalStateException("No provider instance for $sourceId")
-                val resolvedSpec = inst.resolvePlayback(itemRefDecoded, startMs)
+                val resolvedSpec = inst.getPlaybackSpec(itemRefDecoded, startMs)
                 val savedState = app.storageBindings.mediaStateStore.get(protocol, sourceId, itemRefDecoded)
                 val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
                 initialSubtitleTrackId = savedState?.selectedSubtitleTrackId

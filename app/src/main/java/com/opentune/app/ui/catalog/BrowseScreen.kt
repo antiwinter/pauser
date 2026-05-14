@@ -28,9 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.provider.BrowsePageResult
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryList
+import com.opentune.provider.EntryType
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,8 +44,8 @@ private const val OVERSCAN_ROWS = 3
 @Composable
 fun BrowseScreen(
     logTag: String,
-    items: SnapshotStateList<MediaListItem>,
-    loadPage: suspend (startIndex: Int, limit: Int) -> BrowsePageResult,
+    items: SnapshotStateList<EntryInfo>,
+    loadPage: suspend (startIndex: Int, limit: Int) -> EntryList,
     subtitle: String,
     titleLang: TitleLang,
     onBack: () -> Unit,
@@ -53,7 +53,7 @@ fun BrowseScreen(
     onOpenSettings: () -> Unit,
     onOpenBrowseLocation: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
-    onItemsLoaded: ((List<MediaListItem>) -> Unit)? = null,
+    onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var totalCount by remember { mutableStateOf(0) }
@@ -151,13 +151,13 @@ fun BrowseScreen(
                     item = item,
                     titleLang = titleLang,
                     onClick = {
-                        when (item.kind) {
-                            MediaEntryKind.Folder,
-                            MediaEntryKind.Season -> onOpenBrowseLocation(item.id)
-                            MediaEntryKind.Series,
-                            MediaEntryKind.Playable,
-                            MediaEntryKind.Episode,
-                            MediaEntryKind.Other -> onOpenDetail(item.id)
+                        when (item.type) {
+                            EntryType.Folder,
+                            EntryType.Season -> onOpenBrowseLocation(item.id)
+                            EntryType.Series,
+                            EntryType.Playable,
+                            EntryType.Episode,
+                            EntryType.Other -> onOpenDetail(item.id)
                         }
                     },
                 )

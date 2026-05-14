@@ -1,7 +1,7 @@
 /**
  * types.ts — contract types shared between all provider implementations.
  *
- * This file mirrors the Kotlin provider-api contracts; both sides must stay in sync.
+ * This file mirrors the Kotlin `contracts` module; both sides must stay in sync.
  * The `host` global is injected by QuickJsEngine before the bundle runs.
  */
 
@@ -59,23 +59,23 @@ export interface ServerFieldSpec {
 }
 
 export type ValidationResult =
-  | { success: true; hash: string; displayName: string; fieldsJson: string }
+  | { success: true; hash: string; name: string; fields: Record<string, string> }
   | { success: false; error: string };
 
-export type MediaEntryKind = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other';
+export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other';
 
-export interface MediaUserData {
+export interface EntryUserData {
   positionMs: number;
   isFavorite: boolean;
   played: boolean;
 }
 
-export interface MediaListItem {
+export interface EntryInfo {
   id: string;
   title: string;
-  kind: MediaEntryKind;
-  coverUrl: string | null;
-  userData: MediaUserData | null;
+  type: EntryType;
+  cover: string | null;
+  userData?: EntryUserData | null;
   originalTitle?: string | null;
   genres?: string[] | null;
   communityRating?: number | null;
@@ -84,8 +84,8 @@ export interface MediaListItem {
   indexNumber?: number | null;
 }
 
-export interface BrowsePageResult {
-  items: MediaListItem[];
+export interface EntryList {
+  items: EntryInfo[];
   totalCount: number;
 }
 
@@ -94,35 +94,29 @@ export interface ExternalUrl {
   url: string;
 }
 
-export interface MediaStreamInfo {
+export interface StreamInfo {
   index: number;
   type: string;
   codec: string | null;
-  displayTitle: string | null;
+  title: string | null;
   language: string | null;
   isDefault: boolean;
   isForced: boolean;
 }
 
-export interface MediaDetailModel {
+export interface EntryDetail {
   title: string;
   overview: string | null;
-  logoUrl: string | null;
-  backdropImages: string[];
-  canPlay: boolean;
-  communityRating: number | null;
+  logo: string | null;
+  backdrop: string[];
+  isMedia: boolean;
+  rating: number | null;
   bitrate: number | null;
   externalUrls: ExternalUrl[];
-  productionYear: number | null;
+  year: number | null;
   providerIds: Record<string, string>;
-  mediaStreams: MediaStreamInfo[];
+  streams: StreamInfo[];
   etag: string | null;
-}
-
-export interface PlaybackUrlSpec {
-  url: string;
-  headers?: Record<string, string>;
-  mimeType?: string | null;
 }
 
 export interface SubtitleTrack {
@@ -135,26 +129,26 @@ export interface SubtitleTrack {
 }
 
 /**
- * Opaque state blob returned by `resolvePlayback` and passed back into
+ * Opaque state blob returned by `getPlaybackSpec` and passed back into
  * `onPlaybackReady`, `onProgressTick`, `onStop`.
- * Providers store all server-side session parameters here.
  */
 export type HooksState = Record<string, unknown>;
 
 export interface PlaybackSpec {
-  urlSpec: PlaybackUrlSpec | null;
-  displayTitle: string;
+  url: string | null;
+  headers: Record<string, string>;
+  mimeType: string | null;
+  title: string;
   durationMs: number | null;
   subtitleTracks: SubtitleTrack[];
-  subtitleHeaders?: Record<string, string>;
   hooksState: HooksState;
 }
 
-export interface CodecCapabilities {
-  videoMimes: string[];
-  audioMimes: string[];
+export interface PlatformCapabilities {
+  videoMime: string[];
+  audioMime: string[];
   subtitleFormats: string[];
-  maxVideoPixels: number;
+  maxPixels: number;
 }
 
 // ── Bridge protocol ───────────────────────────────────────────────────────────
@@ -167,23 +161,23 @@ export interface OpenTuneProviderBridge {
 
   init(args: {
     credentials: Record<string, string>;
-    capabilities: CodecCapabilities;
+    capabilities: PlatformCapabilities;
   }): Promise<void>;
 
-  loadBrowsePage(args: {
+  listEntry(args: {
     location: string | null;
     startIndex: number;
     limit: number;
-  }): Promise<BrowsePageResult>;
+  }): Promise<EntryList>;
 
-  searchItems(args: {
+  search(args: {
     scopeLocation: string;
     query: string;
-  }): Promise<MediaListItem[]>;
+  }): Promise<EntryInfo[]>;
 
-  loadDetail(args: { itemRef: string }): Promise<MediaDetailModel>;
+  getDetail(args: { itemRef: string }): Promise<EntryDetail>;
 
-  resolvePlayback(args: {
+  getPlaybackSpec(args: {
     itemRef: string;
     startMs: number;
   }): Promise<PlaybackSpec>;

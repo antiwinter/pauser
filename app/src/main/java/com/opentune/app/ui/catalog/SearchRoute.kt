@@ -13,7 +13,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.storage.TitleLang
 
@@ -29,7 +29,7 @@ fun SearchRoute(
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
     var instance by remember { mutableStateOf<OpenTuneProviderInstance?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val results = remember { mutableStateListOf<MediaListItem>() }
+    val results = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
@@ -52,7 +52,7 @@ fun SearchRoute(
             SearchScreen(
                 logTag = "OT_Search_$sourceId",
                 results = results,
-                searchFn = { query -> inst.searchItems(scopeDecoded, query) },
+                searchFn = { query -> inst.search(scopeDecoded, query) },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
                 onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, sourceId, raw)) },

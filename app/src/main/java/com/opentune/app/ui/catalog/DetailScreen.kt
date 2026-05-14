@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,23 +28,30 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import com.opentune.provider.MediaArt
-import com.opentune.provider.MediaDetailModel
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryDetail
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
+import java.io.File
 import kotlin.math.ceil
+
+private fun artImageModel(src: String?): Any? = when {
+    src.isNullOrBlank() -> null
+    src.startsWith("http://", ignoreCase = true) ||
+        src.startsWith("https://", ignoreCase = true) -> src
+    else -> File(src)
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailScreen(
-    detail: MediaDetailModel?,
+    detail: EntryDetail?,
     loading: Boolean,
     isFavorite: Boolean,
     resumeMs: Long,
     titleLang: TitleLang,
-    seasons: List<MediaListItem>?,
+    seasons: List<EntryInfo>?,
     selectedSeasonIndex: Int,
-    episodes: List<MediaListItem>,
+    episodes: List<EntryInfo>,
     totalEpisodes: Int,
     episodePage: Int,
     onBack: () -> Unit,
@@ -52,14 +59,14 @@ fun DetailScreen(
     onResume: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSelectSeason: (Int) -> Unit,
-    onSelectEpisode: (MediaListItem) -> Unit,
+    onSelectEpisode: (EntryInfo) -> Unit,
     onSelectPage: (Int) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         // Backdrop as full-screen background
-        if (detail != null && detail.backdropImages.isNotEmpty()) {
+        if (detail != null && detail.backdrop.isNotEmpty()) {
             AsyncImage(
-                model = detail.backdropImages.first(),
+                model = detail.backdrop.first(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -78,9 +85,9 @@ fun DetailScreen(
                             0.0f to Color.Transparent,
                             0.45f to Color.Black.copy(alpha = 0.5f),
                             1.0f to Color.Black.copy(alpha = 0.95f),
-                        )
-                    )
-                )
+                        ),
+                    ),
+                ),
         )
 
         // Back button top-left
@@ -103,41 +110,41 @@ fun DetailScreen(
                 loading && detail == null -> Text("Loading\u2026")
                 detail != null -> {
                     // Logo or title
-                    when (val logo = detail.logo) {
-                        is MediaArt.Http -> AsyncImage(
-                            model = logo.url,
+                    val logoModel = artImageModel(detail.logo)
+                    if (logoModel != null) {
+                        AsyncImage(
+                            model = logoModel,
                             contentDescription = detail.title,
                             modifier = Modifier.height(80.dp),
                             contentScale = ContentScale.Fit,
                         )
-                        else -> {
-                            val displayTitle = if (titleLang == TitleLang.Original)
-                                detail.title else detail.title
-                            Text(
-                                text = displayTitle,
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                            )
-                        }
+                    } else {
+                        val displayTitle = if (titleLang == TitleLang.Original)
+                            detail.title else detail.title
+                        Text(
+                            text = displayTitle,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
                     }
 
                     // Rating + codec badges
-                    val videoCodécDisplayTitle = detail.mediaStreams
-                        .firstOrNull { it.type == "Video" }?.displayTitle
-                    val audioCodecDisplayTitle = detail.mediaStreams
-                        .firstOrNull { it.type == "Audio" }?.displayTitle
+                    val videoCodecTitle = detail.streams
+                        .firstOrNull { it.type == "Video" }?.title
+                    val audioCodecTitle = detail.streams
+                        .firstOrNull { it.type == "Audio" }?.title
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        detail.communityRating?.let { rating ->
+                        detail.rating?.let { rating ->
                             Badge("★ ${"%.1f".format(rating)}")
                         }
-                        videoCodécDisplayTitle?.let { Badge(it) }
-                        audioCodecDisplayTitle?.let { Badge(it) }
+                        videoCodecTitle?.let { Badge(it) }
+                        audioCodecTitle?.let { Badge(it) }
                     }
 
                     // Action buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (detail.canPlay) {
+                        if (detail.isMedia) {
                             if (resumeMs > 0) {
                                 Button(onClick = onResume) { Text("Resume") }
                             }

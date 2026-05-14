@@ -62,7 +62,7 @@ internal class InfoOsd(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = spec.displayTitle, color = Color.White, fontSize = 14.sp)
+                Text(text = spec.title, color = Color.White, fontSize = 14.sp)
                 Text(text = formatDuration(spec.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 videoMime?.let { mime ->
                     Text(

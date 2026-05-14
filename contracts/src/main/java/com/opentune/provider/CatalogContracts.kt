@@ -2,7 +2,7 @@ package com.opentune.provider
 
 // --- Media models ---
 
-enum class MediaEntryKind {
+enum class EntryType {
     Folder,
     Playable,
     Other,
@@ -11,24 +11,18 @@ enum class MediaEntryKind {
     Episode,
 }
 
-sealed class MediaArt {
-    data class Http(val url: String) : MediaArt()
-    data class LocalFile(val absolutePath: String) : MediaArt()
-    data object None : MediaArt()
-}
-
-data class MediaUserData(
+data class EntryUserData(
     val positionMs: Long,
     val isFavorite: Boolean,
     val played: Boolean,
 )
 
-data class MediaListItem(
+data class EntryInfo(
     val id: String,
     val title: String,
-    val kind: MediaEntryKind,
-    val cover: MediaArt,
-    val userData: MediaUserData? = null,
+    val type: EntryType,
+    val cover: String? = null,
+    val userData: EntryUserData? = null,
     val originalTitle: String? = null,
     val genres: List<String>? = null,
     val communityRating: Float? = null,
@@ -37,8 +31,8 @@ data class MediaListItem(
     val indexNumber: Int? = null,
 )
 
-data class BrowsePageResult(
-    val items: List<MediaListItem>,
+data class EntryList(
+    val items: List<EntryInfo>,
     val totalCount: Int,
 )
 
@@ -47,28 +41,28 @@ data class ExternalUrl(
     val url: String,
 )
 
-data class MediaStreamInfo(
+data class StreamInfo(
     val index: Int,
     val type: String,
     val codec: String?,
-    val displayTitle: String?,
+    val title: String?,
     val language: String?,
     val isDefault: Boolean,
     val isForced: Boolean,
 )
 
-data class MediaDetailModel(
+data class EntryDetail(
     val title: String,
     val overview: String?,
-    val logo: MediaArt,
-    val backdropImages: List<String>,
-    val canPlay: Boolean,
-    val communityRating: Float?,
+    val logo: String?,
+    val backdrop: List<String>,
+    val isMedia: Boolean,
+    val rating: Float?,
     val bitrate: Int?,
     val externalUrls: List<ExternalUrl>,
-    val productionYear: Int?,
+    val year: Int?,
     val providerIds: Map<String, String>,
-    val mediaStreams: List<MediaStreamInfo>,
+    val streams: List<StreamInfo>,
     val etag: String?,
 )
 
@@ -81,7 +75,7 @@ data class SubtitleTrack(
     /**
      * null = embedded (ExoPlayer selects natively via trackSelectionParameters).
      * non-null = external URI the player loads directly.
-     * HTTP(S) providers set subtitleHeaders in PlaybackSpec for auth.
+     * HTTP(S): use [PlaybackSpec.headers] on the same spec for auth when loading this URI.
      * File-based providers (SMB) supply file:// URIs pointing to local cache.
      */
     val externalRef: String?,

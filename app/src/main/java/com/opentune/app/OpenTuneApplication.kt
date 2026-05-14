@@ -5,7 +5,7 @@ import android.media.MediaCodecList
 import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
-import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlatformInfoHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
@@ -46,10 +46,10 @@ class OpenTuneApplication : Application() {
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,
         )
-        providerRegistry.setCapabilities(buildCodecCapabilities())
+        providerRegistry.setCapabilities(buildPlatformCapabilities())
     }
 
-    private fun buildCodecCapabilities(): CodecCapabilities {
+    private fun buildPlatformCapabilities(): PlatformCapabilities {
         val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
         val videoMimes = mutableListOf<String>()
         val audioMimes = mutableListOf<String>()
@@ -71,11 +71,11 @@ class OpenTuneApplication : Application() {
                 }
             }
         }
-        return CodecCapabilities(
-            supportedVideoMimeTypes = videoMimes.distinct(),
-            supportedAudioMimeTypes = audioMimes.distinct(),
-            maxVideoPixels = maxPixels.coerceAtLeast(1920 * 1080),
-            supportedSubtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
+        return PlatformCapabilities(
+            videoMime = videoMimes.distinct(),
+            audioMime = audioMimes.distinct(),
+            maxPixels = maxPixels.coerceAtLeast(1920 * 1080),
+            subtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
         )
     }
 }

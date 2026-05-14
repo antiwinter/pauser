@@ -5,14 +5,15 @@
 import { EmbyApi, BROWSE_FIELDS, DETAIL_FIELDS } from './api.js';
 import { toListItem } from './mapper.js';
 import { imageUrl, resolvePlaybackUrl, playMethod } from './urls.js';
+import { playbackMimeTypeFromContainers } from '../src/playbackMimeType.js';
 import type { DeviceProfile } from './dto.js';
 import type {
-  BrowsePageResult,
-  MediaDetailModel,
-  MediaListItem,
+  EntryDetail,
+  EntryInfo,
+  EntryList,
   PlaybackSpec,
   SubtitleTrack,
-  CodecCapabilities,
+  PlatformCapabilities,
 } from '../src/types.js';
 
 const CONTAINER_TYPES = new Set([
@@ -33,22 +34,22 @@ export interface EmbyCredentials {
 export interface EmbyInstanceState {
   credentials: EmbyCredentials;
   deviceProfile: DeviceProfile;
-  capabilities: CodecCapabilities;
+  capabilities: PlatformCapabilities;
 }
 
-export async function loadBrowsePage(
+export async function listEntry(
   state: EmbyInstanceState,
   location: string | null,
   startIndex: number,
   limit: number,
-): Promise<BrowsePageResult> {
-  const { credentials, deviceProfile } = state;
+): Promise<EntryList> {
+  const { credentials } = state;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
   if (location === null) {
     const views = await api.getViews();
     return {
-      items: views.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as MediaListItem[],
+      items: views.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],
       totalCount: views.TotalRecordCount,
     };
   } else {
@@ -60,17 +61,17 @@ export async function loadBrowsePage(
       fields: BROWSE_FIELDS,
     });
     return {
-      items: result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as MediaListItem[],
+      items: result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],
       totalCount: result.TotalRecordCount,
     };
   }
 }
 
-export async function searchItems(
+export async function search(
   state: EmbyInstanceState,
   scopeLocation: string,
   query: string,
-): Promise<MediaListItem[]> {
+): Promise<EntryInfo[]> {
   const q = query.trim();
   if (!q) return [];
   const { credentials } = state;
@@ -83,24 +84,24 @@ export async function searchItems(
     limit: 100,
     fields: BROWSE_FIELDS,
   });
-  return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as MediaListItem[];
+  return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[];
 }
 
-export async function loadDetail(
+export async function getDetail(
   state: EmbyInstanceState,
   itemRef: string,
-): Promise<MediaDetailModel> {
+): Promise<EntryDetail> {
   const { credentials } = state;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
   const item = await api.getItem(itemRef, DETAIL_FIELDS);
   const id = item.Id ?? itemRef;
 
   const logoTag = item.ImageTags?.['Logo'];
-  const logoUrl = logoTag
+  const logo = logoTag
     ? imageUrl({ baseUrl: credentials.baseUrl, itemId: id, imageType: 'Logo', tag: logoTag, accessToken: credentials.accessToken, maxHeight: 160 })
     : null;
 
-  const backdropImages = (item.BackdropImageTags ?? []).map((tag, index) =>
+  const backdrop = (item.BackdropImageTags ?? []).map((tag, index) =>
     imageUrl({ baseUrl: credentials.baseUrl, itemId: id, imageType: 'Backdrop', tag, accessToken: credentials.accessToken, maxHeight: 1080, index })
   );
 
@@ -110,31 +111,31 @@ export async function loadDetail(
     u.Name && u.Url ? [{ name: u.Name, url: u.Url }] : []
   );
 
-  const mediaStreams = (item.MediaStreams ?? []).map((s) => ({
-    index:        s.Index ?? 0,
-    type:         s.Type ?? '',
-    codec:        s.Codec ?? null,
-    displayTitle: s.DisplayTitle ?? null,
-    language:     s.Language ?? null,
-    isDefault:    s.IsDefault ?? false,
-    isForced:     s.IsForced ?? false,
+  const streams = (item.MediaStreams ?? []).map((s) => ({
+    index: s.Index ?? 0,
+    type: s.Type ?? '',
+    codec: s.Codec ?? null,
+    title: s.DisplayTitle ?? null,
+    language: s.Language ?? null,
+    isDefault: s.IsDefault ?? false,
+    isForced: s.IsForced ?? false,
   }));
 
-  const canPlay = !NON_PLAYABLE_TYPES.has(item.Type ?? '');
+  const isMedia = !NON_PLAYABLE_TYPES.has(item.Type ?? '');
 
   return {
-    title:           item.Name ?? itemRef,
-    overview:        item.Overview ?? null,
-    logoUrl,
-    backdropImages,
-    canPlay,
-    communityRating: item.CommunityRating ?? null,
+    title: item.Name ?? itemRef,
+    overview: item.Overview ?? null,
+    logo,
+    backdrop,
+    isMedia,
+    rating: item.CommunityRating ?? null,
     bitrate,
     externalUrls,
-    productionYear:  item.ProductionYear ?? null,
-    providerIds:     item.ProviderIds ?? {},
-    mediaStreams,
-    etag:            item.Etag ?? null,
+    year: item.ProductionYear ?? null,
+    providerIds: item.ProviderIds ?? {},
+    streams,
+    etag: item.Etag ?? null,
   };
 }
 
@@ -143,13 +144,7 @@ const BITMAP_CODECS = new Set([
   'dvb_subtitle', 'xsub', 'microdvd',
 ]);
 
-export interface ResolvedPlayback {
-  playbackSpec: PlaybackSpec;
-  /** Opaque state blob for hooks (passed back in onPlaybackReady etc.) */
-  hooksState: Record<string, unknown>;
-}
-
-export async function resolvePlayback(
+export async function getPlaybackSpec(
   state: EmbyInstanceState,
   itemRef: string,
   startMs: number,
@@ -177,8 +172,10 @@ export async function resolvePlayback(
 
   const url = resolvePlaybackUrl(credentials.baseUrl, source);
   const method = playMethod(source);
+  const mimeType = playbackMimeTypeFromContainers(source.TranscodingContainer, source.Container);
   const item = await api.getItem(itemRef);
   const title = item.Name ?? itemRef;
+  const headers = { 'X-Emby-Token': credentials.accessToken };
 
   const subtitleTracks: SubtitleTrack[] = (source.MediaStreams ?? []).flatMap((stream) => {
     const index = stream.Index;
@@ -203,36 +200,34 @@ export async function resolvePlayback(
     }
 
     return [{
-      trackId:    String(index),
+      trackId: String(index),
       label,
-      language:   stream.Language ?? null,
-      isDefault:  stream.IsDefault ?? false,
-      isForced:   stream.IsForced ?? false,
+      language: stream.Language ?? null,
+      isDefault: stream.IsDefault ?? false,
+      isForced: stream.IsForced ?? false,
       externalRef,
     }];
   });
 
   const hooksState = {
-    itemId:        itemRef,
-    playMethod:    method,
+    itemId: itemRef,
+    playMethod: method,
     playSessionId: info.PlaySessionId ?? null,
     mediaSourceId: source.Id ?? null,
-    liveStreamId:  source.LiveStreamId ?? null,
-    baseUrl:       credentials.baseUrl,
-    userId:        credentials.userId,
-    accessToken:   credentials.accessToken,
+    liveStreamId: source.LiveStreamId ?? null,
+    baseUrl: credentials.baseUrl,
+    userId: credentials.userId,
+    accessToken: credentials.accessToken,
     deviceProfile,
   };
 
   return {
-    urlSpec: {
-      url,
-      headers: { 'X-Emby-Token': credentials.accessToken },
-    },
-    displayTitle: title,
+    url,
+    headers,
+    mimeType,
+    title,
     durationMs: null,
     subtitleTracks,
-    subtitleHeaders: { 'X-Emby-Token': credentials.accessToken },
     hooksState,
   };
 }

@@ -1,16 +1,22 @@
 package com.opentune.app.providers
 
 import com.opentune.app.OpenTuneApplication
-import com.opentune.provider.SubmitResult
 import com.opentune.provider.ValidationResult
 import com.opentune.storage.ServerEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 object ServerConfigRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    private val stringMapSerializer = MapSerializer(String.serializer(), String.serializer())
+
+    private fun encodeFields(fields: Map<String, String>): String =
+        json.encodeToString(stringMapSerializer, fields)
 
     // --- Draft storage via DataStore ---
 
@@ -39,8 +45,8 @@ object ServerConfigRepository {
                 val entity = ServerEntity(
                     sourceId = sourceId,
                     protocol = protocol,
-                    displayName = result.displayName,
-                    fieldsJson = result.fieldsJson,
+                    displayName = result.name,
+                    fieldsJson = encodeFields(result.fields),
                     createdAtEpochMs = now,
                     updatedAtEpochMs = now,
                 )
@@ -88,14 +94,14 @@ object ServerConfigRepository {
                         ?: return@withContext SubmitResult.Error("Server not found")
                     app.storageBindings.serverDao.update(
                         existing.copy(
-                            displayName = result.displayName,
-                            fieldsJson = result.fieldsJson,
+                            displayName = result.name,
+                            fieldsJson = encodeFields(result.fields),
                             updatedAtEpochMs = now,
                         ),
                     )
                     app.instanceRegistry.update(sourceId, existing.copy(
-                        displayName = result.displayName,
-                        fieldsJson = result.fieldsJson,
+                        displayName = result.name,
+                        fieldsJson = encodeFields(result.fields),
                         updatedAtEpochMs = now,
                     ))
                 } else {
@@ -103,8 +109,8 @@ object ServerConfigRepository {
                     val newEntity = ServerEntity(
                         sourceId = newSourceId,
                         protocol = protocol,
-                        displayName = result.displayName,
-                        fieldsJson = result.fieldsJson,
+                        displayName = result.name,
+                        fieldsJson = encodeFields(result.fields),
                         createdAtEpochMs = now,
                         updatedAtEpochMs = now,
                     )

@@ -243,7 +243,7 @@ internal class SubtitleController(
                     .setMimeType(mimeType)
                     .build()
                 val httpFactory = DefaultHttpDataSource.Factory()
-                    .setDefaultRequestProperties(specState.value.subtitleHeaders)
+                    .setDefaultRequestProperties(specState.value.headers)
                 val subtitleSource = SingleSampleMediaSource
                     .Factory(DefaultDataSource.Factory(context, httpFactory))
                     .createMediaSource(subtitleConfig, C.TIME_UNSET)

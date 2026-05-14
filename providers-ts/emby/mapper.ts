@@ -3,7 +3,7 @@
  * Mirrors EmbyProviderInstance.toListItem() in Kotlin.
  */
 import type { BaseItemDto } from './dto.js';
-import type { MediaListItem, MediaEntryKind } from '../src/types.js';
+import type { EntryInfo, EntryType } from '../src/types.js';
 import { imageUrl } from './urls.js';
 
 const CONTAINER_TYPES = new Set([
@@ -15,20 +15,20 @@ export function toListItem(
   item: BaseItemDto,
   baseUrl: string,
   accessToken: string,
-): MediaListItem | null {
+): EntryInfo | null {
   const id = item.Id;
   if (!id) return null;
 
   const type = item.Type ?? '';
-  let kind: MediaEntryKind;
-  if (type === 'Series')            kind = 'Series';
-  else if (type === 'Season')       kind = 'Season';
-  else if (type === 'Episode')      kind = 'Episode';
-  else if (CONTAINER_TYPES.has(type)) kind = 'Folder';
-  else                              kind = 'Playable';
+  let entryType: EntryType;
+  if (type === 'Series')            entryType = 'Series';
+  else if (type === 'Season')       entryType = 'Season';
+  else if (type === 'Episode')      entryType = 'Episode';
+  else if (CONTAINER_TYPES.has(type)) entryType = 'Folder';
+  else                              entryType = 'Playable';
 
   const primaryTag = item.ImageTags?.['Primary'];
-  const coverUrl = primaryTag
+  const cover = primaryTag
     ? imageUrl({ baseUrl, itemId: id, imageType: 'Primary', tag: primaryTag, accessToken })
     : null;
 
@@ -36,8 +36,8 @@ export function toListItem(
   return {
     id,
     title: item.Name ?? id,
-    kind,
-    coverUrl,
+    type: entryType,
+    cover,
     userData: ud
       ? {
           positionMs: Math.floor((ud.PlaybackPositionTicks ?? 0) / 10_000),

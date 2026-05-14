@@ -17,13 +17,20 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import com.opentune.provider.MediaArt
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryInfo
+import java.io.File
+
+private fun coverImageModel(cover: String?): Any? = when {
+    cover.isNullOrBlank() -> null
+    cover.startsWith("http://", ignoreCase = true) ||
+        cover.startsWith("https://", ignoreCase = true) -> cover
+    else -> File(cover)
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ThumbEntryComponent(
-    item: MediaListItem,
+    item: EntryInfo,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -39,14 +46,14 @@ fun ThumbEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                when (val c = item.cover) {
-                    is MediaArt.Http -> AsyncImage(
-                        model = c.url,
+                val model = coverImageModel(item.cover)
+                if (model != null) {
+                    AsyncImage(
+                        model = model,
                         contentDescription = item.title,
                         modifier = Modifier.fillMaxWidth(),
                         contentScale = ContentScale.Crop,
                     )
-                    else -> Unit
                 }
                 // Episode number badge top-left
                 item.indexNumber?.let { num ->

@@ -9,7 +9,7 @@ import com.opentune.emby.dto.ProfileCondition
 import com.opentune.emby.dto.ResponseProfile
 import com.opentune.emby.dto.SubtitleProfile
 import com.opentune.emby.dto.TranscodingProfile
-import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlatformInfoHolder
@@ -68,21 +68,19 @@ class EmbyProvider : OpenTuneProvider {
                 val info = runEmbyHttpPhase("getSystemInfo") { api.getSystemInfo() }
                 val hash = sha256("$baseUrl$userId")
                 val displayName = info.serverName ?: baseUrl
-                val fieldsJson = EmbyServerFieldsJson.encode(
-                    EmbyServerFieldsJson(
-                        baseUrl = baseUrl,
-                        userId = userId,
-                        accessToken = token,
-                        serverId = info.id,
-                    ),
-                )
-                ValidationResult.Success(hash = hash, displayName = displayName, fieldsJson = fieldsJson)
+                val fields = buildMap {
+                    put("base_url", baseUrl)
+                    put("user_id", userId)
+                    put("access_token", token)
+                    put("server_id", info.id.orEmpty())
+                }
+                ValidationResult.Success(hash = hash, name = displayName, fields = fields)
             } catch (e: Exception) {
                 ValidationResult.Error(e.message ?: "Emby validation failed")
             }
         }
 
-    override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
+    override fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance {
         val fields = EmbyServerFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
@@ -101,13 +99,13 @@ class EmbyProvider : OpenTuneProvider {
         return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities)
     }
 
-    private fun buildDeviceProfile(caps: CodecCapabilities): DeviceProfile {
-        val videoCodecCsv = caps.supportedVideoMimeTypes
+    private fun buildDeviceProfile(caps: PlatformCapabilities): DeviceProfile {
+        val videoCodecCsv = caps.videoMime
             .mapNotNull { mimeToEmbyVideoCodec(it) }.distinct().joinToString(",")
-        val audioCodecCsv = caps.supportedAudioMimeTypes
+        val audioCodecCsv = caps.audioMime
             .mapNotNull { mimeToEmbyAudioCodec(it) }.distinct().joinToString(",")
 
-        val maxPixels = caps.maxVideoPixels.coerceAtLeast(1920 * 1080)
+        val maxPixels = caps.maxPixels.coerceAtLeast(1920 * 1080)
         val maxWidth = sqrtApprox(maxPixels, 16) * 16
         val maxHeight = (maxPixels / maxWidth).coerceAtLeast(1080)
 
@@ -144,7 +142,7 @@ class EmbyProvider : OpenTuneProvider {
                 TranscodingProfile(container = "ts", type = "Video", videoCodec = "h264", audioCodec = "aac", protocol = "hls", context = "Streaming"),
             ),
             codecProfiles = codecProfiles,
-            subtitleProfiles = caps.supportedSubtitleFormats.map { SubtitleProfile(format = it) },
+            subtitleProfiles = caps.subtitleFormats.map { SubtitleProfile(format = it) },
             responseProfiles = listOf(
                 ResponseProfile(type = "Video", container = "m3u8", mimeType = "application/vnd.apple.mpegurl"),
             ),

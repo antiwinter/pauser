@@ -9,8 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.opentune.app.OpenTuneApplication
-import com.opentune.provider.MediaArt
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.storage.MediaStateEntity
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +27,7 @@ private const val LOG_TAG = "OT_CoverExtractor"
  */
 data class CoverExtractor(
     /** Call with every newly loaded batch of items to schedule extraction. */
-    val onItemsLoaded: ((List<MediaListItem>) -> Unit)?,
+    val onItemsLoaded: ((List<EntryInfo>) -> Unit)?,
 )
 
 /**
@@ -41,7 +40,7 @@ data class CoverExtractor(
  * for background stream extraction (bounded to 4 concurrent jobs). Results are
  * persisted to [com.opentune.storage.thumb.ThumbnailDiskCache] and
  * [com.opentune.storage.UserMediaStateStore], and exposed reactively via
- * [CoverExtractor.coverOverride].
+ * [EntryInfo.cover] on the list.
  */
 @Composable
 fun rememberCoverExtractor(
@@ -49,7 +48,7 @@ fun rememberCoverExtractor(
     protocol: String,
     sourceId: String,
     instance: OpenTuneProviderInstance?,
-    items: SnapshotStateList<MediaListItem>,
+    items: SnapshotStateList<EntryInfo>,
 ): CoverExtractor {
     val provider = remember(protocol) { app.providerRegistry.provider(protocol) }
 
@@ -59,7 +58,7 @@ fun rememberCoverExtractor(
 
     val semaphore = remember { Semaphore(4) }
     val processedIds = remember { mutableSetOf<String>() }
-    val pendingItems = remember { mutableStateOf<List<MediaListItem>>(emptyList()) }
+    val pendingItems = remember { mutableStateOf<List<EntryInfo>>(emptyList()) }
 
     LaunchedEffect(pendingItems.value) {
         val batch = pendingItems.value
@@ -76,7 +75,7 @@ fun rememberCoverExtractor(
                     when {
                         cached == MediaStateEntity.COVER_FAILED -> return@withPermit
                         cached != null -> {
-                            updateItemCover(items, item.id, MediaArt.LocalFile(cached))
+                            updateItemCover(items, item.id, cached)
                             return@withPermit
                         }
                     }
@@ -87,7 +86,7 @@ fun rememberCoverExtractor(
                         app.storageBindings.mediaStateStore.upsertCoverCache(
                             protocol, sourceId, item.id, diskCached,
                         )
-                        updateItemCover(items, item.id, MediaArt.LocalFile(diskCached))
+                        updateItemCover(items, item.id, diskCached)
                         return@withPermit
                     }
 
@@ -107,7 +106,7 @@ fun rememberCoverExtractor(
                             app.storageBindings.mediaStateStore.upsertCoverCache(
                                 protocol, sourceId, item.id, path,
                             )
-                            updateItemCover(items, item.id, MediaArt.LocalFile(path))
+                            updateItemCover(items, item.id, path)
                         } else {
                             app.storageBindings.mediaStateStore.upsertCoverCache(
                                 protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
@@ -128,10 +127,10 @@ fun rememberCoverExtractor(
 }
 
 private fun updateItemCover(
-    items: SnapshotStateList<MediaListItem>,
+    items: SnapshotStateList<EntryInfo>,
     itemId: String,
-    art: MediaArt,
+    path: String,
 ) {
     val idx = items.indexOfFirst { it.id == itemId }
-    if (idx >= 0) items[idx] = items[idx].copy(cover = art)
+    if (idx >= 0) items[idx] = items[idx].copy(cover = path)
 }

@@ -14,6 +14,11 @@ interface ItemStream {
 }
 
 // --- Field specs (moved from ConfigContracts.kt) ---
+enum class ServerFieldKind {
+    Text,
+    SingleLineText,
+    Password,
+}
 
 data class ServerFieldSpec(
     val id: String,
@@ -25,33 +30,21 @@ data class ServerFieldSpec(
     val placeholderKey: String? = null,
 )
 
-enum class ServerFieldKind {
-    Text,
-    SingleLineText,
-    Password,
-}
-
 // --- Validation result ---
 
 sealed class ValidationResult {
     /**
      * Provider connected, authenticated, and derived a stable identity.
-     * [fieldsJson] is the opaque credential blob to be stored in [com.opentune.storage.ServerEntity];
+     * [fields] is the merged credential map the **app** serializes into [com.opentune.storage.ServerEntity.fieldsJson];
      * [hash] is used by the app to compute sourceId = "${protocol}_${hash}".
      */
     data class Success(
         val hash: String,
-        val displayName: String,
-        val fieldsJson: String,
+        val name: String,
+        val fields: Map<String, String>,
     ) : ValidationResult()
+
     data class Error(val message: String) : ValidationResult()
-}
-
-// --- Submit result (kept for UI layer) ---
-
-sealed class SubmitResult {
-    data object Success : SubmitResult()
-    data class Error(val message: String) : SubmitResult()
 }
 
 // --- Provider factory ---
@@ -74,8 +67,8 @@ interface OpenTuneProvider {
 
     /**
      * Connect, authenticate, and verify the supplied credentials.
-     * Returns [ValidationResult.Success] with a stable [hash] (used to compute sourceId)
-     * and a human-readable [displayName], or [ValidationResult.Error].
+     * Returns [ValidationResult.Success] with [hash], human-readable [name], and [fields] to persist,
+     * or [ValidationResult.Error].
      */
     suspend fun validateFields(values: Map<String, String>): ValidationResult
 
@@ -83,8 +76,7 @@ interface OpenTuneProvider {
      * Construct a live instance from already-validated credentials.
      * Called without a sourceId; the instance carries no identity state.
      */
-    fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance
-
+    fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance
 }
 
 /**
@@ -103,10 +95,10 @@ interface OpenTuneProviderLoader {
  * No identity fields — the app registry maps sourceId → instance externally.
  */
 interface OpenTuneProviderInstance {
-    suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult
-    suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem>
-    suspend fun loadDetail(itemRef: String): MediaDetailModel
-    suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec
+    suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList
+    suspend fun search(scopeLocation: String, query: String): List<EntryInfo>
+    suspend fun getDetail(itemRef: String): EntryDetail
+    suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
 
     /**
      * Opens a random-access stream for [itemRef], calls [block] with it, and closes the stream.

@@ -5,18 +5,18 @@
  * configured instance; no instanceId map needed.
  */
 import { getFieldsSpec, validateFields, makeInstanceState } from './provider.js';
-import { loadBrowsePage, searchItems, loadDetail, resolvePlayback } from './instance.js';
+import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
 import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksState } from './hooks.js';
 import type { EmbyInstanceState } from './instance.js';
 import type {
   ServerFieldSpec,
   ValidationResult,
-  BrowsePageResult,
-  MediaListItem,
-  MediaDetailModel,
+  EntryList,
+  EntryInfo,
+  EntryDetail,
   PlaybackSpec,
-  CodecCapabilities,
+  PlatformCapabilities,
 } from '../src/types.js';
 
 let state: EmbyInstanceState | null = null;
@@ -39,7 +39,7 @@ let state: EmbyInstanceState | null = null;
 
   async init(args: {
     credentials: Record<string, string>;
-    capabilities: CodecCapabilities;
+    capabilities: PlatformCapabilities;
   }): Promise<void> {
     const info = await host.platform.getPlatformInfo();
     setDeviceAuth({
@@ -53,30 +53,30 @@ let state: EmbyInstanceState | null = null;
 
   // ── Instance methods ──────────────────────────────────────────────────
 
-  async loadBrowsePage(args: {
+  async listEntry(args: {
     location: string | null;
     startIndex: number;
     limit: number;
-  }): Promise<BrowsePageResult> {
-    return loadBrowsePage(state!, args.location, args.startIndex, args.limit);
+  }): Promise<EntryList> {
+    return listEntry(state!, args.location, args.startIndex, args.limit);
   },
 
-  async searchItems(args: {
+  async search(args: {
     scopeLocation: string;
     query: string;
-  }): Promise<MediaListItem[]> {
-    return searchItems(state!, args.scopeLocation, args.query);
+  }): Promise<EntryInfo[]> {
+    return search(state!, args.scopeLocation, args.query);
   },
 
-  async loadDetail(args: { itemRef: string }): Promise<MediaDetailModel> {
-    return loadDetail(state!, args.itemRef);
+  async getDetail(args: { itemRef: string }): Promise<EntryDetail> {
+    return getDetail(state!, args.itemRef);
   },
 
-  async resolvePlayback(args: {
+  async getPlaybackSpec(args: {
     itemRef: string;
     startMs: number;
   }): Promise<PlaybackSpec> {
-    return resolvePlayback(state!, args.itemRef, args.startMs);
+    return getPlaybackSpec(state!, args.itemRef, args.startMs);
   },
 
   // ── Playback hooks ────────────────────────────────────────────────────

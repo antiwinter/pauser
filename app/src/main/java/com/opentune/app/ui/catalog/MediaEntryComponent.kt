@@ -12,25 +12,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import androidx.compose.foundation.Image
 import androidx.tv.material3.Surface
-import com.opentune.provider.MediaArt
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryInfo
+import com.opentune.provider.EntryType
 import com.opentune.storage.TitleLang
 import java.io.File
+
+private fun coverImageModel(cover: String?): Any? = when {
+    cover.isNullOrBlank() -> null
+    cover.startsWith("http://", ignoreCase = true) ||
+        cover.startsWith("https://", ignoreCase = true) -> cover
+    else -> File(cover)
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MediaEntryComponent(
-    item: MediaListItem,
+    item: EntryInfo,
     onClick: () -> Unit,
     titleLang: TitleLang = TitleLang.Local,
     modifier: Modifier = Modifier,
@@ -53,26 +57,22 @@ fun MediaEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                when (val c = item.cover) {
-                    is MediaArt.Http -> AsyncImage(
-                        model = c.url,
+                val model = coverImageModel(item.cover)
+                if (model != null) {
+                    AsyncImage(
+                        model = model,
                         contentDescription = displayTitle,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
                     )
-                    is MediaArt.LocalFile -> AsyncImage(
-                        model = File(c.absolutePath),
-                        contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        contentScale = ContentScale.Crop,
-                    )
-                    MediaArt.None -> Text(
-                        text = when (item.kind) {
-                            MediaEntryKind.Folder -> "\uD83D\uDCC1"
-                            MediaEntryKind.Series -> "\uD83D\uDCFA"
-                            MediaEntryKind.Season -> "\uD83D\uDCC5"
-                            MediaEntryKind.Playable, MediaEntryKind.Episode -> "▶"
-                            MediaEntryKind.Other -> "•"
+                } else {
+                    Text(
+                        text = when (item.type) {
+                            EntryType.Folder -> "\uD83D\uDCC1"
+                            EntryType.Series -> "\uD83D\uDCFA"
+                            EntryType.Season -> "\uD83D\uDCC5"
+                            EntryType.Playable, EntryType.Episode -> "▶"
+                            EntryType.Other -> "•"
                         },
                         style = MaterialTheme.typography.titleLarge,
                     )

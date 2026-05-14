@@ -15,8 +15,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryType
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +42,7 @@ fun BrowseRoute(
 ) {
     val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
     var state by remember { mutableStateOf<BrowseState>(BrowseState.Loading) }
-    val items = remember { mutableStateListOf<MediaListItem>() }
+    val items = remember { mutableStateListOf<EntryInfo>() }
     val scope = rememberCoroutineScope()
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -68,7 +68,7 @@ fun BrowseRoute(
         is BrowseState.Ready -> BrowseScreen(
             logTag = "OT_Browse_$sourceId",
             items = items,
-            loadPage = { startIndex, limit -> s.instance.loadBrowsePage(locationDecoded.ifEmpty { null }, startIndex, limit) },
+            loadPage = { startIndex, limit -> s.instance.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit) },
             subtitle = locationDecoded,
             titleLang = titleLang,
             onBack = { nav.popBackStack() },
@@ -78,10 +78,10 @@ fun BrowseRoute(
                 scope.launch {
                     try {
                         val page = withContext(Dispatchers.IO) {
-                            s.instance.loadBrowsePage(folderId, 0, 1)
+                            s.instance.listEntry(folderId, 0, 1)
                         }
                         val firstItem = page.items.firstOrNull()
-                        if (page.totalCount == 1 && firstItem?.kind == MediaEntryKind.Playable) {
+                        if (page.totalCount == 1 && firstItem?.type == EntryType.Playable) {
                             nav.navigate(Routes.detail(protocol, sourceId, firstItem.id))
                         } else {
                             nav.navigate(Routes.browse(protocol, sourceId, folderId))

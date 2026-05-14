@@ -11,12 +11,11 @@ import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.File as SmbFile
-import com.opentune.provider.BrowsePageResult
+import com.opentune.provider.EntryDetail
+import com.opentune.provider.EntryInfo
+import com.opentune.provider.EntryList
+import com.opentune.provider.EntryType
 import com.opentune.provider.ItemStream
-import com.opentune.provider.MediaArt
-import com.opentune.provider.MediaDetailModel
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.SubtitleTrack
@@ -48,26 +47,26 @@ class SmbProviderInstance(
         domain = fields.domain,
     )
 
-    override suspend fun loadBrowsePage(location: String?, startIndex: Int, limit: Int): BrowsePageResult {
+    override suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
-                val share = session.share ?: error("No share")
+                val share = session.share
                 val all = share.listDirectory(location ?: "")
                 val slice = all.drop(startIndex).take(limit)
-                BrowsePageResult(items = slice.map { mapEntry(it) }, totalCount = all.size)
+                EntryList(items = slice.map { mapEntry(it) }, totalCount = all.size)
             } finally {
                 session.close()
             }
         }
     }
 
-    override suspend fun searchItems(scopeLocation: String, query: String): List<MediaListItem> {
+    override suspend fun search(scopeLocation: String, query: String): List<EntryInfo> {
         if (query.isBlank()) return emptyList()
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
-                val share = session.share ?: return@withContext emptyList()
+                val share = session.share
                 share.listDirectory(scopeLocation)
                     .filterByName(query)
                     .map { mapEntry(it) }
@@ -77,33 +76,30 @@ class SmbProviderInstance(
         }
     }
 
-    override suspend fun loadDetail(itemRef: String): MediaDetailModel {
+    override suspend fun getDetail(itemRef: String): EntryDetail {
         val path = itemRef.replace('\\', '/')
         val name = path.substringAfterLast('/').ifEmpty { path }
         val video = isLikelyVideoFile(name)
-        return MediaDetailModel(
+        return EntryDetail(
             title = name,
             overview = path,
-            logo = MediaArt.None,
-            backdropImages = emptyList(),
-            canPlay = video,
-            communityRating = null,
+            logo = null,
+            backdrop = emptyList(),
+            isMedia = video,
+            rating = null,
             bitrate = null,
             externalUrls = emptyList(),
-            productionYear = null,
+            year = null,
             providerIds = emptyMap(),
-            mediaStreams = emptyList(),
+            streams = emptyList(),
             etag = null,
         )
     }
 
-    override suspend fun resolvePlayback(itemRef: String, startMs: Long): PlaybackSpec {
+    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
-            val share = session.share ?: run {
-                session.close()
-                error("No share")
-            }
+            val share = session.share
             val pathWin = itemRef.replace('/', '\\')
             val factory = DataSource.Factory {
                 Log.d(SMB_PLAYER_LOG, "[smb] createDataSource pathWin=$pathWin")
@@ -122,8 +118,11 @@ class SmbProviderInstance(
             }
 
             PlaybackSpec(
+                url = null,
+                headers = emptyMap(),
+                mimeType = null,
                 customMediaSourceFactory = { progressiveFactory.createMediaSource(mediaItem) },
-                displayTitle = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
+                title = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
                 hooks = SmbPlaybackHooks(session),
                 subtitleTracks = subtitleTracks,
@@ -161,17 +160,17 @@ class SmbProviderInstance(
         }
     }
 
-    private fun mapEntry(e: SmbListEntry): MediaListItem {
+    private fun mapEntry(e: SmbListEntry): EntryInfo {
         val kind = when {
-            e.isDirectory -> MediaEntryKind.Folder
-            isLikelyVideoFile(e.name) -> MediaEntryKind.Playable
-            else -> MediaEntryKind.Other
+            e.isDirectory -> EntryType.Folder
+            isLikelyVideoFile(e.name) -> EntryType.Playable
+            else -> EntryType.Other
         }
-        return MediaListItem(
+        return EntryInfo(
             id = e.path,
             title = e.name + if (e.isDirectory) "/" else "",
-            kind = kind,
-            cover = MediaArt.None,
+            type = kind,
+            cover = null,
         )
     }
 

@@ -5,7 +5,7 @@
 import { EmbyApi } from './api.js';
 import { normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { ServerFieldSpec, ValidationResult, CodecCapabilities } from '../src/types.js';
+import type { ServerFieldSpec, ValidationResult, PlatformCapabilities } from '../src/types.js';
 import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
 
 export function getFieldsSpec(): ServerFieldSpec[] {
@@ -34,16 +34,16 @@ export async function validateFields(values: Record<string, string>): Promise<Va
 
     const hashInput = `${baseUrl}${userId}`;
     const hash = await host.crypto.sha256({ input: hashInput });
-    const displayName = info.ServerName ?? baseUrl;
+    const name = info.ServerName ?? baseUrl;
 
-    const fieldsJson = JSON.stringify({
+    const fields: Record<string, string> = {
       base_url:     baseUrl,
       user_id:      userId,
       access_token: token,
-      server_id:    info.Id ?? null,
-    });
+      server_id:    info.Id ?? '',
+    };
 
-    return { success: true, hash, displayName, fieldsJson };
+    return { success: true, hash, name, fields };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, error: msg };
@@ -52,7 +52,7 @@ export async function validateFields(values: Record<string, string>): Promise<Va
 
 export function makeInstanceState(
   values: Record<string, string>,
-  capabilities: CodecCapabilities,
+  capabilities: PlatformCapabilities,
   deviceName: string,
 ): EmbyInstanceState {
   const credentials: EmbyCredentials = {

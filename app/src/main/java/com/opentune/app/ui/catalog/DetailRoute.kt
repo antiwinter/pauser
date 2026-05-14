@@ -15,8 +15,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.provider.MediaDetailModel
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryDetail
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.TitleLang
 import com.opentune.storage.get
@@ -44,16 +44,16 @@ fun DetailRoute(
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    var detail by remember { mutableStateOf<MediaDetailModel?>(null) }
+    var detail by remember { mutableStateOf<EntryDetail?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Series/season UI state
-    var seasons by remember { mutableStateOf<List<MediaListItem>?>(null) }
+    var seasons by remember { mutableStateOf<List<EntryInfo>?>(null) }
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
-    var episodes by remember { mutableStateOf<List<MediaListItem>>(emptyList()) }
+    var episodes by remember { mutableStateOf<List<EntryInfo>>(emptyList()) }
     var totalEpisodes by remember { mutableIntStateOf(0) }
     var episodePage by remember { mutableIntStateOf(0) }
 
@@ -72,11 +72,11 @@ fun DetailRoute(
             }
             isFavorite = mediaState?.isFavorite ?: false
             resumeMs = mediaState?.positionMs ?: 0L
-            val d = withContext(Dispatchers.IO) { inst.loadDetail(itemRefDecoded) }
+            val d = withContext(Dispatchers.IO) { inst.getDetail(itemRefDecoded) }
             detail = d
-            if (!d.canPlay) {
+            if (!d.isMedia) {
                 val result = withContext(Dispatchers.IO) {
-                    inst.loadBrowsePage(itemRefDecoded, 0, 500)
+                    inst.listEntry(itemRefDecoded, 0, 500)
                 }
                 seasons = result.items
             }
@@ -95,7 +95,7 @@ fun DetailRoute(
         try {
             val inst = app.instanceRegistry.getOrCreate(sourceId) ?: return@LaunchedEffect
             val result = withContext(Dispatchers.IO) {
-                inst.loadBrowsePage(season.id, episodePage * 50, 50)
+                inst.listEntry(season.id, episodePage * 50, 50)
             }
             episodes = result.items.sortedBy { it.indexNumber ?: Int.MAX_VALUE }
             totalEpisodes = result.totalCount

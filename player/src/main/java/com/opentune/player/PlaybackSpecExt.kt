@@ -17,13 +17,13 @@ internal fun PlaybackSpec.toMediaSource(context: Context): MediaSource {
         @Suppress("UNCHECKED_CAST")
         return (factory as () -> MediaSource)()
     }
-    val spec = checkNotNull(urlSpec) { "PlaybackSpec has neither urlSpec nor customMediaSourceFactory" }
+    val streamUrl = checkNotNull(url) { "PlaybackSpec has neither url nor customMediaSourceFactory" }
     val okHttp = OkHttpClient.Builder()
         .apply {
-            if (spec.headers.isNotEmpty()) {
+            if (headers.isNotEmpty()) {
                 addInterceptor { chain ->
                     val req = chain.request().newBuilder().apply {
-                        spec.headers.forEach { (k, v) -> header(k, v) }
+                        headers.forEach { (k, v) -> header(k, v) }
                     }.build()
                     chain.proceed(req)
                 }
@@ -33,8 +33,8 @@ internal fun PlaybackSpec.toMediaSource(context: Context): MediaSource {
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
     val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     val mediaItem = MediaItem.Builder()
-        .setUri(Uri.parse(spec.url))
-        .apply { spec.mimeType?.let { setMimeType(it) } }
+        .setUri(Uri.parse(streamUrl))
+        .apply { mimeType?.let { setMimeType(it) } }
         .build()
     return mediaSourceFactory.createMediaSource(mediaItem)
 }

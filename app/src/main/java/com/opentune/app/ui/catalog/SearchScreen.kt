@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.provider.MediaEntryKind
-import com.opentune.provider.MediaListItem
+import com.opentune.provider.EntryType
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -35,13 +35,13 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SearchScreen(
     logTag: String,
-    results: SnapshotStateList<MediaListItem>,
-    searchFn: suspend (String) -> List<MediaListItem>,
+    results: SnapshotStateList<EntryInfo>,
+    searchFn: suspend (String) -> List<EntryInfo>,
     titleLang: TitleLang,
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
-    onItemsLoaded: ((List<MediaListItem>) -> Unit)? = null,
+    onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -99,13 +99,13 @@ fun SearchScreen(
                     item = item,
                     titleLang = titleLang,
                     onClick = {
-                        when (item.kind) {
-                            MediaEntryKind.Folder,
-                            MediaEntryKind.Season -> onOpenBrowse(item.id)
-                            MediaEntryKind.Series,
-                            MediaEntryKind.Playable,
-                            MediaEntryKind.Episode,
-                            MediaEntryKind.Other -> onOpenDetail(item.id)
+                        when (item.type) {
+                            EntryType.Folder,
+                            EntryType.Season -> onOpenBrowse(item.id)
+                            EntryType.Series,
+                            EntryType.Playable,
+                            EntryType.Episode,
+                            EntryType.Other -> onOpenDetail(item.id)
                         }
                     },
                 )

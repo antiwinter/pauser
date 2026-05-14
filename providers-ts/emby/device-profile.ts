@@ -2,7 +2,7 @@
  * device-profile.ts — Builds the Emby DeviceProfile from codec capabilities.
  * Mirrors EmbyProvider.buildDeviceProfile() in Kotlin.
  */
-import type { CodecCapabilities } from '../src/types.js';
+import type { PlatformCapabilities } from '../src/types.js';
 import type {
   DeviceProfile,
   DirectPlayProfile,
@@ -35,16 +35,16 @@ function mimeToAudioCodec(mime: string): string | null {
   }
 }
 
-export function buildDeviceProfile(caps: CodecCapabilities, deviceName: string): DeviceProfile {
-  const videoCodecs = [...new Set(caps.videoMimes.map(mimeToVideoCodec).filter(Boolean) as string[])];
-  const audioCodecs = [...new Set(caps.audioMimes.map(mimeToAudioCodec).filter(Boolean) as string[])];
+export function buildDeviceProfile(caps: PlatformCapabilities, deviceName: string): DeviceProfile {
+  const videoCodecs = [...new Set(caps.videoMime.map(mimeToVideoCodec).filter(Boolean) as string[])];
+  const audioCodecs = [...new Set(caps.audioMime.map(mimeToAudioCodec).filter(Boolean) as string[])];
 
   const v = videoCodecs.length > 0 ? videoCodecs.join(',') : 'h264';
   const a = audioCodecs.length > 0 ? audioCodecs.join(',') : 'aac';
 
   const codecProfiles: CodecProfile[] = [];
 
-  const maxPx = caps.maxVideoPixels ?? (1920 * 1080);
+  const maxPx = caps.maxPixels ?? (1920 * 1080);
   const w = Math.max(1, Math.floor(Math.sqrt(maxPx) / 8) * 8);
   const h = Math.max(1, Math.floor(maxPx / w / 8) * 8);
 

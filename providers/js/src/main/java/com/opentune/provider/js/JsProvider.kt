@@ -1,6 +1,6 @@
 package com.opentune.provider.js
 
-import com.opentune.provider.CodecCapabilities
+import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.ServerFieldSpec
@@ -65,10 +65,13 @@ class JsProvider(
             val obj = json.parseToJsonElement(resultJson).jsonObject
             val success = obj["success"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
             if (success) {
+                val fieldsEl = obj["fields"] ?: return ValidationResult.Error("Missing fields in validation response")
+                val fieldsObj = fieldsEl.jsonObject
+                val fields = fieldsObj.mapValues { (_, v) -> v.jsonPrimitive.content }
                 ValidationResult.Success(
-                    hash        = obj["hash"]?.jsonPrimitive?.content ?: "",
-                    displayName = obj["displayName"]?.jsonPrimitive?.content ?: protocol,
-                    fieldsJson  = obj["fieldsJson"]?.jsonPrimitive?.content ?: resultJson,
+                    hash = obj["hash"]?.jsonPrimitive?.content ?: "",
+                    name = obj["name"]?.jsonPrimitive?.content ?: protocol,
+                    fields = fields,
                 )
             } else {
                 ValidationResult.Error(obj["error"]?.jsonPrimitive?.content ?: "Validation failed")
@@ -80,7 +83,7 @@ class JsProvider(
 
     // ── Instance creation ──────────────────────────────────────────────────
 
-    override fun createInstance(values: Map<String, String>, capabilities: CodecCapabilities): OpenTuneProviderInstance {
+    override fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance {
         return JsProviderInstance(
             protocol = protocol,
             jsBundle     = jsBundle,

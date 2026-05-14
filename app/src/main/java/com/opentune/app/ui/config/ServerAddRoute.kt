@@ -35,7 +35,7 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.app.providers.ServerConfigRepository
 import com.opentune.provider.ServerFieldKind
-import com.opentune.provider.SubmitResult
+import com.opentune.app.providers.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
