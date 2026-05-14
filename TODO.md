@@ -16,8 +16,8 @@
 - [x] remove sidecar meta
 - [x] research thread safe
 - [ ] common.js
-- [ ] tester on host
-- [ ] ts file arch
+- [x] tester on host
+- [x] ts file arch
 - [x] quickjs exclude std & os
 
 ## Player
