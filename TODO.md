@@ -28,3 +28,6 @@
 - [x] IME still shown
 - [x] investigate initialPositionMs
 - [x] overlay control logic is verbose and messy and too stateful
+
+## Roadmap
+- [ ] HDR support

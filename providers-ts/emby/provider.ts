@@ -1,13 +1,12 @@
 /**
- * provider.ts — Emby stateless factory (getFieldsSpec, validateFields, bootstrap).
+ * provider.ts — Emby stateless factory (getFieldsSpec, validateFields).
  * Mirrors EmbyProvider.kt.
  */
-import { EmbyApi, setGlobalAuth } from './api.js';
+import { EmbyApi } from './api.js';
 import { normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
 import type { ServerFieldSpec, ValidationResult, CodecCapabilities } from '../src/types.js';
 import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
-import type { DeviceProfile } from './dto.js';
 
 export function getFieldsSpec(): ServerFieldSpec[] {
   return [
@@ -49,16 +48,6 @@ export async function validateFields(values: Record<string, string>): Promise<Va
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, error: msg };
   }
-}
-
-let globalDeviceProfile: DeviceProfile | null = null;
-let globalCapabilities: CodecCapabilities | null = null;
-
-/** @deprecated Called only by temp engines for validateFields in JsProvider. */
-export function bootstrap(caps: CodecCapabilities, deviceName: string, deviceId: string, clientVersion: string): void {
-  globalCapabilities = caps;
-  setGlobalAuth({ clientName: 'OpenTune', deviceName, deviceId, clientVersion });
-  globalDeviceProfile = buildDeviceProfile(caps, deviceName);
 }
 
 export function makeInstanceState(

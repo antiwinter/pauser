@@ -87,6 +87,15 @@ interface OpenTuneProvider {
 
 }
 
+/**
+ * Service-loader entry point for a backend module.
+ * Each module (Kotlin or JS) implements this to register its provider(s) into the registry.
+ * Use [META-INF/services/com.opentune.provider.OpenTuneProviderLoader] to auto-discover.
+ */
+interface OpenTuneProviderLoader {
+    fun load(register: (OpenTuneProvider) -> Unit)
+}
+
 // --- Provider instance ---
 
 /**

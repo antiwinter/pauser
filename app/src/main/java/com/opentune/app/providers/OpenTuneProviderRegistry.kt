@@ -2,6 +2,7 @@ package com.opentune.app.providers
 
 import com.opentune.provider.CodecCapabilities
 import com.opentune.provider.OpenTuneProvider
+import com.opentune.provider.OpenTuneProviderLoader
 import java.util.ServiceLoader
 
 class OpenTuneProviderRegistry private constructor(
@@ -28,10 +29,11 @@ class OpenTuneProviderRegistry private constructor(
 
     companion object {
         fun discover(): OpenTuneProviderRegistry {
-            val providers = ServiceLoader
-                .load(OpenTuneProvider::class.java, OpenTuneProvider::class.java.classLoader)
-                .toList()
-            return OpenTuneProviderRegistry(providers.associateBy { it.protocol }.toMutableMap())
+            val registry = OpenTuneProviderRegistry(mutableMapOf())
+            ServiceLoader
+                .load(OpenTuneProviderLoader::class.java, OpenTuneProviderLoader::class.java.classLoader)
+                .forEach { loader -> loader.load { registry.register(it) } }
+            return registry
         }
     }
 }
