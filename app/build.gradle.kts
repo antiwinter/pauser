@@ -52,7 +52,7 @@ android {
 
 dependencies {
     implementation(project(":contracts"))
-    implementation(project(":provider-js"))
+    implementation(project(":providers:js"))
 
     implementation(project(":player"))
     implementation(project(":storage"))
