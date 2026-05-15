@@ -3,6 +3,7 @@ import {
   newQuickJSWASMModuleFromVariant,
   shouldInterruptAfterDeadline,
 } from 'quickjs-emscripten-core';
+import { MEMORY_LIMIT_BYTES, WASM_STACK_SIZE_BYTES } from './quickjs-config.js';
 
 const HOST_BOOTSTRAP_JS = `
 (function() {
@@ -44,8 +45,8 @@ export class QuickJsProviderRunner {
   async init() {
     const QuickJS = await getQuickJsModule();
     this.vm = QuickJS.newContext();
-    this.vm.runtime.setMemoryLimit(32 * 1024 * 1024);
-    this.vm.runtime.setMaxStackSize(512 * 1024);
+    this.vm.runtime.setMemoryLimit(MEMORY_LIMIT_BYTES);
+    this.vm.runtime.setMaxStackSize(WASM_STACK_SIZE_BYTES);
     this.installHostDispatch();
     await this.evalImmediate(HOST_DISPATCH_JS, '<host-dispatch>');
     await this.evalImmediate(HOST_BOOTSTRAP_JS, '<host-bootstrap>');

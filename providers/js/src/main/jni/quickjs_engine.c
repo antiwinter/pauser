@@ -15,6 +15,9 @@
 #define LOG_TAG "QuickJsEngine"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+/* Keep in sync with providers-ts/test/quickjs-config.js MEMORY_LIMIT_BYTES */
+#define QJS_MEMORY_LIMIT (32 * 1024 * 1024)
+
 /* ─── per-context state ─────────────────────────────────────────────────── */
 typedef struct {
     JavaVM    *jvm;
@@ -117,8 +120,8 @@ static JSValue js_host_dispatch(JSContext *ctx, JSValueConst this_val,
 JNIEXPORT jlong JNICALL
 Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, jobject thiz) {
     JSRuntime *rt=JS_NewRuntime(); if(!rt){LOGE("NewRuntime failed");return 0;}
-    JS_SetMaxStackSize(rt, 512*1024);
-    JS_SetMemoryLimit(rt, 32*1024*1024);
+    JS_SetMaxStackSize(rt, 0); /* let OS enforce; JNI stack headroom varies per device */
+    JS_SetMemoryLimit(rt, QJS_MEMORY_LIMIT);
     JSContext *ctx=JS_NewContext(rt);
     if(!ctx){LOGE("NewContext failed");JS_FreeRuntime(rt);return 0;}
     EngineState *s=(EngineState*)calloc(1,sizeof(EngineState));
@@ -283,12 +286,27 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeResolveHostCall(
         JNIEnv *env, jobject thiz, jlong p, jlong key, jstring resultJson) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return NULL;
     const char *json=resultJson?(*env)->GetStringUTFChars(env,resultJson,NULL):NULL;
-    char buf[8192];
-    snprintf(buf,sizeof(buf),
+
+    JSValue val = json ? JS_ParseJSON(ctx, json, strlen(json), "<host>") : JS_NULL;
+    if(JS_IsException(val)){
+        char *m=exc_str(ctx);
+        LOGE("resolveHostCall JS_ParseJSON failed: %s", m);
+        free(m);
+    }
+    if(json) (*env)->ReleaseStringUTFChars(env, resultJson, json);
+    if(JS_IsException(val)){
+        char *m=exc_str(ctx); jstring jm=(*env)->NewStringUTF(env,m); free(m);
+        return jm;
+    }
+    JSValue g=JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, g, "__hostVal", val); /* val ref stolen */
+    char buf[256];
+    snprintf(buf, sizeof(buf),
         "(function(){var r=globalThis.__hr&&globalThis.__hr[%.0f];"
-        "if(r){r.resolve(%s);delete globalThis.__hr[%.0f];}})();",
-        (double)key, json?json:"null", (double)key);
-    if(json)(*env)->ReleaseStringUTFChars(env,resultJson,json);
+        "if(r){r.resolve(globalThis.__hostVal);delete globalThis.__hr[%.0f];}"
+        "delete globalThis.__hostVal;})();",
+        (double)key, (double)key);
+    JS_FreeValue(ctx, g);
     JSValue r=JS_Eval(ctx,buf,strlen(buf),"<resolve>",JS_EVAL_TYPE_GLOBAL);
     if(JS_IsException(r)){
         char *m=exc_str(ctx);jstring jm=(*env)->NewStringUTF(env,m);free(m);
@@ -303,18 +321,19 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeRejectHostCall(
         JNIEnv *env, jobject thiz, jlong p, jlong key, jstring errorMsg) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return NULL;
     const char *msg=errorMsg?(*env)->GetStringUTFChars(env,errorMsg,NULL):"host error";
-    char esc[2048]; int j=0;
-    for(int i=0;msg[i]&&j<2040;i++){
-        if(msg[i]=='\\'||msg[i]=='"') esc[j++]='\\';
-        esc[j++]=msg[i];
-    }
-    esc[j]='\0';
-    char buf[4096];
-    snprintf(buf,sizeof(buf),
+
+    /* Build Error object as a JS value and stash it — same pattern as resolve. */
+    JSValue err_msg = JS_NewString(ctx, msg);
+    if(errorMsg) (*env)->ReleaseStringUTFChars(env, errorMsg, msg);
+    JSValue g=JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, g, "__hostErrMsg", err_msg); /* ref stolen */
+    char buf[256];
+    snprintf(buf, sizeof(buf),
         "(function(){var r=globalThis.__hr&&globalThis.__hr[%.0f];"
-        "if(r){r.reject(new Error(\"%s\"));delete globalThis.__hr[%.0f];}})();",
-        (double)key, esc, (double)key);
-    if(errorMsg)(*env)->ReleaseStringUTFChars(env,errorMsg,msg);
+        "if(r){r.reject(new Error(globalThis.__hostErrMsg));delete globalThis.__hr[%.0f];}"
+        "delete globalThis.__hostErrMsg;})();",
+        (double)key, (double)key);
+    JS_FreeValue(ctx, g);
     JSValue r=JS_Eval(ctx,buf,strlen(buf),"<reject>",JS_EVAL_TYPE_GLOBAL);
     if(JS_IsException(r)){
         char *m=exc_str(ctx);jstring jm=(*env)->NewStringUTF(env,m);free(m);
