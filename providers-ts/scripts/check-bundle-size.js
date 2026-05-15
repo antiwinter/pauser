@@ -8,8 +8,9 @@
 
 import { readdirSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
 
-const ROOT_DIR   = new URL('..', import.meta.url).pathname;
+const ROOT_DIR   = fileURLToPath(new URL('..', import.meta.url));
 const DIST_DIR   = join(ROOT_DIR, 'dist');
 const MAX_BYTES  = 150 * 1024; // 150 KB
 
