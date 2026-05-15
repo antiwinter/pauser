@@ -4,25 +4,25 @@ overview: Make provider discovery fully asynchronous so the app shows the home s
 todos:
   - id: loader-contract
     content: Change OpenTuneProviderLoader.load to suspend fun in contracts module
-    status: pending
+    status: completed
   - id: reactive-registry
     content: Add StateFlow<List<OpenTuneProvider>> and discoverAsync to OpenTuneProviderRegistry; remove synchronous discover()
-    status: pending
+    status: completed
   - id: app-scope
     content: Add appScope to OpenTuneApplication, replace discover() with appScope.launch { discoverAsync() }
-    status: pending
+    status: completed
   - id: js-provider-factory
     content: Replace JsProvider init{} runWithEngine with a suspend companion create() using withEngine; make constructor private with pre-computed fields
-    status: pending
+    status: completed
   - id: js-loader-suspend
     content: Make JsProviderLoader.load suspend; use JsProvider.create() instead of direct constructor
-    status: pending
+    status: completed
   - id: emby-smb-loaders
     content: Add suspend modifier to Emby and SMB OpenTuneProviderLoader implementations
-    status: pending
+    status: completed
   - id: home-route-flow
     content: Replace remember { allProviders() } with providersFlow.collectAsState() in HomeRoute
-    status: pending
+    status: completed
 isProject: false
 ---
 
