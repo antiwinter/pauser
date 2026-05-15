@@ -19,35 +19,20 @@ import kotlinx.serialization.json.put
  * The JS bundle must export `globalThis.opentuneProvider` conforming to the
  * bridge protocol defined in `providers-ts/utils/types.ts`.
  *
- * @param assetPath  The asset filename of the JS bundle (e.g. "emby.js").
- *                   The [protocol] is derived by stripping the ".js" extension.
- * @param jsBundle   The full IIFE JavaScript bundle source code.
- * @param hostApis   Host API implementations (http, crypto, config).
+ * Construct via [create] — the suspend factory evaluates the bundle once to
+ * read [providesCover] and [getFieldsSpec] without blocking any thread.
  */
-class JsProvider(
+class JsProvider private constructor(
     private val assetPath: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
+    override val providesCover: Boolean,
+    private val cachedFieldsSpec: List<ServerFieldSpec>,
 ) : OpenTuneProvider {
 
     override val protocol: String = assetPath.removeSuffix(".js")
 
-    override val providesCover: Boolean
-    private val cachedFieldsSpec: List<ServerFieldSpec>
-
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-
-    init {
-        var cover = false
-        var fields: List<ServerFieldSpec> = emptyList()
-        runWithEngine { engine ->
-            cover = engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
-            val result = engine.callMethod("getFieldsSpec", "{}") ?: ""
-            fields = parseFieldsSpec(result)
-        }
-        providesCover = cover
-        cachedFieldsSpec = fields
-    }
 
     // ── Field spec ─────────────────────────────────────────────────────────
 
@@ -97,20 +82,6 @@ class JsProvider(
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private fun <T> runWithEngine(block: suspend (QuickJsEngine) -> T): T {
-        val engine = QuickJsEngine(hostApis)
-        return try {
-            kotlinx.coroutines.runBlocking {
-                engine.init()
-                installHostApis(engine)
-                engine.evalBundle(jsBundle)
-                block(engine)
-            }
-        } finally {
-            engine.close()
-        }
-    }
-
     private suspend fun <T> withEngine(block: suspend (QuickJsEngine) -> T): T {
         val engine = QuickJsEngine(hostApis)
         return try {
@@ -127,34 +98,57 @@ class JsProvider(
         engine.evalSnippet(HOST_BOOTSTRAP_JS)
     }
 
-    private fun parseFieldsSpec(json: String): List<ServerFieldSpec> {
-        return try {
-            val arr = this.json.parseToJsonElement(json).jsonArray
-            arr.mapNotNull { el ->
-                val obj = el.jsonObject
-                val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
-                val kind = when (obj["kind"]?.jsonPrimitive?.content) {
-                    "password" -> com.opentune.provider.ServerFieldKind.Password
-                    "singleLine" -> com.opentune.provider.ServerFieldKind.SingleLineText
-                    else         -> com.opentune.provider.ServerFieldKind.Text
-                }
-                ServerFieldSpec(
-                    id           = id,
-                    labelKey     = lbl,
-                    kind         = kind,
-                    required     = obj["required"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
-                    sensitive    = obj["sensitive"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    order        = obj["order"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                    placeholderKey = obj["placeholderKey"]?.jsonPrimitive?.content,
-                )
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-
     companion object {
+        /**
+         * Evaluates the bundle in a temporary engine to read [providesCover] and
+         * [getFieldsSpec], then constructs and returns a ready [JsProvider].
+         * Runs on whatever dispatcher the caller is on — call from [Dispatchers.IO].
+         */
+        suspend fun create(assetPath: String, jsBundle: String, hostApis: HostApis): JsProvider {
+            var cover = false
+            var fields: List<ServerFieldSpec> = emptyList()
+            val engine = QuickJsEngine(hostApis)
+            try {
+                engine.init()
+                engine.evalSnippet(HOST_BOOTSTRAP_JS)
+                engine.evalBundle(jsBundle)
+                cover = engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+                val result = engine.callMethod("getFieldsSpec", "{}") ?: ""
+                fields = parseFieldsSpec(result)
+            } finally {
+                engine.close()
+            }
+            return JsProvider(assetPath, jsBundle, hostApis, cover, fields)
+        }
+
+        private fun parseFieldsSpec(json: String): List<ServerFieldSpec> {
+            val serializer = Json { ignoreUnknownKeys = true; isLenient = true }
+            return try {
+                val arr = serializer.parseToJsonElement(json).jsonArray
+                arr.mapNotNull { el ->
+                    val obj = el.jsonObject
+                    val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
+                    val kind = when (obj["kind"]?.jsonPrimitive?.content) {
+                        "password"   -> com.opentune.provider.ServerFieldKind.Password
+                        "singleLine" -> com.opentune.provider.ServerFieldKind.SingleLineText
+                        else         -> com.opentune.provider.ServerFieldKind.Text
+                    }
+                    ServerFieldSpec(
+                        id             = id,
+                        labelKey       = lbl,
+                        kind           = kind,
+                        required       = obj["required"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
+                        sensitive      = obj["sensitive"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+                        order          = obj["order"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                        placeholderKey = obj["placeholderKey"]?.jsonPrimitive?.content,
+                    )
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
         /**
          * JS snippet evaluated after bundle load to install `globalThis.host.*`
          * namespace objects that delegate to `globalThis.__hostDispatch`.

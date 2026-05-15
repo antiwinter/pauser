@@ -2,16 +2,22 @@ package com.opentune.provider.js
 
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderLoader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class JsProviderLoader : OpenTuneProviderLoader {
-    override fun load(register: (OpenTuneProvider) -> Unit) {
+    override suspend fun load(register: (OpenTuneProvider) -> Unit) {
         val assets = AssetManagerHolder.get()
         val hostApis = HostApis()
-        assets.list("")
-            ?.filter { it.endsWith(".js") }
-            ?.forEach { bundleFile ->
-                val bundle = assets.open(bundleFile).use { it.readBytes().toString(Charsets.UTF_8) }
-                register(JsProvider(assetPath = bundleFile, jsBundle = bundle, hostApis = hostApis))
+        val bundleFiles = withContext(Dispatchers.IO) {
+            assets.list("")?.filter { it.endsWith(".js") } ?: emptyList()
+        }
+        for (bundleFile in bundleFiles) {
+            val bundle = withContext(Dispatchers.IO) {
+                assets.open(bundleFile).use { it.readBytes().toString(Charsets.UTF_8) }
             }
+            val provider = JsProvider.create(assetPath = bundleFile, jsBundle = bundle, hostApis = hostApis)
+            register(provider)
+        }
     }
 }

@@ -13,9 +13,16 @@ import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.RoomMediaStateStore
 import com.opentune.storage.thumb.ThumbnailDiskCache
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 class OpenTuneApplication : Application() {
+
+    /** App-level scope for background work tied to the process lifetime. */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     lateinit var database: OpenTuneDatabase
         private set
@@ -34,10 +41,9 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        openTuneServer = OpenTuneServer().also {
-            it.start()
-            StreamRegistrarHolder.set(it)
-        }
+        openTuneServer = OpenTuneServer()
+        StreamRegistrarHolder.set(openTuneServer)
+        appScope.launch(Dispatchers.IO) { openTuneServer.start() }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
             name = getDatabasePath("opentune.db").absolutePath,
@@ -50,12 +56,13 @@ class OpenTuneApplication : Application() {
         )
         val platformInfo = AndroidPlatformInfo(this)
         PlatformInfoHolder.set(platformInfo)
-        providerRegistry = OpenTuneProviderRegistry.discover()
+        providerRegistry = OpenTuneProviderRegistry()
         instanceRegistry = ProviderInstanceRegistry(
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,
         )
-        providerRegistry.setCapabilities(buildPlatformCapabilities())
+        appScope.launch(Dispatchers.IO) { providerRegistry.setCapabilities(buildPlatformCapabilities()) }
+        appScope.launch { providerRegistry.discoverAsync() }
     }
 
     private fun buildPlatformCapabilities(): PlatformCapabilities {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,7 +21,6 @@ import com.opentune.storage.ServerEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -31,16 +31,22 @@ fun HomeRoute(
     onEditProvider: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
-    val providers = remember { app.providerRegistry.allProviders().toList() }
+    val providers by app.providerRegistry.providersFlow.collectAsState()
     var serversByType by remember { mutableStateOf<Map<String, List<ServerEntity>>>(emptyMap()) }
 
+    // Start watching server list for each provider as it arrives.
+    // Uses an observed-protocols set so existing watchers are never cancelled when
+    // the list grows — only new providers get a new watcher coroutine.
     LaunchedEffect(app) {
-        coroutineScope {
-            providers.forEach { provider ->
-                launch {
-                    app.storageBindings.serverDao.observeByProvider(provider.protocol).collect { list ->
-                        serversByType = serversByType + (provider.protocol to list)
-                        launch { app.instanceRegistry.populateEager(list) }
+        val observedProtocols = mutableSetOf<String>()
+        app.providerRegistry.providersFlow.collect { allProviders ->
+            allProviders.forEach { provider ->
+                if (observedProtocols.add(provider.protocol)) {
+                    launch {
+                        app.storageBindings.serverDao.observeByProvider(provider.protocol).collect { list ->
+                            serversByType = serversByType + (provider.protocol to list)
+                            launch { app.instanceRegistry.populateEager(list) }
+                        }
                     }
                 }
             }

@@ -4,7 +4,7 @@ import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderLoader
 
 class SmbProviderLoader : OpenTuneProviderLoader {
-    override fun load(register: (OpenTuneProvider) -> Unit) {
+    override suspend fun load(register: (OpenTuneProvider) -> Unit) {
         register(SmbProvider())
     }
 }
