@@ -21,7 +21,7 @@ Every call that touches the QuickJS C context (`ctxPtr`) is dispatched onto this
 ```
 Caller coroutine (any thread)
   │
-  └─ callMethod("loadBrowsePage", argsJson)
+  └─ callMethod("listEntry", argsJson)
        │
        ├─ [jsDispatcher] nativeCallMethod(ctxPtr, ...)
        │      JS starts executing synchronously until first `await`
@@ -75,17 +75,39 @@ Concretely: if A's Promise chain modifies module-level state and then B's contin
 
 ### 2.4 ensureReady is not concurrency-safe
 
-`JsProviderInstance.ensureReady()` checks `instanceId >= 0` and initialises the engine if not. If two callers reach `ensureReady()` simultaneously before init completes, both will create a `QuickJsEngine`, resulting in a double-init and a leaked context.
+`JsProviderInstance.ensureReady()` checks the `initialized` boolean and initialises the engine if not. If two callers reach `ensureReady()` simultaneously before init completes, both will create a `QuickJsEngine`, resulting in a double-init and a leaked context.
 
-This is only a problem if `loadBrowsePage` and `loadDetail` are called concurrently on a freshly created instance before the first call finishes — i.e., a race between two coroutines on different threads both calling the same instance for the first time.
+This is only a problem if `listEntry` and `getDetail` are called concurrently on a freshly created instance before the first call finishes — i.e., a race between two coroutines on different threads both calling the same instance for the first time.
 
-### 2.5 runBlocking in getFieldsSpec
+### 2.5 runBlocking in getFieldsSpec and providesCover
 
-`JsProvider.getFieldsSpec()` uses `runBlocking` to create a temporary engine synchronously. If this is called from a coroutine running on a limited dispatcher (e.g., the main thread), it will block that thread for the duration of engine init + bundle eval. This is a latency risk, not a correctness risk.
+`JsProvider.getFieldsSpec()` uses `runBlocking` (via `runWithEngine`) to create a temporary engine synchronously. The `providesCover` property is also computed this way — it is a `by lazy` Kotlin property that calls `runWithEngine` on first access:
+
+```kotlin
+override val providesCover: Boolean by lazy {
+    runWithEngine { engine ->
+        engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+    }
+}
+```
+
+If either is called from a coroutine running on a limited dispatcher (e.g., the main thread), it will block that thread for the duration of engine init + bundle eval. The `providesCover` case is subtler because it looks like a plain property read at the call site, making it easy to overlook that it may block. This is a latency risk, not a correctness risk.
 
 ### 2.6 Close/destroy race
 
 `QuickJsEngine.close()` schedules `nativeDestroyContext` on `jsDispatcher`. If a `callMethod` coroutine is mid-flight (awaiting its deferred) and `close()` is called concurrently, `nativeDestroyContext` will be queued behind the current native call — which is correct. However, once `ctxPtr` is zeroed the deferred will never be resolved, leaving the caller suspended indefinitely unless it has a timeout or cancellation.
+
+### 2.7 JsPlaybackHooks is a concurrent caller on the same engine
+
+`getPlaybackSpec` returns a `JsPlaybackHooks` object that holds a direct reference to the `QuickJsEngine` belonging to its `JsProviderInstance`. The player calls `onPlaybackReady`, `onProgressTick`, and `onStop` independently — each dispatches `engine.callMethod(...)` and therefore competes for `jsDispatcher` alongside any concurrent `listEntry`, `search`, or `getDetail` calls.
+
+Two concrete scenarios:
+
+1. A user starts playback and then navigates a browser screen at the same time. `onProgressTick` fires every 10 s while `listEntry` is fetching pages — their JS continuations can interleave at every `await host.*` boundary within the same QuickJS context.
+
+2. If the player triggers `onStop` while an `onProgressTick` call is still awaiting a host response, the two hook invocations interleave. JS hook code that reads and writes module-level state across `await` boundaries (e.g., a running-total counter or a session refresh flag) is subject to the same corruption described in risk 2.1.
+
+The `hooksState` JSON string is treated as immutable on the Kotlin side: it is captured once from the `getPlaybackSpec` response and passed verbatim to every hook call, never updated in place. JS hook implementations must follow the same discipline — treat `hooksState` as a read-only snapshot on entry and return a new object if state needs to change (though the Kotlin bridge currently ignores the returned value and does not thread updates back into subsequent calls). Accumulating mutable state at module scope across hook awaits is unsafe.
 
 ---
 
@@ -196,9 +218,9 @@ The current implementation is safe as long as callers are serialised by `jsDispa
 private val initMutex = Mutex()
 
 private suspend fun ensureReady() {
-    if (instanceId >= 0) return
+    if (initialized) return
     initMutex.withLock {
-        if (instanceId >= 0) return
+        if (initialized) return
         // ... init
     }
 }
@@ -208,7 +230,7 @@ private suspend fun ensureReady() {
 If the engine is closed mid-flight, the deferred will never complete. Wrap calls with `withTimeout`:
 
 ```kotlin
-withTimeout(30_000) { engine.callMethod("loadBrowsePage", args) }
+withTimeout(30_000) { engine.callMethod("listEntry", args) }
 ```
 
 ---

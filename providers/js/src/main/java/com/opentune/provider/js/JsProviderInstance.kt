@@ -12,6 +12,8 @@ import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.StreamInfo
 import com.opentune.provider.SubtitleTrack
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -40,34 +42,38 @@ class JsProviderInstance(
 
     private lateinit var engine: QuickJsEngine
     private var initialized = false
+    private val initMutex = Mutex()
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     private suspend fun ensureReady() {
         if (initialized) return
-        engine = QuickJsEngine(hostApis)
-        engine.init()
-        engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
-        engine.evalBundle(jsBundle)
+        initMutex.withLock {
+            if (initialized) return
+            engine = QuickJsEngine(hostApis)
+            engine.init()
+            engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
+            engine.evalBundle(jsBundle)
 
-        /* init({ credentials, capabilities, deviceName, deviceId, clientVersion }) */
-        val initArgs = buildJsonObject {
-            put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
-            put("capabilities", buildJsonObject {
-                put("videoMime", kotlinx.serialization.json.JsonArray(
-                    capabilities.videoMime.map { JsonPrimitive(it) },
-                ))
-                put("audioMime", kotlinx.serialization.json.JsonArray(
-                    capabilities.audioMime.map { JsonPrimitive(it) },
-                ))
-                put("subtitleFormats", kotlinx.serialization.json.JsonArray(
-                    capabilities.subtitleFormats.map { JsonPrimitive(it) },
-                ))
-                put("maxPixels", capabilities.maxPixels)
-            })
+            /* init({ credentials, capabilities, deviceName, deviceId, clientVersion }) */
+            val initArgs = buildJsonObject {
+                put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
+                put("capabilities", buildJsonObject {
+                    put("videoMime", kotlinx.serialization.json.JsonArray(
+                        capabilities.videoMime.map { JsonPrimitive(it) },
+                    ))
+                    put("audioMime", kotlinx.serialization.json.JsonArray(
+                        capabilities.audioMime.map { JsonPrimitive(it) },
+                    ))
+                    put("subtitleFormats", kotlinx.serialization.json.JsonArray(
+                        capabilities.subtitleFormats.map { JsonPrimitive(it) },
+                    ))
+                    put("maxPixels", capabilities.maxPixels)
+                })
+            }
+            engine.callMethod("init", initArgs.toString())
+            initialized = true
         }
-        engine.callMethod("init", initArgs.toString())
-        initialized = true
     }
 
     // ── OpenTuneProviderInstance ───────────────────────────────────────────

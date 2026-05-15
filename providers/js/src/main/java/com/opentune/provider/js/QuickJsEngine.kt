@@ -2,40 +2,40 @@ package com.opentune.provider.js
 
 import android.util.Log
 import androidx.annotation.Keep
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.Headers.Companion.toHeaders
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * QuickJS context wrapper.
  *
- * Threading contract: ALL native calls are dispatched through [jsDispatcher],
- * which is a single-threaded coroutine context. QuickJS is not thread-safe.
+ * Runs a single engine coroutine that owns the QuickJS context pointer. All JS
+ * execution happens on that coroutine; callers enqueue [EngineTask]s via
+ * [taskChannel] and await results through [CompletableDeferred].
  *
- * Kotlin methods [resolveCallback], [rejectCallback], [invokeHostFunction] are
- * called directly from JNI (on the jsDispatcher thread) and must NOT suspend.
+ * Threading contract:
+ *  - [taskChannel] is the only input path to the engine thread.
+ *  - [resolveCallback] and [rejectCallback] are called from C on the engine
+ *    thread (during [pumpJobs]) and must NOT suspend.
+ *  - [invokeHostFunction] is called from C on the engine thread and must
+ *    return immediately; it enqueues [EngineTask.ResolveHost] / [EngineTask.RejectHost]
+ *    via [Channel.trySend], which never blocks on an UNLIMITED channel.
  */
 class QuickJsEngine(
     private val hostApis: HostApis,
     private val httpClient: OkHttpClient = defaultHttpClient(),
 ) {
-    /** Single-threaded dispatcher for all QuickJS JNI calls. */
-    val jsDispatcher = Dispatchers.IO.limitedParallelism(1)
-
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Native context pointer — only accessed from jsDispatcher. */
-    private var ctxPtr: Long = 0L
+    /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
+    private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
 
     /** Map from callback key → CompletableDeferred for in-flight JS calls. */
     private val pendingCalls = ConcurrentHashMap<Long, CompletableDeferred<String?>>()
@@ -43,43 +43,52 @@ class QuickJsEngine(
     /** Monotonically increasing key generator. */
     private val keyGen = AtomicLong(1L)
 
+    // ── Task type ──────────────────────────────────────────────────────────
+
+    private sealed class EngineTask {
+        data class CallMethod(val method: String, val args: String, val key: Long) : EngineTask()
+        data class ResolveHost(val hostKey: Long, val result: String?) : EngineTask()
+        data class RejectHost(val hostKey: Long, val error: String) : EngineTask()
+        data class EvalSnippet(val code: String, val deferred: CompletableDeferred<Unit>) : EngineTask()
+        data class EvalBundle(val code: String, val deferred: CompletableDeferred<Unit>) : EngineTask()
+        data class EvalExpression(val code: String, val deferred: CompletableDeferred<String?>) : EngineTask()
+    }
+
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
-    suspend fun init() = withContext(jsDispatcher) {
-        ctxPtr = nativeCreateContext()
-        check(ctxPtr != 0L) { "QuickJS context creation failed" }
-    }
-
-    suspend fun evalBundle(jsCode: String) = withContext(jsDispatcher) {
-        val error = nativeEvalBundle(ctxPtr, jsCode)
-        check(error == null) { "Bundle eval failed: $error" }
-        pumpJobs()
-    }
-
-    suspend fun evalSnippet(jsCode: String) = withContext(jsDispatcher) {
-        val error = nativeEvalSnippet(ctxPtr, jsCode)
-        check(error == null) { "Snippet eval failed: $error" }
-        pumpJobs()
-    }
-
     /**
-     * Evaluates [jsCode] as a JS expression and returns its JSON.stringify'd value,
-     * or null if the result is null/undefined. Throws if the expression throws.
+     * Creates the QuickJS context and starts the engine loop coroutine.
+     * Must be called before any other method.
      */
-    suspend fun evalExpression(jsCode: String): String? = withContext(jsDispatcher) {
-        nativeEvalExpression(ctxPtr, jsCode)
-    }
-
-    fun close() {
-        engineScope.launch(jsDispatcher) {
-            if (ctxPtr != 0L) {
-                nativeDestroyContext(ctxPtr)
-                ctxPtr = 0L
+    suspend fun init() {
+        val ready = CompletableDeferred<Unit>()
+        engineScope.launch(Dispatchers.IO.limitedParallelism(1)) {
+            val ctx = nativeCreateContext()
+            if (ctx == 0L) {
+                ready.completeExceptionally(RuntimeException("QuickJS context creation failed"))
+                return@launch
             }
+            ready.complete(Unit)
+            // Engine loop: one task at a time, pumpJobs after each.
+            for (task in taskChannel) {
+                processTask(ctx, task)
+                pumpJobs(ctx)
+            }
+            // Channel closed — destroy context and unblock any waiting callers.
+            nativeDestroyContext(ctx)
+            val err = CancellationException("QuickJsEngine closed")
+            pendingCalls.values.forEach { it.completeExceptionally(err) }
+            pendingCalls.clear()
         }
+        ready.await()
     }
 
-    // ── Method calls ───────────────────────────────────────────────────────
+    /** Closes the task channel, causing the engine loop to drain and exit. */
+    fun close() {
+        taskChannel.close()
+    }
+
+    // ── Public API — enqueue and await ─────────────────────────────────────
 
     /**
      * Calls `globalThis.opentuneProvider.<method>(argsJson)` asynchronously.
@@ -88,28 +97,81 @@ class QuickJsEngine(
     suspend fun callMethod(method: String, argsJson: String): String? {
         val key = keyGen.getAndIncrement()
         val deferred = CompletableDeferred<String?>()
-        // Register BEFORE calling native (sentinel pattern avoids race condition)
+        // Register BEFORE enqueuing (sentinel pattern: fast-completing native call
+        // cannot race with registration).
         pendingCalls[key] = deferred
-        withContext(jsDispatcher) {
-            val error = nativeCallMethod(ctxPtr, method, argsJson, key)
-            if (error != null) {
-                pendingCalls.remove(key)
-                deferred.completeExceptionally(RuntimeException("JS call error: $error"))
-                return@withContext
-            }
-            pumpJobs()
+        try {
+            taskChannel.send(EngineTask.CallMethod(method, argsJson, key))
+        } catch (e: Exception) {
+            pendingCalls.remove(key)
+            throw e
         }
         return deferred.await()
     }
 
-    // ── Pump ───────────────────────────────────────────────────────────────
-
-    /** Drains the QuickJS microtask queue. Must be called on jsDispatcher. */
-    private fun pumpJobs() {
-        while (nativeExecutePendingJobs(ctxPtr, 64) > 0) { /* drain */ }
+    suspend fun evalBundle(jsCode: String) {
+        val deferred = CompletableDeferred<Unit>()
+        taskChannel.send(EngineTask.EvalBundle(jsCode, deferred))
+        deferred.await()
     }
 
-    // ── Callbacks called from JNI (on jsDispatcher thread) ────────────────
+    suspend fun evalSnippet(jsCode: String) {
+        val deferred = CompletableDeferred<Unit>()
+        taskChannel.send(EngineTask.EvalSnippet(jsCode, deferred))
+        deferred.await()
+    }
+
+    /**
+     * Evaluates [jsCode] as a JS expression and returns its JSON.stringify'd value,
+     * or null if the result is null/undefined.
+     */
+    suspend fun evalExpression(jsCode: String): String? {
+        val deferred = CompletableDeferred<String?>()
+        taskChannel.send(EngineTask.EvalExpression(jsCode, deferred))
+        return deferred.await()
+    }
+
+    // ── Engine loop helpers ────────────────────────────────────────────────
+
+    private fun processTask(ctx: Long, task: EngineTask) {
+        when (task) {
+            is EngineTask.CallMethod -> {
+                val error = nativeCallMethod(ctx, task.method, task.args, task.key)
+                if (error != null) {
+                    pendingCalls.remove(task.key)
+                        ?.completeExceptionally(RuntimeException("JS call error: $error"))
+                }
+            }
+            is EngineTask.ResolveHost -> {
+                val err = nativeResolveHostCall(ctx, task.hostKey, task.result)
+                if (err != null) Log.e(TAG, "resolveHostCall error: $err")
+            }
+            is EngineTask.RejectHost -> {
+                val err = nativeRejectHostCall(ctx, task.hostKey, task.error)
+                if (err != null) Log.e(TAG, "rejectHostCall error: $err")
+            }
+            is EngineTask.EvalSnippet -> {
+                val error = nativeEvalSnippet(ctx, task.code)
+                if (error != null) task.deferred.completeExceptionally(RuntimeException(error))
+                else task.deferred.complete(Unit)
+            }
+            is EngineTask.EvalBundle -> {
+                val error = nativeEvalBundle(ctx, task.code)
+                if (error != null) task.deferred.completeExceptionally(RuntimeException(error))
+                else task.deferred.complete(Unit)
+            }
+            is EngineTask.EvalExpression -> {
+                task.deferred.complete(nativeEvalExpression(ctx, task.code))
+            }
+        }
+    }
+
+    /** Drains the QuickJS microtask queue. Called once per task in the engine loop. */
+    private fun pumpJobs(ctx: Long) {
+        while (nativeExecutePendingJobs(ctx, 64) > 0) { /* drain */ }
+    }
+
+    // ── Callbacks called from JNI (on engine thread, during pumpJobs) ──────
 
     @Keep
     fun resolveCallback(key: Long, value: String?) {
@@ -131,8 +193,9 @@ class QuickJsEngine(
 
     /**
      * Called from JNI when JS calls `__hostDispatch(ns, name, argsJson)`.
-     * Must NOT suspend — returns a key string immediately, then schedules
-     * async work that resolves the JS Promise via [nativeResolveHostCall].
+     * Must NOT suspend — returns a key string immediately, then launches an
+     * IO coroutine that enqueues a [EngineTask.ResolveHost] or [EngineTask.RejectHost]
+     * when the host work completes.
      */
     @Keep
     fun invokeHostFunction(namespace: String, name: String, argsJson: String): String {
@@ -140,18 +203,9 @@ class QuickJsEngine(
         engineScope.launch(Dispatchers.IO) {
             try {
                 val result = dispatchHost(namespace, name, argsJson)
-                withContext(jsDispatcher) {
-                    val err = nativeResolveHostCall(ctxPtr, key, result)
-                    if (err != null) Log.e(TAG, "resolveHostCall error: $err")
-                    pumpJobs()
-                }
+                taskChannel.trySend(EngineTask.ResolveHost(key, result))
             } catch (e: Exception) {
-                val msg = e.message ?: "host error"
-                withContext(jsDispatcher) {
-                    val err = nativeRejectHostCall(ctxPtr, key, msg)
-                    if (err != null) Log.e(TAG, "rejectHostCall error: $err")
-                    pumpJobs()
-                }
+                taskChannel.trySend(EngineTask.RejectHost(key, e.message ?: "host error"))
             }
         }
         return key.toString()

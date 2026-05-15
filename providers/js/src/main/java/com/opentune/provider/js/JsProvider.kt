@@ -32,24 +32,26 @@ class JsProvider(
 
     override val protocol: String = assetPath.removeSuffix(".js")
 
-    override val providesCover: Boolean by lazy {
-        runWithEngine { engine ->
-            engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
-        }
-    }
+    override val providesCover: Boolean
+    private val cachedFieldsSpec: List<ServerFieldSpec>
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    init {
+        var cover = false
+        var fields: List<ServerFieldSpec> = emptyList()
+        runWithEngine { engine ->
+            cover = engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+            val result = engine.callMethod("getFieldsSpec", "{}") ?: ""
+            fields = parseFieldsSpec(result)
+        }
+        providesCover = cover
+        cachedFieldsSpec = fields
+    }
 
     // ── Field spec ─────────────────────────────────────────────────────────
 
-    override fun getFieldsSpec(): List<ServerFieldSpec> {
-        /* Synchronously call the JS bundle in a temporary engine to get field specs. */
-        return runWithEngine { engine ->
-            val result = engine.callMethod("getFieldsSpec", "{}") ?: return@runWithEngine emptyList()
-            parseFieldsSpec(result)
-        }
-    }
+    override fun getFieldsSpec(): List<ServerFieldSpec> = cachedFieldsSpec
 
     // ── Validation ─────────────────────────────────────────────────────────
 
