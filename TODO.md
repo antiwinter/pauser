@@ -6,9 +6,9 @@
 - [x] customMediaSourceFactory
 - [-] collapse imports
 - [ ] add version display
-- [ ] split server from app
-- [ ] Fix: smb loading speed
+- [x] Fix: smb loading speed
 
+- [ ] split server from app
 - [ ] check if same local cache used for smb subtitles as thumb
 - [ ] proxy provider
 - [ ] telegram, auto-proxy, extent add server screen & process

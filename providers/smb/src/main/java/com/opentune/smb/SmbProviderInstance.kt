@@ -147,14 +147,35 @@ class SmbProviderInstance(
         override suspend fun getSize(): Long =
             file.getFileInformation(FileStandardInformation::class.java).endOfFile
 
+        // Seek-aware read-ahead buffer: one large SMB READ fills the chunk;
+        // subsequent calls within the window are served from memory.
+        private val chunkBuf = ByteArray(SMB_READ_CHUNK_BYTES)
+        private var chunkStart = -1L
+        private var chunkLen = 0
+
         override suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-            val r = file.read(buffer, position, offset, size)
-            return if (r == -1) 0 else r
+            // Refill chunk if the requested position falls outside the current window.
+            if (chunkLen == 0 || position < chunkStart || position >= chunkStart + chunkLen) {
+                val r = file.read(chunkBuf, position, 0, chunkBuf.size)
+                if (r <= 0) return 0
+                chunkStart = position
+                chunkLen = r
+            }
+            val indexInChunk = (position - chunkStart).toInt()
+            val available = chunkLen - indexInChunk
+            val n = minOf(size, available)
+            System.arraycopy(chunkBuf, indexInChunk, buffer, offset, n)
+            return n
         }
 
         override fun close() {
             runCatching { file.close() }
             session.close()
+        }
+
+        companion object {
+            /** One SMB READ per chunk; balances latency vs memory (server may cap ~1 MiB). */
+            private const val SMB_READ_CHUNK_BYTES = 128 * 1024
         }
     }
 
