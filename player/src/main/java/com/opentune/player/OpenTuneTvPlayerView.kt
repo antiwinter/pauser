@@ -45,6 +45,18 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     var openMenuCallback: (() -> Unit)? = null
 
     /**
+     * Called when BACK is pressed and no overlay is active. The caller is responsible
+     * for deciding whether to hide the controller or exit the player.
+     */
+    var onBack: (() -> Unit)? = null
+
+    /**
+     * Called whenever the Media3 controller overlay becomes visible (true) or hidden (false).
+     * Used to sync InfoOsd visibility with the playback overlay.
+     */
+    var onControllerVisible: ((Boolean) -> Unit)? = null
+
+    /**
      * When non-null, all key events are forwarded here. Return true to consume the event;
      * return false to let it fall through to transport defaults. The callback receives both
      * ACTION_DOWN and ACTION_UP events, but current implementations only respond to ACTION_DOWN.
@@ -59,10 +71,16 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         setControllerVisibilityListener(
             object : ControllerVisibilityListener {
                 override fun onVisibilityChanged(visibility: Int) {
-                    Log.d(LOG_TAG, "controllerVisibility=$visibility")
+                    val visible = visibility == android.view.View.VISIBLE
+                    Log.d(LOG_TAG, "controllerVisibility=$visibility visible=$visible")
                     // Re-take focus whenever the controller shows or hides so keys keep hitting this
                     // view (see class KDoc).
                     post { requestFocus() }
+                    // Notify external listener (e.g. InfoOsd) of visibility change.
+                    onControllerVisible?.invoke(visible)
+                    // Two-phase hide fix: when the controller starts disappearing, ensure it goes
+                    // fully hidden immediately rather than lingering as a minimal progress bar.
+                    if (!visible) post { hideController() }
                 }
             },
         )
@@ -190,12 +208,22 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         }
 
         // Route to active overlay interceptor (menu, subtitle adjust, etc.)
+        // Interceptor receives both ACTION_DOWN and ACTION_UP so overlays can manage
+        // their own UP/DOWN lifecycle (e.g. deferred-close on menu).
         val interceptor = onKey
         if (interceptor != null && interceptor(event)) return true
 
-        // Handle all key actions in one unified block
+        // Execute side-effects on ACTION_DOWN only.
         if (event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
+                // BACK → player-level back: dismiss exo popup → hide controller → exit
+                KeyEvent.KEYCODE_BACK -> {
+                    if (!dismissMenuPopupIfShowing()) {
+                        if (isControllerFullyVisible) hideController()
+                        else onBack?.invoke()
+                    }
+                }
+
                 // MENU / PAGE_DOWN → open player menu
                 KeyEvent.KEYCODE_MENU,
                 KeyEvent.KEYCODE_PAGE_DOWN,
@@ -226,20 +254,22 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                 -> {
                     if (p != null) {
-                        if (p.isPlaying) p.pause() else p.play()
-                        Log.d(LOG_TAG, "toggle play/pause")
+                        // Use playWhenReady (not isPlaying) so toggling works during buffering.
+                        val wasPlayWhenReady = p.playWhenReady
+                        if (wasPlayWhenReady) p.pause() else p.play()
+                        Log.d(LOG_TAG, "toggle play/pause playWhenReady=$wasPlayWhenReady")
+                        // Only show OSD when pausing; resuming from pause should not show it.
+                        if (wasPlayWhenReady) showController()
                     }
-                    showController()
                 }
 
-                // MEDIA_PLAY → play
+                // MEDIA_PLAY → play (no OSD)
                 KeyEvent.KEYCODE_MEDIA_PLAY -> {
                     p?.play()
                     Log.d(LOG_TAG, "media play")
-                    showController()
                 }
 
-                // MEDIA_PAUSE / MEDIA_STOP → pause
+                // MEDIA_PAUSE / MEDIA_STOP → pause (show OSD)
                 KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_STOP,
                 -> {
@@ -248,17 +278,11 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                     showController()
                 }
             }
-            // Keys with side-effects above always consume the event
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_PAGE_DOWN,
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-                KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE,
-                KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
-                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_STOP,
-                -> return true
-            }
         }
+
+        // All OWNED_KEYS are consumed for every action (DOWN and UP) so they never
+        // reach Media3's PlayerView, which would otherwise call showController().
+        if (event.keyCode in OWNED_KEYS) return true
 
         val consumed = super.dispatchKeyEvent(event)
         if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
@@ -278,5 +302,27 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     private companion object {
         private const val LOG_TAG = "OpenTuneTvPlayerKeys"
         private const val SEEK_MS = 15_000L
+
+        /**
+         * Keys fully owned by this view. Both ACTION_DOWN and ACTION_UP are consumed
+         * and never forwarded to Media3's PlayerView (which would call showController()).
+         */
+        private val OWNED_KEYS = intArrayOf(
+            KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_MENU,
+            KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER,
+            KeyEvent.KEYCODE_SPACE,
+            KeyEvent.KEYCODE_MEDIA_PLAY,
+            KeyEvent.KEYCODE_MEDIA_PAUSE,
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            KeyEvent.KEYCODE_MEDIA_STOP,
+        ).toHashSet()
+
+        private fun IntArray.toHashSet() = HashSet<Int>().also { s -> forEach { s.add(it) } }
     }
 }

@@ -9,8 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -20,8 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 internal class InfoOsd(
     private val spec: PlaybackSpec,
@@ -30,26 +29,17 @@ internal class InfoOsd(
     private val audioMime: String?,
     private val audioDecoderName: String?,
     private val showState: MutableState<Boolean>,
-    private val countState: MutableState<Int>,
+    val mbpsState: MutableFloatState,
 ) {
     val isVisible: Boolean get() = showState.value
 
-    fun toggle() {
-        if (showState.value) {
-            showState.value = false
-        } else {
-            if (countState.value >= 3) {
-                showState.value = true
-                countState.value = 0
-            } else {
-                countState.value++
-            }
-        }
-    }
+    fun show() { showState.value = true }
+    fun hide() { showState.value = false }
 
     @Composable
     fun Osd() {
         if (!showState.value) return
+        val mbps = mbpsState.floatValue
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter,
@@ -75,6 +65,13 @@ internal class InfoOsd(
                     Text(
                         text = if (audioDecoderName != null) "$mime $audioDecoderName" else mime,
                         color = Color.White,
+                        fontSize = 14.sp,
+                    )
+                }
+                if (mbps > 0f) {
+                    Text(
+                        text = "%.1f Mbps".format(mbps),
+                        color = Color(0xFFAAAAAA),
                         fontSize = 14.sp,
                     )
                 }
@@ -106,29 +103,17 @@ internal fun rememberInfoOsd(
     audioDecoderName: String?,
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    val countState = remember(instanceKey) { mutableStateOf(0) }
-
-    // 1s inactivity timeout: reset count if no toggle occurs within 1s
-    LaunchedEffect(countState.value) {
-        val current = countState.value
-        if (current > 0 && !showState.value) {
-            delay(1_000L)
-            // Only reset if count hasn't changed during the delay
-            if (countState.value == current) {
-                countState.value = 0
-            }
-        }
-    }
+    val mbpsState = remember(instanceKey) { mutableFloatStateOf(-1f) }
 
     return remember(instanceKey, spec, videoMime, videoDecoderName, audioMime, audioDecoderName) {
         InfoOsd(
             spec = spec,
             videoMime = videoMime,
+            mbpsState = mbpsState,
             videoDecoderName = videoDecoderName,
             audioMime = audioMime,
             audioDecoderName = audioDecoderName,
             showState = showState,
-            countState = countState,
         )
     }
 }

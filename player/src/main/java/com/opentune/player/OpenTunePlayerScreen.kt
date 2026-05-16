@@ -127,7 +127,16 @@ fun OpenTunePlayerScreen(
     var audioMime by remember { mutableStateOf<String?>(null) }
     var videoDecoderName by remember { mutableStateOf<String?>(null) }
     var audioDecoderName by remember { mutableStateOf<String?>(null) }
-    var mbps by remember(instanceKey) { mutableStateOf(0f) }
+
+    // Declared early so LaunchedEffects can update mbpsState directly.
+    val infoOsd = rememberInfoOsd(
+        instanceKey = instanceKey,
+        spec = spec,
+        videoMime = videoMime,
+        videoDecoderName = videoDecoderName,
+        audioMime = audioMime,
+        audioDecoderName = audioDecoderName,
+    )
 
     // Dismiss any IME left open from a previous screen (e.g. server-add / search text fields).
     // hideSoftInputFromWindow also ends the IME's input connection, preventing it from
@@ -380,7 +389,7 @@ fun OpenTunePlayerScreen(
                 if (!exo.isPlaying) continue
                 if (released.get()) break
                 val pos = exo.currentPosition
-                mbps = bandwidthMeter.getBitrateEstimate() / 1_000_000f
+                infoOsd.mbpsState.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
                 hooksState.value.onProgressTick(pos, playbackRate())
                 withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
             }
@@ -388,7 +397,7 @@ fun OpenTunePlayerScreen(
             while (isActive) {
                 delay(10_000L)
                 if (released.get()) break
-                mbps = bandwidthMeter.getBitrateEstimate() / 1_000_000f
+                infoOsd.mbpsState.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
                 if (exo.isPlaying) {
                     val pos = exo.currentPosition
                     withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
@@ -398,21 +407,12 @@ fun OpenTunePlayerScreen(
     }
 
     BackHandler {
-        when {
-            subtitleCtrl.handleBack() -> {}
-            menu.handleBack() -> {}
-            else -> {
-                val pv = playerViewRef
-                if (pv is OpenTuneTvPlayerView && pv.dismissMenuPopupIfShowing()) {
-                    return@BackHandler
-                }
-                if (pv != null && pv.isControllerFullyVisible) {
-                    pv.hideController()
-                } else {
-                    scope.launch { shutdown(userInitiatedExit = true) }
-                }
-            }
-        }
+        // Subtitle adjust active: BACK exits adjust mode (ACTION_DOWN in onKey routes to
+        // subtitleCtrl.handleBack(); this BackHandler covers the system back gesture).
+        if (subtitleCtrl.handleBack()) return@BackHandler
+        // For all other cases, the View owns BACK via OWNED_KEYS and routes through onBack.
+        // This BackHandler exists only as a fallback for gesture navigation on non-TV devices.
+        scope.launch { shutdown(userInitiatedExit = true) }
     }
 
     DisposableEffect(exo) {
@@ -436,16 +436,16 @@ fun OpenTunePlayerScreen(
         }
     }
 
-    // --- UI ---
+    // Own the controller hide timeout: when the infoOsd becomes visible (controller shown),
+    // wait 5s then hide immediately. This bypasses Media3's two-phase shrink animation.
+    LaunchedEffect(infoOsd.isVisible) {
+        if (infoOsd.isVisible) {
+            delay(CONTROLLER_HIDE_AFTER_MS.toLong())
+            playerViewRef?.hideController()
+        }
+    }
 
-    val infoOsd = rememberInfoOsd(
-        instanceKey = instanceKey,
-        spec = spec,
-        videoMime = videoMime,
-        videoDecoderName = videoDecoderName,
-        audioMime = audioMime,
-        audioDecoderName = audioDecoderName,
-    )
+    // --- UI ---
 
     Box(modifier = Modifier.fillMaxSize()) {
         OpenTunePlayerView(
@@ -453,17 +453,20 @@ fun OpenTunePlayerScreen(
             modifier = Modifier.fillMaxSize(),
             onPlayerViewBound = { playerViewRef = it },
             onOpenMenu = { menu.open() },
+            onBack = { scope.launch { shutdown(userInitiatedExit = true) } },
+            onControllerVisibilityChanged = { visible ->
+                if (visible) infoOsd.show() else infoOsd.hide()
+            },
             onKey = { event ->
                 when {
                     menu.isOpen -> menu.onKey?.invoke(event) == true
                     subtitleCtrl.isAdjustActive -> {
-                        if (event.action == KeyEvent.ACTION_DOWN) subtitleCtrl.adjustKey(event.keyCode)
-                        true
-                    }
-                    // No overlay: UP toggles infoOSD (don't consume — let view show controller)
-                    event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
-                        infoOsd.toggle()
-                        false
+                        if (event.action == KeyEvent.ACTION_DOWN) {
+                            // BACK exits adjust mode; all other keys adjust position/size.
+                            if (event.keyCode == KeyEvent.KEYCODE_BACK) subtitleCtrl.handleBack()
+                            else subtitleCtrl.adjustKey(event.keyCode)
+                        }
+                        true // consume both UP and DOWN while adjust is active
                     }
                     else -> false
                 }
@@ -474,6 +477,5 @@ fun OpenTunePlayerScreen(
         menu.Overlay()
         subtitleCtrl.AdjustOsd()
         infoOsd.Osd()
-        MbpsOverlay(mbps = mbps)
     }
 }

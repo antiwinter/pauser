@@ -25,13 +25,14 @@
 - [ ] common.js
 
 ## Player
-- [ ] merge infoOSD w/ playbackOverlay
-- [ ] Opt: subtitle bg
-- [ ] Opt: start play, immediate dismiss
-- [ ] Fix: menu scrolling, navi back, don't bringup posd when dismiss
-- [ ] Fix: playbackOSD two phase disappearing
+- [x] merge infoOSD w/ playbackOverlay
+- [x] Opt: start play, don't show controller
+- [x] Fix: menu scrolling, navi back
+- [x] don't bringup posd when dismiss
+- [x] Fix: playbackOSD two phase disappearing
+- [x] Opt: subtitle bg
+- [x] Fix: buffering pause
 - [ ] Fix: pause/continue slow buffering
-- [ ] Fix: pause buffering, buffering pause
 - [x] pagedown -> menu
 - [x] emby resolve external
 - [x] srt/vss/ass as profile
