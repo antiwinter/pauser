@@ -159,6 +159,7 @@ export interface PlaybackProgressInfo {
   PlayMethod: string;
   PositionTicks: number;
   PlaybackRate: number;
+  IsPaused?: boolean;
 }
 
 export interface PlaybackStopInfo {

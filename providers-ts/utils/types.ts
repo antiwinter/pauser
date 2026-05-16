@@ -192,6 +192,7 @@ export interface OpenTuneProviderBridge {
     hooksState: HooksState;
     positionMs: number;
     playbackRate: number;
+    isPaused: boolean;
   }): Promise<void>;
 
   onStop(args: {

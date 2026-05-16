@@ -14,7 +14,7 @@ class SmbPlaybackHooks(private val tokenUrls: List<String>) : OpenTunePlaybackHo
 
     override suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float) = Unit
 
-    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float) = Unit
+    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean) = Unit
 
     override suspend fun onStop(positionMs: Long) = Unit
 

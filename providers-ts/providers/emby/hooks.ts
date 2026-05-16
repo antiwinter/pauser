@@ -41,6 +41,7 @@ export async function onProgressTick(
   state: EmbyHooksState,
   positionMs: number,
   playbackRate: number,
+  isPaused: boolean,
 ): Promise<void> {
   const api = new EmbyApi(state.baseUrl, state.accessToken, state.userId);
   const ticks = positionMs * 10_000;
@@ -52,6 +53,7 @@ export async function onProgressTick(
     PlayMethod:    state.playMethod,
     PositionTicks: ticks,
     PlaybackRate:  playbackRate,
+    IsPaused:      isPaused,
   });
 }
 

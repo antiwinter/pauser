@@ -279,11 +279,12 @@ private class JsPlaybackHooks(
         })
     }
 
-    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float) {
+    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean) {
         callHook("onProgressTick", buildJsonObject {
             put("hooksState", json.parseToJsonElement(hooksStateJson))
             put("positionMs", positionMs)
             put("playbackRate", playbackRate)
+            put("isPaused", isPaused)
         })
     }
 

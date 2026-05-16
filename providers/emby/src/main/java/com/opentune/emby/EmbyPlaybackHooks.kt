@@ -47,7 +47,7 @@ class EmbyPlaybackHooks(
         }
     }
 
-    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float) {
+    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean) {
         val ticks = positionMs * 10_000L
         withContext(Dispatchers.IO) {
             repository().reportProgress(
@@ -59,6 +59,7 @@ class EmbyPlaybackHooks(
                     playMethod = playMethod,
                     positionTicks = ticks,
                     playbackRate = playbackRate,
+                    isPaused = isPaused,
                 ),
             )
         }

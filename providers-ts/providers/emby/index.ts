@@ -93,8 +93,9 @@ let state: EmbyInstanceState | null = null;
     hooksState: EmbyHooksState;
     positionMs: number;
     playbackRate: number;
+    isPaused: boolean;
   }): Promise<void> {
-    await onProgressTick(args.hooksState, args.positionMs, args.playbackRate);
+    await onProgressTick(args.hooksState, args.positionMs, args.playbackRate, args.isPaused);
   },
 
   async onStop(args: {

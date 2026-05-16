@@ -5,7 +5,7 @@ interface OpenTunePlaybackHooks {
     fun progressIntervalMs(): Long
 
     suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float)
-    suspend fun onProgressTick(positionMs: Long, playbackRate: Float)
+    suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean = false)
     suspend fun onStop(positionMs: Long)
 
     /**

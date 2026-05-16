@@ -386,12 +386,14 @@ fun OpenTunePlayerScreen(
         if (interval > 0L) {
             while (isActive) {
                 delay(interval)
-                if (!exo.isPlaying) continue
                 if (released.get()) break
                 val pos = exo.currentPosition
+                val isPaused = !exo.playWhenReady
                 infoOsd.mbpsState.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
-                hooksState.value.onProgressTick(pos, playbackRate())
-                withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
+                hooksState.value.onProgressTick(pos, playbackRate(), isPaused)
+                if (!isPaused) {
+                    withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
+                }
             }
         } else {
             while (isActive) {
