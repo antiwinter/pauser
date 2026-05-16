@@ -1,6 +1,7 @@
 package com.opentune.app.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -11,10 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.storage.ServerEntity
@@ -53,25 +57,34 @@ fun HomeRoute(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(48.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(stringResource(R.string.home_title))
-        providers.forEach { provider ->
-            Button(onClick = { onAddProvider(provider.protocol) }) {
-                Text(stringResource(R.string.home_add_provider, provider.protocol))
-            }
-        }
-        providers.forEach { provider ->
-            (serversByType[provider.protocol] ?: emptyList()).forEach { s ->
-                Button(
-                    onClick = { onOpenBrowse(provider.protocol, s.sourceId, "") },
-                    modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, s.sourceId) },
-                ) {
-                    Text(s.displayName)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(48.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(stringResource(R.string.home_title))
+            providers.forEach { provider ->
+                Button(onClick = { onAddProvider(provider.protocol) }) {
+                    Text(stringResource(R.string.home_add_provider, provider.protocol))
                 }
             }
-        }
-    }
+            providers.forEach { provider ->
+                (serversByType[provider.protocol] ?: emptyList()).forEach { s ->
+                    Button(
+                        onClick = { onOpenBrowse(provider.protocol, s.sourceId, "") },
+                        modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, s.sourceId) },
+                    ) {
+                        Text(s.displayName)
+                    }
+                }
+            }
+        } // end Column
+        Text(
+            text = BuildConfig.GIT_VERSION,
+            fontSize = 11.sp,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        )
+    } // end Box
 }

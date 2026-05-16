@@ -1,8 +1,31 @@
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+fun gitExec(vararg args: String): String =
+    providers.exec {
+        commandLine("git", *args)
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim()
+
+fun gitVersion(): String {
+    val hash = gitExec("rev-parse", "--short=5", "HEAD").ifEmpty { "00000" }
+    val date = LocalDate.now().format(DateTimeFormatter.ofPattern("MMdd"))
+    val dirty = gitExec("status", "--porcelain").isNotEmpty()
+    val tag = gitExec("describe", "--tags", "--exact-match", "HEAD")
+
+    return buildString {
+        if (tag.isNotEmpty()) append("$tag-")
+        append("$hash-$date")
+        if (dirty) append("-dirty")
+    }
 }
 
 android {
@@ -15,6 +38,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "GIT_VERSION", "\"${gitVersion()}\"")
     }
 
     signingConfigs {
@@ -29,6 +53,7 @@ android {
     buildTypes {
         debug {
             // Include all ABIs in debug so emulators work
+            buildConfigField("String", "GIT_VERSION", "\"${gitVersion()}-debug\"")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
