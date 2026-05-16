@@ -22,6 +22,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: providers-ts/yarn.lock
+
+      - name: Build TS providers
+        working-directory: providers-ts
+        run: yarn install --frozen-lockfile && yarn build
+
       - name: Install NDK
         run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;30.0.14904198"
 
@@ -46,6 +56,16 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: providers-ts/yarn.lock
+
+      - name: Build TS providers
+        working-directory: providers-ts
+        run: yarn install --frozen-lockfile && yarn build
 
       - name: Install NDK
         run: $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;30.0.14904198"
