@@ -5,7 +5,7 @@
 - [x] service worker like mechanism to map files/smb to url
 - [x] customMediaSourceFactory
 - [-] collapse imports
-- [ ] add version display
+- [x] add version display
 - [x] Fix: smb loading speed
 
 - [ ] split server from app
@@ -25,7 +25,7 @@
 - [ ] common.js
 
 ## Player
-- [ ] merge infoOSD w/ playbackOverlay,when buffering: show playbackOverlay, allow pause
+- [ ] merge infoOSD w/ playbackOverlay
 - [ ] Opt: subtitle bg
 - [ ] Opt: start play, immediate dismiss
 - [ ] Fix: menu scrolling, navi back, don't bringup posd when dismiss
