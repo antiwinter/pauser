@@ -64,7 +64,7 @@ android {
                 "proguard-rules.pro",
             )
             ndk {
-                abiFilters += setOf("arm64-v8a")
+                abiFilters += setOf("arm64-v8a", "armeabi-v7a")
             }
         }
     }
@@ -81,6 +81,16 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets", "${rootDir}/providers-ts/dist")
+        }
+    }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            if (variant.buildType.name == "release") {
+                output.outputFileName = "opentune-v${variant.versionName}.apk"
+            }
         }
     }
 }

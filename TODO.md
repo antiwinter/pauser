@@ -45,3 +45,4 @@
 ## Roadmap
 - [ ] remove opentune naming
 - [ ] HDR support
+- [ ] release insomnia-x86_64-vx.x.x.apk
