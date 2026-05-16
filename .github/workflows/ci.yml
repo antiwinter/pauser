@@ -106,8 +106,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      - name: Rename APK
+        run: |
+          VERSION=$(grep versionName app/build.gradle.kts | grep -oP '"\K[^"]+' | head -1)
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/opentune-v${VERSION}.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/opentune-*.apk
+          files: app/build/outputs/apk/release/opentune-v*.apk
           generate_release_notes: true
