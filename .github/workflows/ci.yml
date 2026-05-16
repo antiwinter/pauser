@@ -6,9 +6,45 @@ on:
     tags: ["v*"]
 
 jobs:
-  build:
+  changes:
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     runs-on: ubuntu-latest
+    outputs:
+      ts: ${{ steps.filter.outputs.ts }}
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ts:
+              - 'providers-ts/**'
+            android:
+              - '**'
+              - '!providers-ts/**'
 
+  build-ts:
+    needs: changes
+    if: needs.changes.outputs.ts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: providers-ts/yarn.lock
+
+      - name: Build TS providers
+        working-directory: providers-ts
+        run: yarn install --frozen-lockfile && yarn build
+
+  build-android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +76,6 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
     runs-on: ubuntu-latest
 
     permissions:
