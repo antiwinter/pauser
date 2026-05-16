@@ -16,6 +16,7 @@
 - [x] remove sidecar meta
 - [x] research thread safe
 - [ ] common.js
+- [ ] bundle/gzip, {fields, providesCover, js: 'string'}
 - [x] tester on host
 - [x] ts file arch
 - [x] quickjs exclude std & os

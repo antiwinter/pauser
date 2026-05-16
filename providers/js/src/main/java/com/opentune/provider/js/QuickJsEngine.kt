@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
  *  - [resolveCallback] and [rejectCallback] are called from C on the engine
  *    thread (during [pumpJobs]) and must NOT suspend.
  *  - [invokeHostFunction] is called from C on the engine thread and must
- *    return immediately; it enqueues [EngineTask.ResolveHost] / [EngineTask.RejectHost]
+ *    return immediately; it enqueues [EngineTask.SettleHost] via [Channel.trySend],
  *    via [Channel.trySend], which never blocks on an UNLIMITED channel.
  */
 class QuickJsEngine(
@@ -47,8 +47,7 @@ class QuickJsEngine(
 
     private sealed class EngineTask {
         data class CallMethod(val method: String, val args: String, val key: Long) : EngineTask()
-        data class ResolveHost(val hostKey: Long, val result: String?) : EngineTask()
-        data class RejectHost(val hostKey: Long, val error: String) : EngineTask()
+        data class SettleHost(val hostKey: Long, val result: String?, val isError: Boolean) : EngineTask()
         data class EvalSnippet(val code: String, val deferred: CompletableDeferred<Unit>) : EngineTask()
         data class EvalBundle(val code: String, val deferred: CompletableDeferred<Unit>) : EngineTask()
         data class EvalExpression(val code: String, val deferred: CompletableDeferred<String?>) : EngineTask()
@@ -142,13 +141,9 @@ class QuickJsEngine(
                         ?.completeExceptionally(RuntimeException("JS call error: $error"))
                 }
             }
-            is EngineTask.ResolveHost -> {
-                val err = nativeResolveHostCall(ctx, task.hostKey, task.result)
-                if (err != null) Log.e(TAG, "resolveHostCall error: $err")
-            }
-            is EngineTask.RejectHost -> {
-                val err = nativeRejectHostCall(ctx, task.hostKey, task.error)
-                if (err != null) Log.e(TAG, "rejectHostCall error: $err")
+            is EngineTask.SettleHost -> {
+                val err = nativeSettleHostCall(ctx, task.hostKey, task.result, task.isError)
+                if (err != null) Log.e(TAG, "settleHostCall error: $err")
             }
             is EngineTask.EvalSnippet -> {
                 val error = nativeEvalSnippet(ctx, task.code)
@@ -194,8 +189,7 @@ class QuickJsEngine(
     /**
      * Called from JNI when JS calls `__hostDispatch(ns, name, argsJson)`.
      * Must NOT suspend — returns a key string immediately, then launches an
-     * IO coroutine that enqueues a [EngineTask.ResolveHost] or [EngineTask.RejectHost]
-     * when the host work completes.
+     * IO coroutine that enqueues a [EngineTask.SettleHost] when the host work completes.
      */
     @Keep
     fun invokeHostFunction(namespace: String, name: String, argsJson: String): String {
@@ -203,9 +197,9 @@ class QuickJsEngine(
         engineScope.launch(Dispatchers.IO) {
             try {
                 val result = dispatchHost(namespace, name, argsJson)
-                taskChannel.trySend(EngineTask.ResolveHost(key, result))
+                taskChannel.trySend(EngineTask.SettleHost(key, result, false))
             } catch (e: Exception) {
-                taskChannel.trySend(EngineTask.RejectHost(key, e.message ?: "host error"))
+                taskChannel.trySend(EngineTask.SettleHost(key, e.message ?: "host error", true))
             }
         }
         return key.toString()
@@ -230,8 +224,7 @@ class QuickJsEngine(
     private external fun nativeEvalExpression(ctxPtr: Long, jsCode: String): String?
     private external fun nativeExecutePendingJobs(ctxPtr: Long, maxJobs: Int): Int
     private external fun nativeCallMethod(ctxPtr: Long, method: String, argsJson: String, callbackKey: Long): String?
-    private external fun nativeResolveHostCall(ctxPtr: Long, key: Long, resultJson: String?): String?
-    private external fun nativeRejectHostCall(ctxPtr: Long, key: Long, errorMsg: String): String?
+    private external fun nativeSettleHostCall(ctxPtr: Long, key: Long, payload: String?, isError: Boolean): String?
 
     companion object {
         private const val TAG = "QuickJsEngine"

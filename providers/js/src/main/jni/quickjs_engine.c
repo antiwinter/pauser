@@ -280,61 +280,41 @@ done:
     return err;
 }
 
-/* ─── nativeResolveHostCall ─────────────────────────────────────────────── */
+/* ─── nativeSettleHostCall ──────────────────────────────────────────────── */
+/* isError=0: resolve with parsed JSON value; isError=1: reject with Error   */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeResolveHostCall(
-        JNIEnv *env, jobject thiz, jlong p, jlong key, jstring resultJson) {
+Java_com_opentune_provider_js_QuickJsEngine_nativeSettleHostCall(
+        JNIEnv *env, jobject thiz, jlong p, jlong key, jstring payload, jboolean isError) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return NULL;
-    const char *json=resultJson?(*env)->GetStringUTFChars(env,resultJson,NULL):NULL;
+    const char *str=payload?(*env)->GetStringUTFChars(env,payload,NULL):NULL;
 
-    JSValue val = json ? JS_ParseJSON(ctx, json, strlen(json), "<host>") : JS_NULL;
-    if(JS_IsException(val)){
-        char *m=exc_str(ctx);
-        LOGE("resolveHostCall JS_ParseJSON failed: %s", m);
-        free(m);
+    JSValue stash;
+    if(isError) {
+        stash = JS_NewString(ctx, str ? str : "host error");
+    } else {
+        stash = str ? JS_ParseJSON(ctx, str, strlen(str), "<host>") : JS_NULL;
+        if(JS_IsException(stash)){
+            char *m=exc_str(ctx);
+            LOGE("settleHostCall JS_ParseJSON failed: %s", m);
+            free(m);
+        }
     }
-    if(json) (*env)->ReleaseStringUTFChars(env, resultJson, json);
-    if(JS_IsException(val)){
+    if(str) (*env)->ReleaseStringUTFChars(env, payload, str);
+    if(JS_IsException(stash)){
         char *m=exc_str(ctx); jstring jm=(*env)->NewStringUTF(env,m); free(m);
         return jm;
     }
+
     JSValue g=JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, g, "__hostVal", val); /* val ref stolen */
+    JS_SetPropertyStr(ctx, g, "__hostStash", stash); /* ref stolen */
     char buf[256];
     snprintf(buf, sizeof(buf),
         "(function(){var r=globalThis.__hr&&globalThis.__hr[%.0f];"
-        "if(r){r.resolve(globalThis.__hostVal);delete globalThis.__hr[%.0f];}"
-        "delete globalThis.__hostVal;})();",
-        (double)key, (double)key);
+        "if(r){r.%s(globalThis.__hostStash);delete globalThis.__hr[%.0f];}"
+        "delete globalThis.__hostStash;})();",
+        (double)key, isError ? "reject" : "resolve", (double)key);
     JS_FreeValue(ctx, g);
-    JSValue r=JS_Eval(ctx,buf,strlen(buf),"<resolve>",JS_EVAL_TYPE_GLOBAL);
-    if(JS_IsException(r)){
-        char *m=exc_str(ctx);jstring jm=(*env)->NewStringUTF(env,m);free(m);
-        JS_FreeValue(ctx,r);return jm;
-    }
-    JS_FreeValue(ctx,r); return NULL;
-}
-
-/* ─── nativeRejectHostCall ──────────────────────────────────────────────── */
-JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeRejectHostCall(
-        JNIEnv *env, jobject thiz, jlong p, jlong key, jstring errorMsg) {
-    JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return NULL;
-    const char *msg=errorMsg?(*env)->GetStringUTFChars(env,errorMsg,NULL):"host error";
-
-    /* Build Error object as a JS value and stash it — same pattern as resolve. */
-    JSValue err_msg = JS_NewString(ctx, msg);
-    if(errorMsg) (*env)->ReleaseStringUTFChars(env, errorMsg, msg);
-    JSValue g=JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, g, "__hostErrMsg", err_msg); /* ref stolen */
-    char buf[256];
-    snprintf(buf, sizeof(buf),
-        "(function(){var r=globalThis.__hr&&globalThis.__hr[%.0f];"
-        "if(r){r.reject(new Error(globalThis.__hostErrMsg));delete globalThis.__hr[%.0f];}"
-        "delete globalThis.__hostErrMsg;})();",
-        (double)key, (double)key);
-    JS_FreeValue(ctx, g);
-    JSValue r=JS_Eval(ctx,buf,strlen(buf),"<reject>",JS_EVAL_TYPE_GLOBAL);
+    JSValue r=JS_Eval(ctx,buf,strlen(buf),"<settle>",JS_EVAL_TYPE_GLOBAL);
     if(JS_IsException(r)){
         char *m=exc_str(ctx);jstring jm=(*env)->NewStringUTF(env,m);free(m);
         JS_FreeValue(ctx,r);return jm;
