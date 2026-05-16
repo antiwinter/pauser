@@ -154,18 +154,23 @@ class SmbProviderInstance(
         private var chunkLen = 0
 
         override suspend fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-            // Refill chunk if the requested position falls outside the current window.
-            if (chunkLen == 0 || position < chunkStart || position >= chunkStart + chunkLen) {
-                val r = file.read(chunkBuf, position, 0, chunkBuf.size)
-                if (r <= 0) return 0
-                chunkStart = position
-                chunkLen = r
+            var bytesRead = 0
+            while (bytesRead < size) {
+                val pos = position + bytesRead
+                // Refill chunk if the requested position falls outside the current window.
+                if (chunkLen == 0 || pos < chunkStart || pos >= chunkStart + chunkLen) {
+                    val r = file.read(chunkBuf, pos, 0, chunkBuf.size)
+                    if (r <= 0) break  // EOF
+                    chunkStart = pos
+                    chunkLen = r
+                }
+                val indexInChunk = (pos - chunkStart).toInt()
+                val available = chunkLen - indexInChunk
+                val n = minOf(size - bytesRead, available)
+                System.arraycopy(chunkBuf, indexInChunk, buffer, offset + bytesRead, n)
+                bytesRead += n
             }
-            val indexInChunk = (position - chunkStart).toInt()
-            val available = chunkLen - indexInChunk
-            val n = minOf(size, available)
-            System.arraycopy(chunkBuf, indexInChunk, buffer, offset, n)
-            return n
+            return bytesRead
         }
 
         override fun close() {
