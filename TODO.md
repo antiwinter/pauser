@@ -31,6 +31,12 @@
 - [x] IME still shown
 - [x] investigate initialPositionMs
 - [x] overlay control logic is verbose and messy and too stateful
+- [ ] Opt: subtitle bg
+- [ ] Fix: menu scrolling, navi back
+- [ ] Fix: playbackOSD two phase disappearing
+- [ ] Fix: pause/continue slow buffering
+- [ ] Fix: pause buffering, buffering pause
+- [ ] Opt: start play, immediate dismiss
 
 ## Roadmap
 - [ ] HDR support
