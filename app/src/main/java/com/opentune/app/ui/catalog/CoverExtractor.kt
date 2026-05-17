@@ -1,7 +1,8 @@
 package com.opentune.app.ui.catalog
 
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.util.Log
+import java.io.ByteArrayOutputStream
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -9,14 +10,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.opentune.app.OpenTuneApplication
 import com.opentune.provider.EntryInfo
+import com.opentune.provider.EntryType
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.storage.MediaStateEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-
-private const val LOG_TAG = "OT_CoverExtractor"
 
 /**
  * Returned by [rememberCoverExtractor].
@@ -67,11 +67,11 @@ fun rememberCoverExtractor(
         val batch = pendingItems.value
         if (batch.isEmpty()) return@LaunchedEffect
         batch.forEach { item ->
+            if (item.type != EntryType.Playable && item.type != EntryType.Episode) return@forEach
             if (processedIds.contains(item.id)) return@forEach
             processedIds.add(item.id)
             launch(Dispatchers.IO) {
                 semaphore.withPermit {
-
                     // 1. Check Room cache
                     val cached = app.storageBindings.mediaStateStore
                         .get(protocol, sourceId, item.id)?.coverCachePath
@@ -99,7 +99,6 @@ fun rememberCoverExtractor(
                     val spec = try {
                         instance.getPlaybackSpec(item.id, 0)
                     } catch (e: Exception) {
-                        Log.w(LOG_TAG, "getPlaybackSpec failed for cover extraction: ${item.id}", e)
                         app.storageBindings.mediaStateStore.upsertCoverCache(
                             protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
                         )
@@ -109,7 +108,27 @@ fun rememberCoverExtractor(
                     try {
                         val bytes = MediaMetadataRetriever().use { mmr ->
                             mmr.setDataSource(spec.url, spec.headers)
-                            mmr.embeddedPicture
+                            val embedded = mmr.embeddedPicture
+                            if (embedded != null) {
+                                embedded
+                            } else {
+                                val durationMs = mmr.extractMetadata(
+                                    MediaMetadataRetriever.METADATA_KEY_DURATION,
+                                )?.toLongOrNull() ?: 0L
+                                val bitmap = mmr.getFrameAtTime(
+                                    (durationMs * 1000L) / 3L,
+                                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                                )
+                                if (bitmap != null) {
+                                    ByteArrayOutputStream().use { out ->
+                                        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                                        bitmap.recycle()
+                                        out.toByteArray()
+                                    }
+                                } else {
+                                    null
+                                }
+                            }
                         }
                         if (bytes != null) {
                             val path = app.storageBindings.thumbnailDiskCache.put(
@@ -125,7 +144,6 @@ fun rememberCoverExtractor(
                             )
                         }
                     } catch (e: Exception) {
-                        Log.w(LOG_TAG, "Cover extraction failed for ${item.id}", e)
                         app.storageBindings.mediaStateStore.upsertCoverCache(
                             protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
                         )

@@ -23,4 +23,4 @@ node_modules/
 providers-ts/dist/
 providers-ts/providers/*/.env
 **/bin/
-
+.env
