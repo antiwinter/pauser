@@ -332,7 +332,7 @@ fun OpenTunePlayerScreen(
                 codecSelector.markFailed(mime)
             }
             val isExhausted = codecSelector.isExhausted(mime)
-            Log.w(PLAYER_LOG, "$label decode failed (realFailure=$isRealDecoderFailure); ${if (isExhausted) "all decoders exhausted" else "retrying next decoder"}. code=${error.errorCode}", error)
+            Log.w(PLAYER_LOG, "$label decode failed; ${if (isExhausted) "all decoders exhausted" else "retrying next decoder"}. code=${error.errorCode}", error)
             mainHandler.post {
                 exo.stop()
                 if (isExhausted) {
@@ -376,14 +376,6 @@ fun OpenTunePlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                // Log the full cause chain so we can verify causeChainContains keyword matching.
-                var t: Throwable? = error
-                var depth = 0
-                while (t != null) {
-                    Log.d(PLAYER_LOG, "causeChain[$depth] class=${t.javaClass.name} msg=${t.message}")
-                    t = t.cause
-                    depth++
-                }
                 when {
                     error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") ->
                         handleDecoderError(audioGate, C.TRACK_TYPE_AUDIO, "audio", audioMime, error) { audioDecoderName = it }
