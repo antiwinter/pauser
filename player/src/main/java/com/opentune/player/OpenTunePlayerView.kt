@@ -73,7 +73,6 @@ fun OpenTunePlayerView(
                     Log.w("OT_Subtitle", "update: subtitleView is null — cannot apply translation/scale")
                 } else {
                     Log.d("OT_Subtitle", "update: subtitleView translationY=$subtitleTranslationYPx sizeScale=$subtitleSizeScale")
-                    sv.translationY = subtitleTranslationYPx
                     sv.scaleX = subtitleSizeScale
                     sv.scaleY = subtitleSizeScale
                     sv.setStyle(
@@ -88,6 +87,13 @@ fun OpenTunePlayerView(
                     )
                     val hPad = (16 * view.resources.displayMetrics.density).toInt()
                     sv.setPadding(hPad, 0, hPad, 0)
+                    // Constrain the subtitle view's bottom edge using layout margin.
+                    // The SubtitleView fills the screen; a bottomMargin shrinks its
+                    // layout area so the text renders above the target position.
+                    val layoutParams = sv.layoutParams
+                    if (layoutParams is android.view.ViewGroup.MarginLayoutParams) {
+                        layoutParams.bottomMargin = subtitleTranslationYPx.toInt()
+                    }
                     sv.requestLayout()
                     sv.invalidate()
                 }

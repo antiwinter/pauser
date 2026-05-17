@@ -3,8 +3,10 @@ package com.opentune.server
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlatformCapabilities
+import com.opentune.storage.AppConfigStore
 import com.opentune.storage.ServerDao
 import com.opentune.storage.ServerEntity
+import com.opentune.storage.UserMediaStateStore
 
 /**
  * App-level dependency surface exposed to the `:server` module.
@@ -19,4 +21,6 @@ interface AppContext {
     suspend fun getInstance(sourceId: String): OpenTuneProviderInstance?
     suspend fun createAndRegister(sourceId: String, entity: ServerEntity): OpenTuneProviderInstance?
     val serverDao: ServerDao
+    val mediaStateStore: UserMediaStateStore
+    val appConfigStore: AppConfigStore
 }

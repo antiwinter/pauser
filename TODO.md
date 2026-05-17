@@ -27,8 +27,10 @@
 - [ ] common.js
 
 ## Player
-- [ ] Fix: subtitle position persistence
-- [ ] Fix: subtitle should align to bottom vertially
+- [ ] Opt: episode track selection should persist on series
+- [x] Fix: subtitle position persistence
+- [x] Fix: subtitle should align to bottom vertially
+- [x] Fix: subtitle track/audio track not persistant or not applied on the next run
 - [x] Fix: smb slow buffering
 - [x] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay

@@ -68,6 +68,8 @@ class OpenTuneApplication : Application() {
                 override suspend fun getInstance(sourceId: String) = instanceRegistry.getOrCreate(sourceId)
                 override suspend fun createAndRegister(sourceId: String, entity: ServerEntity) = instanceRegistry.createAndRegister(sourceId, entity)
                 override val serverDao get() = storageBindings.serverDao
+                override val mediaStateStore get() = storageBindings.mediaStateStore
+                override val appConfigStore get() = storageBindings.appConfigStore
             },
         )
         StreamRegistrarHolder.set(openTuneServer)

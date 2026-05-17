@@ -75,3 +75,32 @@ data class OkResponse(val ok: Boolean = true)
 
 @Serializable
 data class ErrorResponse(val error: String)
+
+@Serializable
+data class MediaStateDto(
+    val protocol: String,
+    val sourceId: String,
+    val itemId: String,
+    val positionMs: Long,
+    val playbackSpeed: Float,
+    val selectedSubtitleTrackId: String?,
+    val selectedAudioTrackId: String?,
+    val title: String?,
+    val type: String?,
+    val isFavorite: Boolean,
+    val coverCachePath: String?,
+)
+
+@Serializable
+data class SubtitlePrefsDto(
+    val offsetFraction: Float,
+    val sizeScale: Float,
+)
+
+@Serializable
+data class SetTrackRequest(
+    val protocol: String,
+    val sourceId: String,
+    val itemId: String,
+    val trackId: String?,
+)

@@ -1,5 +1,6 @@
 package com.opentune.app.ui.catalog
 
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,8 @@ import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val PLAYER_ROUTE_LOG = "OT_PlayerRoute"
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlayerRoute(
@@ -38,6 +41,7 @@ fun PlayerRoute(
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var initialSubtitleTrackId by remember { mutableStateOf<String?>(null) }
+    var initialAudioTrackId by remember { mutableStateOf<String?>(null) }
     var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
     LaunchedEffect(protocol, sourceId, itemRefDecoded, startMs) {
@@ -51,7 +55,9 @@ fun PlayerRoute(
                 val savedState = app.storageBindings.mediaStateStore.get(protocol, sourceId, itemRefDecoded)
                 val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
                 initialSubtitleTrackId = savedState?.selectedSubtitleTrackId
+                initialAudioTrackId = savedState?.selectedAudioTrackId
                 initialSubtitlePrefs = subtitlePrefs
+                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${sourceId}/${itemRefDecoded} savedState=$savedState subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId subtitlePrefs=$subtitlePrefs")
                 spec = resolvedSpec
             }
         } catch (e: Exception) {
@@ -75,6 +81,7 @@ fun PlayerRoute(
                     mediaStateKey = stateKey,
                     onExit = onExit,
                     initialSubtitleTrackId = initialSubtitleTrackId,
+                    initialAudioTrackId = initialAudioTrackId,
                     initialSubtitleOffsetFraction = initialSubtitlePrefs.offsetFraction,
                     initialSubtitleSizeScale = initialSubtitlePrefs.sizeScale,
                     appConfigStore = app.storageBindings.appConfigStore,

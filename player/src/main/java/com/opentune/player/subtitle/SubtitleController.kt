@@ -102,8 +102,10 @@ internal class SubtitleController(
         isAdjustActiveState.value = false
         val offset = offsetFractionState.value
         val scale = sizeScaleState.value
+        Log.d(SUB_LOG_TAG, "confirmAdjust: offset=$offset scale=$scale")
         scope.launch(Dispatchers.IO) {
             stores.appConfigStore?.saveSubtitlePrefs(SubtitlePrefs(offset, scale))
+            Log.d(SUB_LOG_TAG, "confirmAdjust: saved subtitle prefs")
         }
     }
 
@@ -152,6 +154,7 @@ internal class SubtitleController(
                     .build()
                 activeTrackIdState.value = null
                 scope.launch(Dispatchers.IO) {
+                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: Off for key=$mediaStateKey")
                     stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, null)
                 }
             },
@@ -191,6 +194,7 @@ internal class SubtitleController(
                                 .build()
                             activeTrackIdState.value = gid
                             scope.launch(Dispatchers.IO) {
+                                Log.d(SUB_LOG_TAG, "SAVE subtitle track: ExoNative gid=$gid for key=$mediaStateKey")
                                 stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, gid)
                             }
                         },
@@ -229,6 +233,7 @@ internal class SubtitleController(
             exo.trackSelectionParameters = params.build()
             activeTrackIdState.value = track.trackId
             scope.launch(Dispatchers.IO) {
+                Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec embedded trackId=${track.trackId} for key=$mediaStateKey")
                 stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, track.trackId)
             }
         } else {
@@ -295,6 +300,7 @@ internal class SubtitleController(
                 }
                 activeTrackIdState.value = track.trackId
                 withContext(Dispatchers.IO) {
+                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$mediaStateKey")
                     stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, track.trackId)
                 }
             }
@@ -316,6 +322,8 @@ internal fun rememberSubtitleController(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val specState = rememberUpdatedState(spec)
+
+    Log.d(SUB_LOG_TAG, "rememberSubtitleController: initialTrackId=$initialTrackId offset=$initialOffsetFraction scale=$initialSizeScale")
 
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
     val activeTrackIdState = remember { mutableStateOf(initialTrackId) }

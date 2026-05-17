@@ -1,5 +1,6 @@
 package com.opentune.player.audio
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
@@ -21,6 +22,8 @@ import com.opentune.storage.upsertAudioTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+private const val AUDIO_LOG_TAG = "OT_Audio"
 
 @UnstableApi
 internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
@@ -64,6 +67,7 @@ internal class AudioController(
                     .build()
                 activeTrackIdState.value = null
                 scope.launch(Dispatchers.IO) {
+                    Log.d(AUDIO_LOG_TAG, "SAVE audio track: Auto for key=$mediaStateKey")
                     stores.mediaStateStore.upsertAudioTrack(mediaStateKey, null)
                 }
             },
@@ -83,6 +87,7 @@ internal class AudioController(
                         .build()
                     activeTrackIdState.value = gid
                     scope.launch(Dispatchers.IO) {
+                        Log.d(AUDIO_LOG_TAG, "SAVE audio track: gid=$gid for key=$mediaStateKey")
                         stores.mediaStateStore.upsertAudioTrack(mediaStateKey, gid)
                     }
                 },
@@ -99,11 +104,10 @@ internal fun rememberAudioController(
     exo: ExoPlayer,
     stores: PlayerStores,
     mediaStateKey: MediaStateKey,
-    initialTrackId: String?,
 ): AudioController {
     val scope = rememberCoroutineScope()
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
-    val activeTrackIdState = remember { mutableStateOf(initialTrackId) }
+    val activeTrackIdState = remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(exo) {
         val listener = object : Player.Listener {

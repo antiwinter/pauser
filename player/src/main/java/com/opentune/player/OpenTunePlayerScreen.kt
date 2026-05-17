@@ -3,6 +3,7 @@ package com.opentune.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -25,15 +26,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import android.view.inputmethod.InputMethodManager
+import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.C
-import androidx.media3.common.Tracks
+import com.opentune.player.subtitle.subtitleMimeType
 import com.opentune.player.audio.rememberAudioController
 import com.opentune.player.menu.rememberMenuOverlay
 import com.opentune.player.speed.rememberSpeedController
@@ -91,6 +97,62 @@ private fun PlaybackException.causeChainContains(vararg keywords: String): Boole
     return false
 }
 
+/** Resolve a saved subtitle track ID against the spec.
+ * Returns the external URI if it's a sidecar track, or the language if embedded. */
+internal data class SubtitlePreference(
+    val externalUri: Uri? = null,
+    val language: String? = null,
+)
+
+@UnstableApi
+internal fun resolveSubtitlePreference(
+    savedId: String?,
+    spec: PlaybackSpec,
+): SubtitlePreference {
+    if (savedId == null) return SubtitlePreference()
+    if (spec.subtitleTracks.isNotEmpty()) {
+        val track = spec.subtitleTracks.find { it.trackId == savedId }
+        if (track != null) {
+            return if (track.externalRef != null) {
+                SubtitlePreference(externalUri = Uri.parse(track.externalRef!!), language = track.language)
+            } else {
+                SubtitlePreference(language = track.language)
+            }
+        }
+    }
+    // ExoPlayer-native ID like "exo_<groupId>" — we don't know the language, let ExoPlayer auto-select.
+    return SubtitlePreference()
+}
+
+/** Prepare the player with a sidecar subtitle merged in. Returns the resolved sidecar URI. */
+@UnstableApi
+private suspend fun prepareWithSidecar(
+    context: Context,
+    exo: androidx.media3.exoplayer.ExoPlayer,
+    subtitleUri: Uri,
+    mimeType: String,
+    spec: PlaybackSpec,
+) {
+    val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
+        .Builder(subtitleUri)
+        .setMimeType(mimeType)
+        .build()
+    val httpFactory = DefaultHttpDataSource.Factory()
+        .setDefaultRequestProperties(spec.headers)
+    val subtitleSource = SingleSampleMediaSource
+        .Factory(DefaultDataSource.Factory(context, httpFactory))
+        .createMediaSource(subtitleConfig, androidx.media3.common.C.TIME_UNSET)
+    val mergedSource = MergingMediaSource(spec.toMediaSource(context), subtitleSource)
+    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        .setSelectUndeterminedTextLanguage(true)
+        .build()
+    exo.setMediaSource(mergedSource)
+    exo.playWhenReady = true
+    exo.prepare()
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun OpenTunePlayerScreen(
@@ -100,6 +162,7 @@ fun OpenTunePlayerScreen(
     mediaStateKey: MediaStateKey,
     onExit: () -> Unit,
     initialSubtitleTrackId: String? = null,
+    initialAudioTrackId: String? = null,
     initialSubtitleOffsetFraction: Float = 0f,
     initialSubtitleSizeScale: Float = 1f,
     appConfigStore: AppConfigStore? = null,
@@ -167,7 +230,6 @@ fun OpenTunePlayerScreen(
         exo = exo,
         stores = stores,
         mediaStateKey = instanceKey,
-        initialTrackId = null,
     )
     val speedCtrl = rememberSpeedController(
         exo = exo,
@@ -217,12 +279,40 @@ fun OpenTunePlayerScreen(
                 instanceKey.itemRef,
             )?.playbackSpeed ?: 1f
         }.coerceIn(0.25f, 4f)
+
+        // --- Track restoration: apply language preferences BEFORE prepare ---
+        val subPref = resolveSubtitlePreference(initialSubtitleTrackId, s)
+        val isSidecar = subPref.externalUri != null
+
+        // Audio: we only have a TrackGroup ID from ExoPlayer, not a language.
+        // Let ExoPlayer auto-select; user can override via the menu.
+
         withContext(Dispatchers.Main) {
             exo.playbackParameters = PlaybackParameters(savedSpeed)
-            exo.stop()
-            exo.setMediaSource(s.toMediaSource(context))
-            exo.playWhenReady = true
-            exo.prepare()
+
+            if (isSidecar) {
+                // External sidecar: merge into the media source before prepare.
+                prepareWithSidecar(
+                    context = context,
+                    exo = exo,
+                    subtitleUri = subPref.externalUri,
+                    mimeType = subtitleMimeType(subPref.externalUri.toString()),
+                    spec = s,
+                )
+            } else {
+                exo.stop()
+                exo.setMediaSource(s.toMediaSource(context))
+                // Apply subtitle language preference so ExoPlayer auto-selects on prepare.
+                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .apply {
+                        subPref.language?.let { setPreferredTextLanguage(it) }
+                    }
+                    .build()
+                exo.playWhenReady = true
+                exo.prepare()
+            }
         }
 
         val hooks = s.hooks

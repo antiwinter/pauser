@@ -3,6 +3,7 @@ package com.opentune.server.debug
 import android.util.Log
 import com.opentune.server.AppContext
 import com.opentune.storage.ServerEntity
+import com.opentune.storage.SubtitlePrefs
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -219,6 +220,120 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             NavigationBridge.commands.trySend(cmd)
             Log.i(LOG_TAG, "navigate command sent: $cmd")
             call.respondText(json.encodeToString(OkResponse()), ContentType.Application.Json)
+        }
+
+        // --- Debug routes for media state ---
+        route("/debug") {
+            route("/subtitle-prefs") {
+                get {
+                    val prefs = ctx.appConfigStore.loadSubtitlePrefs()
+                    call.respondText(
+                        json.encodeToString(SubtitlePrefsDto(prefs.offsetFraction, prefs.sizeScale)),
+                        ContentType.Application.Json,
+                    )
+                }
+                post {
+                    val body = runCatching { json.decodeFromString<SubtitlePrefsDto>(call.receiveText()) }.getOrNull()
+                    if (body == null) {
+                        call.respond400("invalid request body"); return@post
+                    }
+                    ctx.appConfigStore.saveSubtitlePrefs(SubtitlePrefs(body.offsetFraction, body.sizeScale))
+                    call.respondText(json.encodeToString(body), ContentType.Application.Json)
+                }
+            }
+
+            route("/media-state") {
+                get {
+                    val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
+                    val sourceId = call.request.queryParameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+                    val all = ctx.mediaStateStore.observeForSource(protocol, sourceId).first()
+                    val dtos = all.map { s ->
+                        MediaStateDto(
+                            protocol = s.protocol,
+                            sourceId = s.sourceId,
+                            itemId = s.itemId,
+                            positionMs = s.positionMs,
+                            playbackSpeed = s.playbackSpeed,
+                            selectedSubtitleTrackId = s.selectedSubtitleTrackId,
+                            selectedAudioTrackId = s.selectedAudioTrackId,
+                            title = s.title,
+                            type = s.type,
+                            isFavorite = s.isFavorite,
+                            coverCachePath = s.coverCachePath,
+                        )
+                    }
+                    call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
+                }
+
+                get("/{protocol}/{sourceId}/{itemId}") {
+                    val protocol = call.parameters["protocol"] ?: return@get call.respond400("missing protocol")
+                    val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+                    val itemId = call.parameters["itemId"] ?: return@get call.respond400("missing itemId")
+                    val snapshot = ctx.mediaStateStore.get(protocol, sourceId, itemId)
+                    if (snapshot == null) {
+                        call.respond404("no state found for $protocol/$sourceId/$itemId")
+                        return@get
+                    }
+                    val dto = MediaStateDto(
+                        protocol = snapshot.protocol,
+                        sourceId = snapshot.sourceId,
+                        itemId = snapshot.itemId,
+                        positionMs = snapshot.positionMs,
+                        playbackSpeed = snapshot.playbackSpeed,
+                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
+                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
+                        title = snapshot.title,
+                        type = snapshot.type,
+                        isFavorite = snapshot.isFavorite,
+                        coverCachePath = snapshot.coverCachePath,
+                    )
+                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                }
+
+                post("/subtitle-track") {
+                    val body = runCatching { json.decodeFromString<SetTrackRequest>(call.receiveText()) }.getOrNull()
+                    if (body == null) {
+                        call.respond400("invalid request body"); return@post
+                    }
+                    ctx.mediaStateStore.upsertSubtitleTrack(body.protocol, body.sourceId, body.itemId, body.trackId)
+                    val snapshot = ctx.mediaStateStore.get(body.protocol, body.sourceId, body.itemId)
+                    if (snapshot == null) {
+                        call.respond500("state not found after upsert")
+                        return@post
+                    }
+                    val dto = MediaStateDto(
+                        protocol = snapshot.protocol, sourceId = snapshot.sourceId, itemId = snapshot.itemId,
+                        positionMs = snapshot.positionMs, playbackSpeed = snapshot.playbackSpeed,
+                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
+                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
+                        title = snapshot.title, type = snapshot.type, isFavorite = snapshot.isFavorite,
+                        coverCachePath = snapshot.coverCachePath,
+                    )
+                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                }
+
+                post("/audio-track") {
+                    val body = runCatching { json.decodeFromString<SetTrackRequest>(call.receiveText()) }.getOrNull()
+                    if (body == null) {
+                        call.respond400("invalid request body"); return@post
+                    }
+                    ctx.mediaStateStore.upsertAudioTrack(body.protocol, body.sourceId, body.itemId, body.trackId)
+                    val snapshot = ctx.mediaStateStore.get(body.protocol, body.sourceId, body.itemId)
+                    if (snapshot == null) {
+                        call.respond500("state not found after upsert")
+                        return@post
+                    }
+                    val dto = MediaStateDto(
+                        protocol = snapshot.protocol, sourceId = snapshot.sourceId, itemId = snapshot.itemId,
+                        positionMs = snapshot.positionMs, playbackSpeed = snapshot.playbackSpeed,
+                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
+                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
+                        title = snapshot.title, type = snapshot.type, isFavorite = snapshot.isFavorite,
+                        coverCachePath = snapshot.coverCachePath,
+                    )
+                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                }
+            }
         }
     }
 }
