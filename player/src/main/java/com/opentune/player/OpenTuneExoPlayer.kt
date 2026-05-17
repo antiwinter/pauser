@@ -3,7 +3,6 @@ package com.opentune.player
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
@@ -37,7 +36,7 @@ object OpenTuneExoPlayer {
             )
             .build()
         val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
-        val renderersFactory = DefaultRenderersFactory(context)
+        val renderersFactory = OpenTuneRenderersFactory(context)
             .setMediaCodecSelector(codecSelector)
             .setEnableDecoderFallback(true)
         val player = ExoPlayer.Builder(context, renderersFactory)

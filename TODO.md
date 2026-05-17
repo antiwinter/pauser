@@ -27,8 +27,8 @@
 - [ ] common.js
 
 ## Player
-- [ ] Fix: smb slow buffering
-- [ ] Fix: 5a.mkv audio decoder
+- [x] Fix: smb slow buffering
+- [x] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay
 - [x] Opt: start play, don't show controller
 - [x] Fix: menu scrolling, navi back

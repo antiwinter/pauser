@@ -79,7 +79,13 @@ private fun PlaybackException.causeChainContains(vararg keywords: String): Boole
     var t: Throwable? = this
     while (t != null) {
         val msg = t.message ?: ""
-        if (keywords.any { msg.contains(it, ignoreCase = true) }) return true
+        val className = t.javaClass.name
+        val simpleName = t.javaClass.simpleName
+        if (keywords.any {
+                msg.contains(it, ignoreCase = true) ||
+                className.contains(it, ignoreCase = true) ||
+                simpleName.contains(it, ignoreCase = true)
+            }) return true
         t = t.cause
     }
     return false
@@ -318,9 +324,15 @@ fun OpenTunePlayerScreen(
                 gate.set(false)
                 return
             }
-            codecSelector.markFailed(mime)
+            // Only blacklist the decoder if the error is a real codec failure (MediaCodec$CodecException
+            // as the root cause). State errors (IllegalStateException: Released state) fire during
+            // the stop/prepare transition of a prior retry and must not count as a real decode failure.
+            val isRealDecoderFailure = error.causeChainContains("MediaCodec\$CodecException")
+            if (isRealDecoderFailure) {
+                codecSelector.markFailed(mime)
+            }
             val isExhausted = codecSelector.isExhausted(mime)
-            Log.w(PLAYER_LOG, "$label decode failed; ${if (isExhausted) "all decoders exhausted" else "retrying next decoder"}. code=${error.errorCode}", error)
+            Log.w(PLAYER_LOG, "$label decode failed (realFailure=$isRealDecoderFailure); ${if (isExhausted) "all decoders exhausted" else "retrying next decoder"}. code=${error.errorCode}", error)
             mainHandler.post {
                 exo.stop()
                 if (isExhausted) {
@@ -364,12 +376,20 @@ fun OpenTunePlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                // Log the full cause chain so we can verify causeChainContains keyword matching.
+                var t: Throwable? = error
+                var depth = 0
+                while (t != null) {
+                    Log.d(PLAYER_LOG, "causeChain[$depth] class=${t.javaClass.name} msg=${t.message}")
+                    t = t.cause
+                    depth++
+                }
                 when {
                     error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") ->
                         handleDecoderError(audioGate, C.TRACK_TYPE_AUDIO, "audio", audioMime, error) { audioDecoderName = it }
                     error.causeChainContains("MediaCodecVideoRenderer") ->
                         handleDecoderError(videoGate, C.TRACK_TYPE_VIDEO, "video", videoMime, error) { videoDecoderName = it }
-                    else -> Log.e(PLAYER_LOG, "onPlayerError code=${error.errorCode} msg=${error.message}", error)
+                    else -> Log.e(PLAYER_LOG, "onPlayerError unhandled code=${error.errorCode} msg=${error.message}", error)
                 }
             }
         }
