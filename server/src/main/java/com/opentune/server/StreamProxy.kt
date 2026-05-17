@@ -25,21 +25,19 @@ private const val PUMP_CHUNK_SIZE = 128 * 1024
 /**
  * Token-based stream proxy that bridges provider byte-streams to plain HTTP URLs.
  *
- * Implements [StreamRegistrar]: providers call [registerStream] to obtain a
- * `http://127.0.0.1:<port>/stream/<token>` URL, and [revokeToken] when done.
- *
- * Route surface is internal to `:server` — installed by [OpenTuneServer] via [installRoutes].
+ * One SMB session is opened per HTTP request and closed when the response finishes.
+ * File size is cached after the first query so repeated HEAD-like requests don't
+ * open extra connections.
  */
 class StreamProxy : StreamRegistrar {
 
     private data class TokenEntry(
         val instance: OpenTuneProviderInstance,
         val itemRef: String,
+        @Volatile var cachedSize: Long = -1L,
     )
 
     private val registry = ConcurrentHashMap<String, TokenEntry>()
-
-    // --- StreamRegistrar ---
 
     override fun registerStream(instance: OpenTuneProviderInstance, itemRef: String): String {
         val token = UUID.randomUUID().toString().replace("-", "")
@@ -52,8 +50,6 @@ class StreamProxy : StreamRegistrar {
         registry.remove(token)
         Log.d(LOG_TAG, "revoked token=$token registry.size=${registry.size}")
     }
-
-    // --- Ktor route installer (internal to :server) ---
 
     internal fun Application.installRoutes() {
         routing {
@@ -68,7 +64,11 @@ class StreamProxy : StreamRegistrar {
                 } ?: return@get call.respond(HttpStatusCode.NotFound)
 
                 try {
-                    val totalSize = withContext(Dispatchers.IO) { stream.getSize() }
+                    val totalSize = withContext(Dispatchers.IO) {
+                        if (entry.cachedSize < 0) entry.cachedSize = stream.getSize()
+                        entry.cachedSize
+                    }
+
                     val rangeHeader = call.request.headers[HttpHeaders.Range]
                     call.response.header(HttpHeaders.AcceptRanges, "bytes")
 
@@ -81,18 +81,14 @@ class StreamProxy : StreamRegistrar {
                             contentType = ContentType.Application.OctetStream,
                             status = HttpStatusCode.PartialContent,
                             contentLength = length,
-                        ) {
-                            pumpStream(stream, start, length)
-                        }
+                        ) { pump(stream, start, length) }
                     } else {
                         Log.d(LOG_TAG, "stream token=$token full size=$totalSize")
                         call.respondBytesWriter(
                             contentType = ContentType.Application.OctetStream,
                             status = HttpStatusCode.OK,
                             contentLength = totalSize,
-                        ) {
-                            pumpStream(stream, 0L, totalSize)
-                        }
+                        ) { pump(stream, 0L, totalSize) }
                     }
                 } finally {
                     withContext(Dispatchers.IO) { stream.close() }
@@ -101,9 +97,7 @@ class StreamProxy : StreamRegistrar {
         }
     }
 
-    // --- internals ---
-
-    private suspend fun io.ktor.utils.io.ByteWriteChannel.pumpStream(
+    private suspend fun io.ktor.utils.io.ByteWriteChannel.pump(
         stream: ProviderStream,
         offset: Long,
         length: Long,
@@ -114,7 +108,7 @@ class StreamProxy : StreamRegistrar {
         while (remaining > 0) {
             val toRead = minOf(remaining, buf.size.toLong()).toInt()
             val read = withContext(Dispatchers.IO) { stream.readAt(pos, buf, 0, toRead) }
-            if (read == 0) break
+            if (read <= 0) break
             writeFully(buf, 0, read)
             pos += read
             remaining -= read
@@ -122,9 +116,6 @@ class StreamProxy : StreamRegistrar {
     }
 
     companion object {
-        /**
-         * Parses `Range: bytes=<start>-[end]` and returns `(start, end)` clamped to [totalSize].
-         */
         internal fun parseRange(header: String, totalSize: Long): Pair<Long, Long> {
             val spec = header.removePrefix("bytes=")
             val dashIdx = spec.indexOf('-')
