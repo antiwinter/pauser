@@ -27,6 +27,8 @@
 - [ ] common.js
 
 ## Player
+- [ ] Fix: subtitle position persistence
+- [ ] Fix: subtitle should align to bottom vertially
 - [x] Fix: smb slow buffering
 - [x] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay

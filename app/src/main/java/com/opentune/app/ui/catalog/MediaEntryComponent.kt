@@ -72,6 +72,7 @@ fun MediaEntryComponent(
                             EntryType.Series -> "\uD83D\uDCFA"
                             EntryType.Season -> "\uD83D\uDCC5"
                             EntryType.Playable, EntryType.Episode -> "▶"
+                            EntryType.Image -> "🖼"
                             EntryType.Other -> "•"
                         },
                         style = MaterialTheme.typography.titleLarge,

@@ -208,6 +208,12 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     val r = body.itemRef ?: return@post call.respond400("missing itemRef")
                     NavCommand.Player(p, s, r, body.startMs)
                 }
+                "image" -> {
+                    val p = body.provider ?: return@post call.respond400("missing provider")
+                    val s = body.sourceId ?: return@post call.respond400("missing sourceId")
+                    val r = body.itemRef ?: return@post call.respond400("missing itemRef")
+                    NavCommand.Image(p, s, r)
+                }
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }
             NavigationBridge.commands.trySend(cmd)

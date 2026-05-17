@@ -1,8 +1,10 @@
 package com.opentune.app.ui.catalog
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import java.io.ByteArrayOutputStream
+import java.net.URL
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +19,48 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+
+/** Target cover thumbnail dimensions: smaller edge → [COVER_SHORT_EDGE], then center-crop to [COVER_W]×[COVER_H]. */
+private const val COVER_W = 300
+private const val COVER_H = 250
+private const val COVER_SHORT_EDGE = 300
+
+/**
+ * Resize a bitmap so the smaller edge becomes [COVER_SHORT_EDGE], then center-crop to
+ * [COVER_W]×[COVER_H].  If the source is already smaller than the target on either axis
+ * it is still scaled up to maintain a uniform thumbnail size.
+ */
+private fun Bitmap.resizeAndCropToCover(): Bitmap {
+    val srcW = width
+    val srcH = height
+
+    // Scale so smaller edge = COVER_SHORT_EDGE
+    val scale = if (srcW <= srcH) {
+        COVER_SHORT_EDGE.toFloat() / srcW
+    } else {
+        COVER_SHORT_EDGE.toFloat() / srcH
+    }
+    val scaledW = (srcW * scale).toInt()
+    val scaledH = (srcH * scale).toInt()
+
+    val scaled = Bitmap.createScaledBitmap(this, scaledW, scaledH, true)
+
+    // Center-crop to COVER_W x COVER_H
+    val cropW = COVER_W.coerceAtMost(scaledW)
+    val cropH = COVER_H.coerceAtMost(scaledH)
+    val cropX = (scaledW - cropW) / 2
+    val cropY = (scaledH - cropH) / 2
+
+    val cropped = if (cropW == scaledW && cropH == scaledH) {
+        scaled
+    } else {
+        Bitmap.createBitmap(scaled, cropX, cropY, cropW, cropH)
+    }
+
+    if (cropped !== scaled) scaled.recycle()
+
+    return cropped
+}
 
 /**
  * Returned by [rememberCoverExtractor].
@@ -67,29 +111,38 @@ fun rememberCoverExtractor(
         val batch = pendingItems.value
         if (batch.isEmpty()) return@LaunchedEffect
         batch.forEach { item ->
-            if (item.type != EntryType.Playable && item.type != EntryType.Episode) return@forEach
-            if (processedIds.contains(item.id)) return@forEach
+            if (item.type != EntryType.Playable &&
+                item.type != EntryType.Episode &&
+                item.type != EntryType.Image) {
+                return@forEach
+            }
+            if (processedIds.contains(item.id)) {
+                return@forEach
+            }
             processedIds.add(item.id)
             launch(Dispatchers.IO) {
                 semaphore.withPermit {
+                    val id = item.id
                     // 1. Check Room cache
                     val cached = app.storageBindings.mediaStateStore
-                        .get(protocol, sourceId, item.id)?.coverCachePath
+                        .get(protocol, sourceId, id)?.coverCachePath
                     when {
-                        cached == MediaStateEntity.COVER_FAILED -> return@withPermit
+                        cached == MediaStateEntity.COVER_FAILED -> {
+                            return@withPermit
+                        }
                         cached != null -> {
-                            updateItemCover(items, item.id, cached)
+                            updateItemCover(items, id, cached)
                             return@withPermit
                         }
                     }
 
                     // 2. Check disk cache (in case DB row was lost)
-                    val diskCached = app.storageBindings.thumbnailDiskCache.get(sourceId, item.id)
+                    val diskCached = app.storageBindings.thumbnailDiskCache.get(sourceId, id)
                     if (diskCached != null) {
                         app.storageBindings.mediaStateStore.upsertCoverCache(
-                            protocol, sourceId, item.id, diskCached,
+                            protocol, sourceId, id, diskCached,
                         )
-                        updateItemCover(items, item.id, diskCached)
+                        updateItemCover(items, id, diskCached)
                         return@withPermit
                     }
 
@@ -97,11 +150,44 @@ fun rememberCoverExtractor(
                     //    MMR reads the embedded picture from spec.url + spec.headers.
                     //    spec.hooks.onDispose() releases any provider resources (e.g. SMB tokens).
                     val spec = try {
-                        instance.getPlaybackSpec(item.id, 0)
+                        instance.getPlaybackSpec(id, 0)
                     } catch (e: Exception) {
                         app.storageBindings.mediaStateStore.upsertCoverCache(
-                            protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                            protocol, sourceId, id, MediaStateEntity.COVER_FAILED,
                         )
+                        return@withPermit
+                    }
+
+                    // For images, download bytes, resize+crop, then dispose the token.
+                    if (item.type == EntryType.Image) {
+                        val bytes = try {
+                            val raw = URL(spec.url).readBytes()
+                            BitmapFactory.decodeByteArray(raw, 0, raw.size, null)
+                                ?.resizeAndCropToCover()
+                                ?.let { bmp ->
+                                    ByteArrayOutputStream().use { out ->
+                                        bmp.compress(Bitmap.CompressFormat.JPEG, 75, out)
+                                        bmp.recycle()
+                                        out.toByteArray()
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (bytes != null) {
+                            val path = app.storageBindings.thumbnailDiskCache.put(
+                                sourceId, id, bytes,
+                            )
+                            app.storageBindings.mediaStateStore.upsertCoverCache(
+                                protocol, sourceId, id, path,
+                            )
+                            updateItemCover(items, id, path)
+                        } else {
+                            app.storageBindings.mediaStateStore.upsertCoverCache(
+                                protocol, sourceId, id, MediaStateEntity.COVER_FAILED,
+                            )
+                        }
+                        spec.hooks.onDispose()
                         return@withPermit
                     }
 
@@ -119,33 +205,31 @@ fun rememberCoverExtractor(
                                     (durationMs * 1000L) / 3L,
                                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                                 )
-                                if (bitmap != null) {
+                                bitmap?.resizeAndCropToCover()?.let { bmp ->
                                     ByteArrayOutputStream().use { out ->
-                                        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                                        bitmap.recycle()
+                                        bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                                        bmp.recycle()
                                         out.toByteArray()
                                     }
-                                } else {
-                                    null
                                 }
                             }
                         }
                         if (bytes != null) {
                             val path = app.storageBindings.thumbnailDiskCache.put(
-                                sourceId, item.id, bytes,
+                                sourceId, id, bytes,
                             )
                             app.storageBindings.mediaStateStore.upsertCoverCache(
-                                protocol, sourceId, item.id, path,
+                                protocol, sourceId, id, path,
                             )
-                            updateItemCover(items, item.id, path)
+                            updateItemCover(items, id, path)
                         } else {
                             app.storageBindings.mediaStateStore.upsertCoverCache(
-                                protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                                protocol, sourceId, id, MediaStateEntity.COVER_FAILED,
                             )
                         }
                     } catch (e: Exception) {
                         app.storageBindings.mediaStateStore.upsertCoverCache(
-                            protocol, sourceId, item.id, MediaStateEntity.COVER_FAILED,
+                            protocol, sourceId, id, MediaStateEntity.COVER_FAILED,
                         )
                     } finally {
                         spec.hooks.onDispose()

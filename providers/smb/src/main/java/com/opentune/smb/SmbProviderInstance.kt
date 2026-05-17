@@ -162,6 +162,7 @@ class SmbProviderInstance(
         val kind = when {
             e.isDirectory -> EntryType.Folder
             isLikelyVideoFile(e.name) -> EntryType.Playable
+            isLikelyImageFile(e.name) -> EntryType.Image
             else -> EntryType.Other
         }
         return EntryInfo(

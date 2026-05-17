@@ -2,6 +2,7 @@ package com.opentune.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -12,6 +13,7 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.ui.catalog.BrowseRoute
 import com.opentune.app.ui.catalog.CatalogNav
 import com.opentune.app.ui.catalog.DetailRoute
+import com.opentune.app.ui.catalog.ImageViewerRoute
 import com.opentune.app.ui.catalog.PlayerRoute
 import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.catalog.SettingsScreen
@@ -21,6 +23,7 @@ import com.opentune.app.ui.home.HomeRoute
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
 import java.net.URLEncoder
+import kotlinx.coroutines.launch
 
 object Routes {
 
@@ -34,6 +37,7 @@ object Routes {
     const val PROVIDER_ADD = "provider_add/{protocol}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}/{sourceId}"
     const val SETTINGS = "settings"
+    const val IMAGE_VIEWER = "image_viewer/{provider}/{sourceId}/{itemRef}"
 
     fun providerAdd(protocol: String) = "provider_add/$protocol"
 
@@ -51,6 +55,9 @@ object Routes {
 
     fun search(protocol: String, sourceId: String, scopeLocationRaw: String) =
         "search/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+
+    fun imageViewer(protocol: String, sourceId: String, itemRefRaw: String) =
+        "image_viewer/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 }
 
 @Composable
@@ -67,6 +74,7 @@ fun OpenTuneNavHost() {
                 is NavCommand.Browse -> nav.navigate(Routes.browse(cmd.provider, cmd.sourceId, cmd.location ?: ""))
                 is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.sourceId, cmd.itemRef))
                 is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.sourceId, cmd.itemRef, cmd.startMs))
+                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.sourceId, cmd.itemRef))
             }
         }
     }
@@ -190,6 +198,24 @@ fun OpenTuneNavHost() {
             SettingsScreen(
                 app = app,
                 onBack = { nav.popBackStack() },
+            )
+        }
+        composable(
+            Routes.IMAGE_VIEWER,
+            listOf(
+                navArgument("provider") { type = NavType.StringType },
+                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("itemRef") { type = NavType.StringType },
+            ),
+        ) {
+            val sourceId = it.arguments!!.getString("sourceId")!!
+            val itemRef = it.arguments!!.getString("itemRef")!!
+            val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
+            ImageViewerRoute(
+                app = app,
+                sourceId = sourceId,
+                itemRefDecoded = itemRefDecoded,
+                onExit = { nav.popBackStack() },
             )
         }
     }

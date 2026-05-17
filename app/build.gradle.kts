@@ -116,6 +116,7 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.androidx.datastore.preferences)
     implementation(project(":server"))
+    implementation(project(":image-viewer"))
 
     testImplementation("junit:junit:4.13.2")
 }

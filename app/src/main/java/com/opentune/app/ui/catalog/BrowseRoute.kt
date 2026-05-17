@@ -93,6 +93,7 @@ fun BrowseRoute(
                 }
             },
             onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
+            onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, sourceId, raw)) },
             onItemsLoaded = coverExtractor.onItemsLoaded,
         )
     }

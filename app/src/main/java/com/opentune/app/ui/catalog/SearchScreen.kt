@@ -41,6 +41,7 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    onOpenImageViewer: (String) -> Unit = {},
     onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
@@ -106,6 +107,7 @@ fun SearchScreen(
                             EntryType.Playable,
                             EntryType.Episode,
                             EntryType.Other -> onOpenDetail(item.id)
+                            EntryType.Image -> onOpenImageViewer(item.id)
                         }
                     },
                 )

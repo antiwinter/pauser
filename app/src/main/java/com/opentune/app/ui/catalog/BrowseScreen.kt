@@ -53,6 +53,7 @@ fun BrowseScreen(
     onOpenSettings: () -> Unit,
     onOpenBrowseLocation: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    onOpenImageViewer: (String) -> Unit = {},
     onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -158,6 +159,7 @@ fun BrowseScreen(
                             EntryType.Playable,
                             EntryType.Episode,
                             EntryType.Other -> onOpenDetail(item.id)
+                            EntryType.Image -> onOpenImageViewer(item.id)
                         }
                     },
                 )

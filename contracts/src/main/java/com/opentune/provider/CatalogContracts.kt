@@ -9,6 +9,7 @@ enum class EntryType {
     Series,
     Season,
     Episode,
+    Image,
 }
 
 data class EntryUserData(

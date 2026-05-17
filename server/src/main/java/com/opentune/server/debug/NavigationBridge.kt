@@ -15,4 +15,5 @@ sealed class NavCommand {
     data class Browse(val provider: String, val sourceId: String, val location: String?) : NavCommand()
     data class Detail(val provider: String, val sourceId: String, val itemRef: String) : NavCommand()
     data class Player(val provider: String, val sourceId: String, val itemRef: String, val startMs: Long = 0) : NavCommand()
+    data class Image(val provider: String, val sourceId: String, val itemRef: String) : NavCommand()
 }
