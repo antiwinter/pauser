@@ -5,7 +5,9 @@ import android.media.MediaCodecList
 import androidx.room.Room
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
-import com.opentune.app.server.OpenTuneServer
+import com.opentune.server.AppContext
+import com.opentune.server.OpenTuneServer
+import com.opentune.storage.ServerEntity
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.StreamRegistrarHolder
@@ -41,9 +43,6 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        openTuneServer = OpenTuneServer()
-        StreamRegistrarHolder.set(openTuneServer)
-        appScope.launch(Dispatchers.IO) { openTuneServer.start() }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
             name = getDatabasePath("opentune.db").absolutePath,
@@ -61,6 +60,18 @@ class OpenTuneApplication : Application() {
             serverDao = storageBindings.serverDao,
             providerRegistry = providerRegistry,
         )
+        openTuneServer = OpenTuneServer(
+            appContext = object : AppContext {
+                override fun getProviders() = providerRegistry.providersFlow.value
+                override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
+                override fun platformCapabilities() = providerRegistry.platformCapabilities
+                override suspend fun getInstance(sourceId: String) = instanceRegistry.getOrCreate(sourceId)
+                override suspend fun createAndRegister(sourceId: String, entity: ServerEntity) = instanceRegistry.createAndRegister(sourceId, entity)
+                override val serverDao get() = storageBindings.serverDao
+            },
+        )
+        StreamRegistrarHolder.set(openTuneServer)
+        appScope.launch(Dispatchers.IO) { openTuneServer.start() }
         appScope.launch(Dispatchers.IO) { providerRegistry.setCapabilities(buildPlatformCapabilities()) }
         appScope.launch { providerRegistry.discoverAsync() }
     }

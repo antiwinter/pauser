@@ -140,6 +140,11 @@ class OpenTuneServer(
 ```
 When non-null, the Ktor routing block calls `installDebugRoutes(...)`.
 
+The server binds to **fixed port 7920** via the Ktor CIO engine config:
+```kotlin
+embeddedServer(CIO, port = 7920, host = "0.0.0.0") { … }
+```
+
 ### `settings.gradle.kts`
 Add: `include(":server")`
 
@@ -169,50 +174,49 @@ description: Debug OpenTune on a connected Android TV device via the embedded HT
 ---
 
 ## Setup
-The OpenTune app runs an embedded HTTP server. Forward the port via ADB:
-  adb forward tcp:9090 tcp:<port>
+The OpenTune app runs an embedded HTTP server on fixed port 7920. Forward the port via ADB:
+  adb forward tcp:7920 tcp:7920
 
-The port is logged at app startup: grep "OpenTuneServer started on port" in logcat.
-After forwarding, base URL is http://localhost:9090.
+Base URL is http://localhost:7920.
 
 ## Commands
 
 List providers:
-  curl http://localhost:9090/providers
+  curl http://localhost:7920/providers
 
 List configured servers:
-  curl http://localhost:9090/servers
+  curl http://localhost:7920/servers
 
 Add a server:
-  curl -X POST http://localhost:9090/servers \
+  curl -X POST http://localhost:7920/servers \
     -H 'Content-Type: application/json' \
     -d '{"protocol":"emby-kt","fields":{"url":"http://...","token":"..."}}'
 
 List active instances:
-  curl http://localhost:9090/instances
+  curl http://localhost:7920/instances
 
 Browse root of an instance:
-  curl "http://localhost:9090/instances/{sourceId}/browse"
+  curl "http://localhost:7920/instances/{sourceId}/browse"
 
 Browse a folder:
-  curl "http://localhost:9090/instances/{sourceId}/browse?location=<ref>&start=0&limit=50"
+  curl "http://localhost:7920/instances/{sourceId}/browse?location=<ref>&start=0&limit=50"
 
 Get item detail:
-  curl "http://localhost:9090/instances/{sourceId}/detail?ref=<itemRef>"
+  curl "http://localhost:7920/instances/{sourceId}/detail?ref=<itemRef>"
 
 Get playback spec:
-  curl "http://localhost:9090/instances/{sourceId}/playback?ref=<itemRef>&startMs=0"
+  curl "http://localhost:7920/instances/{sourceId}/playback?ref=<itemRef>&startMs=0"
 
 Search:
-  curl "http://localhost:9090/instances/{sourceId}/search?scope=<location>&q=<query>"
+  curl "http://localhost:7920/instances/{sourceId}/search?scope=<location>&q=<query>"
 
 Navigate to player:
-  curl -X POST http://localhost:9090/navigate \
+  curl -X POST http://localhost:7920/navigate \
     -H 'Content-Type: application/json' \
     -d '{"route":"player","provider":"emby-kt","sourceId":"<id>","itemRef":"<ref>","startMs":0}'
 
 Navigate home:
-  curl -X POST http://localhost:9090/navigate -d '{"route":"home"}'
+  curl -X POST http://localhost:7920/navigate -d '{"route":"home"}'
 ```
 
 ---
@@ -239,9 +243,9 @@ Navigate home:
 ## Verification
 
 1. Build and install the app — ensure no compilation errors
-2. Run `adb logcat | grep OpenTuneServer` to find the port, then `adb forward tcp:9090 tcp:<port>`
-3. `curl http://localhost:9090/providers` — should return JSON list of providers
-4. `curl http://localhost:9090/servers` — should return configured servers from DB
-5. Browse an instance: `curl "http://localhost:9090/instances/<sourceId>/browse"`
+2. Run `adb forward tcp:7920 tcp:7920`
+3. `curl http://localhost:7920/providers` — should return JSON list of providers
+4. `curl http://localhost:7920/servers` — should return configured servers from DB
+5. Browse an instance: `curl "http://localhost:7920/instances/<sourceId>/browse"`
 6. Navigate to player via `POST /navigate` and verify the TV navigates to the player screen
 7. Confirm `/stream/{token}` still works (existing SMB playback unaffected)

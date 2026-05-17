@@ -1,4 +1,7 @@
 # TODOs
+- [ ] Fix: smb gen cover
+- [ ] check if same local cache used for smb subtitles as thumb
+- [ ] align server/source/provider terminology
 - [x] fix audio in background
 - [x] folder, single media folder, series
 - [x] eliminate instance concept, rename provider methods
@@ -8,8 +11,7 @@
 - [x] add version display
 - [x] Fix: smb loading speed
 
-- [ ] split server from app
-- [ ] check if same local cache used for smb subtitles as thumb
+- [x] split server from app, debug skill
 - [ ] proxy provider
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
@@ -25,6 +27,8 @@
 - [ ] common.js
 
 ## Player
+- [ ] Fix: smb slow buffering
+- [ ] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay
 - [x] Opt: start play, don't show controller
 - [x] Fix: menu scrolling, navi back
@@ -32,7 +36,7 @@
 - [x] Fix: playbackOSD two phase disappearing
 - [x] Opt: subtitle bg
 - [x] Fix: buffering pause
-- [ ] Fix: pause/continue slow buffering
+- [x] Fix: pause/continue slow buffering
 - [x] pagedown -> menu
 - [x] emby resolve external
 - [x] srt/vss/ass as profile
@@ -46,3 +50,4 @@
 - [ ] remove opentune naming
 - [ ] HDR support
 - [ ] release insomnia-x86_64-vx.x.x.apk
+- [ ] pro user decoration. ICON/badge

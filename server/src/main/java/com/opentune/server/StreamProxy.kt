@@ -1,4 +1,4 @@
-package com.opentune.app.server
+package com.opentune.server
 
 import android.util.Log
 import com.opentune.provider.OpenTuneProviderInstance
@@ -7,8 +7,7 @@ import com.opentune.provider.StreamRegistrar
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.cio.CIO
-import io.ktor.server.engine.embeddedServer
+import io.ktor.server.application.Application
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytesWriter
@@ -17,7 +16,6 @@ import io.ktor.server.routing.routing
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.ServerSocket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,14 +23,14 @@ private const val LOG_TAG = "OpenTuneServer"
 private const val PUMP_CHUNK_SIZE = 128 * 1024
 
 /**
- * Embedded HTTP server started at app launch.
- * Binds to all interfaces (`0.0.0.0`) on an ephemeral port so both local player
- * and LAN clients can reach it.
+ * Token-based stream proxy that bridges provider byte-streams to plain HTTP URLs.
  *
  * Implements [StreamRegistrar]: providers call [registerStream] to obtain a
- * `http://127.0.0.1:<port>/stream/<token>` URL and later [revokeToken] to clean up.
+ * `http://127.0.0.1:<port>/stream/<token>` URL, and [revokeToken] when done.
+ *
+ * Route surface is internal to `:server` — installed by [OpenTuneServer] via [installRoutes].
  */
-class OpenTuneServer : StreamRegistrar {
+class StreamProxy : StreamRegistrar {
 
     private data class TokenEntry(
         val instance: OpenTuneProviderInstance,
@@ -41,9 +39,23 @@ class OpenTuneServer : StreamRegistrar {
 
     private val registry = ConcurrentHashMap<String, TokenEntry>()
 
-    val port: Int = findFreePort()
+    // --- StreamRegistrar ---
 
-    private val engine = embeddedServer(CIO, host = "0.0.0.0", port = port) {
+    override fun registerStream(instance: OpenTuneProviderInstance, itemRef: String): String {
+        val token = UUID.randomUUID().toString().replace("-", "")
+        registry[token] = TokenEntry(instance, itemRef)
+        return "http://127.0.0.1:${SERVER_PORT}/stream/$token"
+    }
+
+    override fun revokeToken(url: String) {
+        val token = url.substringAfterLast('/')
+        registry.remove(token)
+        Log.d(LOG_TAG, "revoked token=$token registry.size=${registry.size}")
+    }
+
+    // --- Ktor route installer (internal to :server) ---
+
+    internal fun Application.installRoutes() {
         routing {
             get("/stream/{token}") {
                 val token = call.parameters["token"]
@@ -89,29 +101,6 @@ class OpenTuneServer : StreamRegistrar {
         }
     }
 
-    fun start() {
-        engine.start(wait = false)
-        Log.i(LOG_TAG, "OpenTuneServer started on port $port")
-    }
-
-    fun stop() {
-        engine.stop(gracePeriodMillis = 0, timeoutMillis = 500)
-    }
-
-    // --- StreamRegistrar ---
-
-    override fun registerStream(instance: OpenTuneProviderInstance, itemRef: String): String {
-        val token = UUID.randomUUID().toString().replace("-", "")
-        registry[token] = TokenEntry(instance, itemRef)
-        return "http://127.0.0.1:$port/stream/$token"
-    }
-
-    override fun revokeToken(url: String) {
-        val token = url.substringAfterLast('/')
-        registry.remove(token)
-        Log.d(LOG_TAG, "revoked token=$token registry.size=${registry.size}")
-    }
-
     // --- internals ---
 
     private suspend fun io.ktor.utils.io.ByteWriteChannel.pumpStream(
@@ -133,13 +122,10 @@ class OpenTuneServer : StreamRegistrar {
     }
 
     companion object {
-        private fun findFreePort(): Int = ServerSocket(0).use { it.localPort }
-
         /**
          * Parses `Range: bytes=<start>-[end]` and returns `(start, end)` clamped to [totalSize].
-         * Handles open-ended ranges (`bytes=512-`).
          */
-        private fun parseRange(header: String, totalSize: Long): Pair<Long, Long> {
+        internal fun parseRange(header: String, totalSize: Long): Pair<Long, Long> {
             val spec = header.removePrefix("bytes=")
             val dashIdx = spec.indexOf('-')
             val start = if (dashIdx > 0) spec.substring(0, dashIdx).toLongOrNull() ?: 0L else 0L

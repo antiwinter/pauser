@@ -1,6 +1,7 @@
 package com.opentune.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -17,6 +18,8 @@ import com.opentune.app.ui.catalog.SettingsScreen
 import com.opentune.app.ui.config.ServerAddRoute
 import com.opentune.app.ui.config.ServerEditRoute
 import com.opentune.app.ui.home.HomeRoute
+import com.opentune.server.debug.NavCommand
+import com.opentune.server.debug.NavigationBridge
 import java.net.URLEncoder
 
 object Routes {
@@ -54,6 +57,19 @@ object Routes {
 fun OpenTuneNavHost() {
     val nav = rememberNavController()
     val app = LocalContext.current.applicationContext as OpenTuneApplication
+
+    LaunchedEffect(nav) {
+        for (cmd in NavigationBridge.commands) {
+            when (cmd) {
+                NavCommand.Home -> nav.navigate(Routes.HOME) {
+                    popUpTo(Routes.HOME) { inclusive = true }
+                }
+                is NavCommand.Browse -> nav.navigate(Routes.browse(cmd.provider, cmd.sourceId, cmd.location ?: ""))
+                is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.sourceId, cmd.itemRef))
+                is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.sourceId, cmd.itemRef, cmd.startMs))
+            }
+        }
+    }
 
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {

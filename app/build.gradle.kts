@@ -115,8 +115,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.room.runtime)
     implementation(libs.androidx.datastore.preferences)
-    implementation(libs.ktor.server.core)
-    implementation(libs.ktor.server.cio)
+    implementation(project(":server"))
 
     testImplementation("junit:junit:4.13.2")
 }

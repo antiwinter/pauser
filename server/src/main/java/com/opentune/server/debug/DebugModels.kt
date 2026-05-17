@@ -1,0 +1,77 @@
+package com.opentune.server.debug
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ProviderDto(
+    val protocol: String,
+    val providesCover: Boolean,
+    val fields: List<FieldDto>,
+)
+
+@Serializable
+data class FieldDto(
+    val id: String,
+    val labelKey: String,
+    val kind: String,
+    val required: Boolean,
+    val sensitive: Boolean,
+)
+
+@Serializable
+data class ServerDto(
+    val sourceId: String,
+    val protocol: String,
+    val displayName: String,
+)
+
+@Serializable
+data class AddServerRequest(
+    val protocol: String,
+    val fields: Map<String, String>,
+)
+
+@Serializable
+data class AddServerResponse(
+    val sourceId: String? = null,
+    val displayName: String? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class EntryInfoDto(
+    val ref: String,
+    val title: String,
+    val type: String,
+    val cover: String? = null,
+)
+
+@Serializable
+data class EntryListDto(
+    val items: List<EntryInfoDto>,
+    val totalCount: Int,
+)
+
+@Serializable
+data class PlaybackSpecDto(
+    val url: String,
+    val mimeType: String? = null,
+    val title: String,
+    val durationMs: Long? = null,
+    val headers: Map<String, String>,
+)
+
+@Serializable
+data class NavigateRequest(
+    val route: String,
+    val provider: String? = null,
+    val sourceId: String? = null,
+    val itemRef: String? = null,
+    val startMs: Long = 0,
+)
+
+@Serializable
+data class OkResponse(val ok: Boolean = true)
+
+@Serializable
+data class ErrorResponse(val error: String)
