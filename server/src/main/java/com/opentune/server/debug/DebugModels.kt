@@ -1,5 +1,6 @@
 package com.opentune.server.debug
 
+import com.opentune.storage.MediaStateSnapshot
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -90,6 +91,21 @@ data class MediaStateDto(
     val isFavorite: Boolean,
     val coverCachePath: String?,
 )
+
+fun MediaStateSnapshot.toDto(): MediaStateDto =
+    MediaStateDto(
+        protocol = protocol,
+        sourceId = sourceId,
+        itemId = itemId,
+        positionMs = positionMs,
+        playbackSpeed = playbackSpeed,
+        selectedSubtitleTrackId = selectedSubtitleTrackId,
+        selectedAudioTrackId = selectedAudioTrackId,
+        title = title,
+        type = type,
+        isFavorite = isFavorite,
+        coverCachePath = coverCachePath,
+    )
 
 @Serializable
 data class SubtitlePrefsDto(

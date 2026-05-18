@@ -16,6 +16,7 @@ android {
 dependencies {
     api(project(":contracts"))
     api(project(":storage"))
+    implementation(project(":gen-art"))
     implementation(libs.ktor.server.cio)
     implementation(libs.ktor.server.core)
     implementation(libs.kotlinx.serialization.json)

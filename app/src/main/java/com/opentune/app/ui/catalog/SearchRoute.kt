@@ -42,7 +42,7 @@ fun SearchRoute(
         }
     }
 
-    val coverExtractor = rememberCoverExtractor(app, protocol, sourceId, instance, results)
+    rememberAssetGenerator(app, protocol, sourceId, results)
 
     when {
         error != null -> Text("Error: $error")
@@ -57,7 +57,6 @@ fun SearchRoute(
                 onBack = { nav.popBackStack() },
                 onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, sourceId, raw)) },
                 onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
-                onItemsLoaded = coverExtractor.onItemsLoaded,
             )
         }
     }

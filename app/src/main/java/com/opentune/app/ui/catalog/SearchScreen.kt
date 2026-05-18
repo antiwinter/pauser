@@ -42,7 +42,6 @@ fun SearchScreen(
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
-    onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -60,7 +59,6 @@ fun SearchScreen(
             val fetched = withContext(Dispatchers.IO) { searchFn(q) }
             results.clear()
             results.addAll(fetched)
-            onItemsLoaded?.invoke(fetched)
         } catch (e: Exception) {
             Log.e(logTag, "search", e)
             results.clear()

@@ -121,7 +121,6 @@ object ServerConfigRepository {
                     }
                     app.instanceRegistry.createAndRegister(newSourceId, newEntity)
                     app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-                    app.storageBindings.thumbnailDiskCache.deleteBySource(sourceId)
                     app.storageBindings.serverDao.deleteBySourceId(sourceId)
                     app.instanceRegistry.remove(sourceId)
                 }
@@ -135,7 +134,6 @@ object ServerConfigRepository {
     suspend fun removeServer(sourceId: String, app: OpenTuneApplication) =
         withContext(Dispatchers.IO) {
             app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-            app.storageBindings.thumbnailDiskCache.deleteBySource(sourceId)
             app.storageBindings.serverDao.deleteBySourceId(sourceId)
             app.instanceRegistry.remove(sourceId)
         }

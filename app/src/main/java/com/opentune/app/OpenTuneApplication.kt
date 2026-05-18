@@ -3,6 +3,10 @@ package com.opentune.app
 import android.app.Application
 import android.media.MediaCodecList
 import androidx.room.Room
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
+import okio.Path.Companion.toOkioPath
 import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
 import com.opentune.server.AppContext
@@ -14,7 +18,6 @@ import com.opentune.provider.StreamRegistrarHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.RoomMediaStateStore
-import com.opentune.storage.thumb.ThumbnailDiskCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,8 +44,11 @@ class OpenTuneApplication : Application() {
     lateinit var openTuneServer: OpenTuneServer
         private set
 
+    val imageLoader: ImageLoader by lazy { buildImageLoader() }
+
     override fun onCreate() {
         super.onCreate()
+        SingletonImageLoader.setSafe { buildImageLoader() }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
             name = getDatabasePath("opentune.db").absolutePath,
@@ -51,7 +57,6 @@ class OpenTuneApplication : Application() {
             serverDao = database.serverDao(),
             mediaStateStore = RoomMediaStateStore(database),
             appConfigStore = DataStoreAppConfigStore(applicationContext),
-            thumbnailDiskCache = ThumbnailDiskCache(File(cacheDir, "covers")),
         )
         val platformInfo = AndroidPlatformInfo(this)
         PlatformInfoHolder.set(platformInfo)
@@ -77,6 +82,16 @@ class OpenTuneApplication : Application() {
         appScope.launch(Dispatchers.IO) { providerRegistry.setCapabilities(buildPlatformCapabilities()) }
         appScope.launch { providerRegistry.discoverAsync() }
     }
+
+    private fun buildImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(File(cacheDir, "coil").toOkioPath())
+                    .maxSizeBytes(200L * 1024 * 1024)
+                    .build()
+            }
+            .build()
 
     private fun buildPlatformCapabilities(): PlatformCapabilities {
         val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)

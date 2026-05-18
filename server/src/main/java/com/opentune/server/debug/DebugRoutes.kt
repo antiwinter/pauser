@@ -247,21 +247,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
                     val sourceId = call.request.queryParameters["sourceId"] ?: return@get call.respond400("missing sourceId")
                     val all = ctx.mediaStateStore.observeForSource(protocol, sourceId).first()
-                    val dtos = all.map { s ->
-                        MediaStateDto(
-                            protocol = s.protocol,
-                            sourceId = s.sourceId,
-                            itemId = s.itemId,
-                            positionMs = s.positionMs,
-                            playbackSpeed = s.playbackSpeed,
-                            selectedSubtitleTrackId = s.selectedSubtitleTrackId,
-                            selectedAudioTrackId = s.selectedAudioTrackId,
-                            title = s.title,
-                            type = s.type,
-                            isFavorite = s.isFavorite,
-                            coverCachePath = s.coverCachePath,
-                        )
-                    }
+                    val dtos = all.map { it.toDto() }
                     call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
                 }
 
@@ -274,20 +260,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         call.respond404("no state found for $protocol/$sourceId/$itemId")
                         return@get
                     }
-                    val dto = MediaStateDto(
-                        protocol = snapshot.protocol,
-                        sourceId = snapshot.sourceId,
-                        itemId = snapshot.itemId,
-                        positionMs = snapshot.positionMs,
-                        playbackSpeed = snapshot.playbackSpeed,
-                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
-                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
-                        title = snapshot.title,
-                        type = snapshot.type,
-                        isFavorite = snapshot.isFavorite,
-                        coverCachePath = snapshot.coverCachePath,
-                    )
-                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                    call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
                 }
 
                 post("/subtitle-track") {
@@ -301,15 +274,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         call.respond500("state not found after upsert")
                         return@post
                     }
-                    val dto = MediaStateDto(
-                        protocol = snapshot.protocol, sourceId = snapshot.sourceId, itemId = snapshot.itemId,
-                        positionMs = snapshot.positionMs, playbackSpeed = snapshot.playbackSpeed,
-                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
-                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
-                        title = snapshot.title, type = snapshot.type, isFavorite = snapshot.isFavorite,
-                        coverCachePath = snapshot.coverCachePath,
-                    )
-                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                    call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
                 }
 
                 post("/audio-track") {
@@ -323,15 +288,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         call.respond500("state not found after upsert")
                         return@post
                     }
-                    val dto = MediaStateDto(
-                        protocol = snapshot.protocol, sourceId = snapshot.sourceId, itemId = snapshot.itemId,
-                        positionMs = snapshot.positionMs, playbackSpeed = snapshot.playbackSpeed,
-                        selectedSubtitleTrackId = snapshot.selectedSubtitleTrackId,
-                        selectedAudioTrackId = snapshot.selectedAudioTrackId,
-                        title = snapshot.title, type = snapshot.type, isFavorite = snapshot.isFavorite,
-                        coverCachePath = snapshot.coverCachePath,
-                    )
-                    call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+                    call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
                 }
             }
         }

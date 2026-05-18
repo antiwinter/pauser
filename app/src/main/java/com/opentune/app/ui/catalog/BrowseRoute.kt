@@ -60,7 +60,8 @@ fun BrowseRoute(
     }
 
     val instance = (state as? BrowseState.Ready)?.instance
-    val coverExtractor = rememberCoverExtractor(app, protocol, sourceId, instance, items)
+
+    rememberAssetGenerator(app, protocol, sourceId, items)
 
     when (val s = state) {
         is BrowseState.Loading -> Text("Loading\u2026")
@@ -94,7 +95,6 @@ fun BrowseRoute(
             },
             onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, sourceId, raw)) },
-            onItemsLoaded = coverExtractor.onItemsLoaded,
         )
     }
 }

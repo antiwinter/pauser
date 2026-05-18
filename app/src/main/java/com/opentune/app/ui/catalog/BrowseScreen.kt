@@ -54,7 +54,6 @@ fun BrowseScreen(
     onOpenBrowseLocation: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
-    onItemsLoaded: ((List<EntryInfo>) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var totalCount by remember { mutableStateOf(0) }
@@ -80,7 +79,6 @@ fun BrowseScreen(
                 val page = withContext(Dispatchers.IO) { loadPage(0, PAGE_SIZE) }
                 items.addAll(page.items)
                 totalCount = page.totalCount
-                onItemsLoaded?.invoke(page.items)
             } catch (e: Exception) {
                 Log.e(logTag, "browse load", e)
                 error = e.message
@@ -100,7 +98,6 @@ fun BrowseScreen(
             try {
                 val page = withContext(Dispatchers.IO) { loadPage(items.size, PAGE_SIZE) }
                 items.addAll(page.items)
-                onItemsLoaded?.invoke(page.items)
             } catch (e: Exception) {
                 Log.e(logTag, "load more", e)
                 error = e.message

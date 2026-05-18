@@ -20,7 +20,11 @@ data class MediaStateSnapshot(
     val coverCachePath: String?,
     val selectedSubtitleTrackId: String?,
     val selectedAudioTrackId: String?,
-)
+) {
+    companion object {
+        const val COVER_FAILED = MediaStateEntity.COVER_FAILED
+    }
+}
 
 interface UserMediaStateStore {
     suspend fun get(protocol: String, sourceId: String, itemId: String): MediaStateSnapshot?

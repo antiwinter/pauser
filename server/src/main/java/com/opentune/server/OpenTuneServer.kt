@@ -28,6 +28,7 @@ class OpenTuneServer private constructor(
 
     private val engine = embeddedServer(CIO, host = "0.0.0.0", port = SERVER_PORT) {
         with(streamProxy) { installRoutes() }
+        appContext?.let { installGenartRoutes(it) }
         appContext?.let { installDebugRoutes(it) }
     }
 

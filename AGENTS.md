@@ -96,13 +96,16 @@ Providers **never** import `:storage`.
 [`:storage`](storage/src/main/java/com/opentune/storage/) owns all persistence. Key types:
 
 - **`ServerEntity`** — `@PrimaryKey val sourceId: String` (`"${providerType}_${hash}"`), `providerType`, `displayName`, `fieldsJson`, timestamps.
-- **`MediaStateEntity`** — composite PK `(sourceId, itemId)`. Field `providerType` is stored but is not part of the PK. Notable field:
-  - `coverCachePath: String?` — tri-state: `null` = not yet attempted; `MediaStateEntity.COVER_FAILED = "failed"` = extraction failed / never retry; any other value = absolute path to cached thumbnail on disk.
-- **`UserMediaStateStore`** / **`RoomMediaStateStore`** — CRUD for `MediaStateEntity`. Method `upsertCoverCache(providerType, sourceId, itemId, path)` persists cover results.
-- **`ThumbnailDiskCache`** — stores extracted cover bytes under `cacheDir/<sourceId>/<sha256(itemId).take(16)>`. `deleteBySource(sourceId)` deletes the entire `<sourceId>/` subdirectory. Called only from `:app`, never from providers.
-- **`OpenTuneStorageBindings`** — exposes `serverDao`, `mediaStateStore`, `appConfigStore`, `thumbnailDiskCache`. Created by `OpenTuneApplication` and passed to routes via `app.storageBindings`.
+- **`MediaStateEntity`** — composite PK `(sourceId, itemId)`. Field `providerType` is stored but is not part of the PK. Notable cached-asset fields:
+  - `cachedCover: String?` — tri-state: `null` = not yet attempted; `MediaStateEntity.CACHE_FAILED = "failed"` = extraction failed / never retry; any other string = SHA-256 blob key into `OssCache`.
+  - `cachedBackdrops: String?` — `null` = not tried; `""` = failed / none; otherwise space-separated SHA-256 blob keys.
+  - `cachedLogo: String?` — same tri-state as `cachedCover`.
+- **`OssCacheEntity`** — `@PrimaryKey val key: String` (SHA-256 hex of blob bytes), `sizeBytes`, `lastVisit`, `pinned`. Tracks LRU metadata for `OssCache`.
+- **`UserMediaStateStore`** / **`RoomMediaStateStore`** — CRUD for `MediaStateEntity`. Method `upsertCachedAssets(protocol, sourceId, itemId, cover, backdrops, logo)` persists all asset keys at once.
+- **`OssCache`** — content-addressed blob cache at `cacheDir/oss/<sha256key>`. Keys are SHA-256 hex of the stored bytes; identical blobs share one file. LRU eviction driven by `OssCacheDao` — no explicit per-source deletion. API: `put(bytes): String`, `getPath(key): String?`, `pin(key)`, `unpin(key)`. If a file is evicted by LRU, `getPath` returns `null` and `AssetGenerator` re-extracts transparently.
+- **`OpenTuneStorageBindings`** — exposes `serverDao`, `mediaStateStore`, `appConfigStore`, `ossCache`. Created by `OpenTuneApplication` and passed to routes via `app.storageBindings`.
 
-**Database version: 5.** Uses `fallbackToDestructiveMigration`.
+**Database version: 9.** Uses `fallbackToDestructiveMigration`.
 
 ---
 
@@ -110,23 +113,23 @@ Providers **never** import `:storage`.
 
 ### List covers (`providesCover = false` providers, e.g. SMB)
 
-Cover extraction is handled by [`rememberCoverExtractor`](app/src/main/java/com/opentune/app/ui/catalog/CoverExtractor.kt), a `@Composable` hook used in `BrowseRoute` and `SearchRoute`:
+Cover generation is handled by [`rememberAssetGenerator`](app/src/main/java/com/opentune/app/ui/catalog/AssetGenerator.kt), a `@Composable` hook used in `BrowseRoute` and `SearchRoute`:
 
 ```kotlin
-val coverExtractor = rememberCoverExtractor(app, providerType, sourceId, instance, items)
+val assetGenerator = rememberAssetGenerator(app, providerType, sourceId, instance, items)
 ```
 
-`items` is a `SnapshotStateList<EntryInfo>` owned by the route. When a cover is resolved, `rememberCoverExtractor` writes it directly into the list (`items[idx] = items[idx].copy(cover = path)`), which drives recomposition automatically. **No parallel override map; no extra cover props on `MediaEntryComponent`.**
+`items` is a `SnapshotStateList<EntryInfo>` owned by the route. When a cover is resolved, `rememberAssetGenerator` writes it directly into the list (`items[idx] = items[idx].copy(cover = path)`), which drives recomposition automatically. **No parallel override map; no extra cover props on `MediaEntryComponent`.**
 
 Priority chain per item:
-1. `mediaStateStore.get(…)?.coverCachePath` — fast DB lookup
-2. `thumbnailDiskCache.get(sourceId, itemId)` — disk stat; re-syncs DB on hit
-3. `instance.getPlaybackSpec(itemId, 0)` → `PlaybackSpec` → `MediaMetadataRetriever.setDataSource(spec.url, spec.headers)` → `.embeddedPicture` → `spec.hooks.onDispose()` in `finally`. The same contract the player uses: SMB resolves a loopback URL and `onDispose()` revokes its stream tokens; any future HTTP provider with embedded art works identically at no extra code cost.
-4. On failure: write `COVER_FAILED` sentinel to DB, never retried
+1. `mediaStateStore.get(…)?.cachedCover` — fast DB lookup for the blob key
+2. `ossCache.getPath(key)` — resolve key to file path; if the file was LRU-evicted, `getPath` returns `null` and falls through to re-extraction automatically
+3. `instance.getPlaybackSpec(itemId, 0)` → `PlaybackSpec` → `MediaMetadataRetriever.setDataSource(spec.url, spec.headers)` → `.embeddedPicture` → `spec.hooks.onDispose()` in `finally`. The same contract the player uses: SMB resolves a loopback URL and `onDispose()` revokes its stream tokens; any future HTTP provider with embedded art works identically at no extra code cost. Extracted bytes are stored via `ossCache.put(bytes)` which returns the SHA-256 content key.
+4. On failure: write `CACHE_FAILED` sentinel to DB, never retried
 
-Extraction is bounded to **4 concurrent jobs** via `Semaphore(4)`. Items with `COVER_FAILED` or an already-resolved cover are skipped immediately.
+Extraction is bounded to **4 concurrent jobs** via `Semaphore(4)`. Items with `CACHE_FAILED` or an already-resolved cover are skipped immediately.
 
-When `provider.providesCover = true` (Emby), `rememberCoverExtractor` returns a no-op and does no work.
+When `provider.providesCover = true` (Emby), `rememberAssetGenerator` returns a no-op and does no work.
 
 ### Detail poster
 
@@ -135,10 +138,11 @@ When `provider.providesCover = true` (Emby), `rememberCoverExtractor` returns a 
 ### Cover clean-up on provider removal / identity change
 
 [`ServerConfigRepository`](app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt) `removeServer` and the identity-change edit branch both execute, in order:
-1. `mediaStateStore.deleteBySource(sourceId)` — deletes all Room rows for the source
-2. `thumbnailDiskCache.deleteBySource(sourceId)` — deletes the `<sourceId>/` cache directory
-3. `serverDao.deleteBySourceId(sourceId)` — deletes the server record
-4. `instanceRegistry.remove(sourceId)` — evicts the live instance
+1. `mediaStateStore.deleteBySource(sourceId)` — deletes all Room rows for the source (removes cached key references)
+2. `serverDao.deleteBySourceId(sourceId)` — deletes the server record
+3. `instanceRegistry.remove(sourceId)` — evicts the live instance
+
+No explicit file deletion is needed — `OssCache` LRU eviction handles cleanup automatically.
 
 ---
 
@@ -148,11 +152,11 @@ Routes and screens under **`app/.../ui/catalog`**:
 
 | File | Role |
 |---|---|
-| `BrowseRoute` / `SearchRoute` | Create `mutableStateListOf<EntryInfo>()`, call `rememberCoverExtractor`, pass both to the screen |
+| `BrowseRoute` / `SearchRoute` | Create `mutableStateListOf<EntryInfo>()`, call `rememberAssetGenerator`, pass both to the screen |
 | `BrowseScreen` / `SearchScreen` | Accept `SnapshotStateList<EntryInfo>`; populate with `.clear()` + `.addAll()`; call `onItemsLoaded` after each batch |
 | `MediaEntryComponent` | Renders `item.cover` directly — no cover override param |
 | `DetailRoute` / `DetailScreen` | Load `EntryDetail`, render `detail.poster` |
-| `CoverExtractor` | `rememberCoverExtractor` hook + `updateItemCover` helper |
+| `AssetGenerator` | `rememberAssetGenerator` hook + `updateItemCover` helper; currently covers only |
 
 **Player shell:** [`OpenTunePlayerScreen`](player/src/main/java/com/opentune/player/OpenTunePlayerScreen.kt) in `:player` takes `PlaybackSpec` only — no SMB/Emby branching.
 
@@ -184,7 +188,7 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 
 ## Log tags
 
-- Cover extraction: `"OT_CoverExtractor"`.
+- Cover/asset generation: `"OT_AssetGenerator"`.
 - Embedded server: `"OpenTuneServer"`.
 - Player: `"OpenTunePlayer"` (from `OPEN_TUNE_PLAYER_LOG`); add provider hints in log *messages* if needed.
 
