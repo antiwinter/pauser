@@ -1,6 +1,6 @@
 # TODOs
-- [ ] Fix: smb gen cover
-- [ ] check if same local cache used for smb subtitles as thumb
+- [x] Fix: smb gen cover
+- [x] check if same local cache used for smb subtitles as thumb
 - [ ] align server/source/provider terminology
 - [x] fix audio in background
 - [x] folder, single media folder, series
