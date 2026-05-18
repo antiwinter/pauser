@@ -53,7 +53,7 @@ fun BrowseRoute(
         val instance = app.instanceRegistry.getOrCreate(sourceId)
         state = if (instance == null) {
             Log.e(LOG_TAG, "No instance for sourceId=$sourceId")
-            BrowseState.Error("Server not found")
+            BrowseState.Error("Source not found")
         } else {
             BrowseState.Ready(instance)
         }

@@ -1,7 +1,7 @@
 package com.opentune.storage
 
 data class OpenTuneStorageBindings(
-    val serverDao: ServerDao,
+    val sourceDao: SourceDao,
     val mediaStateStore: UserMediaStateStore,
     val appConfigStore: AppConfigStore,
 )

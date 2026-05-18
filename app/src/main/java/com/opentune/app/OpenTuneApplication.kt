@@ -11,7 +11,7 @@ import com.opentune.app.providers.OpenTuneProviderRegistry
 import com.opentune.app.providers.ProviderInstanceRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.SourceEntity
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.StreamRegistrarHolder
@@ -54,7 +54,7 @@ class OpenTuneApplication : Application() {
             name = getDatabasePath("opentune.db").absolutePath,
         ).fallbackToDestructiveMigration(dropAllTables = true).build()
         storageBindings = OpenTuneStorageBindings(
-            serverDao = database.serverDao(),
+            sourceDao = database.sourceDao(),
             mediaStateStore = RoomMediaStateStore(database),
             appConfigStore = DataStoreAppConfigStore(applicationContext),
         )
@@ -62,7 +62,7 @@ class OpenTuneApplication : Application() {
         PlatformInfoHolder.set(platformInfo)
         providerRegistry = OpenTuneProviderRegistry()
         instanceRegistry = ProviderInstanceRegistry(
-            serverDao = storageBindings.serverDao,
+            sourceDao = storageBindings.sourceDao,
             providerRegistry = providerRegistry,
         )
         openTuneServer = OpenTuneServer(
@@ -71,8 +71,8 @@ class OpenTuneApplication : Application() {
                 override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
                 override fun platformCapabilities() = providerRegistry.platformCapabilities
                 override suspend fun getInstance(sourceId: String) = instanceRegistry.getOrCreate(sourceId)
-                override suspend fun createAndRegister(sourceId: String, entity: ServerEntity) = instanceRegistry.createAndRegister(sourceId, entity)
-                override val serverDao get() = storageBindings.serverDao
+                override suspend fun createAndRegister(sourceId: String, entity: SourceEntity) = instanceRegistry.createAndRegister(sourceId, entity)
+                override val sourceDao get() = storageBindings.sourceDao
                 override val mediaStateStore get() = storageBindings.mediaStateStore
                 override val appConfigStore get() = storageBindings.appConfigStore
             },

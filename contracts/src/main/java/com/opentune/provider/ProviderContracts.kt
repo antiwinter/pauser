@@ -18,16 +18,16 @@ interface ProviderStream {
 
 
 // --- Field specs (moved from ConfigContracts.kt) ---
-enum class ServerFieldKind {
+enum class SourceFieldKind {
     Text,
     SingleLineText,
     Password,
 }
 
-data class ServerFieldSpec(
+data class SourceFieldSpec(
     val id: String,
     val labelKey: String,
-    val kind: ServerFieldKind,
+    val kind: SourceFieldKind,
     val required: Boolean = true,
     val sensitive: Boolean = false,
     val order: Int = 0,
@@ -39,7 +39,7 @@ data class ServerFieldSpec(
 sealed class ValidationResult {
     /**
      * Provider connected, authenticated, and derived a stable identity.
-     * [fields] is the merged credential map the **app** serializes into [com.opentune.storage.ServerEntity.fieldsJson];
+     * [fields] is the merged credential map the **app** serializes into [com.opentune.storage.SourceEntity.fieldsJson];
      * [hash] is used by the app to compute sourceId = "${protocol}_${hash}".
      */
     data class Success(
@@ -55,7 +55,7 @@ sealed class ValidationResult {
 
 /**
  * Stateless factory registered in [com.opentune.app.providers.OpenTuneProviderRegistry].
- * Does not hold server state or store references.
+ * Does not hold source state or store references.
  */
 interface OpenTuneProvider {
     val protocol: String
@@ -67,7 +67,7 @@ interface OpenTuneProvider {
     val providesCover: Boolean
 
     /** Single field spec for both add and edit forms. Does not include display_name. */
-    fun getFieldsSpec(): List<ServerFieldSpec>
+    fun getFieldsSpec(): List<SourceFieldSpec>
 
     /**
      * Connect, authenticate, and verify the supplied credentials.
@@ -95,7 +95,7 @@ interface OpenTuneProviderLoader {
 // --- Provider instance ---
 
 /**
- * Live protocol handle for a single configured server.
+ * Live protocol handle for a single configured source.
  * No identity fields — the app registry maps sourceId → instance externally.
  */
 interface OpenTuneProviderInstance {

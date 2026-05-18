@@ -5,13 +5,13 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
-        ServerEntity::class,
+        SourceEntity::class,
         MediaStateEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class OpenTuneDatabase : RoomDatabase() {
-    abstract fun serverDao(): ServerDao
+    abstract fun sourceDao(): SourceDao
     abstract fun mediaStateDao(): MediaStateDao
 }

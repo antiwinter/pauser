@@ -3,7 +3,7 @@ package com.opentune.provider.js
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.ServerFieldSpec
+import com.opentune.provider.SourceFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -27,7 +27,7 @@ class JsProvider private constructor(
     private val jsBundle: String,
     private val hostApis: HostApis,
     override val providesCover: Boolean,
-    private val cachedFieldsSpec: List<ServerFieldSpec>,
+    private val cachedFieldsSpec: List<SourceFieldSpec>,
 ) : OpenTuneProvider {
 
     override val protocol: String = assetPath.removeSuffix(".js")
@@ -36,7 +36,7 @@ class JsProvider private constructor(
 
     // ── Field spec ─────────────────────────────────────────────────────────
 
-    override fun getFieldsSpec(): List<ServerFieldSpec> = cachedFieldsSpec
+    override fun getFieldsSpec(): List<SourceFieldSpec> = cachedFieldsSpec
 
     // ── Validation ─────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ class JsProvider private constructor(
          */
         suspend fun create(assetPath: String, jsBundle: String, hostApis: HostApis): JsProvider {
             var cover = false
-            var fields: List<ServerFieldSpec> = emptyList()
+            var fields: List<SourceFieldSpec> = emptyList()
             val engine = QuickJsEngine(hostApis)
             try {
                 engine.init()
@@ -121,7 +121,7 @@ class JsProvider private constructor(
             return JsProvider(assetPath, jsBundle, hostApis, cover, fields)
         }
 
-        private fun parseFieldsSpec(json: String): List<ServerFieldSpec> {
+        private fun parseFieldsSpec(json: String): List<SourceFieldSpec> {
             val serializer = Json { ignoreUnknownKeys = true; isLenient = true }
             return try {
                 val arr = serializer.parseToJsonElement(json).jsonArray
@@ -130,11 +130,11 @@ class JsProvider private constructor(
                     val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
                     val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
                     val kind = when (obj["kind"]?.jsonPrimitive?.content) {
-                        "password"   -> com.opentune.provider.ServerFieldKind.Password
-                        "singleLine" -> com.opentune.provider.ServerFieldKind.SingleLineText
-                        else         -> com.opentune.provider.ServerFieldKind.Text
+                        "password"   -> com.opentune.provider.SourceFieldKind.Password
+                        "singleLine" -> com.opentune.provider.SourceFieldKind.SingleLineText
+                        else         -> com.opentune.provider.SourceFieldKind.Text
                     }
-                    ServerFieldSpec(
+                    SourceFieldSpec(
                         id             = id,
                         labelKey       = lbl,
                         kind           = kind,

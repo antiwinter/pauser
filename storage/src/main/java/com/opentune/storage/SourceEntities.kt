@@ -3,8 +3,8 @@ package com.opentune.storage
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "servers")
-data class ServerEntity(
+@Entity(tableName = "sources")
+data class SourceEntity(
     @PrimaryKey val sourceId: String,
     val protocol: String,
     val displayName: String,

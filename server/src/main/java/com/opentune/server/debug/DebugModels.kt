@@ -20,20 +20,20 @@ data class FieldDto(
 )
 
 @Serializable
-data class ServerDto(
+data class SourceDto(
     val sourceId: String,
     val protocol: String,
     val displayName: String,
 )
 
 @Serializable
-data class AddServerRequest(
+data class AddSourceRequest(
     val protocol: String,
     val fields: Map<String, String>,
 )
 
 @Serializable
-data class AddServerResponse(
+data class AddSourceResponse(
     val sourceId: String? = null,
     val displayName: String? = null,
     val error: String? = null,

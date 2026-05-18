@@ -2,7 +2,7 @@ package com.opentune.server.debug
 
 import android.util.Log
 import com.opentune.server.AppContext
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.SourceEntity
 import com.opentune.storage.SubtitlePrefs
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -43,17 +43,17 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             }
         }
 
-        route("/servers") {
+        route("/sources") {
             get {
-                val servers = ctx.serverDao.observeAll().first()
-                val dtos = servers.map { s -> ServerDto(s.sourceId, s.protocol, s.displayName) }
+                val sources = ctx.sourceDao.observeAll().first()
+                val dtos = sources.map { s -> SourceDto(s.sourceId, s.protocol, s.displayName) }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
             post {
-                val body = runCatching { json.decodeFromString<AddServerRequest>(call.receiveText()) }.getOrNull()
+                val body = runCatching { json.decodeFromString<AddSourceRequest>(call.receiveText()) }.getOrNull()
                 if (body == null) {
                     call.respondText(
-                        json.encodeToString(AddServerResponse(error = "invalid request body")),
+                        json.encodeToString(AddSourceResponse(error = "invalid request body")),
                         ContentType.Application.Json,
                         HttpStatusCode.BadRequest,
                     )
@@ -62,7 +62,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val provider = ctx.getProvider(body.protocol)
                 if (provider == null) {
                     call.respondText(
-                        json.encodeToString(AddServerResponse(error = "unknown protocol: ${body.protocol}")),
+                        json.encodeToString(AddSourceResponse(error = "unknown protocol: ${body.protocol}")),
                         ContentType.Application.Json,
                         HttpStatusCode.BadRequest,
                     )
@@ -75,7 +75,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 when (result) {
                     is com.opentune.provider.ValidationResult.Error -> {
                         call.respondText(
-                            json.encodeToString(AddServerResponse(error = result.message)),
+                            json.encodeToString(AddSourceResponse(error = result.message)),
                             ContentType.Application.Json,
                             HttpStatusCode.UnprocessableEntity,
                         )
@@ -83,7 +83,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     is com.opentune.provider.ValidationResult.Success -> {
                         val sourceId = "${body.protocol}_${result.hash}"
                         val now = System.currentTimeMillis()
-                        val entity = ServerEntity(
+                        val entity = SourceEntity(
                             sourceId = sourceId,
                             protocol = body.protocol,
                             displayName = result.name,
@@ -91,13 +91,13 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                             createdAtEpochMs = now,
                             updatedAtEpochMs = now,
                         )
-                        runCatching { ctx.serverDao.insert(entity) }.onFailure {
+                        runCatching { ctx.sourceDao.insert(entity) }.onFailure {
                             Log.w(LOG_TAG, "insert failed (may already exist): ${it.message}")
                         }
                         ctx.createAndRegister(sourceId, entity)
-                        Log.i(LOG_TAG, "added server $sourceId (${result.name})")
+                        Log.i(LOG_TAG, "added source $sourceId (${result.name})")
                         call.respondText(
-                            json.encodeToString(AddServerResponse(sourceId = sourceId, displayName = result.name)),
+                            json.encodeToString(AddSourceResponse(sourceId = sourceId, displayName = result.name)),
                             ContentType.Application.Json,
                             HttpStatusCode.Created,
                         )
@@ -108,8 +108,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 
         route("/instances") {
             get {
-                val servers = ctx.serverDao.observeAll().first()
-                val dtos = servers.map { s -> ServerDto(s.sourceId, s.protocol, s.displayName) }
+                val sources = ctx.sourceDao.observeAll().first()
+                val dtos = sources.map { s -> SourceDto(s.sourceId, s.protocol, s.displayName) }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
 

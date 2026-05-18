@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class EmbyServerFieldsJson(
+data class EmbySourceFieldsJson(
     @SerialName("base_url") val baseUrl: String,
     @SerialName("user_id") val userId: String,
     @SerialName("access_token") val accessToken: String,
@@ -14,10 +14,10 @@ data class EmbyServerFieldsJson(
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
 
-        fun parse(fieldsJson: String): EmbyServerFieldsJson =
-            json.decodeFromString<EmbyServerFieldsJson>(fieldsJson)
+        fun parse(fieldsJson: String): EmbySourceFieldsJson =
+            json.decodeFromString<EmbySourceFieldsJson>(fieldsJson)
 
-        fun encode(value: EmbyServerFieldsJson): String =
-            json.encodeToString(EmbyServerFieldsJson.serializer(), value)
+        fun encode(value: EmbySourceFieldsJson): String =
+            json.encodeToString(EmbySourceFieldsJson.serializer(), value)
     }
 }

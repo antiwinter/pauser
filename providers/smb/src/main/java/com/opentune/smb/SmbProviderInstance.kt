@@ -22,7 +22,7 @@ import java.util.EnumSet
 private const val SMB_LOG = "OpenTunePlayer"
 
 class SmbProviderInstance(
-    private val fields: SmbServerFieldsJson,
+    private val fields: SmbSourceFieldsJson,
 ) : OpenTuneProviderInstance {
 
     private fun credentials() = SmbCredentials(

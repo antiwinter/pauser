@@ -27,7 +27,7 @@ import kotlinx.serialization.json.put
 /**
  * Live provider instance backed by a dedicated QuickJS context.
  *
- * One context per server instance — contexts are not shared between instances
+ * One context per source instance — contexts are not shared between instances
  * so JS state (instance credentials) is fully isolated.
  */
 class JsProviderInstance(

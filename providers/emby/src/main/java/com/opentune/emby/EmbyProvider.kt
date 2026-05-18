@@ -13,8 +13,8 @@ import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlatformInfoHolder
-import com.opentune.provider.ServerFieldKind
-import com.opentune.provider.ServerFieldSpec
+import com.opentune.provider.SourceFieldKind
+import com.opentune.provider.SourceFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,26 +26,26 @@ class EmbyProvider : OpenTuneProvider {
     override val protocol: String = "emby-kt"
     override val providesCover: Boolean = true
 
-    override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
-        ServerFieldSpec(
+    override fun getFieldsSpec(): List<SourceFieldSpec> = listOf(
+        SourceFieldSpec(
             id = "base_url",
             labelKey = "fld_http_library_url",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = true,
             order = 0,
             placeholderKey = "ph_http_library_url",
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "username",
             labelKey = "fld_account_username",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = true,
             order = 1,
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "password",
             labelKey = "fld_account_password",
-            kind = ServerFieldKind.Password,
+            kind = SourceFieldKind.Password,
             required = true,
             sensitive = true,
             order = 2,
@@ -81,7 +81,7 @@ class EmbyProvider : OpenTuneProvider {
         }
 
     override fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance {
-        val fields = EmbyServerFieldsJson(
+        val fields = EmbySourceFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
             accessToken = values["access_token"] ?: error("Missing access_token"),

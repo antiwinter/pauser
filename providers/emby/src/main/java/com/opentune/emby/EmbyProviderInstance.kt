@@ -25,7 +25,7 @@ private val CONTAINER_TYPES = setOf(
 private val NON_PLAYABLE_TYPES = CONTAINER_TYPES + setOf("Series", "Season")
 
 class EmbyProviderInstance(
-    private val fields: EmbyServerFieldsJson,
+    private val fields: EmbySourceFieldsJson,
     private val deviceProfile: DeviceProfile,
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
 ) : OpenTuneProviderInstance {

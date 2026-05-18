@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.SourceEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -32,13 +32,13 @@ import kotlinx.coroutines.launch
 fun HomeRoute(
     onAddProvider: (String) -> Unit,
     onOpenBrowse: (String, String, String) -> Unit,
-    onEditProvider: (String, String) -> Unit,
+    onEditSource: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
     val providers by app.providerRegistry.providersFlow.collectAsState()
-    var serversByType by remember { mutableStateOf<Map<String, List<ServerEntity>>>(emptyMap()) }
+    var sourcesByType by remember { mutableStateOf<Map<String, List<SourceEntity>>>(emptyMap()) }
 
-    // Start watching server list for each provider as it arrives.
+    // Start watching source list for each provider as it arrives.
     // Uses an observed-protocols set so existing watchers are never cancelled when
     // the list grows — only new providers get a new watcher coroutine.
     LaunchedEffect(app) {
@@ -47,8 +47,8 @@ fun HomeRoute(
             allProviders.forEach { provider ->
                 if (observedProtocols.add(provider.protocol)) {
                     launch {
-                        app.storageBindings.serverDao.observeByProvider(provider.protocol).collect { list ->
-                            serversByType = serversByType + (provider.protocol to list)
+                        app.storageBindings.sourceDao.observeByProvider(provider.protocol).collect { list ->
+                            sourcesByType = sourcesByType + (provider.protocol to list)
                             launch { app.instanceRegistry.populateEager(list) }
                         }
                     }
@@ -69,10 +69,10 @@ fun HomeRoute(
                 }
             }
             providers.forEach { provider ->
-                (serversByType[provider.protocol] ?: emptyList()).forEach { s ->
+                (sourcesByType[provider.protocol] ?: emptyList()).forEach { s ->
                     Button(
                         onClick = { onOpenBrowse(provider.protocol, s.sourceId, "") },
-                        modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, s.sourceId) },
+                        modifier = Modifier.onTvMenuKeyDown { onEditSource(provider.protocol, s.sourceId) },
                     ) {
                         Text(s.displayName)
                     }

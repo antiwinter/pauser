@@ -3,8 +3,8 @@ package com.opentune.smb
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.OpenTuneProvider
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.provider.ServerFieldKind
-import com.opentune.provider.ServerFieldSpec
+import com.opentune.provider.SourceFieldKind
+import com.opentune.provider.SourceFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,40 +14,40 @@ class SmbProvider : OpenTuneProvider {
 
     override val protocol: String = "smb"
     override val providesCover: Boolean = false
-    override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
-        ServerFieldSpec(
+    override fun getFieldsSpec(): List<SourceFieldSpec> = listOf(
+        SourceFieldSpec(
             id = "host",
             labelKey = "fld_network_host",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = true,
             order = 0,
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "share_name",
             labelKey = "fld_share_name",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = true,
             order = 1,
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "username",
             labelKey = "fld_account_username",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = true,
             order = 2,
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "password",
             labelKey = "fld_account_password",
-            kind = ServerFieldKind.Password,
+            kind = SourceFieldKind.Password,
             required = true,
             sensitive = true,
             order = 3,
         ),
-        ServerFieldSpec(
+        SourceFieldSpec(
             id = "domain",
             labelKey = "fld_domain_optional",
-            kind = ServerFieldKind.SingleLineText,
+            kind = SourceFieldKind.SingleLineText,
             required = false,
             order = 4,
         ),
@@ -90,7 +90,7 @@ class SmbProvider : OpenTuneProvider {
         }
 
     override fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance {
-        val fields = SmbServerFieldsJson(
+        val fields = SmbSourceFieldsJson(
             host = values["host"] ?: error("Missing host"),
             shareName = values["share_name"] ?: error("Missing share_name"),
             username = values["username"] ?: error("Missing username"),

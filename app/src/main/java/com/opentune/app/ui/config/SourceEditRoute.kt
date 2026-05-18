@@ -27,18 +27,18 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.provider.ServerFieldKind
+import com.opentune.app.providers.SourceConfigRepository
+import com.opentune.provider.SourceFieldKind
 import com.opentune.app.providers.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val LOG_TAG = "OpenTuneServerEdit"
+private const val LOG_TAG = "OpenTuneSourceEdit"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ServerEditRoute(
+fun SourceEditRoute(
     protocol: String,
     sourceId: String,
     onDone: () -> Unit,
@@ -55,7 +55,7 @@ fun ServerEditRoute(
     LaunchedEffect(protocol, sourceId) {
         loaded = false
         val initial = withContext(Dispatchers.IO) {
-            ServerConfigRepository.loadEditFields(protocol, app, sourceId)
+            SourceConfigRepository.loadEditFields(protocol, app, sourceId)
         }
         values = fields.associate { it.id to (initial[it.id] ?: "") }
         loaded = true
@@ -75,7 +75,7 @@ fun ServerEditRoute(
                 .verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.server_edit_title))
+            Text(stringResource(R.string.source_edit_title))
             if (!loaded) {
                 Text("Loading…")
             } else {
@@ -89,8 +89,8 @@ fun ServerEditRoute(
                             val ph = providerFieldPlaceholder(spec.placeholderKey)
                             if (ph != null) ({ Text(ph) }) else null
                         },
-                        singleLine = spec.kind != ServerFieldKind.Text,
-                        visualTransformation = if (spec.kind == ServerFieldKind.Password) {
+                        singleLine = spec.kind != SourceFieldKind.Text,
+                        visualTransformation = if (spec.kind == SourceFieldKind.Password) {
                             PasswordVisualTransformation()
                         } else {
                             VisualTransformation.None
@@ -105,7 +105,7 @@ fun ServerEditRoute(
                 scope.launch {
                     error = null
                     val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitEdit(protocol, sourceId, values, app)
+                        SourceConfigRepository.submitEdit(protocol, sourceId, values, app)
                     }
                     when (result) {
                         is SubmitResult.Success -> onDone()
@@ -118,7 +118,7 @@ fun ServerEditRoute(
             },
             enabled = loaded && fields.filter { it.required }.all { values[it.id]?.isNotBlank() == true },
         ) {
-            Text(stringResource(R.string.server_edit_primary))
+            Text(stringResource(R.string.source_edit_primary))
         }
         Button(onClick = onDone) { Text(stringResource(R.string.action_cancel)) }
     }

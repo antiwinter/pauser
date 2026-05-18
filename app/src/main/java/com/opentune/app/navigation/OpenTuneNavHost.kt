@@ -17,8 +17,8 @@ import com.opentune.app.ui.catalog.ImageViewerRoute
 import com.opentune.app.ui.catalog.PlayerRoute
 import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.catalog.SettingsScreen
-import com.opentune.app.ui.config.ServerAddRoute
-import com.opentune.app.ui.config.ServerEditRoute
+import com.opentune.app.ui.config.SourceAddRoute
+import com.opentune.app.ui.config.SourceEditRoute
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
@@ -86,7 +86,7 @@ fun OpenTuneNavHost() {
                 onOpenBrowse = { pt, sid, path ->
                     nav.navigate(Routes.browse(pt, sid, path))
                 },
-                onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
+                onEditSource = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
             )
         }
         composable(
@@ -94,7 +94,7 @@ fun OpenTuneNavHost() {
             listOf(navArgument("protocol") { type = NavType.StringType }),
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
-            ServerAddRoute(
+            SourceAddRoute(
                 protocol = protocol,
                 onDone = { nav.popBackStack() },
             )
@@ -108,7 +108,7 @@ fun OpenTuneNavHost() {
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
             val sourceId = it.arguments!!.getString("sourceId")!!
-            ServerEditRoute(
+            SourceEditRoute(
                 protocol = protocol,
                 sourceId = sourceId,
                 onDone = { nav.popBackStack() },

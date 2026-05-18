@@ -8,23 +8,23 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ServerDao {
-    @Query("SELECT * FROM servers WHERE protocol = :protocol ORDER BY createdAtEpochMs ASC")
-    fun observeByProvider(protocol: String): Flow<List<ServerEntity>>
+interface SourceDao {
+    @Query("SELECT * FROM sources WHERE protocol = :protocol ORDER BY createdAtEpochMs ASC")
+    fun observeByProvider(protocol: String): Flow<List<SourceEntity>>
 
-    @Query("SELECT * FROM servers ORDER BY createdAtEpochMs ASC")
-    fun observeAll(): Flow<List<ServerEntity>>
+    @Query("SELECT * FROM sources ORDER BY createdAtEpochMs ASC")
+    fun observeAll(): Flow<List<SourceEntity>>
 
-    @Query("SELECT * FROM servers WHERE sourceId = :sourceId LIMIT 1")
-    suspend fun getBySourceId(sourceId: String): ServerEntity?
+    @Query("SELECT * FROM sources WHERE sourceId = :sourceId LIMIT 1")
+    suspend fun getBySourceId(sourceId: String): SourceEntity?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insert(server: ServerEntity)
+    suspend fun insert(source: SourceEntity)
 
     @Update
-    suspend fun update(server: ServerEntity)
+    suspend fun update(source: SourceEntity)
 
-    @Query("DELETE FROM servers WHERE sourceId = :sourceId")
+    @Query("DELETE FROM sources WHERE sourceId = :sourceId")
     suspend fun deleteBySourceId(sourceId: String)
 }
 

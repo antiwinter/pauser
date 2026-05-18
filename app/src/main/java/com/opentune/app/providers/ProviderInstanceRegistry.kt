@@ -1,14 +1,14 @@
 package com.opentune.app.providers
 
 import com.opentune.provider.OpenTuneProviderInstance
-import com.opentune.storage.ServerEntity
-import com.opentune.storage.ServerDao
+import com.opentune.storage.SourceEntity
+import com.opentune.storage.SourceDao
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 
 class ProviderInstanceRegistry(
-    private val serverDao: ServerDao,
+    private val sourceDao: SourceDao,
     private val providerRegistry: OpenTuneProviderRegistry,
 ) {
     private val mutex = Mutex()
@@ -18,15 +18,15 @@ class ProviderInstanceRegistry(
     /** Get existing or create a new instance by lazy DB lookup. Returns null if sourceId is unknown. */
     suspend fun getOrCreate(sourceId: String): OpenTuneProviderInstance? = mutex.withLock {
         instances[sourceId] ?: run {
-            val entity = serverDao.getBySourceId(sourceId) ?: return@withLock null
+            val entity = sourceDao.getBySourceId(sourceId) ?: return@withLock null
             val instance = buildInstance(entity) ?: return@withLock null
             instances[sourceId] = instance
             instance
         }
     }
 
-    /** Register an instance immediately after server creation. */
-    suspend fun createAndRegister(sourceId: String, entity: ServerEntity): OpenTuneProviderInstance? =
+    /** Register an instance immediately after source creation. */
+    suspend fun createAndRegister(sourceId: String, entity: SourceEntity): OpenTuneProviderInstance? =
         mutex.withLock {
             val instance = buildInstance(entity) ?: return@withLock null
             instances[sourceId] = instance
@@ -34,18 +34,18 @@ class ProviderInstanceRegistry(
         }
 
     /** Re-register an instance when credentials are updated. */
-    suspend fun update(sourceId: String, entity: ServerEntity): Unit = mutex.withLock {
+    suspend fun update(sourceId: String, entity: SourceEntity): Unit = mutex.withLock {
         val instance = buildInstance(entity)
         if (instance != null) instances[sourceId] = instance else instances.remove(sourceId)
     }
 
-    /** Remove an instance when a server is deleted. */
+    /** Remove an instance when a source is deleted. */
     suspend fun remove(sourceId: String): Unit = mutex.withLock {
         instances.remove(sourceId)
     }
 
-    /** Eagerly populate registry from a snapshot of servers (called from home screen). */
-    suspend fun populateEager(entities: List<ServerEntity>): Unit = mutex.withLock {
+    /** Eagerly populate registry from a snapshot of sources (called from home screen). */
+    suspend fun populateEager(entities: List<SourceEntity>): Unit = mutex.withLock {
         for (entity in entities) {
             if (!instances.containsKey(entity.sourceId)) {
                 val instance = buildInstance(entity) ?: continue
@@ -54,7 +54,7 @@ class ProviderInstanceRegistry(
         }
     }
 
-    private fun buildInstance(entity: ServerEntity): OpenTuneProviderInstance? {
+    private fun buildInstance(entity: SourceEntity): OpenTuneProviderInstance? {
         val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()
             ?: return null
         val values = runCatching {

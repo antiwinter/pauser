@@ -2,14 +2,14 @@ package com.opentune.app.providers
 
 import com.opentune.app.OpenTuneApplication
 import com.opentune.provider.ValidationResult
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.SourceEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-object ServerConfigRepository {
+object SourceConfigRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -29,7 +29,7 @@ object ServerConfigRepository {
     suspend fun clearAddDraft(protocol: String, app: OpenTuneApplication) =
         app.storageBindings.appConfigStore.clearDraft(protocol)
 
-    // --- Server add ---
+    // --- Source add ---
 
     suspend fun submitAdd(
         protocol: String,
@@ -42,7 +42,7 @@ object ServerConfigRepository {
             is ValidationResult.Success -> {
                 val sourceId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
-                val entity = ServerEntity(
+                val entity = SourceEntity(
                     sourceId = sourceId,
                     protocol = protocol,
                     displayName = result.name,
@@ -51,9 +51,9 @@ object ServerConfigRepository {
                     updatedAtEpochMs = now,
                 )
                 try {
-                    app.storageBindings.serverDao.insert(entity)
+                    app.storageBindings.sourceDao.insert(entity)
                 } catch (e: android.database.sqlite.SQLiteConstraintException) {
-                    return@withContext SubmitResult.Error("Server already exists")
+                    return@withContext SubmitResult.Error("Source already exists")
                 }
                 app.instanceRegistry.createAndRegister(sourceId, entity)
                 SubmitResult.Success
@@ -61,14 +61,14 @@ object ServerConfigRepository {
         }
     }
 
-    // --- Server edit ---
+    // --- Source edit ---
 
     suspend fun loadEditFields(
         protocol: String,
         app: OpenTuneApplication,
         sourceId: String,
     ): Map<String, String> = withContext(Dispatchers.IO) {
-        val entity = app.storageBindings.serverDao.getBySourceId(sourceId) ?: return@withContext emptyMap()
+        val entity = app.storageBindings.sourceDao.getBySourceId(sourceId) ?: return@withContext emptyMap()
         val stored = runCatching {
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrElse { emptyMap() }
@@ -90,9 +90,9 @@ object ServerConfigRepository {
                 val now = System.currentTimeMillis()
                 if (newSourceId == sourceId) {
                     // Same identity — update fields only
-                    val existing = app.storageBindings.serverDao.getBySourceId(sourceId)
-                        ?: return@withContext SubmitResult.Error("Server not found")
-                    app.storageBindings.serverDao.update(
+                    val existing = app.storageBindings.sourceDao.getBySourceId(sourceId)
+                        ?: return@withContext SubmitResult.Error("Source not found")
+                    app.storageBindings.sourceDao.update(
                         existing.copy(
                             displayName = result.name,
                             fieldsJson = encodeFields(result.fields),
@@ -106,7 +106,7 @@ object ServerConfigRepository {
                     ))
                 } else {
                     // Identity changed — insert new, cascade-delete old
-                    val newEntity = ServerEntity(
+                    val newEntity = SourceEntity(
                         sourceId = newSourceId,
                         protocol = protocol,
                         displayName = result.name,
@@ -115,13 +115,13 @@ object ServerConfigRepository {
                         updatedAtEpochMs = now,
                     )
                     try {
-                        app.storageBindings.serverDao.insert(newEntity)
+                        app.storageBindings.sourceDao.insert(newEntity)
                     } catch (e: android.database.sqlite.SQLiteConstraintException) {
-                        return@withContext SubmitResult.Error("A server with the new credentials already exists")
+                        return@withContext SubmitResult.Error("A source with the new credentials already exists")
                     }
                     app.instanceRegistry.createAndRegister(newSourceId, newEntity)
                     app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-                    app.storageBindings.serverDao.deleteBySourceId(sourceId)
+                    app.storageBindings.sourceDao.deleteBySourceId(sourceId)
                     app.instanceRegistry.remove(sourceId)
                 }
                 SubmitResult.Success
@@ -129,12 +129,12 @@ object ServerConfigRepository {
         }
     }
 
-    // --- Server removal ---
+    // --- Source removal ---
 
-    suspend fun removeServer(sourceId: String, app: OpenTuneApplication) =
+    suspend fun removeSource(sourceId: String, app: OpenTuneApplication) =
         withContext(Dispatchers.IO) {
             app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-            app.storageBindings.serverDao.deleteBySourceId(sourceId)
+            app.storageBindings.sourceDao.deleteBySourceId(sourceId)
             app.instanceRegistry.remove(sourceId)
         }
 }
