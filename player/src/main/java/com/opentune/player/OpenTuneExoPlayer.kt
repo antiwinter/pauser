@@ -17,15 +17,15 @@ object OpenTuneExoPlayer {
      * ExoPlayer for provider-supplied [androidx.media3.exoplayer.source.MediaSource] instances
      * (each source bundles its own [androidx.media3.datasource.DataSource]).
      *
-     * [codecSelector] should be a [RetryableMediaCodecSelector.selector] so the player screen can
-     * drive per-item decoder retry/fallback. [bandwidthMeter] is owned by the player after
-     * [ExoPlayer.Builder.setBandwidthMeter]; it is torn down automatically when
-     * [ExoPlayer.release] is called — no separate disposal needed.
+     * Pass a [RetryableMediaCodecSelector.selector] as [codecSelector] when the decoder-fallback
+     * path is enabled; otherwise the default Media3 selector is used. [bandwidthMeter] is owned
+     * by the player after [ExoPlayer.Builder.setBandwidthMeter] and torn down automatically on
+     * [ExoPlayer.release].
      */
     fun createForBundledSources(
         context: Context,
         preBufferMs: Int = AppConfigStore.DEFAULT_PRE_BUFFER_MS,
-        codecSelector: MediaCodecSelector,
+        codecSelector: MediaCodecSelector = MediaCodecSelector.DEFAULT,
     ): PlayerWithMeter {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(

@@ -1,10 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.opentune.player.OpenTuneTvPlayerView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<com.opentune.player.tv.OpenTuneTvPlayerView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    app:auto_show="false"
-    app:controller_layout_id="@layout/opentune_player_control_view"
-    app:hide_on_touch="false"
-    app:show_buffering="when_playing"
-    app:use_controller="true" />
+    android:layout_height="match_parent" />

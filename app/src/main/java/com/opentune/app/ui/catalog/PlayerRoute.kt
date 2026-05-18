@@ -16,7 +16,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
-import com.opentune.player.OpenTunePlayerScreen
+import com.opentune.player.OpenTunePlayer
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -74,7 +74,7 @@ fun PlayerRoute(
         }
         spec != null -> {
             PlayerShell {
-                OpenTunePlayerScreen(
+                OpenTunePlayer(
                     spec = spec!!,
                     startMs = startMs,
                     mediaStateStore = app.storageBindings.mediaStateStore,

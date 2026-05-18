@@ -4,49 +4,49 @@ overview: Phase 1 splits the monolithic `OpenTunePlayerScreen` into three layers
 todos:
   - id: engine
     content: "Phase 1: Create PlaybackEngine.kt: move ExoPlayer creation, AtomicBoolean, codec selector, prepare/seek/wait-READY effect, decoder-retry effect, speed-listener effect, progress tick effect, controllers, trackInfo + bandwidthMbps state, idempotent release()."
-    status: pending
+    status: completed
   - id: host
     content: "Phase 1: Create PlaybackHostEffects.kt: MediaSession + keep-screen-on DisposableEffect and IME-dismiss LaunchedEffect (moved verbatim from OpenTunePlayerScreen)."
-    status: pending
+    status: completed
   - id: helpers
     content: "Phase 1: Create PlayerViewHelpers.kt: configurePlayerViewDefaults(view) and applySubtitleStyle(view, translationYPx, sizeScale)."
-    status: pending
+    status: completed
   - id: tv-view
     content: "Phase 1: Create tv/TvPlayerView.kt: move OpenTuneTvPlayerView class into package com.opentune.player.tv (unchanged behavior); add @Composable TvPlayerView wrapping it, calling the shared helpers; delete old OpenTunePlayerView.kt and OpenTuneTvPlayerView.kt."
-    status: pending
+    status: completed
   - id: xml
     content: "Phase 1: Update opentune_player_view.xml root tag to <com.opentune.player.tv.OpenTuneTvPlayerView>."
-    status: pending
+    status: completed
   - id: tv-player
     content: "Phase 1: Create tv/TvPlayer.kt: thin ~40-line composable that calls rememberPlaybackEngine, PlaybackHostEffects, rememberMenuOverlay, rememberInfoOsd, and assembles the Box with TvPlayerView and overlays; delete OpenTunePlayerScreen.kt."
-    status: pending
+    status: completed
   - id: route
     content: "Phase 1: Update PlayerRoute.kt import and call site from OpenTunePlayerScreen to com.opentune.player.tv.TvPlayer (argument list unchanged)."
-    status: pending
+    status: completed
   - id: build
     content: "Phase 1: Run :player and :app compile + lint to confirm no regressions."
-    status: pending
+    status: completed
   - id: controller-bar
     content: "Phase 2: Create PlaybackControllerBar.kt: shared Compose bottom bar (progress + buffered indicator + position/duration text + play/pause icon). Display-only (no touch scrubbing yet). Position polled every 500 ms via LaunchedEffect while playing."
-    status: pending
+    status: completed
   - id: tv-view-cleanup
     content: "Phase 2: Strip OpenTuneTvPlayerView of all Media3-controller code (setControllerVisibilityListener, updatePlaybackStateIndicatorAttachment, dismissMenuPopupIfShowing, applyTimeBarColors, showController/hideController calls, isControllerFullyVisible). Add onTransportKey callback. Both TvPlayerView and PadPlayerView use useController = false. Delete opentune_player_control_view.xml; simplify opentune_player_view.xml."
-    status: pending
+    status: completed
   - id: tv-player-2
     content: "Phase 2: Update TvPlayer to drive controllerVisible as Compose state (replacing playerViewRef?.hideController() and onControllerVisibilityChanged). Wire onTransportKey from TvPlayerView to set controllerVisible = true. Render PlaybackControllerBar inside the Box with AnimatedVisibility."
-    status: pending
+    status: completed
   - id: pad-view
     content: "Phase 2: Create pad/PadPlayerView.kt: empty class OpenTunePadPlayerView : PlayerView + @Composable PadPlayerView; useController = false; tap-to-show via pointerInput; calls shared helpers."
-    status: pending
+    status: completed
   - id: pad-player
     content: "Phase 2: Create pad/PadPlayer.kt: composable that calls rememberPlaybackEngine + PlaybackHostEffects + PadPlayerView + PlaybackControllerBar with tap-driven controllerVisible state and 3s auto-hide. BackHandler releases engine and calls onExit."
-    status: pending
+    status: completed
   - id: selector
     content: "Phase 2: Create OpenTunePlayer.kt: platform selector that picks TvPlayer or PadPlayer via UiModeManager.currentModeType == UI_MODE_TYPE_TELEVISION."
-    status: pending
+    status: completed
   - id: route-2
     content: "Phase 2: Update PlayerRoute.kt to call OpenTunePlayer instead of TvPlayer."
-    status: pending
+    status: completed
   - id: verify-pad
     content: "Phase 2: Smoke test TV + phone/tablet emulator. TV: controller appears on DPAD key, hides after 5s, menus/subtitle-adjust work. Pad: controller appears on tap, hides after 3s, system back exits. Note any engine assumption that leaked to Pad for Phase 3."
     status: pending
