@@ -431,29 +431,17 @@ internal fun rememberPlaybackEngine(
     // SMB uses SmbJ directly (not ExoPlayer's DataSource), so getBitrateEstimate() always
     // returns -1 for SMB sources — the mbps field in InfoOsd will not be displayed for SMB.
     LaunchedEffect(exo, instanceKey, spec.hooks) {
-        val s = spec
-        val interval = s.hooks.progressIntervalMs()
-        if (interval > 0L) {
-            while (isActive) {
-                delay(interval)
-                if (released.get()) break
-                val pos = exo.currentPosition
-                val isPaused = !exo.playWhenReady
-                bandwidthMbps.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
-                hooksState.value.onProgressTick(pos, exo.playbackParameters.speed, isPaused)
-                if (!isPaused) {
-                    withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
-                }
-            }
-        } else {
-            while (isActive) {
-                delay(10_000L)
-                if (released.get()) break
-                bandwidthMbps.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
-                if (exo.isPlaying) {
-                    val pos = exo.currentPosition
-                    withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
-                }
+        val progressIntervalMs = spec.hooks.progressIntervalMs()
+        val interval = progressIntervalMs.takeIf { it > 0L } ?: 10_000L
+        while (isActive) {
+            delay(interval)
+            if (released.get()) break
+            bandwidthMbps.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
+            val pos = exo.currentPosition
+            val isPaused = !exo.playWhenReady
+            hooksState.value.onProgressTick(pos, exo.playbackParameters.speed, isPaused)
+            if (!isPaused) {
+                withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
             }
         }
     }
