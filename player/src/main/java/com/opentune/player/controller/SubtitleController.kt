@@ -29,6 +29,8 @@ import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.R
 import com.opentune.player.engine.PlayerStores
 import com.opentune.player.engine.toMediaSource
+import com.opentune.provider.PlaybackSpec
+import com.opentune.provider.SubtitleTrack
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.SubtitlePrefs
 import com.opentune.storage.upsertSubtitleTrack
@@ -38,6 +40,63 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SUB_LOG_TAG = "OT_Subtitle"
+
+// ---------------------------------------------------------------------------
+// Subtitle resolution helpers — used during initial playback setup
+// ---------------------------------------------------------------------------
+
+internal data class SubtitlePreference(
+    val externalUri: Uri? = null,
+    val language: String? = null,
+)
+
+@UnstableApi
+internal fun resolveSubtitlePreference(
+    savedId: String?,
+    spec: PlaybackSpec,
+): SubtitlePreference {
+    if (savedId == null) return SubtitlePreference()
+    if (spec.subtitleTracks.isNotEmpty()) {
+        val track = spec.subtitleTracks.find { it.trackId == savedId }
+        if (track != null) {
+            return if (track.externalRef != null) {
+                SubtitlePreference(externalUri = Uri.parse(track.externalRef!!), language = track.language)
+            } else {
+                SubtitlePreference(language = track.language)
+            }
+        }
+    }
+    // ExoPlayer-native ID like "exo_<groupId>" — language unknown, let ExoPlayer auto-select.
+    return SubtitlePreference()
+}
+
+@UnstableApi
+internal fun prepareWithSidecar(
+    context: Context,
+    exo: ExoPlayer,
+    subtitleUri: Uri,
+    mimeType: String,
+    spec: PlaybackSpec,
+) {
+    val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
+        .Builder(subtitleUri)
+        .setMimeType(mimeType)
+        .build()
+    val httpFactory = DefaultHttpDataSource.Factory()
+        .setDefaultRequestProperties(spec.headers)
+    val subtitleSource = SingleSampleMediaSource
+        .Factory(DefaultDataSource.Factory(context, httpFactory))
+        .createMediaSource(subtitleConfig, C.TIME_UNSET)
+    val mergedSource = MergingMediaSource(spec.toMediaSource(context), subtitleSource)
+    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        .setSelectUndeterminedTextLanguage(true)
+        .build()
+    exo.setMediaSource(mergedSource)
+    exo.playWhenReady = true
+    exo.prepare()
+}
 
 @UnstableApi
 internal class SubtitleController(
@@ -50,7 +109,7 @@ internal class SubtitleController(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
     private val mediaStateKey: MediaStateKey,
-    private val specState: State<com.opentune.provider.PlaybackSpec>,
+    private val specState: State<PlaybackSpec>,
     private val context: Context,
     private val exo: ExoPlayer,
 ) {
@@ -84,10 +143,16 @@ internal class SubtitleController(
         onSelect = {},
     )
 
+    val adjustMenuEntry: PlayerMenuEntry = PlayerMenuEntry(
+        label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
+        children = { emptyList() },
+        isSelected = { isAdjustActiveState.value },
+        onSelect = { isAdjustActiveState.value = true },
+    )
+
     private fun buildSubtitleChildren(): List<PlayerMenuEntry> {
         val spec = specState.value
         val tracks = currentTracksState.value
-        val activeId = activeTrackIdState.value
         val entries = mutableListOf<PlayerMenuEntry>()
 
         // Off
@@ -151,23 +216,12 @@ internal class SubtitleController(
                 }
         }
 
-        // Adjust option only when a track is active
-        if (activeId != null) {
-            entries += PlayerMenuEntry(
-                label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
-                children = { emptyList() },
-                isSelected = { false },
-                onSelect = { isAdjustActiveState.value = true },
-            )
-        }
-
         return entries
     }
 
-    private fun selectFromSpec(track: com.opentune.provider.SubtitleTrack) {
+    private fun selectFromSpec(track: SubtitleTrack) {
         if (track.externalRef == null) {
-            val currentTracks = currentTracksState.value
-            val exoGroup = currentTracks.groups
+            val exoGroup = currentTracksState.value.groups
                 .filter { it.type == C.TRACK_TYPE_TEXT }
                 .firstOrNull { it.mediaTrackGroup.id == track.trackId }
             Log.d(SUB_LOG_TAG, "select: FromSpec embedded trackId=${track.trackId} lang=${track.language} exoGroupMatch=${exoGroup?.let { "id=${it.mediaTrackGroup.id} isSupported=${it.isSupported}" } ?: "null"}")
@@ -186,67 +240,21 @@ internal class SubtitleController(
                 stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, track.trackId)
             }
         } else {
-            val externalRef = track.externalRef!!
-            Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=$externalRef")
+            // External sidecar: stop the player, re-prepare with a MergingMediaSource, then
+            // resume from the same position. prepareWithSidecar sets
+            // setSelectUndeterminedTextLanguage(true) so ExoPlayer auto-selects the new track.
+            Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=${track.externalRef}")
             scope.launch {
-                val subtitleUri = Uri.parse(externalRef)
-                val pos = withContext(Dispatchers.Main) { exo.currentPosition }
-                val mimeType = subtitleMimeType(externalRef)
-                val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
-                    .Builder(subtitleUri)
-                    .setMimeType(mimeType)
-                    .build()
-                val httpFactory = DefaultHttpDataSource.Factory()
-                    .setDefaultRequestProperties(specState.value.headers)
-                val subtitleSource = SingleSampleMediaSource
-                    .Factory(DefaultDataSource.Factory(context, httpFactory))
-                    .createMediaSource(subtitleConfig, C.TIME_UNSET)
-                val mergedSource = MergingMediaSource(specState.value.toMediaSource(context), subtitleSource)
-                withContext(Dispatchers.Main) {
-                    var sidecarListener: Player.Listener? = null
-                    sidecarListener = object : Player.Listener {
-                        override fun onTracksChanged(tracks: Tracks) {
-                            val supported = tracks.groups.filter {
-                                it.type == C.TRACK_TYPE_TEXT && it.isSupported
-                            }
-                            if (supported.isNotEmpty()) {
-                                val g = supported.last()
-                                val fmt = if (g.length > 0) g.getTrackFormat(0) else null
-                                Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: selecting gid=${g.mediaTrackGroup.id} lang=${fmt?.language} mime=${fmt?.sampleMimeType}")
-                                exo.removeListener(this)
-                                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                    .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, 0))
-                                    .build()
-                            } else {
-                                Log.d(SUB_LOG_TAG, "sidecar.onTracksChanged: no supported text tracks yet (total=${tracks.groups.count { it.type == C.TRACK_TYPE_TEXT }})")
-                            }
-                        }
-                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                            Log.e(SUB_LOG_TAG, "sidecar.onPlayerError: errorCode=${error.errorCode} msg=${error.message}", error.cause)
-                            exo.removeListener(this)
-                        }
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_IDLE) {
-                                Log.d(SUB_LOG_TAG, "sidecar.onPlaybackStateChanged: IDLE — removing listener")
-                                exo.removeListener(this)
-                            }
-                        }
-                    }
-                    Log.d(SUB_LOG_TAG, "sidecar: re-preparing with merged source uri=$subtitleUri pos=$pos")
-                    exo.addListener(sidecarListener)
-                    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .setSelectUndeterminedTextLanguage(true)
-                        .build()
-                    exo.stop()
-                    exo.setMediaSource(mergedSource)
-                    exo.playWhenReady = true
-                    exo.prepare()
-                    exo.seekTo(pos)
-                }
+                val pos = exo.currentPosition
+                exo.stop()
+                prepareWithSidecar(
+                    context = context,
+                    exo = exo,
+                    subtitleUri = Uri.parse(track.externalRef!!),
+                    mimeType = subtitleMimeType(track.externalRef!!),
+                    spec = specState.value,
+                )
+                exo.seekTo(pos)
                 activeTrackIdState.value = track.trackId
                 withContext(Dispatchers.IO) {
                     Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$mediaStateKey")
@@ -261,7 +269,7 @@ internal class SubtitleController(
 @Composable
 internal fun rememberSubtitleController(
     exo: ExoPlayer,
-    spec: com.opentune.provider.PlaybackSpec,
+    spec: PlaybackSpec,
     stores: PlayerStores,
     mediaStateKey: MediaStateKey,
     initialTrackId: String?,

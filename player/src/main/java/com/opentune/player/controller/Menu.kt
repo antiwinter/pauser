@@ -89,7 +89,16 @@ class MenuOverlay(private val entries: List<PlayerMenuEntry>) {
 
     fun confirm() {
         when (depth) {
-            1 -> { subIndex = 0; depth = 2 }
+            1 -> {
+                val entry = entries.getOrNull(topIndex) ?: return
+                if (entry.children().isEmpty()) {
+                    entry.onSelect()
+                    close()
+                } else {
+                    subIndex = 0
+                    depth = 2
+                }
+            }
             2 -> {
                 val children = entries.getOrNull(topIndex)?.children() ?: return
                 children.getOrNull(subIndex)?.onSelect()

@@ -5,7 +5,6 @@ import android.os.Handler
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.media3.common.C
@@ -145,7 +144,7 @@ internal fun FallbackEffect(
     instanceKey: MediaStateKey,
     selector: RetryableMediaCodecSelector?,
     specState: State<PlaybackSpec>,
-    trackInfoState: MutableState<TrackInfo>,
+    trackInfoState: State<TrackInfo>,
     mainHandler: Handler,
     context: Context,
 ) {
@@ -172,7 +171,13 @@ internal fun FallbackEffect(
                 return
             }
             val isRealDecoderFailure = error.causeChainContains("MediaCodec\$CodecException")
-            if (isRealDecoderFailure) selector.markFailed(mime)
+            if (!isRealDecoderFailure) {
+                // Not a codec failure — rotating decoders won't help. Leave gate set so this
+                // path is not retried, and let ExoPlayer surface the error normally.
+                Log.w(FALLBACK_LOG, "$label error is not a MediaCodec failure; skipping decoder rotation code=${error.errorCode}")
+                return
+            }
+            selector.markFailed(mime)
             val isExhausted = selector.isExhausted(mime)
             Log.w(
                 FALLBACK_LOG,

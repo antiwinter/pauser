@@ -1,10 +1,12 @@
 package com.opentune.player.controller
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
 import com.opentune.player.engine.PlayerStores
@@ -40,9 +42,6 @@ internal class SpeedController(
                 isSelected = { exo.playbackParameters.speed == speed },
                 onSelect = {
                     exo.playbackParameters = PlaybackParameters(speed)
-                    scope.launch(Dispatchers.IO) {
-                        stores.mediaStateStore.upsertSpeed(mediaStateKey, speed)
-                    }
                 },
             )
         }
@@ -55,6 +54,19 @@ internal fun rememberSpeedController(
     mediaStateKey: MediaStateKey,
 ): SpeedController {
     val scope = rememberCoroutineScope()
+
+    DisposableEffect(exo, mediaStateKey) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
+                scope.launch(Dispatchers.IO) {
+                    stores.mediaStateStore.upsertSpeed(mediaStateKey, parameters.speed)
+                }
+            }
+        }
+        exo.addListener(listener)
+        onDispose { exo.removeListener(listener) }
+    }
+
     return remember {
         SpeedController(
             scope = scope,

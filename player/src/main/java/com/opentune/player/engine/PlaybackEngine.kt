@@ -1,7 +1,5 @@
 package com.opentune.player.engine
 
-import android.content.Context
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -9,12 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -22,28 +18,23 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
-import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
-import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.controller.AudioController
 import com.opentune.player.controller.SpeedController
 import com.opentune.player.controller.SubtitleController
+import com.opentune.player.controller.prepareWithSidecar
 import com.opentune.player.controller.rememberAudioController
 import com.opentune.player.controller.rememberSpeedController
 import com.opentune.player.controller.rememberSubtitleController
+import com.opentune.player.controller.resolveSubtitlePreference
 import com.opentune.player.controller.subtitleMimeType
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.UserMediaStateStore
 import com.opentune.storage.upsertPosition
-import com.opentune.storage.upsertSpeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -69,74 +60,6 @@ internal data class PlayerStores(
 )
 
 // ---------------------------------------------------------------------------
-// Track info state exposed by the engine for OSD rendering
-// ---------------------------------------------------------------------------
-
-internal data class TrackInfo(
-    val videoMime: String? = null,
-    val videoDecoderName: String? = null,
-    val audioMime: String? = null,
-    val audioDecoderName: String? = null,
-)
-
-// ---------------------------------------------------------------------------
-// Subtitle resolution helpers
-// ---------------------------------------------------------------------------
-
-internal data class SubtitlePreference(
-    val externalUri: Uri? = null,
-    val language: String? = null,
-)
-
-@UnstableApi
-internal fun resolveSubtitlePreference(
-    savedId: String?,
-    spec: PlaybackSpec,
-): SubtitlePreference {
-    if (savedId == null) return SubtitlePreference()
-    if (spec.subtitleTracks.isNotEmpty()) {
-        val track = spec.subtitleTracks.find { it.trackId == savedId }
-        if (track != null) {
-            return if (track.externalRef != null) {
-                SubtitlePreference(externalUri = Uri.parse(track.externalRef!!), language = track.language)
-            } else {
-                SubtitlePreference(language = track.language)
-            }
-        }
-    }
-    // ExoPlayer-native ID like "exo_<groupId>" — language unknown, let ExoPlayer auto-select.
-    return SubtitlePreference()
-}
-
-@UnstableApi
-internal suspend fun prepareWithSidecar(
-    context: Context,
-    exo: ExoPlayer,
-    subtitleUri: Uri,
-    mimeType: String,
-    spec: PlaybackSpec,
-) {
-    val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
-        .Builder(subtitleUri)
-        .setMimeType(mimeType)
-        .build()
-    val httpFactory = DefaultHttpDataSource.Factory()
-        .setDefaultRequestProperties(spec.headers)
-    val subtitleSource = SingleSampleMediaSource
-        .Factory(DefaultDataSource.Factory(context, httpFactory))
-        .createMediaSource(subtitleConfig, C.TIME_UNSET)
-    val mergedSource = MergingMediaSource(spec.toMediaSource(context), subtitleSource)
-    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-        .setSelectUndeterminedTextLanguage(true)
-        .build()
-    exo.setMediaSource(mergedSource)
-    exo.playWhenReady = true
-    exo.prepare()
-}
-
-// ---------------------------------------------------------------------------
 // PlaybackEngine — pure playback logic, no UI
 // ---------------------------------------------------------------------------
 
@@ -145,15 +68,13 @@ internal class PlaybackEngine(
     val subtitleCtrl: SubtitleController,
     val audioCtrl: AudioController,
     val speedCtrl: SpeedController,
-    private val trackInfoState: MutableState<TrackInfo>,
+    val trackInfo: State<TrackInfo>,
     val bandwidthMbps: MutableFloatState,
     private val released: AtomicBoolean,
     private val specState: State<PlaybackSpec>,
     private val mediaStateStore: UserMediaStateStore,
     private val mediaStateKey: MediaStateKey,
 ) {
-    val trackInfo: State<TrackInfo> get() = trackInfoState
-
     /** Idempotent — safe to call multiple times (e.g. from BackHandler and onDispose). */
     suspend fun release() {
         val s = specState.value
@@ -213,7 +134,7 @@ internal fun rememberPlaybackEngine(
     val released = remember(instanceKey, preBufferMs) { AtomicBoolean(false) }
 
     val stores = remember { PlayerStores(mediaStateStore, appConfigStore) }
-    val trackInfoState = remember(instanceKey) { mutableStateOf(TrackInfo()) }
+    val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
 
     val subtitleCtrl = rememberSubtitleController(
@@ -242,7 +163,7 @@ internal fun rememberPlaybackEngine(
             subtitleCtrl = subtitleCtrl,
             audioCtrl = audioCtrl,
             speedCtrl = speedCtrl,
-            trackInfoState = trackInfoState,
+            trackInfo = trackInfo,
             bandwidthMbps = bandwidthMbps,
             released = released,
             specState = specState,
@@ -255,7 +176,6 @@ internal fun rememberPlaybackEngine(
     LaunchedEffect(instanceKey) {
         val s = spec
         released.set(false)
-        trackInfoState.value = TrackInfo()
         bandwidthMbps.floatValue = -1f
 
         val savedSpeed = withContext(Dispatchers.IO) {
@@ -341,91 +261,6 @@ internal fun rememberPlaybackEngine(
         hooks.onPlaybackReady(pos, rate)
     }
 
-    // --- Speed listener ---
-    DisposableEffect(exo, instanceKey) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
-                scope.launch(Dispatchers.IO) {
-                    mediaStateStore.upsertSpeed(instanceKey, parameters.speed)
-                }
-            }
-        }
-        exo.addListener(listener)
-        onDispose { exo.removeListener(listener) }
-    }
-
-    // --- Track info (MIME types + decoder names for InfoOsd) ---
-    // MIME types come from onTracksChanged. Decoder names come from AnalyticsListener
-    // callbacks which fire when a decoder is initialized — this works for both the normal path
-    // and for fallback retries (each retry re-initializes the decoder, firing again).
-    DisposableEffect(exo, instanceKey) {
-        val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) {
-                var vm: String? = null
-                var am: String? = null
-                for (group in tracks.groups) {
-                    if (!group.isSelected) continue
-                    for (i in 0 until group.length) {
-                        if (!group.isTrackSelected(i)) continue
-                        val fmt = group.getTrackFormat(i)
-                        when (group.type) {
-                            // Only update when a track is actively selected; preserve last-known
-                            // value when the track is disabled so the OSD can still show it.
-                            C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
-                            C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
-                        }
-                        break
-                    }
-                }
-                mainHandler.post {
-                    val current = trackInfoState.value
-                    trackInfoState.value = current.copy(
-                        videoMime = vm ?: current.videoMime,
-                        audioMime = am ?: current.audioMime,
-                    )
-                }
-            }
-        }
-
-        val analyticsListener = object : AnalyticsListener {
-            override fun onVideoDecoderInitialized(
-                eventTime: AnalyticsListener.EventTime,
-                decoderName: String,
-                initializedTimestampMs: Long,
-                initializationDurationMs: Long,
-            ) {
-                trackInfoState.value = trackInfoState.value.copy(videoDecoderName = decoderName)
-            }
-
-            override fun onAudioDecoderInitialized(
-                eventTime: AnalyticsListener.EventTime,
-                decoderName: String,
-                initializedTimestampMs: Long,
-                initializationDurationMs: Long,
-            ) {
-                trackInfoState.value = trackInfoState.value.copy(audioDecoderName = decoderName)
-            }
-        }
-
-        exo.addListener(listener)
-        exo.addAnalyticsListener(analyticsListener)
-        onDispose {
-            exo.removeListener(listener)
-            exo.removeAnalyticsListener(analyticsListener)
-        }
-    }
-
-    // --- Decoder retry (no-op when DECODER_FALLBACK_ENABLED = false) ---
-    FallbackEffect(
-        exo = exo,
-        instanceKey = instanceKey,
-        selector = fallbackSelector,
-        specState = specState,
-        trackInfoState = trackInfoState,
-        mainHandler = mainHandler,
-        context = context,
-    )
-
     // --- Progress tick loop + bandwidth meter ---
     // DefaultBandwidthMeter only receives transfer events from ExoPlayer's DataSource layer.
     // SMB uses SmbJ directly (not ExoPlayer's DataSource), so getBitrateEstimate() always
@@ -445,6 +280,17 @@ internal fun rememberPlaybackEngine(
             }
         }
     }
+
+    // --- Decoder retry (no-op when DECODER_FALLBACK_ENABLED = false) ---
+    FallbackEffect(
+        exo = exo,
+        instanceKey = instanceKey,
+        selector = fallbackSelector,
+        specState = specState,
+        trackInfoState = trackInfo,
+        mainHandler = mainHandler,
+        context = context,
+    )
 
     // --- Release on dispose ---
     DisposableEffect(exo) {

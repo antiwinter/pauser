@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +95,7 @@ fun TvPlayer(
 
     val menu = rememberMenuOverlay(
         engine.subtitleCtrl.menuEntry,
+        engine.subtitleCtrl.adjustMenuEntry,
         engine.audioCtrl.menuEntry,
         engine.speedCtrl.menuEntry,
     )
@@ -192,26 +195,48 @@ fun TvPlayer(
         }
 
         menu.Overlay()
-        SubtitleAdjustOsd(isActive = engine.subtitleCtrl.isAdjustActive)
+        SubtitleAdjustOsd(
+            isActive = engine.subtitleCtrl.isAdjustActive,
+            translationYPx = engine.subtitleCtrl.translationYPx,
+            sizeScale = engine.subtitleCtrl.sizeScale,
+        )
         infoOsd.Osd()
     }
 }
 
 @Composable
-private fun SubtitleAdjustOsd(isActive: Boolean) {
+private fun SubtitleAdjustOsd(
+    isActive: Boolean,
+    translationYPx: Float,
+    sizeScale: Float,
+) {
     if (!isActive) return
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter,
-    ) {
+    // Convert pixel offset to dp so the preview bar matches the subtitle view's bottom margin.
+    val previewBottomDp = with(LocalDensity.current) { translationYPx.toDp() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Live preview bar — moves and scales exactly as the subtitle rendering will.
+        Text(
+            text = stringResource(R.string.subtitle_adjust_sample),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                // Keep the preview above the hint strip; add 48dp clearance.
+                .padding(bottom = (previewBottomDp + 48.dp).coerceAtLeast(48.dp))
+                .graphicsLayer { scaleX = sizeScale; scaleY = sizeScale }
+                .background(Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp))
+                .padding(horizontal = 28.dp, vertical = 10.dp),
+            color = Color.White,
+            fontSize = 20.sp,
+        )
+        // Fixed key-binding hint at the very bottom.
         Text(
             text = stringResource(R.string.subtitle_adjust_hint),
             modifier = Modifier
-                .padding(bottom = 72.dp)
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
                 .background(Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(6.dp))
                 .padding(horizontal = 20.dp, vertical = 10.dp),
-            color = Color.White,
-            fontSize = 14.sp,
+            color = Color(0xFFAAAAAA),
+            fontSize = 13.sp,
         )
     }
 }
