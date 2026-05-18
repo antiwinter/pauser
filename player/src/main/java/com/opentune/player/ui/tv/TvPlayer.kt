@@ -5,8 +5,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,8 +21,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import com.opentune.player.R
 import com.opentune.player.controller.rememberMenuOverlay
 import com.opentune.player.engine.TrackInfo
 import com.opentune.player.engine.rememberPlaybackEngine
@@ -103,9 +112,16 @@ fun TvPlayer(
     if (controllerVisible) infoOsd.show() else infoOsd.hide()
 
     BackHandler {
-        if (engine.subtitleCtrl.handleBack()) return@BackHandler
-        scope.launch { engine.release(); onExit() }
+        when {
+            menu.isOpen -> menu.back()
+            engine.subtitleCtrl.isAdjustActive -> engine.subtitleCtrl.confirmAdjust()
+            else -> scope.launch { engine.release(); onExit() }
+        }
     }
+
+    // Tracks whether the menu handled the last ACTION_DOWN so the paired ACTION_UP
+    // is consumed even if the menu already closed by then.
+    var menuConsumedDown by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         TvPlayerView(
@@ -116,15 +132,41 @@ fun TvPlayer(
             onTransportKey = { controllerVisible = true },
             onKey = { event ->
                 when {
-                    menu.isOpen -> menu.onKey?.invoke(event) == true
+                    menu.isOpen -> {
+                        if (event.action == KeyEvent.ACTION_DOWN) {
+                            menuConsumedDown = true
+                            when (event.keyCode) {
+                                KeyEvent.KEYCODE_DPAD_UP -> menu.navigateUp()
+                                KeyEvent.KEYCODE_DPAD_DOWN -> menu.navigateDown()
+                                KeyEvent.KEYCODE_DPAD_CENTER,
+                                KeyEvent.KEYCODE_ENTER,
+                                KeyEvent.KEYCODE_NUMPAD_ENTER -> menu.confirm()
+                                KeyEvent.KEYCODE_BACK,
+                                KeyEvent.KEYCODE_DPAD_LEFT -> menu.back()
+                            }
+                        }
+                        true
+                    }
+                    menuConsumedDown && event.action == KeyEvent.ACTION_UP -> {
+                        menuConsumedDown = false
+                        true
+                    }
                     engine.subtitleCtrl.isAdjustActive -> {
                         if (event.action == KeyEvent.ACTION_DOWN) {
-                            if (event.keyCode == KeyEvent.KEYCODE_BACK) engine.subtitleCtrl.handleBack()
-                            else engine.subtitleCtrl.adjustKey(event.keyCode)
+                            when (event.keyCode) {
+                                KeyEvent.KEYCODE_DPAD_UP -> engine.subtitleCtrl.adjustOffsetUp()
+                                KeyEvent.KEYCODE_DPAD_DOWN -> engine.subtitleCtrl.adjustOffsetDown()
+                                KeyEvent.KEYCODE_DPAD_LEFT -> engine.subtitleCtrl.adjustScaleDown()
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> engine.subtitleCtrl.adjustScaleUp()
+                                KeyEvent.KEYCODE_DPAD_CENTER,
+                                KeyEvent.KEYCODE_ENTER,
+                                KeyEvent.KEYCODE_NUMPAD_ENTER,
+                                KeyEvent.KEYCODE_BACK -> engine.subtitleCtrl.confirmAdjust()
+                            }
                         }
-                        true // consume both UP and DOWN while adjust is active
+                        true
                     }
-                    else -> false
+                    else -> { menuConsumedDown = false; false }
                 }
             },
             subtitleTranslationYPx = engine.subtitleCtrl.translationYPx,
@@ -150,7 +192,26 @@ fun TvPlayer(
         }
 
         menu.Overlay()
-        engine.subtitleCtrl.AdjustOsd()
+        SubtitleAdjustOsd(isActive = engine.subtitleCtrl.isAdjustActive)
         infoOsd.Osd()
+    }
+}
+
+@Composable
+private fun SubtitleAdjustOsd(isActive: Boolean) {
+    if (!isActive) return
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Text(
+            text = stringResource(R.string.subtitle_adjust_hint),
+            modifier = Modifier
+                .padding(bottom = 72.dp)
+                .background(Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(6.dp))
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            color = Color.White,
+            fontSize = 14.sp,
+        )
     }
 }

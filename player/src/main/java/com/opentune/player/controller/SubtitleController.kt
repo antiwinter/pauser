@@ -3,12 +3,6 @@ package com.opentune.player.controller
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
@@ -18,15 +12,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -72,32 +61,12 @@ internal class SubtitleController(
     private val offsetStep: Float get() =
         if (screenHeightPxState.value > 0f) 20f / screenHeightPxState.value else 0f
 
-    val adjustKey: (Int) -> Unit = { keyCode ->
-        val isConfirm = keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-            keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
-            keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
-        Log.d(SUB_LOG_TAG, "adjustCallback keyCode=$keyCode before: offset=${offsetFractionState.value} scale=${sizeScaleState.value}")
-        when (keyCode) {
-            android.view.KeyEvent.KEYCODE_DPAD_UP ->
-                offsetFractionState.value -= offsetStep
-            android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
-                offsetFractionState.value += offsetStep
-            android.view.KeyEvent.KEYCODE_DPAD_LEFT ->
-                sizeScaleState.value = (sizeScaleState.value - 0.1f).coerceAtLeast(0.3f)
-            android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
-                sizeScaleState.value = (sizeScaleState.value + 0.1f).coerceAtMost(3f)
-        }
-        if (isConfirm) confirmAdjust()
-    }
+    fun adjustOffsetUp() { offsetFractionState.value -= offsetStep }
+    fun adjustOffsetDown() { offsetFractionState.value += offsetStep }
+    fun adjustScaleDown() { sizeScaleState.value = (sizeScaleState.value - 0.1f).coerceAtLeast(0.3f) }
+    fun adjustScaleUp() { sizeScaleState.value = (sizeScaleState.value + 0.1f).coerceAtMost(3f) }
 
-    /** Returns true if back was consumed (adjust mode was active). */
-    fun handleBack(): Boolean {
-        if (!isAdjustActiveState.value) return false
-        confirmAdjust()
-        return true
-    }
-
-    private fun confirmAdjust() {
+    internal fun confirmAdjust() {
         isAdjustActiveState.value = false
         val offset = offsetFractionState.value
         val scale = sizeScaleState.value
@@ -105,25 +74,6 @@ internal class SubtitleController(
         scope.launch(Dispatchers.IO) {
             stores.appConfigStore?.saveSubtitlePrefs(SubtitlePrefs(offset, scale))
             Log.d(SUB_LOG_TAG, "confirmAdjust: saved subtitle prefs")
-        }
-    }
-
-    @Composable
-    fun AdjustOsd() {
-        if (!isAdjustActiveState.value) return
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            Text(
-                text = stringResource(R.string.subtitle_adjust_hint),
-                modifier = Modifier
-                    .padding(bottom = 72.dp)
-                    .background(Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(6.dp))
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                color = Color.White,
-                fontSize = 14.sp,
-            )
         }
     }
 

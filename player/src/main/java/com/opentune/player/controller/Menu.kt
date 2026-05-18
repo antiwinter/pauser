@@ -1,6 +1,5 @@
 package com.opentune.player.controller
 
-import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +46,7 @@ data class PlayerMenuEntry(
 /**
  * Retained state for the two-level player settings menu.
  *
- * Create via [rememberMenuOverlay]. All Compose state is held as [mutableStateOf] / [mutableIntStateOf]
+ * Create via [rememberMenuOverlay]. All Compose state is held as [mutableIntStateOf]
  * so reads inside composables trigger recomposition automatically.
  */
 class MenuOverlay(private val entries: List<PlayerMenuEntry>) {
@@ -57,76 +55,53 @@ class MenuOverlay(private val entries: List<PlayerMenuEntry>) {
     private var depth by mutableIntStateOf(0)
     private var topIndex by mutableIntStateOf(0)
     private var subIndex by mutableIntStateOf(0)
-    // True when an entry-select or close key ACTION_DOWN was handled; we defer depth=0 to
-    // the corresponding ACTION_UP so the UP event is still consumed by the menu interceptor
-    // and never leaks to the player view (which would call showController()).
-    private var pendingClose by mutableStateOf(false)
 
-    val isOpen: Boolean get() = depth > 0 || pendingClose
-
-    /** Non-null when the menu is open; intercepts all key events. */
-    val onKey: ((KeyEvent) -> Boolean)? get() = if (depth > 0 || pendingClose) ::handleKeyEvent else null
+    val isOpen: Boolean get() = depth > 0
 
     fun open() {
         topIndex = 0
-        pendingClose = false
         depth = 1
     }
 
-    /** Returns true if the back press was consumed by the menu. */
-    fun handleBack(): Boolean = when {
-        pendingClose -> { pendingClose = false; depth = 0; true }
-        depth == 2 -> { depth = 1; true }
-        depth == 1 -> { depth = 0; true }
-        else -> false
+    fun close() {
+        depth = 0
     }
 
-    private fun handleKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_UP) {
-            // Close is deferred to ACTION_UP so the UP of the closing key is consumed here
-            // rather than leaking to the player view and triggering showController().
-            if (pendingClose) {
-                pendingClose = false
-                depth = 0
-            }
-            return true
-        }
-        if (event.action != KeyEvent.ACTION_DOWN) return true
-        handleKey(event.keyCode)
-        return true
-    }
-
-    private fun handleKey(keyCode: Int) {
-        val isConfirm = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-            keyCode == KeyEvent.KEYCODE_ENTER ||
-            keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-        val isBack = keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+    fun navigateUp() {
         when (depth) {
-            1 -> when {
-                keyCode == KeyEvent.KEYCODE_DPAD_UP ->
-                    topIndex = (topIndex - 1 + entries.size) % entries.size
-                keyCode == KeyEvent.KEYCODE_DPAD_DOWN ->
-                    topIndex = (topIndex + 1) % entries.size
-                isBack -> pendingClose = true
-                isConfirm -> { subIndex = 0; depth = 2 }
-            }
+            1 -> topIndex = (topIndex - 1 + entries.size) % entries.size
             2 -> {
-                val children = entries.getOrNull(topIndex)?.children() ?: emptyList()
-                when {
-                    keyCode == KeyEvent.KEYCODE_DPAD_UP ->
-                        subIndex = (subIndex - 1 + children.size) % children.size
-                    keyCode == KeyEvent.KEYCODE_DPAD_DOWN ->
-                        subIndex = (subIndex + 1) % children.size
-                    isBack -> depth = 1
-                    isConfirm -> {
-                        val entry = children.getOrNull(subIndex)
-                        if (entry != null) {
-                            entry.onSelect()
-                            pendingClose = true
-                        }
-                    }
-                }
+                val children = entries.getOrNull(topIndex)?.children() ?: return
+                subIndex = (subIndex - 1 + children.size) % children.size
             }
+        }
+    }
+
+    fun navigateDown() {
+        when (depth) {
+            1 -> topIndex = (topIndex + 1) % entries.size
+            2 -> {
+                val children = entries.getOrNull(topIndex)?.children() ?: return
+                subIndex = (subIndex + 1) % children.size
+            }
+        }
+    }
+
+    fun confirm() {
+        when (depth) {
+            1 -> { subIndex = 0; depth = 2 }
+            2 -> {
+                val children = entries.getOrNull(topIndex)?.children() ?: return
+                children.getOrNull(subIndex)?.onSelect()
+                close()
+            }
+        }
+    }
+
+    fun back() {
+        when (depth) {
+            2 -> depth = 1
+            1 -> close()
         }
     }
 
