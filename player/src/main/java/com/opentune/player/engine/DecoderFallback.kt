@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.engine
 
 import android.content.Context
 import android.os.Handler
@@ -89,7 +89,6 @@ internal class RetryableMediaCodecSelector {
     }
 
     fun currentDecoderName(mimeType: String): String? = dispensed[mimeType]
-
 }
 
 // ---------------------------------------------------------------------------
@@ -134,8 +133,7 @@ internal fun rememberFallbackCodecSelector(
  * Phase 2 — registers the [Player.Listener] that retries with the next decoder on
  * [Player.Listener.onPlayerError]. No-op when [DECODER_FALLBACK_ENABLED] is false or
  * [selector] is null.
- */
-/**
+ *
  * Decoder names are updated via [AnalyticsListener] in [PlaybackEngine] on every decoder
  * initialization (including retries), so [FallbackEffect] only needs to drive the re-prepare
  * cycle; it does not touch [TrackInfo.videoDecoderName] / [TrackInfo.audioDecoderName].

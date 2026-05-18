@@ -1,4 +1,4 @@
-package com.opentune.player.menu
+package com.opentune.player.controller
 
 import android.view.KeyEvent
 import androidx.compose.foundation.background

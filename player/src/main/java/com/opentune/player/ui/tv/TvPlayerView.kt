@@ -1,4 +1,4 @@
-package com.opentune.player.tv
+package com.opentune.player.ui.tv
 
 import android.content.Context
 import android.util.AttributeSet
@@ -18,15 +18,15 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.opentune.player.R
-import com.opentune.player.applySubtitleStyle
-import com.opentune.player.configurePlayerViewDefaults
+import com.opentune.player.ui.applySubtitleStyle
+import com.opentune.player.ui.configurePlayerViewDefaults
 
 /** Hide controller after this many ms without input. Driven via LaunchedEffect so
  * [PlayerView.hideController] fires immediately with no shrink animation. */
 internal const val CONTROLLER_HIDE_AFTER_MS = 5_000
 
 // ---------------------------------------------------------------------------
-// OpenTuneTvPlayerView — unchanged behavior, new package
+// OpenTuneTvPlayerView
 // ---------------------------------------------------------------------------
 
 /**

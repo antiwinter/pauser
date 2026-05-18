@@ -1,4 +1,4 @@
-package com.opentune.player.pad
+package com.opentune.player.ui.pad
 
 import android.content.Context
 import android.util.AttributeSet
@@ -11,8 +11,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.opentune.player.applySubtitleStyle
-import com.opentune.player.configurePlayerViewDefaults
+import com.opentune.player.ui.applySubtitleStyle
+import com.opentune.player.ui.configurePlayerViewDefaults
 
 /** Minimal [PlayerView] subclass for the Pad platform. No custom key dispatch needed — the
  * Compose layer handles touch via [pointerInput] on the surrounding [Box]. */

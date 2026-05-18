@@ -1,4 +1,4 @@
-package com.opentune.player.audio
+package com.opentune.player.controller
 
 import android.util.Log
 import androidx.compose.runtime.Composable
@@ -14,9 +14,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import com.opentune.player.PlayerStores
 import com.opentune.player.R
-import com.opentune.player.menu.PlayerMenuEntry
+import com.opentune.player.engine.PlayerStores
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.upsertAudioTrack
 import kotlinx.coroutines.CoroutineScope

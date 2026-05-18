@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

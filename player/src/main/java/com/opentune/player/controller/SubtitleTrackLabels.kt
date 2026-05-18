@@ -1,4 +1,4 @@
-package com.opentune.player.subtitle
+package com.opentune.player.controller
 
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks

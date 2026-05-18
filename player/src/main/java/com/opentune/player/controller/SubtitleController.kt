@@ -1,4 +1,4 @@
-package com.opentune.player.subtitle
+package com.opentune.player.controller
 
 import android.content.Context
 import android.net.Uri
@@ -37,10 +37,9 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
-import com.opentune.player.PlayerStores
 import com.opentune.player.R
-import com.opentune.player.toMediaSource
-import com.opentune.player.menu.PlayerMenuEntry
+import com.opentune.player.engine.PlayerStores
+import com.opentune.player.engine.toMediaSource
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.SubtitlePrefs
 import com.opentune.storage.upsertSubtitleTrack

@@ -1,4 +1,4 @@
-package com.opentune.player.tv
+package com.opentune.player.ui.tv
 
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
@@ -19,11 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import com.opentune.player.PlaybackControllerBar
-import com.opentune.player.PlaybackHostEffects
-import com.opentune.player.TrackInfo
-import com.opentune.player.menu.rememberMenuOverlay
-import com.opentune.player.rememberPlaybackEngine
+import com.opentune.player.controller.rememberMenuOverlay
+import com.opentune.player.engine.TrackInfo
+import com.opentune.player.engine.rememberPlaybackEngine
+import com.opentune.player.ui.PlaybackControllerBar
+import com.opentune.player.ui.PlaybackHostEffects
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey

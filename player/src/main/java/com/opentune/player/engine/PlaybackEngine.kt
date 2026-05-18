@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.engine
 
 import android.content.Context
 import android.net.Uri
@@ -31,13 +31,13 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
-import com.opentune.player.audio.AudioController
-import com.opentune.player.audio.rememberAudioController
-import com.opentune.player.speed.SpeedController
-import com.opentune.player.speed.rememberSpeedController
-import com.opentune.player.subtitle.SubtitleController
-import com.opentune.player.subtitle.rememberSubtitleController
-import com.opentune.player.subtitle.subtitleMimeType
+import com.opentune.player.controller.AudioController
+import com.opentune.player.controller.SpeedController
+import com.opentune.player.controller.SubtitleController
+import com.opentune.player.controller.rememberAudioController
+import com.opentune.player.controller.rememberSpeedController
+import com.opentune.player.controller.rememberSubtitleController
+import com.opentune.player.controller.subtitleMimeType
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey
@@ -80,7 +80,7 @@ internal data class TrackInfo(
 )
 
 // ---------------------------------------------------------------------------
-// Subtitle resolution helpers (moved from OpenTunePlayerScreen)
+// Subtitle resolution helpers
 // ---------------------------------------------------------------------------
 
 internal data class SubtitlePreference(

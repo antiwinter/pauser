@@ -7,8 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.util.UnstableApi
-import com.opentune.player.pad.PadPlayer
-import com.opentune.player.tv.TvPlayer
+import com.opentune.player.ui.pad.PadPlayer
+import com.opentune.player.ui.tv.TvPlayer
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey

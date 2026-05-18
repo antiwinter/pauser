@@ -1,4 +1,4 @@
-package com.opentune.player.tv
+package com.opentune.player.ui.tv
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

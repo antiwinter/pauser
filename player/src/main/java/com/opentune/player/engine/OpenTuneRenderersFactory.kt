@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.engine
 
 import android.content.Context
 import android.media.MediaFormat

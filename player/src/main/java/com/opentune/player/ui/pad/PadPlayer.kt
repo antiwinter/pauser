@@ -1,4 +1,4 @@
-package com.opentune.player.pad
+package com.opentune.player.ui.pad
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -19,9 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.media3.common.util.UnstableApi
-import com.opentune.player.PlaybackControllerBar
-import com.opentune.player.PlaybackHostEffects
-import com.opentune.player.rememberPlaybackEngine
+import com.opentune.player.engine.rememberPlaybackEngine
+import com.opentune.player.ui.PlaybackControllerBar
+import com.opentune.player.ui.PlaybackHostEffects
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.MediaStateKey

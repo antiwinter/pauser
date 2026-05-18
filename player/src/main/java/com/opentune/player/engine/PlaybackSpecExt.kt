@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.engine
 
 import android.net.Uri
 import androidx.media3.common.MediaItem

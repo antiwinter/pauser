@@ -1,4 +1,4 @@
-package com.opentune.player.speed
+package com.opentune.player.controller
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -6,9 +6,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
-import com.opentune.player.PlayerStores
 import com.opentune.player.R
-import com.opentune.player.menu.PlayerMenuEntry
+import com.opentune.player.engine.PlayerStores
 import com.opentune.storage.MediaStateKey
 import com.opentune.storage.upsertSpeed
 import kotlinx.coroutines.CoroutineScope

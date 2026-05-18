@@ -1,4 +1,4 @@
-package com.opentune.player
+package com.opentune.player.ui
 
 import android.graphics.Color as AndroidColor
 import android.util.Log
