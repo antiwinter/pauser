@@ -100,7 +100,7 @@ interface OpenTuneProviderLoader {
  */
 interface EndpointClient {
     suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList
-    suspend fun search(scopeLocation: String, query: String): List<EntryInfo>
+    suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo>
     suspend fun getDetail(itemRef: String): EntryDetail
     suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
 

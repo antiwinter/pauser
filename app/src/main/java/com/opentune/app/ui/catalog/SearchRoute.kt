@@ -16,6 +16,7 @@ import com.opentune.app.navigation.Routes
 import com.opentune.app.navigation.toJson
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EndpointClient
+import com.opentune.provider.SearchQuery
 import com.opentune.storage.TitleLang
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -52,7 +53,7 @@ fun SearchRoute(
                 logTag = "OT_Search_$endpointId",
                 results = results,
                 searchFn = { query ->
-                    inst.search(scopeDecoded, query)
+                    inst.search(scopeDecoded, SearchQuery(term = query))
                         .let { ArtUrlInjector.apply(it, app, protocol, endpointId) }
                 },
                 titleLang = titleLang,

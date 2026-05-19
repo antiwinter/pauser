@@ -8,6 +8,7 @@ import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
+import com.opentune.provider.SearchQuery
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackMimeTypes
@@ -106,19 +107,34 @@ class EmbyProviderInstance(
         }
     }
 
-    override suspend fun search(scopeLocation: String, query: String): List<EntryInfo> {
-        val q = query.trim()
-        if (q.isEmpty()) return emptyList()
+    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
+        if (query.term.isEmpty() && query.years == null && query.genres == null &&
+            query.countries == null && query.studios == null
+        ) return emptyList()
         val r = repo()
         return withContext(Dispatchers.IO) {
             val parentId: String? = scopeLocation.ifEmpty { null }
+            val excludeEmbyTypes = query.excludeTypes.mapNotNull { type ->
+                when (type) {
+                    EntryType.Folder -> "Folder"
+                    EntryType.Series -> "Series"
+                    EntryType.Season -> "Season"
+                    EntryType.Episode -> "Episode"
+                    else -> null
+                }
+            }.joinToString(",").ifEmpty { null }
             val result = r.getItems(
                 parentId = parentId,
+                excludeItemTypes = excludeEmbyTypes,
                 recursive = true,
-                searchTerm = q,
+                searchTerm = query.term.ifEmpty { null },
                 startIndex = 0,
-                limit = 100,
+                limit = query.limit,
                 fields = EmbyFieldSets.BROWSE_FIELDS,
+                years = query.years?.joinToString(","),
+                genres = query.genres?.joinToString(","),
+                studios = query.studios?.joinToString(","),
+                countries = query.countries?.joinToString(","),
             )
             result.items.mapNotNull { it.toListItem() }
         }

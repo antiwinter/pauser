@@ -90,6 +90,17 @@ data class SubtitleTrack(
     val externalRef: String?,
 )
 
+@Serializable
+data class SearchQuery(
+    val term: String = "",
+    val years: List<Int>? = null,
+    val genres: List<String>? = null,
+    val countries: List<String>? = null,
+    val studios: List<String>? = null,
+    val excludeTypes: Set<EntryType> = emptySet(),
+    val limit: Int = 100,
+)
+
 // --- Route tokens ---
 
 /** Opaque browse/search location tokens shared with catalog routes. */

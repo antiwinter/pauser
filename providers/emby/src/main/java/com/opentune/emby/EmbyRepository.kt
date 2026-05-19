@@ -21,21 +21,31 @@ class EmbyRepository(
     suspend fun getItems(
         parentId: String? = null,
         includeItemTypes: String? = null,
+        excludeItemTypes: String? = null,
         recursive: Boolean = false,
         searchTerm: String? = null,
         startIndex: Int? = null,
         limit: Int? = null,
         fields: String? = null,
+        years: String? = null,
+        genres: String? = null,
+        studios: String? = null,
+        countries: String? = null,
     ): QueryResultBaseItemDto = api.getItems(
         userId = userId,
         parentId = parentId,
         includeItemTypes = includeItemTypes,
+        excludeItemTypes = excludeItemTypes,
         recursive = recursive,
         searchTerm = searchTerm,
         sortBy = "SortName",
         startIndex = startIndex,
         limit = limit,
         fields = fields,
+        years = years,
+        genres = genres,
+        studios = studios,
+        countries = countries,
     )
 
     suspend fun getItem(itemId: String, fields: String? = null): BaseItemDto =

@@ -2,6 +2,7 @@ package com.opentune.server.debug
 
 import android.util.Log
 import com.opentune.server.AppContext
+import com.opentune.provider.SearchQuery
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -158,7 +159,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val scope = call.request.queryParameters["scope"] ?: ""
                 val query = call.request.queryParameters["q"] ?: return@get call.respond400("missing q")
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
-                val results = runCatching { instance.search(scope, query) }.getOrElse {
+                val results = runCatching { instance.search(scope, SearchQuery(term = query)) }.getOrElse {
                     Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
                 }
                 val dtos = results.map { e ->

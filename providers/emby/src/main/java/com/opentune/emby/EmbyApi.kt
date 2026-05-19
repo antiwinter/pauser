@@ -43,12 +43,17 @@ interface EmbyApi {
         @Path("userId") userId: String,
         @Query("ParentId") parentId: String? = null,
         @Query("IncludeItemTypes") includeItemTypes: String? = null,
+        @Query("ExcludeItemTypes") excludeItemTypes: String? = null,
         @Query("Recursive") recursive: Boolean? = null,
         @Query("SearchTerm") searchTerm: String? = null,
         @Query("SortBy") sortBy: String? = null,
         @Query("StartIndex") startIndex: Int? = null,
         @Query("Limit") limit: Int? = null,
         @Query("Fields") fields: String? = null,
+        @Query("Years") years: String? = null,
+        @Query("Genres") genres: String? = null,
+        @Query("Studios") studios: String? = null,
+        @Query("Countries") countries: String? = null,
     ): QueryResultBaseItemDto
 
     @GET("Users/{userId}/Items/{itemId}")

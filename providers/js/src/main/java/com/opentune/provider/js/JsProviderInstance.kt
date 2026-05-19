@@ -7,6 +7,7 @@ import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
 import com.opentune.provider.OpenTunePlaybackHooks
+import com.opentune.provider.SearchQuery
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackSpec
@@ -94,15 +95,23 @@ class JsProviderInstance(
         )
     }
 
-    override suspend fun search(scopeLocation: String, query: String): List<EntryInfo> {
+    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
         ensureReady()
         val args = buildJsonObject {
             put("scopeLocation", scopeLocation)
-            put("query", query)
+            put("query", query.term)
+            put("term", query.term)
+            query.years?.let { put("years", kotlinx.serialization.json.JsonArray(it.map { y -> JsonPrimitive(y) })) }
+            query.genres?.let { put("genres", kotlinx.serialization.json.JsonArray(it.map { g -> JsonPrimitive(g) })) }
+            query.countries?.let { put("countries", kotlinx.serialization.json.JsonArray(it.map { c -> JsonPrimitive(c) })) }
+            query.studios?.let { put("studios", kotlinx.serialization.json.JsonArray(it.map { s -> JsonPrimitive(s) })) }
+            put("limit", query.limit)
         }
         val resultJson = engine.callMethod("search", args.toString())
             ?: return emptyList()
-        return json.parseToJsonElement(resultJson).jsonArray.mapNotNull { parseListItem(it.jsonObject) }
+        return json.parseToJsonElement(resultJson).jsonArray
+            .mapNotNull { parseListItem(it.jsonObject) }
+            .filter { it.type !in query.excludeTypes }
     }
 
     override suspend fun getDetail(itemRef: String): EntryDetail {

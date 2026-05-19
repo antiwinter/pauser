@@ -10,6 +10,7 @@ import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
+import com.opentune.provider.SearchQuery
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.ProviderStream
@@ -47,15 +48,16 @@ class SmbProviderInstance(
         }
     }
 
-    override suspend fun search(scopeLocation: String, query: String): List<EntryInfo> {
-        if (query.isBlank()) return emptyList()
+    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
+        if (query.term.isBlank()) return emptyList()
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share
                 share.listDirectory(scopeLocation)
-                    .filterByName(query)
+                    .filterByName(query.term)
                     .map { mapEntry(it) }
+                    .filter { it.type !in query.excludeTypes }
             } finally {
                 session.close()
             }

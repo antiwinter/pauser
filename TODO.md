@@ -1,5 +1,5 @@
 # TODOs
-- [ ] Storage naming unification
+- [x] Storage naming unification
 - [x] Fix: smb gen cover
 - [x] check if same local cache used for smb subtitles as thumb
 - [x] align server/source/provider terminology
@@ -19,7 +19,8 @@
 
 ## Browser
 - [ ] filter
-- [ ] detail screen entering rules
+- [x] detail screen entering rules
+- [ ] right most alphabet quick jump
 
 ## js providers
 - [x] remove sidecar meta
@@ -35,6 +36,7 @@
 - [x] Fix: subtitle position persistence
 - [ ] Fix: subtitle should align to bottom vertially
 - [ ] Fix: subtitle track/audio track not persistant or not applied on the next run
+- [ ] keep 1min played buffer
 - [x] Fix: smb slow buffering
 - [x] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay
