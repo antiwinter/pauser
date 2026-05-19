@@ -64,7 +64,7 @@ interface OpenTuneProvider {
      * True if catalog list items carry HTTP cover art directly (e.g. Emby).
      * False if covers must be extracted from the media stream (e.g. SMB).
      */
-    val providesCover: Boolean
+    val providesArt: Boolean
 
     /** Single field spec for both add and edit forms. Does not include display_name. */
     fun getFieldsSpec(): List<ServerFieldSpec>

@@ -15,16 +15,21 @@ object GenArt {
     private const val COVER_H = 250
     private const val COVER_SHORT_EDGE = 300
 
-    private val FALLBACK_JPEG: ByteArray = run {
-        val bmp = Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8)
-        ByteArrayOutputStream().use { out ->
-            bmp.compress(Bitmap.CompressFormat.JPEG, 50, out)
-            out.toByteArray()
-        }
-    }
+    /** Minimal 1×1 transparent PNG (67 bytes). */
+    private val TRANSPARENT_PNG = byteArrayOf(
+        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4.toByte(),
+        0x89.toByte(), 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44,
+        0x41, 0x54, 0x78, 0x9C.toByte(), 0x63, 0x00, 0x01, 0x00,
+        0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4.toByte(),
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
+        0xAE.toByte(), 0x42, 0x60, 0x82.toByte(),
+    )
 
-    /** Returns a 1×1 gray JPEG used for failed/missing covers. */
-    fun fallback(): ByteArray = FALLBACK_JPEG.copyOf()
+    /** Returns a 1×1 transparent PNG used for failed/missing covers. */
+    fun transparentPlaceholder(): ByteArray = TRANSPARENT_PNG.copyOf()
 
     fun generateCover(videoUrl: String, headers: Map<String, String>): ByteArray? {
         return try {

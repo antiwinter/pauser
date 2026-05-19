@@ -58,8 +58,8 @@ export class QuickJsProviderRunner {
     this.vm = null;
   }
 
-  async getProvidesCover() {
-    return this.evalImmediate('globalThis.opentuneProvider.providesCover', '<providesCover>');
+  async getProvidesArt() {
+    return this.evalImmediate('globalThis.opentuneProvider.providesArt', '<providesArt>');
   }
 
   async hasMethod(name) {

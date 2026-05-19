@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ProviderDto(
     val protocol: String,
-    val providesCover: Boolean,
+    val providesArt: Boolean,
     val fields: List<FieldDto>,
 )
 
@@ -89,7 +89,6 @@ data class MediaStateDto(
     val title: String?,
     val type: String?,
     val isFavorite: Boolean,
-    val coverCachePath: String?,
 )
 
 fun MediaStateSnapshot.toDto(): MediaStateDto =
@@ -104,7 +103,6 @@ fun MediaStateSnapshot.toDto(): MediaStateDto =
         title = title,
         type = type,
         isFavorite = isFavorite,
-        coverCachePath = coverCachePath,
     )
 
 @Serializable

@@ -27,7 +27,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val dtos = ctx.getProviders().map { p ->
                     ProviderDto(
                         protocol = p.protocol,
-                        providesCover = p.providesCover,
+                        providesArt = p.providesArt,
                         fields = p.getFieldsSpec().map { f ->
                             FieldDto(
                                 id = f.id,

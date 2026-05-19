@@ -46,6 +46,15 @@ fun ThumbEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
+                // Bottom layer: placeholder asset
+                AsyncImage(
+                    model = "file:///android_asset/art/thumb.png",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Crop,
+                )
+
+                // Top layer: item image (transparent if genart failed)
                 val model = coverImageModel(item.cover)
                 if (model != null) {
                     AsyncImage(
@@ -55,6 +64,7 @@ fun ThumbEntryComponent(
                         contentScale = ContentScale.Crop,
                     )
                 }
+
                 // Episode number badge top-left
                 item.indexNumber?.let { num ->
                     Text(

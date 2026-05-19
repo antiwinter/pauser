@@ -19,18 +19,18 @@ const REQUIRED_METHODS = [
  *
  * @param {import('../reporter.js').Reporter} reporter
  * @param {import('../quickjs-runner.js').QuickJsProviderRunner} runner
- * @returns {Promise<{ providesCover: boolean }>}
+ * @returns {Promise<{ providesArt: boolean }>}
  */
 export async function runBridgeChecks(reporter, runner) {
   reporter.beginCategory('Bridge', ['opentuneProvider']);
 
-  let providesCover = false;
+  let providesArt = false;
 
-  await reporter.step('providesCover field is present and boolean', async () => {
-    const value = await runner.getProvidesCover();
-    assertType(value, 'boolean', 'providesCover');
-    providesCover = value;
-    return `providesCover=${value}`;
+  await reporter.step('providesArt field is present and boolean', async () => {
+    const value = await runner.getProvidesArt();
+    assertType(value, 'boolean', 'providesArt');
+    providesArt = value;
+    return `providesArt=${value}`;
   });
 
   for (const method of REQUIRED_METHODS) {
@@ -41,5 +41,5 @@ export async function runBridgeChecks(reporter, runner) {
   }
 
   reporter.endCategory();
-  return { providesCover };
+  return { providesArt };
 }

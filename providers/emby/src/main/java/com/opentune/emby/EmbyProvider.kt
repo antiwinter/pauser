@@ -24,7 +24,7 @@ import kotlin.math.sqrt
 class EmbyProvider : OpenTuneProvider {
 
     override val protocol: String = "emby-kt"
-    override val providesCover: Boolean = true
+    override val providesArt: Boolean = true
 
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(

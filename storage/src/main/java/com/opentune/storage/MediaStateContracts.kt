@@ -17,14 +17,9 @@ data class MediaStateSnapshot(
     val isFavorite: Boolean,
     val title: String?,
     val type: String?,
-    val coverCachePath: String?,
     val selectedSubtitleTrackId: String?,
     val selectedAudioTrackId: String?,
-) {
-    companion object {
-        const val COVER_FAILED = MediaStateEntity.COVER_FAILED
-    }
-}
+)
 
 interface UserMediaStateStore {
     suspend fun get(protocol: String, sourceId: String, itemId: String): MediaStateSnapshot?
@@ -38,7 +33,6 @@ interface UserMediaStateStore {
         title: String? = null,
         type: String? = null,
     )
-    suspend fun upsertCoverCache(protocol: String, sourceId: String, itemId: String, path: String?)
     suspend fun upsertSubtitleTrack(protocol: String, sourceId: String, itemId: String, trackId: String?)
     suspend fun upsertAudioTrack(protocol: String, sourceId: String, itemId: String, trackId: String?)
     fun observeForSource(protocol: String, sourceId: String): Flow<List<MediaStateSnapshot>>

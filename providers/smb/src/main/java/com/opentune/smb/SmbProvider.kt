@@ -13,7 +13,7 @@ import java.security.MessageDigest
 class SmbProvider : OpenTuneProvider {
 
     override val protocol: String = "smb"
-    override val providesCover: Boolean = false
+    override val providesArt: Boolean = false
     override fun getFieldsSpec(): List<ServerFieldSpec> = listOf(
         ServerFieldSpec(
             id = "host",

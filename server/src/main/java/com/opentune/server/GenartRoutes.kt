@@ -14,16 +14,25 @@ private const val LOG_TAG = "GenartRoutes"
 
 fun Application.installGenartRoutes(ctx: AppContext) {
     routing {
-        get("/genart/{version}/{sourceId}/{itemId}") {
+        get("/genart/{type}/{version}/{sourceId}/{itemId}") {
+            val type = call.parameters["type"]
             val version = call.parameters["version"]
             val sourceId = call.parameters["sourceId"]
             val itemId = call.parameters["itemId"]
-            if (version != GenArt.VERSION || sourceId == null || itemId == null) {
-                return@get call.respondBytes(GenArt.fallback(), ContentType.Image.JPEG)
+
+            if (type !in setOf("cover", "thumb") || version != GenArt.VERSION ||
+                sourceId == null || itemId == null) {
+                return@get call.respondBytes(
+                    GenArt.transparentPlaceholder(),
+                    ContentType.Image.PNG,
+                )
             }
 
             val instance = ctx.getInstance(sourceId)
-                ?: return@get call.respondBytes(GenArt.fallback(), ContentType.Image.JPEG)
+                ?: return@get call.respondBytes(
+                    GenArt.transparentPlaceholder(),
+                    ContentType.Image.PNG,
+                )
 
             val bytes = withContext(Dispatchers.IO) {
                 val spec = try {
@@ -45,18 +54,9 @@ fun Application.installGenartRoutes(ctx: AppContext) {
             }
 
             call.respondBytes(
-                bytes ?: GenArt.fallback(),
-                ContentType.Image.JPEG,
+                bytes ?: GenArt.transparentPlaceholder(),
+                ContentType.Image.PNG,
             )
-        }
-
-        get("/asset/{name}") {
-            val name = call.parameters["name"]
-            if (name == "fallback") {
-                call.respondBytes(GenArt.fallback(), ContentType.Image.JPEG)
-            } else {
-                call.respondBytes(GenArt.fallback(), ContentType.Image.JPEG)
-            }
         }
     }
 }

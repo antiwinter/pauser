@@ -57,6 +57,15 @@ fun MediaEntryComponent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
+                // Bottom layer: placeholder asset
+                AsyncImage(
+                    model = "file:///android_asset/art/cover.png",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    contentScale = ContentScale.Crop,
+                )
+
+                // Top layer: item image (transparent if genart failed)
                 val model = coverImageModel(item.cover)
                 if (model != null) {
                     AsyncImage(
@@ -64,18 +73,6 @@ fun MediaEntryComponent(
                         contentDescription = displayTitle,
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Text(
-                        text = when (item.type) {
-                            EntryType.Folder -> "\uD83D\uDCC1"
-                            EntryType.Series -> "\uD83D\uDCFA"
-                            EntryType.Season -> "\uD83D\uDCC5"
-                            EntryType.Playable, EntryType.Episode -> "▶"
-                            EntryType.Image -> "🖼"
-                            EntryType.Other -> "•"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
                     )
                 }
 

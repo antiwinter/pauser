@@ -155,7 +155,7 @@ export interface PlatformCapabilities {
 
 /** Exposed on globalThis.opentuneProvider by providers/emby/index.ts */
 export interface OpenTuneProviderBridge {
-  providesCover: boolean;
+  providesArt: boolean;
   getFieldsSpec(): Promise<ServerFieldSpec[]>;
   validateFields(args: { values: Record<string, string> }): Promise<ValidationResult>;
 

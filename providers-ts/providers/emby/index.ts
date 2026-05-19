@@ -25,7 +25,7 @@ let state: EmbyInstanceState | null = null;
 
   // ── Provider-level (called from a fresh temp engine) ──────────────────
 
-  providesCover: true,
+  providesArt: true,
 
   async getFieldsSpec(): Promise<ServerFieldSpec[]> {
     return getFieldsSpec();

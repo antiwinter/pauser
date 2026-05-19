@@ -51,9 +51,6 @@ interface MediaStateDao {
     @Query("UPDATE media_state SET isFavorite = :isFavorite, title = :title, type = :type, updatedAtEpochMs = :now WHERE protocol = :protocol AND sourceId = :sourceId AND itemId = :itemId")
     suspend fun updateFavorite(protocol: String, sourceId: String, itemId: String, isFavorite: Boolean, title: String?, type: String?, now: Long)
 
-    @Query("UPDATE media_state SET coverCachePath = :path, updatedAtEpochMs = :now WHERE protocol = :protocol AND sourceId = :sourceId AND itemId = :itemId")
-    suspend fun updateCoverCache(protocol: String, sourceId: String, itemId: String, path: String?, now: Long)
-
     @Query("UPDATE media_state SET selectedSubtitleTrackId = :id, updatedAtEpochMs = :now WHERE protocol = :protocol AND sourceId = :sourceId AND itemId = :itemId")
     suspend fun updateSubtitleTrack(protocol: String, sourceId: String, itemId: String, id: String?, now: Long)
 

@@ -17,7 +17,6 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
             isFavorite = isFavorite,
             title = title,
             type = type,
-            coverCachePath = coverCachePath,
             selectedSubtitleTrackId = selectedSubtitleTrackId,
             selectedAudioTrackId = selectedAudioTrackId,
         )
@@ -69,16 +68,6 @@ class RoomMediaStateStore(private val db: OpenTuneDatabase) : UserMediaStateStor
     ) {
         ensureRow(protocol, sourceId, itemId)
         dao.updateFavorite(protocol, sourceId, itemId, isFavorite, title, type, System.currentTimeMillis())
-    }
-
-    override suspend fun upsertCoverCache(
-        protocol: String,
-        sourceId: String,
-        itemId: String,
-        path: String?,
-    ) {
-        ensureRow(protocol, sourceId, itemId)
-        dao.updateCoverCache(protocol, sourceId, itemId, path, System.currentTimeMillis())
     }
 
     override suspend fun upsertSubtitleTrack(

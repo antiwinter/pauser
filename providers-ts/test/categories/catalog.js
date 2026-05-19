@@ -22,13 +22,13 @@ const PAGINATION_PAGE_SIZE = 5;
  *
  * @param {import('../reporter.js').Reporter} reporter
  * @param {import('../quickjs-runner.js').QuickJsProviderRunner} runner
- * @param {{ providesCover: boolean, ffprobe: boolean }} opts
+ * @param {{ providesArt: boolean, ffprobe: boolean }} opts
  * @returns {Promise<{ firstItem: object|null, seriesItem: object|null, seasonItem: object|null, playableItem: object|null }>}
  */
 export async function runCatalogChecks(reporter, runner, opts) {
   reporter.beginCategory('Catalog', ['listEntry', 'search']);
 
-  const { providesCover, ffprobe } = opts;
+  const { providesArt, ffprobe } = opts;
   let context = { firstItem: null, seriesItem: null, seasonItem: null, playableItem: null };
 
   // ── Basic root list ────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
 
   await reporter.step('root list cover URLs are valid', async () => {
     if (!rootList) throw new NAError('root list not loaded');
-    if (!providesCover) throw new NAError('providesCover=false — cover URLs not expected');
+    if (!providesArt) throw new NAError('providesArt=false — cover URLs not expected');
     const itemsWithCover = rootList.items.filter((item) => item.cover != null);
     if (itemsWithCover.length === 0) throw new NAError('no items have a cover URL in root list');
     for (const item of itemsWithCover) {
@@ -65,7 +65,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
 
   await reporter.step('cover URLs pass ffprobe image check', async () => {
     if (!rootList) throw new NAError('root list not loaded');
-    if (!providesCover) throw new NAError('providesCover=false — cover URLs not expected');
+    if (!providesArt) throw new NAError('providesArt=false — cover URLs not expected');
     if (!ffprobe) throw new NAError('--no-ffprobe flag set');
     const sample = rootList.items.filter((item) => item.cover != null).slice(0, 3);
     if (sample.length === 0) throw new NAError('no items have a cover URL to probe');

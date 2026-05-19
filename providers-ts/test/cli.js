@@ -122,13 +122,13 @@ async function run(providerName, opts, out) {
 
   const configRunner = new QuickJsProviderRunner({ bundle, hostApis, filename: bundlePath });
   let credentials;
-  let providesCover = false;
+  let providesArt = false;
 
   try {
     await configRunner.init();
 
     const bridgeResult = await runBridgeChecks(out, configRunner);
-    providesCover = bridgeResult.providesCover;
+    providesArt = bridgeResult.providesArt;
 
     const envValues = await loadCredentials(out, configRunner, envPath, opts);
     if (!envValues) {
@@ -153,7 +153,7 @@ async function run(providerName, opts, out) {
       capabilities: defaultCapabilities(),
     });
 
-    const catalogContext = await runCatalogChecks(out, instanceRunner, { providesCover, ffprobe });
+    const catalogContext = await runCatalogChecks(out, instanceRunner, { providesArt, ffprobe });
 
     await runDetailChecks(out, instanceRunner, {
       firstItem: catalogContext.playableItem ?? catalogContext.firstItem,

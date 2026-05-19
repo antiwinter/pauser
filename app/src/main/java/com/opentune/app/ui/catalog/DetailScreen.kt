@@ -38,6 +38,7 @@ private fun artImageModel(src: String?): Any? = when {
     src.isNullOrBlank() -> null
     src.startsWith("http://", ignoreCase = true) ||
         src.startsWith("https://", ignoreCase = true) -> src
+    src.startsWith("file://") -> src
     else -> File(src)
 }
 
@@ -63,16 +64,28 @@ fun DetailScreen(
     onSelectPage: (Int) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Backdrop as full-screen background
-        if (detail != null && detail.backdrop.isNotEmpty()) {
+        // Backdrop as full-screen background (two-layer: asset + image)
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Bottom layer: placeholder
             AsyncImage(
-                model = detail.backdrop.first(),
+                model = "file:///android_asset/art/backdrop.png",
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-        } else {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1A)))
+
+            // Top layer: actual backdrop
+            if (detail != null && detail.backdrop.isNotEmpty()) {
+                AsyncImage(
+                    model = artImageModel(detail.backdrop.first()),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
         }
 
         // Gradient overlay: transparent at top → dark at bottom
@@ -107,17 +120,31 @@ fun DetailScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when {
-                loading && detail == null -> Text("Loading\u2026")
+                loading && detail == null -> Text("Loading…")
                 detail != null -> {
-                    // Logo or title
+                    // Logo or title (two-layer: asset + image)
                     val logoModel = artImageModel(detail.logo)
                     if (logoModel != null) {
-                        AsyncImage(
-                            model = logoModel,
-                            contentDescription = detail.title,
+                        Box(
                             modifier = Modifier.height(80.dp),
-                            contentScale = ContentScale.Fit,
-                        )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            // Bottom layer: placeholder
+                            AsyncImage(
+                                model = "file:///android_asset/art/logo.png",
+                                contentDescription = null,
+                                modifier = Modifier.height(80.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+
+                            // Top layer: logo image
+                            AsyncImage(
+                                model = logoModel,
+                                contentDescription = detail.title,
+                                modifier = Modifier.height(80.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
                     } else {
                         val displayTitle = if (titleLang == TitleLang.Original)
                             detail.title else detail.title
@@ -207,7 +234,7 @@ fun DetailScreen(
                                 val end = minOf((page + 1) * 50, totalEpisodes)
                                 Button(onClick = { onSelectPage(page) }) {
                                     Text(
-                                        text = "$start\u2013$end",
+                                        text = "$start–$end",
                                         fontWeight = if (page == episodePage)
                                             FontWeight.Bold else FontWeight.Normal,
                                     )

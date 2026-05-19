@@ -73,12 +73,12 @@ fun DetailRoute(
             isFavorite = mediaState?.isFavorite ?: false
             resumeMs = mediaState?.positionMs ?: 0L
             val d = withContext(Dispatchers.IO) { inst.getDetail(itemRefDecoded) }
-            detail = d
+            detail = ArtUrlInjector.applyDetail(d, app, protocol)
             if (!d.isMedia) {
                 val result = withContext(Dispatchers.IO) {
                     inst.listEntry(itemRefDecoded, 0, 500)
                 }
-                seasons = result.items
+                seasons = ArtUrlInjector.apply(result.items, app, protocol, sourceId)
             }
         } catch (e: Exception) {
             Log.e(LOG_TAG, "detail load", e)
@@ -97,7 +97,8 @@ fun DetailRoute(
             val result = withContext(Dispatchers.IO) {
                 inst.listEntry(season.id, episodePage * 50, 50)
             }
-            episodes = result.items.sortedBy { it.indexNumber ?: Int.MAX_VALUE }
+            episodes = ArtUrlInjector.apply(result.items, app, protocol, sourceId, ArtType.Thumb)
+                .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
             totalEpisodes = result.totalCount
         } catch (e: Exception) {
             Log.e(LOG_TAG, "episodes load", e)

@@ -20,13 +20,13 @@ import kotlinx.serialization.json.put
  * bridge protocol defined in `providers-ts/utils/types.ts`.
  *
  * Construct via [create] — the suspend factory evaluates the bundle once to
- * read [providesCover] and [getFieldsSpec] without blocking any thread.
+ * read [providesArt] and [getFieldsSpec] without blocking any thread.
  */
 class JsProvider private constructor(
     private val assetPath: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
-    override val providesCover: Boolean,
+    override val providesArt: Boolean,
     private val cachedFieldsSpec: List<ServerFieldSpec>,
 ) : OpenTuneProvider {
 
@@ -100,7 +100,7 @@ class JsProvider private constructor(
 
     companion object {
         /**
-         * Evaluates the bundle in a temporary engine to read [providesCover] and
+         * Evaluates the bundle in a temporary engine to read [providesArt] and
          * [getFieldsSpec], then constructs and returns a ready [JsProvider].
          * Runs on whatever dispatcher the caller is on — call from [Dispatchers.IO].
          */
@@ -112,7 +112,7 @@ class JsProvider private constructor(
                 engine.init()
                 engine.evalSnippet(HOST_BOOTSTRAP_JS)
                 engine.evalBundle(jsBundle)
-                cover = engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+                cover = engine.evalExpression("globalThis.opentuneProvider.providesArt") == "true"
                 val result = engine.callMethod("getFieldsSpec", "{}") ?: ""
                 fields = parseFieldsSpec(result)
             } finally {

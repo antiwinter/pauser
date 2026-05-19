@@ -42,17 +42,18 @@ fun SearchRoute(
         }
     }
 
-    rememberAssetGenerator(app, protocol, sourceId, results)
-
     when {
         error != null -> Text("Error: $error")
-        instance == null -> Text("Loading\u2026")
+        instance == null -> Text("Loading…")
         else -> {
             val inst = instance!!
             SearchScreen(
                 logTag = "OT_Search_$sourceId",
                 results = results,
-                searchFn = { query -> inst.search(scopeDecoded, query) },
+                searchFn = { query ->
+                    inst.search(scopeDecoded, query)
+                        .let { ArtUrlInjector.apply(it, app, protocol, sourceId) }
+                },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
                 onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, sourceId, raw)) },
