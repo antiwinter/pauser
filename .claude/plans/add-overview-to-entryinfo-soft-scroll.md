@@ -59,47 +59,66 @@ Series detail view stays unchanged.
 ### 6. BrowseScreen + SearchScreen: Update click routing
 
 **File**: [BrowseScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/BrowseScreen.kt) (line 152-160)
+- Change `onOpenDetail: (String) -> Unit` to `onOpenDetail: (String, Int?) -> Unit` (now carries `item.childCount`)
 - Add `onOpenPlayer: (String, Long?) -> Unit` parameter
 - Update the click `when` block:
   - `Folder, Season` → `onOpenBrowseLocation(item.id)` (unchanged)
-  - `Series, Digipak` → `onOpenDetail(item.id)` (Digipak is new)
+  - `Series, Digipak` → `onOpenDetail(item.id, item.childCount)` (Digipak is new, both pass childCount)
   - `Playable, Episode, Other` → `onOpenPlayer(item.id, item.userData?.positionMs)` (was `onOpenDetail`, now direct play)
   - `Image` → `onOpenImageViewer(item.id)` (unchanged)
 
 **File**: [BrowseRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/BrowseRoute.kt)
+- Update `onOpenDetail = { raw, childCount -> nav.navigate(Routes.detail(protocol, endpointId, raw, childCount)) }`
 - Wire `onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) }`
 
 **File**: [SearchScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/SearchScreen.kt) (line 100-109)
+- Change `onOpenDetail: (String) -> Unit` to `onOpenDetail: (String, Int?) -> Unit`
 - Add `onOpenPlayer: (String, Long?) -> Unit` parameter
 - Update the click `when` block identically:
   - `Folder, Season` → `onOpenBrowse(item.id)` (unchanged)
-  - `Series, Digipak` → `onOpenDetail(item.id)` (Digipak is new)
+  - `Series, Digipak` → `onOpenDetail(item.id, item.childCount)`
   - `Playable, Episode, Other` → `onOpenPlayer(item.id, item.userData?.positionMs)`
   - `Image` → `onOpenImageViewer(item.id)` (unchanged)
 
 **File**: [SearchRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/SearchRoute.kt)
+- Update `onOpenDetail = { raw, childCount -> nav.navigate(Routes.detail(protocol, endpointId, raw, childCount)) }`
 - Wire `onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) }`
 
-### 7. DetailRoute: Fetch children for all entries
+### 7. Navigation: Pass full EntryInfo as JSON in detail route
+
+**File**: [OpenTuneNavHost.kt](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt)
+- Update `Routes.DETAIL` to `detail/{provider}/{endpointId}/{itemRef}/{infoJson}`
+- Update `Routes.detail(protocol, endpointId, itemRef, infoJson: String)` builder — encode EntryInfo as JSON
+- Add `infoJson` nav argument (StringType) to the DETAIL composable block
+- Decode EntryInfo from JSON and pass to `DetailRoute`
+- `NavCommand.Detail` wiring: pass `null`/empty for infoJson (debug path)
+
+**File**: [Routes.kt](app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt) (same file)
+- Add helper: `fun EntryInfo.toJson(): String` using `kotlinx.serialization.json.Json`
+- `infoJson` is URL-encoded in the route builder
+
+### 8. DetailRoute: Accept EntryInfo, pass to DetailScreen
 
 **File**: [DetailRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailRoute.kt)
-- Remove the `!d.isMedia` guard — fetch children unconditionally after loading detail
-- Pass the children list to DetailScreen
-- For single-child case (`totalCount == 1`), keep that child's EntryInfo ready so Play button can target it
-- Pass `childCount` from loaded result's `totalCount`
+- Accept `initialInfo: EntryInfo?` from route params (decoded from JSON)
+- Remove the `!d.isMedia` child-fetch branch entirely — children loading moves into DetailScreen
+- Pass `initialInfo` to `DetailScreen` for immediate rendering (cover, childCount, title, rating)
+- DetailRoute handles: detail fetch (EntryDetail from getDetail), favorite toggle, back, player nav
 
-### 8. DetailScreen: Render by type + childCount
+### 9. DetailScreen: Layout from EntryInfo, fetch detail + children internally
 
 **File**: [DetailScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailScreen.kt)
-- Add `children: List<EntryInfo>` parameter (flat children for both Series and Digipak)
-- Add `childCount: Int? = null` parameter
-- Add `singleChild: EntryInfo? = null` parameter (for single-child play)
-- Add `onPlayDirect: (EntryInfo) -> Unit` callback (plays the single child)
-- Add `onSelectChild: (EntryInfo) -> Unit` callback (for child thumb clicks)
-- Rendering logic:
-  - **Series** (`childCount > 1`): season selector row + episode thumbnail row + pagination (existing behavior, but driven by `children` list)
-  - **Digipak with childCount > 1**: show children as `ThumbEntryComponent` row, clicking → `onSelectChild` → player
-  - **Single child (childCount <= 1)**: show Play/Resume button calling `onPlayDirect` with `singleChild`
+- Add `initialInfo: EntryInfo?` parameter — drives layout decision and immediate rendering
+- Internal state: `detail`, `seasons` (Series), `children` (Digipak), `loading`, `error`
+- LaunchedEffect: fetch `getDetail(itemRef)` + `listEntry(itemRef, ...)` based on `initialInfo.type`:
+  - Series: load seasons (limit 500), then episodes on season select (existing logic moved here)
+  - Digipak `childCount > 1`: load all children flat
+  - Digipak `childCount <= 1`: load single child EntryInfo for play button
+- Rendering:
+  - If `initialInfo` available: render backdrop/title/overview immediately while detail loads
+  - Series: season selector + episode row + pagination (existing behavior)
+  - Digipak `childCount > 1`: child thumbnail row, click → play that child
+  - Digipak `childCount <= 1`: Play/Resume button → play single child
 
 ## File Summary
 
@@ -116,8 +135,8 @@ Series detail view stays unchanged.
 | [BrowseScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/BrowseScreen.kt) | Route playable→player, Digipak→detail |
 | [SearchRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/SearchRoute.kt) | Add onOpenPlayer wiring |
 | [SearchScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/SearchScreen.kt) | Route playable→player, Digipak→detail |
-| [DetailRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailRoute.kt) | Fetch children unconditionally, pass child info |
-| [DetailScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailScreen.kt) | Render by type + childCount |
+| [DetailRoute.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailRoute.kt) | Thin wrapper: accept childCount, pass to DetailScreen |
+| [DetailScreen.kt](app/src/main/java/com/opentune/app/ui/catalog/DetailScreen.kt) | Layout from childCount, fetch detail+children internally |
 
 ## Verification
 
