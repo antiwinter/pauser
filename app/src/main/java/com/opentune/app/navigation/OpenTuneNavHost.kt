@@ -20,10 +20,13 @@ import com.opentune.app.ui.catalog.SettingsScreen
 import com.opentune.app.ui.config.EndpointAddRoute
 import com.opentune.app.ui.config.EndpointEditRoute
 import com.opentune.app.ui.home.HomeRoute
+import com.opentune.provider.EntryInfo
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
 import java.net.URLEncoder
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 object Routes {
 
@@ -31,7 +34,7 @@ object Routes {
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
     const val BROWSE = "browse/{provider}/{endpointId}/{location}"
-    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}"
+    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{infoJson}"
     const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_ADD = "provider_add/{protocol}"
@@ -47,8 +50,13 @@ object Routes {
     fun browse(protocol: String, endpointId: String, locationRaw: String) =
         "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
 
-    fun detail(protocol: String, endpointId: String, itemRefRaw: String) =
-        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun detail(
+        protocol: String,
+        endpointId: String,
+        itemRefRaw: String,
+        infoJson: String? = null,
+    ) =
+        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(infoJson ?: "", UrlCharset)}"
 
     fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long) =
         "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
@@ -59,6 +67,13 @@ object Routes {
     fun imageViewer(protocol: String, endpointId: String, itemRefRaw: String) =
         "image_viewer/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 }
+
+private val navJson = Json { ignoreUnknownKeys = true }
+
+internal fun EntryInfo.toJson(): String = navJson.encodeToString(this)
+
+internal fun decodeEntryInfo(json: String): EntryInfo? =
+    runCatching { navJson.decodeFromString<EntryInfo>(json) }.getOrNull()
 
 @Composable
 fun OpenTuneNavHost() {
@@ -139,17 +154,21 @@ fun OpenTuneNavHost() {
                 navArgument("provider") { type = NavType.StringType },
                 navArgument("endpointId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
+                navArgument("infoJson") { type = NavType.StringType; nullable = true },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
             val endpointId = it.arguments!!.getString("endpointId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
+            val infoJsonStr = it.arguments!!.getString("infoJson")
+            val initialInfo = if (!infoJsonStr.isNullOrBlank()) decodeEntryInfo(infoJsonStr) else null
             DetailRoute(
                 nav = nav,
                 app = app,
                 protocol = protocol,
                 endpointId = endpointId,
                 itemRefEncoded = itemRef,
+                initialInfo = initialInfo,
             )
         }
         composable(

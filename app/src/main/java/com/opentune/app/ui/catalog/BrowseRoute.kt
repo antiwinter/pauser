@@ -8,19 +8,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
-import com.opentune.provider.EntryType
+import com.opentune.app.navigation.toJson
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EndpointClient
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "OpenTuneBrowseRoute"
@@ -43,7 +41,6 @@ fun BrowseRoute(
     val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
     var state by remember { mutableStateOf<BrowseState>(BrowseState.Loading) }
     val items = remember { mutableStateListOf<EntryInfo>() }
-    val scope = rememberCoroutineScope()
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
@@ -80,24 +77,10 @@ fun BrowseRoute(
             onSearch = { nav.navigate(Routes.search(protocol, endpointId, locationDecoded)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onOpenBrowseLocation = { folderId ->
-                scope.launch {
-                    try {
-                        val page = withContext(Dispatchers.IO) {
-                            s.instance.listEntry(folderId, 0, 1)
-                        }
-                        val firstItem = page.items.firstOrNull()
-                        if (page.totalCount == 1 && firstItem?.type == EntryType.Playable) {
-                            nav.navigate(Routes.detail(protocol, endpointId, firstItem.id))
-                        } else {
-                            nav.navigate(Routes.browse(protocol, endpointId, folderId))
-                        }
-                    } catch (e: Exception) {
-                        Log.e(LOG_TAG, "auto-nav check failed for $folderId", e)
-                        nav.navigate(Routes.browse(protocol, endpointId, folderId))
-                    }
-                }
+                nav.navigate(Routes.browse(protocol, endpointId, folderId))
             },
-            onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, endpointId, raw)) },
+            onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
+            onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
         )
     }

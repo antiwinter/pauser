@@ -28,9 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
-import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,7 +52,8 @@ fun BrowseScreen(
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenBrowseLocation: (String) -> Unit,
-    onOpenDetail: (String) -> Unit,
+    onOpenDetail: (EntryInfo) -> Unit,
+    onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
@@ -153,9 +154,10 @@ fun BrowseScreen(
                             EntryType.Folder,
                             EntryType.Season -> onOpenBrowseLocation(item.id)
                             EntryType.Series,
+                            EntryType.Digipak -> onOpenDetail(item)
                             EntryType.Playable,
                             EntryType.Episode,
-                            EntryType.Other -> onOpenDetail(item.id)
+                            EntryType.Other -> onOpenPlayer(item.id, item.userData?.positionMs)
                             EntryType.Image -> onOpenImageViewer(item.id)
                         }
                     },

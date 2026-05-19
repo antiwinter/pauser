@@ -112,6 +112,7 @@ export interface BaseItemDto {
   ExternalUrls?: ExternalUrlDto[] | null;
   MediaSources?: MediaSourceInfo[] | null;
   MediaStreams?: MediaStream[] | null;
+  ChildCount?: number | null;
 }
 
 export interface QueryResultBaseItemDto {

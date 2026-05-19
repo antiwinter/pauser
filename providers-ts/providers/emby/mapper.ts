@@ -7,7 +7,7 @@ import type { EntryInfo, EntryType } from '../../utils/types.js';
 import { imageUrl } from './urls.js';
 
 const CONTAINER_TYPES = new Set([
-  'Folder', 'BoxSet', 'MusicAlbum', 'MusicArtist',
+  'BoxSet', 'MusicAlbum', 'MusicArtist',
   'Playlist', 'CollectionFolder', 'UserView',
 ]);
 
@@ -24,6 +24,7 @@ export function toListItem(
   if (type === 'Series')            entryType = 'Series';
   else if (type === 'Season')       entryType = 'Season';
   else if (type === 'Episode')      entryType = 'Episode';
+  else if (type === 'Folder')       entryType = 'Digipak';
   else if (CONTAINER_TYPES.has(type)) entryType = 'Folder';
   else                              entryType = 'Playable';
 
@@ -51,5 +52,7 @@ export function toListItem(
     studios:         item.Studios?.map((s) => s.Name ?? '').filter(Boolean) ?? null,
     etag:            item.Etag ?? null,
     indexNumber:     item.IndexNumber ?? null,
+    overview:        item.Overview ?? null,
+    childCount:      item.ChildCount ?? null,
   };
 }

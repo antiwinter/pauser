@@ -40,7 +40,8 @@ fun SearchScreen(
     titleLang: TitleLang,
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
-    onOpenDetail: (String) -> Unit,
+    onOpenDetail: (EntryInfo) -> Unit,
+    onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
 ) {
     var query by remember { mutableStateOf("") }
@@ -102,9 +103,10 @@ fun SearchScreen(
                             EntryType.Folder,
                             EntryType.Season -> onOpenBrowse(item.id)
                             EntryType.Series,
+                            EntryType.Digipak -> onOpenDetail(item)
                             EntryType.Playable,
                             EntryType.Episode,
-                            EntryType.Other -> onOpenDetail(item.id)
+                            EntryType.Other -> onOpenPlayer(item.id, item.userData?.positionMs)
                             EntryType.Image -> onOpenImageViewer(item.id)
                         }
                     },

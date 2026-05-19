@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val CONTAINER_TYPES = setOf(
-    "Folder", "BoxSet", "MusicAlbum",
+    "BoxSet", "MusicAlbum",
     "MusicArtist", "Playlist", "CollectionFolder", "UserView",
 )
 
@@ -44,6 +44,7 @@ class EmbyProviderInstance(
             "Series" -> EntryType.Series
             "Season" -> EntryType.Season
             "Episode" -> EntryType.Episode
+            "Folder" -> EntryType.Digipak
             in CONTAINER_TYPES -> EntryType.Folder
             else -> EntryType.Playable
         }
@@ -75,6 +76,8 @@ class EmbyProviderInstance(
             studios = studios?.mapNotNull { it.name },
             etag = etag,
             indexNumber = indexNumber,
+            overview = overview,
+            childCount = childCount,
         )
     }
 

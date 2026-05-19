@@ -62,7 +62,7 @@ export type ValidationResult =
   | { success: true; hash: string; name: string; fields: Record<string, string> }
   | { success: false; error: string };
 
-export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other';
+export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other' | 'Digipak' | 'Image';
 
 export interface EntryUserData {
   positionMs: number;
@@ -82,6 +82,8 @@ export interface EntryInfo {
   studios?: string[] | null;
   etag?: string | null;
   indexNumber?: number | null;
+  overview?: string | null;
+  childCount?: number | null;
 }
 
 export interface EntryList {

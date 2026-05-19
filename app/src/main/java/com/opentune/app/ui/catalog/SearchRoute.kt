@@ -13,6 +13,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
+import com.opentune.app.navigation.toJson
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EndpointClient
 import com.opentune.storage.TitleLang
@@ -57,7 +58,8 @@ fun SearchRoute(
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
                 onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, endpointId, raw)) },
-                onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, endpointId, raw)) },
+                onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
+                onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },
             )
         }
     }

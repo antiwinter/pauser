@@ -19,7 +19,7 @@ import retrofit2.http.Query
 
 object EmbyFieldSets {
     const val BROWSE_FIELDS =
-        "UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle"
+        "UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle,Overview,ChildCount"
     const val DETAIL_FIELDS =
         "Overview,ImageTags,BackdropImageTags,RunTimeTicks,UserData,MediaSources,CommunityRating,Genres,Studios,ProductionYear,ProviderIds,ExternalUrls,OriginalTitle,IndexNumber,Etag,MediaStreams"
 }

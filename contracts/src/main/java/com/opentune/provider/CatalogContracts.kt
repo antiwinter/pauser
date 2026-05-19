@@ -1,7 +1,10 @@
 package com.opentune.provider
 
+import kotlinx.serialization.Serializable
+
 // --- Media models ---
 
+@Serializable
 enum class EntryType {
     Folder,
     Playable,
@@ -10,14 +13,17 @@ enum class EntryType {
     Season,
     Episode,
     Image,
+    Digipak,
 }
 
+@Serializable
 data class EntryUserData(
     val positionMs: Long,
     val isFavorite: Boolean,
     val played: Boolean,
 )
 
+@Serializable
 data class EntryInfo(
     val id: String,
     val title: String,
@@ -30,6 +36,8 @@ data class EntryInfo(
     val studios: List<String>? = null,
     val etag: String? = null,
     val indexNumber: Int? = null,
+    val overview: String? = null,
+    val childCount: Int? = null,
 )
 
 data class EntryList(

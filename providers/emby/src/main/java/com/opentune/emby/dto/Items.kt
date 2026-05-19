@@ -32,6 +32,7 @@ data class BaseItemDto(
     @SerialName("ExternalUrls") val externalUrls: List<ExternalUrlDto>? = null,
     @SerialName("MediaSources") val mediaSources: List<MediaSourceInfo>? = null,
     @SerialName("MediaStreams") val mediaStreams: List<MediaStream>? = null,
+    @SerialName("ChildCount") val childCount: Int? = null,
 )
 
 @Serializable
