@@ -18,7 +18,7 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.player.OpenTunePlayer
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.MediaStateKey
+import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,13 +30,13 @@ private const val PLAYER_ROUTE_LOG = "OT_PlayerRoute"
 fun PlayerRoute(
     app: OpenTuneApplication,
     protocol: String,
-    sourceId: String,
+    endpointId: String,
     itemRefDecoded: String,
     startMs: Long,
     onExit: () -> Unit,
 ) {
-    val stateKey = remember(protocol, sourceId, itemRefDecoded) {
-        MediaStateKey(protocol, sourceId, itemRefDecoded)
+    val stateKey = remember(protocol, endpointId, itemRefDecoded) {
+        EntryStateKey(protocol, endpointId, itemRefDecoded)
     }
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -44,20 +44,20 @@ fun PlayerRoute(
     var initialAudioTrackId by remember { mutableStateOf<String?>(null) }
     var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
-    LaunchedEffect(protocol, sourceId, itemRefDecoded, startMs) {
+    LaunchedEffect(protocol, endpointId, itemRefDecoded, startMs) {
         spec = null
         error = null
         try {
             withContext(Dispatchers.IO) {
-                val inst = app.instanceRegistry.getOrCreate(sourceId)
-                    ?: throw IllegalStateException("No provider instance for $sourceId")
+                val inst = app.endpointClientRegistry.getOrCreate(endpointId)
+                    ?: throw IllegalStateException("No provider instance for $endpointId")
                 val resolvedSpec = inst.getPlaybackSpec(itemRefDecoded, startMs)
-                val savedState = app.storageBindings.mediaStateStore.get(protocol, sourceId, itemRefDecoded)
+                val savedState = app.storageBindings.entryStateStore.get(protocol, endpointId, itemRefDecoded)
                 val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
                 initialSubtitleTrackId = savedState?.selectedSubtitleTrackId
                 initialAudioTrackId = savedState?.selectedAudioTrackId
                 initialSubtitlePrefs = subtitlePrefs
-                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${sourceId}/${itemRefDecoded} savedState=$savedState subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId subtitlePrefs=$subtitlePrefs")
+                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${endpointId}/${itemRefDecoded} savedState=$savedState subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId subtitlePrefs=$subtitlePrefs")
                 spec = resolvedSpec
             }
         } catch (e: Exception) {
@@ -77,8 +77,8 @@ fun PlayerRoute(
                 OpenTunePlayer(
                     spec = spec!!,
                     startMs = startMs,
-                    mediaStateStore = app.storageBindings.mediaStateStore,
-                    mediaStateKey = stateKey,
+                    entryStateStore = app.storageBindings.entryStateStore,
+                    entryStateKey = stateKey,
                     onExit = onExit,
                     initialSubtitleTrackId = initialSubtitleTrackId,
                     initialAudioTrackId = initialAudioTrackId,

@@ -14,21 +14,21 @@ private const val LOG_TAG = "GenartRoutes"
 
 fun Application.installGenartRoutes(ctx: AppContext) {
     routing {
-        get("/genart/{type}/{version}/{sourceId}/{itemId}") {
+        get("/genart/{type}/{version}/{endpointId}/{itemId}") {
             val type = call.parameters["type"]
             val version = call.parameters["version"]
-            val sourceId = call.parameters["sourceId"]
+            val endpointId = call.parameters["endpointId"]
             val itemId = call.parameters["itemId"]
 
             if (type !in setOf("cover", "thumb") || version != GenArt.VERSION ||
-                sourceId == null || itemId == null) {
+                endpointId == null || itemId == null) {
                 return@get call.respondBytes(
                     GenArt.transparentPlaceholder(),
                     ContentType.Image.PNG,
                 )
             }
 
-            val instance = ctx.getInstance(sourceId)
+            val client = ctx.getClient(endpointId)
                 ?: return@get call.respondBytes(
                     GenArt.transparentPlaceholder(),
                     ContentType.Image.PNG,
@@ -36,7 +36,7 @@ fun Application.installGenartRoutes(ctx: AppContext) {
 
             val bytes = withContext(Dispatchers.IO) {
                 val spec = try {
-                    instance.getPlaybackSpec(itemId, 0)
+                    client.getPlaybackSpec(itemId, 0)
                 } catch (e: Exception) {
                     Log.w(LOG_TAG, "getPlaybackSpec failed for $itemId", e)
                     null

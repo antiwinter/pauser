@@ -1,12 +1,12 @@
 package com.opentune.server
 
+import com.opentune.provider.EndpointClient
 import com.opentune.provider.OpenTuneProvider
-import com.opentune.provider.OpenTuneProviderInstance
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.storage.AppConfigStore
-import com.opentune.storage.ServerDao
-import com.opentune.storage.ServerEntity
-import com.opentune.storage.UserMediaStateStore
+import com.opentune.storage.EndpointDao
+import com.opentune.storage.EndpointEntity
+import com.opentune.storage.EntryStateStore
 
 /**
  * App-level dependency surface exposed to the `:server` module.
@@ -18,9 +18,9 @@ interface AppContext {
     fun getProviders(): List<OpenTuneProvider>
     fun getProvider(protocol: String): OpenTuneProvider?
     fun platformCapabilities(): PlatformCapabilities
-    suspend fun getInstance(sourceId: String): OpenTuneProviderInstance?
-    suspend fun createAndRegister(sourceId: String, entity: ServerEntity): OpenTuneProviderInstance?
-    val serverDao: ServerDao
-    val mediaStateStore: UserMediaStateStore
+    suspend fun getClient(endpointId: String): EndpointClient?
+    suspend fun registerClient(endpointId: String, entity: EndpointEntity): EndpointClient?
+    val endpointDao: EndpointDao
+    val entryStateStore: EntryStateStore
     val appConfigStore: AppConfigStore
 }

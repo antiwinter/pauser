@@ -10,8 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
 import com.opentune.player.engine.PlayerStores
-import com.opentune.storage.MediaStateKey
-import com.opentune.storage.upsertSpeed
+import com.opentune.storage.EntryStateKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -22,7 +21,7 @@ private val SPEED_LABELS = SPEED_VALUES.map { if (it == 1f) "1×" else "${it}×"
 internal class SpeedController(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
-    private val mediaStateKey: MediaStateKey,
+    private val entryStateKey: EntryStateKey,
     private val exo: ExoPlayer,
 ) {
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -51,15 +50,15 @@ internal class SpeedController(
 internal fun rememberSpeedController(
     exo: ExoPlayer,
     stores: PlayerStores,
-    mediaStateKey: MediaStateKey,
+    entryStateKey: EntryStateKey,
 ): SpeedController {
     val scope = rememberCoroutineScope()
 
-    DisposableEffect(exo, mediaStateKey) {
+    DisposableEffect(exo, entryStateKey) {
         val listener = object : Player.Listener {
             override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
                 scope.launch(Dispatchers.IO) {
-                    stores.mediaStateStore.upsertSpeed(mediaStateKey, parameters.speed)
+                    stores.entryStateStore.upsertSpeed(entryStateKey, parameters.speed)
                 }
             }
         }
@@ -71,7 +70,7 @@ internal fun rememberSpeedController(
         SpeedController(
             scope = scope,
             stores = stores,
-            mediaStateKey = mediaStateKey,
+            entryStateKey = entryStateKey,
             exo = exo,
         )
     }

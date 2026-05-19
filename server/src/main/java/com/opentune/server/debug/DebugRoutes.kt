@@ -2,7 +2,8 @@ package com.opentune.server.debug
 
 import android.util.Log
 import com.opentune.server.AppContext
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.EndpointEntity
+import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -43,10 +44,10 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             }
         }
 
-        route("/servers") {
+        route("/endpoints") {
             get {
-                val servers = ctx.serverDao.observeAll().first()
-                val dtos = servers.map { s -> ServerDto(s.sourceId, s.protocol, s.displayName) }
+                val servers = ctx.endpointDao.observeAll().first()
+                val dtos = servers.map { s -> ServerDto(s.endpointId, s.protocol, s.displayName) }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
             post {
@@ -81,23 +82,23 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         )
                     }
                     is com.opentune.provider.ValidationResult.Success -> {
-                        val sourceId = "${body.protocol}_${result.hash}"
+                        val endpointId = "${body.protocol}_${result.hash}"
                         val now = System.currentTimeMillis()
-                        val entity = ServerEntity(
-                            sourceId = sourceId,
+                        val entity = EndpointEntity(
+                            endpointId = endpointId,
                             protocol = body.protocol,
                             displayName = result.name,
                             fieldsJson = Json.encodeToString(result.fields),
                             createdAtEpochMs = now,
                             updatedAtEpochMs = now,
                         )
-                        runCatching { ctx.serverDao.insert(entity) }.onFailure {
+                        runCatching { ctx.endpointDao.insert(entity) }.onFailure {
                             Log.w(LOG_TAG, "insert failed (may already exist): ${it.message}")
                         }
-                        ctx.createAndRegister(sourceId, entity)
-                        Log.i(LOG_TAG, "added server $sourceId (${result.name})")
+                        ctx.registerClient(endpointId, entity)
+                        Log.i(LOG_TAG, "added server $endpointId (${result.name})")
                         call.respondText(
-                            json.encodeToString(AddServerResponse(sourceId = sourceId, displayName = result.name)),
+                            json.encodeToString(AddServerResponse(endpointId = endpointId, displayName = result.name)),
                             ContentType.Application.Json,
                             HttpStatusCode.Created,
                         )
@@ -106,19 +107,19 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             }
         }
 
-        route("/instances") {
+        route("/clients") {
             get {
-                val servers = ctx.serverDao.observeAll().first()
-                val dtos = servers.map { s -> ServerDto(s.sourceId, s.protocol, s.displayName) }
+                val servers = ctx.endpointDao.observeAll().first()
+                val dtos = servers.map { s -> ServerDto(s.endpointId, s.protocol, s.displayName) }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
 
-            get("/{sourceId}/browse") {
-                val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+            get("/{endpointId}/browse") {
+                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                 val location = call.request.queryParameters["location"]
                 val start = call.request.queryParameters["start"]?.toIntOrNull() ?: 0
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-                val instance = ctx.getInstance(sourceId) ?: return@get call.respond404("unknown sourceId")
+                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val result = runCatching { instance.listEntry(location, start, limit) }.getOrElse {
                     Log.e(LOG_TAG, "listEntry error", it); return@get call.respond500(it.message)
                 }
@@ -131,10 +132,10 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
             }
 
-            get("/{sourceId}/detail") {
-                val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+            get("/{endpointId}/detail") {
+                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                 val ref = call.request.queryParameters["ref"] ?: return@get call.respond400("missing ref")
-                val instance = ctx.getInstance(sourceId) ?: return@get call.respond404("unknown sourceId")
+                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val detail = runCatching { instance.getDetail(ref) }.getOrElse {
                     Log.e(LOG_TAG, "getDetail error", it); return@get call.respond500(it.message)
                 }
@@ -152,11 +153,11 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 )
             }
 
-            get("/{sourceId}/search") {
-                val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+            get("/{endpointId}/search") {
+                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                 val scope = call.request.queryParameters["scope"] ?: ""
                 val query = call.request.queryParameters["q"] ?: return@get call.respond400("missing q")
-                val instance = ctx.getInstance(sourceId) ?: return@get call.respond404("unknown sourceId")
+                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val results = runCatching { instance.search(scope, query) }.getOrElse {
                     Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
                 }
@@ -166,11 +167,11 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
 
-            get("/{sourceId}/playback") {
-                val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+            get("/{endpointId}/playback") {
+                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                 val ref = call.request.queryParameters["ref"] ?: return@get call.respond400("missing ref")
                 val startMs = call.request.queryParameters["startMs"]?.toLongOrNull() ?: 0L
-                val instance = ctx.getInstance(sourceId) ?: return@get call.respond404("unknown sourceId")
+                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val spec = runCatching { instance.getPlaybackSpec(ref, startMs) }.getOrElse {
                     Log.e(LOG_TAG, "getPlaybackSpec error", it); return@get call.respond500(it.message)
                 }
@@ -194,24 +195,24 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 "home" -> NavCommand.Home
                 "browse" -> {
                     val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.sourceId ?: return@post call.respond400("missing sourceId")
+                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
                     NavCommand.Browse(p, s, body.itemRef)
                 }
                 "detail" -> {
                     val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.sourceId ?: return@post call.respond400("missing sourceId")
+                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val r = body.itemRef ?: return@post call.respond400("missing itemRef")
                     NavCommand.Detail(p, s, r)
                 }
                 "player" -> {
                     val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.sourceId ?: return@post call.respond400("missing sourceId")
+                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val r = body.itemRef ?: return@post call.respond400("missing itemRef")
                     NavCommand.Player(p, s, r, body.startMs)
                 }
                 "image" -> {
                     val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.sourceId ?: return@post call.respond400("missing sourceId")
+                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val r = body.itemRef ?: return@post call.respond400("missing itemRef")
                     NavCommand.Image(p, s, r)
                 }
@@ -245,19 +246,19 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             route("/media-state") {
                 get {
                     val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
-                    val sourceId = call.request.queryParameters["sourceId"] ?: return@get call.respond400("missing sourceId")
-                    val all = ctx.mediaStateStore.observeForSource(protocol, sourceId).first()
+                    val endpointId = call.request.queryParameters["endpointId"] ?: return@get call.respond400("missing endpointId")
+                    val all = ctx.entryStateStore.observeForEndpoint(protocol, endpointId).first()
                     val dtos = all.map { it.toDto() }
                     call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
                 }
 
-                get("/{protocol}/{sourceId}/{itemId}") {
+                get("/{protocol}/{endpointId}/{itemId}") {
                     val protocol = call.parameters["protocol"] ?: return@get call.respond400("missing protocol")
-                    val sourceId = call.parameters["sourceId"] ?: return@get call.respond400("missing sourceId")
+                    val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                     val itemId = call.parameters["itemId"] ?: return@get call.respond400("missing itemId")
-                    val snapshot = ctx.mediaStateStore.get(protocol, sourceId, itemId)
+                    val snapshot = ctx.entryStateStore.get(protocol, endpointId, itemId)
                     if (snapshot == null) {
-                        call.respond404("no state found for $protocol/$sourceId/$itemId")
+                        call.respond404("no state found for $protocol/$endpointId/$itemId")
                         return@get
                     }
                     call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
@@ -268,8 +269,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.mediaStateStore.upsertSubtitleTrack(body.protocol, body.sourceId, body.itemId, body.trackId)
-                    val snapshot = ctx.mediaStateStore.get(body.protocol, body.sourceId, body.itemId)
+                    ctx.entryStateStore.upsertSubtitleTrack(EntryStateKey(body.protocol, body.endpointId, body.itemId), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.protocol, body.endpointId, body.itemId)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post
@@ -282,8 +283,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.mediaStateStore.upsertAudioTrack(body.protocol, body.sourceId, body.itemId, body.trackId)
-                    val snapshot = ctx.mediaStateStore.get(body.protocol, body.sourceId, body.itemId)
+                    ctx.entryStateStore.upsertAudioTrack(EntryStateKey(body.protocol, body.endpointId, body.itemId), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.protocol, body.endpointId, body.itemId)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post

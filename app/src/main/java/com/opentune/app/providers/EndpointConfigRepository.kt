@@ -2,14 +2,14 @@ package com.opentune.app.providers
 
 import com.opentune.app.OpenTuneApplication
 import com.opentune.provider.ValidationResult
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.EndpointEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-object ServerConfigRepository {
+object EndpointConfigRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -29,7 +29,7 @@ object ServerConfigRepository {
     suspend fun clearAddDraft(protocol: String, app: OpenTuneApplication) =
         app.storageBindings.appConfigStore.clearDraft(protocol)
 
-    // --- Server add ---
+    // --- Endpoint add ---
 
     suspend fun submitAdd(
         protocol: String,
@@ -40,10 +40,10 @@ object ServerConfigRepository {
         when (val result = provider.validateFields(values)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
-                val sourceId = "${protocol}_${result.hash}"
+                val endpointId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
-                val entity = ServerEntity(
-                    sourceId = sourceId,
+                val entity = EndpointEntity(
+                    endpointId = endpointId,
                     protocol = protocol,
                     displayName = result.name,
                     fieldsJson = encodeFields(result.fields),
@@ -51,24 +51,24 @@ object ServerConfigRepository {
                     updatedAtEpochMs = now,
                 )
                 try {
-                    app.storageBindings.serverDao.insert(entity)
+                    app.storageBindings.endpointDao.insert(entity)
                 } catch (e: android.database.sqlite.SQLiteConstraintException) {
-                    return@withContext SubmitResult.Error("Server already exists")
+                    return@withContext SubmitResult.Error("Endpoint already exists")
                 }
-                app.instanceRegistry.createAndRegister(sourceId, entity)
+                app.endpointClientRegistry.registerClient(endpointId, entity)
                 SubmitResult.Success
             }
         }
     }
 
-    // --- Server edit ---
+    // --- Endpoint edit ---
 
     suspend fun loadEditFields(
         protocol: String,
         app: OpenTuneApplication,
-        sourceId: String,
+        endpointId: String,
     ): Map<String, String> = withContext(Dispatchers.IO) {
-        val entity = app.storageBindings.serverDao.getBySourceId(sourceId) ?: return@withContext emptyMap()
+        val entity = app.storageBindings.endpointDao.getByEndpointId(endpointId) ?: return@withContext emptyMap()
         val stored = runCatching {
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrElse { emptyMap() }
@@ -78,7 +78,7 @@ object ServerConfigRepository {
 
     suspend fun submitEdit(
         protocol: String,
-        sourceId: String,
+        endpointId: String,
         values: Map<String, String>,
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
@@ -86,28 +86,28 @@ object ServerConfigRepository {
         when (val result = provider.validateFields(values)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
-                val newSourceId = "${protocol}_${result.hash}"
+                val newEndpointId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
-                if (newSourceId == sourceId) {
+                if (newEndpointId == endpointId) {
                     // Same identity — update fields only
-                    val existing = app.storageBindings.serverDao.getBySourceId(sourceId)
-                        ?: return@withContext SubmitResult.Error("Server not found")
-                    app.storageBindings.serverDao.update(
+                    val existing = app.storageBindings.endpointDao.getByEndpointId(endpointId)
+                        ?: return@withContext SubmitResult.Error("Endpoint not found")
+                    app.storageBindings.endpointDao.update(
                         existing.copy(
                             displayName = result.name,
                             fieldsJson = encodeFields(result.fields),
                             updatedAtEpochMs = now,
                         ),
                     )
-                    app.instanceRegistry.update(sourceId, existing.copy(
+                    app.endpointClientRegistry.update(endpointId, existing.copy(
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
                         updatedAtEpochMs = now,
                     ))
                 } else {
                     // Identity changed — insert new, cascade-delete old
-                    val newEntity = ServerEntity(
-                        sourceId = newSourceId,
+                    val newEntity = EndpointEntity(
+                        endpointId = newEndpointId,
                         protocol = protocol,
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
@@ -115,26 +115,26 @@ object ServerConfigRepository {
                         updatedAtEpochMs = now,
                     )
                     try {
-                        app.storageBindings.serverDao.insert(newEntity)
+                        app.storageBindings.endpointDao.insert(newEntity)
                     } catch (e: android.database.sqlite.SQLiteConstraintException) {
-                        return@withContext SubmitResult.Error("A server with the new credentials already exists")
+                        return@withContext SubmitResult.Error("An endpoint with the new credentials already exists")
                     }
-                    app.instanceRegistry.createAndRegister(newSourceId, newEntity)
-                    app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-                    app.storageBindings.serverDao.deleteBySourceId(sourceId)
-                    app.instanceRegistry.remove(sourceId)
+                    app.endpointClientRegistry.registerClient(newEndpointId, newEntity)
+                    app.storageBindings.entryStateStore.deleteByEndpoint(endpointId)
+                    app.storageBindings.endpointDao.deleteByEndpointId(endpointId)
+                    app.endpointClientRegistry.remove(endpointId)
                 }
                 SubmitResult.Success
             }
         }
     }
 
-    // --- Server removal ---
+    // --- Endpoint removal ---
 
-    suspend fun removeServer(sourceId: String, app: OpenTuneApplication) =
+    suspend fun removeEndpoint(endpointId: String, app: OpenTuneApplication) =
         withContext(Dispatchers.IO) {
-            app.storageBindings.mediaStateStore.deleteBySource(sourceId)
-            app.storageBindings.serverDao.deleteBySourceId(sourceId)
-            app.instanceRegistry.remove(sourceId)
+            app.storageBindings.entryStateStore.deleteByEndpoint(endpointId)
+            app.storageBindings.endpointDao.deleteByEndpointId(endpointId)
+            app.endpointClientRegistry.remove(endpointId)
         }
 }

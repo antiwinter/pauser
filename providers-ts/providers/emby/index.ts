@@ -1,7 +1,7 @@
 /**
  * index.ts — Rollup IIFE entry point for the Emby provider.
  *
- * One engine = one server instance. Module-level `state` holds the single
+ * One engine = one endpoint client. Module-level `state` holds the single
  * configured instance; no instanceId map needed.
  */
 import { getFieldsSpec, validateFields, makeInstanceState } from './provider.js';
@@ -10,7 +10,7 @@ import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.
 import type { EmbyHooksState } from './hooks.js';
 import type { EmbyInstanceState } from './instance.js';
 import type {
-  ServerFieldSpec,
+  ProviderFieldSpec,
   ValidationResult,
   EntryList,
   EntryInfo,
@@ -27,7 +27,7 @@ let state: EmbyInstanceState | null = null;
 
   providesArt: true,
 
-  async getFieldsSpec(): Promise<ServerFieldSpec[]> {
+  async getFieldsSpec(): Promise<ProviderFieldSpec[]> {
     return getFieldsSpec();
   },
 

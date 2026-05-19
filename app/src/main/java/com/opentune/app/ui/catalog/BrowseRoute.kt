@@ -17,7 +17,7 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.provider.EntryType
 import com.opentune.provider.EntryInfo
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,7 +28,7 @@ private const val LOG_TAG = "OpenTuneBrowseRoute"
 sealed interface BrowseState {
     data object Loading : BrowseState
     data class Error(val message: String) : BrowseState
-    data class Ready(val instance: OpenTuneProviderInstance) : BrowseState
+    data class Ready(val instance: EndpointClient) : BrowseState
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -37,7 +37,7 @@ fun BrowseRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
     protocol: String,
-    sourceId: String,
+    endpointId: String,
     locationEncoded: String,
 ) {
     val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
@@ -47,13 +47,13 @@ fun BrowseRoute(
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    LaunchedEffect(app, protocol, sourceId) {
+    LaunchedEffect(app, protocol, endpointId) {
         state = BrowseState.Loading
         items.clear()
-        val instance = app.instanceRegistry.getOrCreate(sourceId)
+        val instance = app.endpointClientRegistry.getOrCreate(endpointId)
         state = if (instance == null) {
-            Log.e(LOG_TAG, "No instance for sourceId=$sourceId")
-            BrowseState.Error("Server not found")
+            Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
+            BrowseState.Error("Endpoint not found")
         } else {
             BrowseState.Ready(instance)
         }
@@ -65,19 +65,19 @@ fun BrowseRoute(
         is BrowseState.Loading -> Text("Loading…")
         is BrowseState.Error -> Text("Error: ${s.message}")
         is BrowseState.Ready -> BrowseScreen(
-            logTag = "OT_Browse_$sourceId",
+            logTag = "OT_Browse_$endpointId",
             items = items,
             loadPage = { startIndex, limit ->
                 withContext(Dispatchers.IO) {
                     s.instance.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
                 }.let { result ->
-                    result.copy(items = ArtUrlInjector.apply(result.items, app, protocol, sourceId))
+                    result.copy(items = ArtUrlInjector.apply(result.items, app, protocol, endpointId))
                 }
             },
             subtitle = locationDecoded,
             titleLang = titleLang,
             onBack = { nav.popBackStack() },
-            onSearch = { nav.navigate(Routes.search(protocol, sourceId, locationDecoded)) },
+            onSearch = { nav.navigate(Routes.search(protocol, endpointId, locationDecoded)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onOpenBrowseLocation = { folderId ->
                 scope.launch {
@@ -87,18 +87,18 @@ fun BrowseRoute(
                         }
                         val firstItem = page.items.firstOrNull()
                         if (page.totalCount == 1 && firstItem?.type == EntryType.Playable) {
-                            nav.navigate(Routes.detail(protocol, sourceId, firstItem.id))
+                            nav.navigate(Routes.detail(protocol, endpointId, firstItem.id))
                         } else {
-                            nav.navigate(Routes.browse(protocol, sourceId, folderId))
+                            nav.navigate(Routes.browse(protocol, endpointId, folderId))
                         }
                     } catch (e: Exception) {
                         Log.e(LOG_TAG, "auto-nav check failed for $folderId", e)
-                        nav.navigate(Routes.browse(protocol, sourceId, folderId))
+                        nav.navigate(Routes.browse(protocol, endpointId, folderId))
                     }
                 }
             },
-            onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
-            onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, sourceId, raw)) },
+            onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, endpointId, raw)) },
+            onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
         )
     }
 }

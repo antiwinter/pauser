@@ -46,12 +46,12 @@ declare global {
 
 // ── Provider contracts ────────────────────────────────────────────────────────
 
-export type ServerFieldKind = 'text' | 'singleLine' | 'password';
+export type ProviderFieldKind = 'text' | 'singleLine' | 'password';
 
-export interface ServerFieldSpec {
+export interface ProviderFieldSpec {
   id: string;
   labelKey: string;
-  kind: ServerFieldKind;
+  kind: ProviderFieldKind;
   required?: boolean;
   sensitive?: boolean;
   order?: number;
@@ -156,7 +156,7 @@ export interface PlatformCapabilities {
 /** Exposed on globalThis.opentuneProvider by providers/emby/index.ts */
 export interface OpenTuneProviderBridge {
   providesArt: boolean;
-  getFieldsSpec(): Promise<ServerFieldSpec[]>;
+  getFieldsSpec(): Promise<ProviderFieldSpec[]>;
   validateFields(args: { values: Record<string, string> }): Promise<ValidationResult>;
 
   init(args: {

@@ -1,7 +1,8 @@
 # TODOs
+- [ ] Storage naming unification
 - [x] Fix: smb gen cover
 - [x] check if same local cache used for smb subtitles as thumb
-- [ ] align server/source/provider terminology
+- [x] align server/source/provider terminology
 - [x] fix audio in background
 - [x] folder, single media folder, series
 - [x] eliminate instance concept, rename provider methods
@@ -16,6 +17,9 @@
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 
+## Browser
+- [ ] filter
+- [ ] detail screen entering rules
 
 ## js providers
 - [x] remove sidecar meta

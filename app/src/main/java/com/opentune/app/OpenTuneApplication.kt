@@ -8,16 +8,16 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
 import com.opentune.app.providers.OpenTuneProviderRegistry
-import com.opentune.app.providers.ProviderInstanceRegistry
+import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
-import com.opentune.storage.ServerEntity
+import com.opentune.storage.EndpointEntity
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlatformInfoHolder
 import com.opentune.provider.StreamRegistrarHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
-import com.opentune.storage.RoomMediaStateStore
+import com.opentune.storage.EntryStateStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,7 +38,7 @@ class OpenTuneApplication : Application() {
     lateinit var providerRegistry: OpenTuneProviderRegistry
         private set
 
-    lateinit var instanceRegistry: ProviderInstanceRegistry
+    lateinit var endpointClientRegistry: EndpointClientRegistry
         private set
 
     lateinit var openTuneServer: OpenTuneServer
@@ -54,15 +54,15 @@ class OpenTuneApplication : Application() {
             name = getDatabasePath("opentune.db").absolutePath,
         ).fallbackToDestructiveMigration(dropAllTables = true).build()
         storageBindings = OpenTuneStorageBindings(
-            serverDao = database.serverDao(),
-            mediaStateStore = RoomMediaStateStore(database),
+            endpointDao = database.endpointDao(),
+            entryStateStore = EntryStateStore(database),
             appConfigStore = DataStoreAppConfigStore(applicationContext),
         )
         val platformInfo = AndroidPlatformInfo(this)
         PlatformInfoHolder.set(platformInfo)
         providerRegistry = OpenTuneProviderRegistry()
-        instanceRegistry = ProviderInstanceRegistry(
-            serverDao = storageBindings.serverDao,
+        endpointClientRegistry = EndpointClientRegistry(
+            endpointDao = storageBindings.endpointDao,
             providerRegistry = providerRegistry,
         )
         openTuneServer = OpenTuneServer(
@@ -70,10 +70,10 @@ class OpenTuneApplication : Application() {
                 override fun getProviders() = providerRegistry.providersFlow.value
                 override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
                 override fun platformCapabilities() = providerRegistry.platformCapabilities
-                override suspend fun getInstance(sourceId: String) = instanceRegistry.getOrCreate(sourceId)
-                override suspend fun createAndRegister(sourceId: String, entity: ServerEntity) = instanceRegistry.createAndRegister(sourceId, entity)
-                override val serverDao get() = storageBindings.serverDao
-                override val mediaStateStore get() = storageBindings.mediaStateStore
+                override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
+                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerClient(endpointId, entity)
+                override val endpointDao get() = storageBindings.endpointDao
+                override val entryStateStore get() = storageBindings.entryStateStore
                 override val appConfigStore get() = storageBindings.appConfigStore
             },
         )

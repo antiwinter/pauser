@@ -8,7 +8,7 @@ import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackMimeTypes
 import com.opentune.provider.PlaybackSpec
@@ -28,7 +28,7 @@ class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
     private val deviceProfile: DeviceProfile,
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
-) : OpenTuneProviderInstance {
+) : EndpointClient {
 
     private fun repo(): EmbyRepository = EmbyRepository(
         baseUrl = fields.baseUrl,

@@ -5,10 +5,10 @@
 import { EmbyApi } from './api.js';
 import { normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { ServerFieldSpec, ValidationResult, PlatformCapabilities } from '../../utils/types.js';
+import type { ProviderFieldSpec, ValidationResult, PlatformCapabilities } from '../../utils/types.js';
 import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
 
-export function getFieldsSpec(): ServerFieldSpec[] {
+export function getFieldsSpec(): ProviderFieldSpec[] {
   return [
     { id: 'base_url',  labelKey: 'emby.field.base_url',  kind: 'singleLine', required: true,  order: 0 },
     { id: 'username',  labelKey: 'emby.field.username',  kind: 'singleLine', required: true,  order: 1 },

@@ -10,7 +10,7 @@ import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.ProviderStream
 import com.opentune.provider.StreamRegistrarHolder
@@ -23,7 +23,7 @@ private const val SMB_LOG = "OpenTunePlayer"
 
 class SmbProviderInstance(
     private val fields: SmbServerFieldsJson,
-) : OpenTuneProviderInstance {
+) : EndpointClient {
 
     private fun credentials() = SmbCredentials(
         host = fields.host,

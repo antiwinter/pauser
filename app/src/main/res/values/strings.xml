@@ -11,11 +11,11 @@
     <string name="fld_share_name">Share name</string>
     <string name="fld_domain_optional">Domain (optional)</string>
 
-    <string name="server_add_title">Add source</string>
-    <string name="server_add_hint_autosave">Fields are saved automatically if you leave before finishing.</string>
-    <string name="server_add_primary">Save and connect</string>
-    <string name="server_edit_title">Edit source</string>
-    <string name="server_edit_primary">Save changes</string>
+    <string name="endpoint_add_title">Add source</string>
+    <string name="endpoint_add_hint_autosave">Fields are saved automatically if you leave before finishing.</string>
+    <string name="endpoint_add_primary">Save and connect</string>
+    <string name="endpoint_edit_title">Edit source</string>
+    <string name="endpoint_edit_primary">Save changes</string>
     <string name="action_cancel">Cancel</string>
     <string name="home_title">OpenTune</string>
     <string name="home_section_http_sources">Library servers (Menu on the remote to edit)</string>

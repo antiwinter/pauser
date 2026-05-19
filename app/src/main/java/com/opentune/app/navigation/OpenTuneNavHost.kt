@@ -17,8 +17,8 @@ import com.opentune.app.ui.catalog.ImageViewerRoute
 import com.opentune.app.ui.catalog.PlayerRoute
 import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.catalog.SettingsScreen
-import com.opentune.app.ui.config.ServerAddRoute
-import com.opentune.app.ui.config.ServerEditRoute
+import com.opentune.app.ui.config.EndpointAddRoute
+import com.opentune.app.ui.config.EndpointEditRoute
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
@@ -30,34 +30,34 @@ object Routes {
     /** [URLEncoder.encode] with Charset is API 33+; use charset name for older Android TV devices. */
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
-    const val BROWSE = "browse/{provider}/{sourceId}/{location}"
-    const val DETAIL = "detail/{provider}/{sourceId}/{itemRef}"
-    const val PLAYER = "player/{provider}/{sourceId}/{itemRef}/{startMs}"
-    const val SEARCH = "search/{provider}/{sourceId}/{scopeLocation}"
+    const val BROWSE = "browse/{provider}/{endpointId}/{location}"
+    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}"
+    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}"
+    const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_ADD = "provider_add/{protocol}"
-    const val PROVIDER_EDIT = "provider_edit/{protocol}/{sourceId}"
+    const val PROVIDER_EDIT = "provider_edit/{protocol}/{endpointId}"
     const val SETTINGS = "settings"
-    const val IMAGE_VIEWER = "image_viewer/{provider}/{sourceId}/{itemRef}"
+    const val IMAGE_VIEWER = "image_viewer/{provider}/{endpointId}/{itemRef}"
 
     fun providerAdd(protocol: String) = "provider_add/$protocol"
 
-    fun providerEdit(protocol: String, sourceId: String) =
-        "provider_edit/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}"
+    fun providerEdit(protocol: String, endpointId: String) =
+        "provider_edit/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}"
 
-    fun browse(protocol: String, sourceId: String, locationRaw: String) =
-        "browse/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
+    fun browse(protocol: String, endpointId: String, locationRaw: String) =
+        "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
 
-    fun detail(protocol: String, sourceId: String, itemRefRaw: String) =
-        "detail/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun detail(protocol: String, endpointId: String, itemRefRaw: String) =
+        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 
-    fun player(protocol: String, sourceId: String, itemRefRaw: String, startMs: Long) =
-        "player/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
+    fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long) =
+        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
 
-    fun search(protocol: String, sourceId: String, scopeLocationRaw: String) =
-        "search/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+    fun search(protocol: String, endpointId: String, scopeLocationRaw: String) =
+        "search/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
 
-    fun imageViewer(protocol: String, sourceId: String, itemRefRaw: String) =
-        "image_viewer/$protocol/${URLEncoder.encode(sourceId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun imageViewer(protocol: String, endpointId: String, itemRefRaw: String) =
+        "image_viewer/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
 }
 
 @Composable
@@ -71,10 +71,10 @@ fun OpenTuneNavHost() {
                 NavCommand.Home -> nav.navigate(Routes.HOME) {
                     popUpTo(Routes.HOME) { inclusive = true }
                 }
-                is NavCommand.Browse -> nav.navigate(Routes.browse(cmd.provider, cmd.sourceId, cmd.location ?: ""))
-                is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.sourceId, cmd.itemRef))
-                is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.sourceId, cmd.itemRef, cmd.startMs))
-                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.sourceId, cmd.itemRef))
+                is NavCommand.Browse -> nav.navigate(Routes.browse(cmd.provider, cmd.endpointId, cmd.location ?: ""))
+                is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.endpointId, cmd.itemRef))
+                is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, cmd.startMs))
+                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))
             }
         }
     }
@@ -94,7 +94,7 @@ fun OpenTuneNavHost() {
             listOf(navArgument("protocol") { type = NavType.StringType }),
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
-            ServerAddRoute(
+            EndpointAddRoute(
                 protocol = protocol,
                 onDone = { nav.popBackStack() },
             )
@@ -103,14 +103,14 @@ fun OpenTuneNavHost() {
             Routes.PROVIDER_EDIT,
             listOf(
                 navArgument("protocol") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
             ),
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
-            val sourceId = it.arguments!!.getString("sourceId")!!
-            ServerEditRoute(
+            val endpointId = it.arguments!!.getString("endpointId")!!
+            EndpointEditRoute(
                 protocol = protocol,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 onDone = { nav.popBackStack() },
             )
         }
@@ -118,18 +118,18 @@ fun OpenTuneNavHost() {
             Routes.BROWSE,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
                 navArgument("location") { type = NavType.StringType },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
-            val sourceId = it.arguments!!.getString("sourceId")!!
+            val endpointId = it.arguments!!.getString("endpointId")!!
             val location = it.arguments!!.getString("location")!!
             BrowseRoute(
                 nav = nav,
                 app = app,
                 protocol = protocol,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 locationEncoded = location,
             )
         }
@@ -137,18 +137,18 @@ fun OpenTuneNavHost() {
             Routes.DETAIL,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
-            val sourceId = it.arguments!!.getString("sourceId")!!
+            val endpointId = it.arguments!!.getString("endpointId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             DetailRoute(
                 nav = nav,
                 app = app,
                 protocol = protocol,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 itemRefEncoded = itemRef,
             )
         }
@@ -156,18 +156,18 @@ fun OpenTuneNavHost() {
             Routes.SEARCH,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
                 navArgument("scopeLocation") { type = NavType.StringType },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
-            val sourceId = it.arguments!!.getString("sourceId")!!
+            val endpointId = it.arguments!!.getString("endpointId")!!
             val scope = it.arguments!!.getString("scopeLocation")!!
             SearchRoute(
                 nav = nav,
                 app = app,
                 protocol = protocol,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 scopeLocationEncoded = scope,
             )
         }
@@ -175,20 +175,20 @@ fun OpenTuneNavHost() {
             Routes.PLAYER,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
                 navArgument("startMs") { type = NavType.LongType },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
-            val sourceId = it.arguments!!.getString("sourceId")!!
+            val endpointId = it.arguments!!.getString("endpointId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             val startMs = it.arguments!!.getLong("startMs")
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
             PlayerRoute(
                 app = app,
                 protocol = protocol,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 itemRefDecoded = itemRefDecoded,
                 startMs = startMs,
                 onExit = { nav.popBackStack() },
@@ -204,16 +204,16 @@ fun OpenTuneNavHost() {
             Routes.IMAGE_VIEWER,
             listOf(
                 navArgument("provider") { type = NavType.StringType },
-                navArgument("sourceId") { type = NavType.StringType },
+                navArgument("endpointId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
             ),
         ) {
-            val sourceId = it.arguments!!.getString("sourceId")!!
+            val endpointId = it.arguments!!.getString("endpointId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
             ImageViewerRoute(
                 app = app,
-                sourceId = sourceId,
+                endpointId = endpointId,
                 itemRefDecoded = itemRefDecoded,
                 onExit = { nav.popBackStack() },
             )

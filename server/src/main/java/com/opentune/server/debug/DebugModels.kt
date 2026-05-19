@@ -1,6 +1,6 @@
 package com.opentune.server.debug
 
-import com.opentune.storage.MediaStateSnapshot
+import com.opentune.storage.EntryStateEntity
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -21,7 +21,7 @@ data class FieldDto(
 
 @Serializable
 data class ServerDto(
-    val sourceId: String,
+    val endpointId: String,
     val protocol: String,
     val displayName: String,
 )
@@ -34,7 +34,7 @@ data class AddServerRequest(
 
 @Serializable
 data class AddServerResponse(
-    val sourceId: String? = null,
+    val endpointId: String? = null,
     val displayName: String? = null,
     val error: String? = null,
 )
@@ -66,7 +66,7 @@ data class PlaybackSpecDto(
 data class NavigateRequest(
     val route: String,
     val provider: String? = null,
-    val sourceId: String? = null,
+    val endpointId: String? = null,
     val itemRef: String? = null,
     val startMs: Long = 0,
 )
@@ -78,9 +78,9 @@ data class OkResponse(val ok: Boolean = true)
 data class ErrorResponse(val error: String)
 
 @Serializable
-data class MediaStateDto(
+data class EntryStateDto(
     val protocol: String,
-    val sourceId: String,
+    val endpointId: String,
     val itemId: String,
     val positionMs: Long,
     val playbackSpeed: Float,
@@ -91,10 +91,10 @@ data class MediaStateDto(
     val isFavorite: Boolean,
 )
 
-fun MediaStateSnapshot.toDto(): MediaStateDto =
-    MediaStateDto(
+fun EntryStateEntity.toDto(): EntryStateDto =
+    EntryStateDto(
         protocol = protocol,
-        sourceId = sourceId,
+        endpointId = endpointId,
         itemId = itemId,
         positionMs = positionMs,
         playbackSpeed = playbackSpeed,
@@ -114,7 +114,7 @@ data class SubtitlePrefsDto(
 @Serializable
 data class SetTrackRequest(
     val protocol: String,
-    val sourceId: String,
+    val endpointId: String,
     val itemId: String,
     val trackId: String?,
 )

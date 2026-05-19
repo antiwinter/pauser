@@ -11,8 +11,8 @@ import com.opentune.player.ui.pad.PadPlayer
 import com.opentune.player.ui.tv.TvPlayer
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
-import com.opentune.storage.MediaStateKey
-import com.opentune.storage.UserMediaStateStore
+import com.opentune.storage.EntryStateKey
+import com.opentune.storage.EntryStateStore
 
 /**
  * Platform selector. Reads [UiModeManager] once and routes to [TvPlayer] or [PadPlayer].
@@ -24,8 +24,8 @@ import com.opentune.storage.UserMediaStateStore
 fun OpenTunePlayer(
     spec: PlaybackSpec,
     startMs: Long = 0L,
-    mediaStateStore: UserMediaStateStore,
-    mediaStateKey: MediaStateKey,
+    entryStateStore: EntryStateStore,
+    entryStateKey: EntryStateKey,
     onExit: () -> Unit,
     initialSubtitleTrackId: String? = null,
     initialAudioTrackId: String? = null,
@@ -43,8 +43,8 @@ fun OpenTunePlayer(
         TvPlayer(
             spec = spec,
             startMs = startMs,
-            mediaStateStore = mediaStateStore,
-            mediaStateKey = mediaStateKey,
+            entryStateStore = entryStateStore,
+            entryStateKey = entryStateKey,
             onExit = onExit,
             initialSubtitleTrackId = initialSubtitleTrackId,
             initialAudioTrackId = initialAudioTrackId,
@@ -56,8 +56,8 @@ fun OpenTunePlayer(
         PadPlayer(
             spec = spec,
             startMs = startMs,
-            mediaStateStore = mediaStateStore,
-            mediaStateKey = mediaStateKey,
+            entryStateStore = entryStateStore,
+            entryStateKey = entryStateKey,
             onExit = onExit,
             initialSubtitleTrackId = initialSubtitleTrackId,
             initialAudioTrackId = initialAudioTrackId,

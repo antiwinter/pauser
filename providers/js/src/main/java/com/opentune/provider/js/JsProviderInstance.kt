@@ -7,7 +7,7 @@ import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
 import com.opentune.provider.OpenTunePlaybackHooks
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.StreamInfo
@@ -36,7 +36,7 @@ class JsProviderInstance(
     private val hostApis: HostApis,
     private val values: Map<String, String>,
     private val capabilities: PlatformCapabilities,
-) : OpenTuneProviderInstance {
+) : EndpointClient {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
@@ -76,7 +76,7 @@ class JsProviderInstance(
         }
     }
 
-    // ── OpenTuneProviderInstance ───────────────────────────────────────────
+    // ── EndpointClient ───────────────────────────────────────────
 
     override suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList {
         ensureReady()

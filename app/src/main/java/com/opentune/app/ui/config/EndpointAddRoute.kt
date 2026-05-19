@@ -33,8 +33,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.provider.ServerFieldKind
+import com.opentune.app.providers.EndpointConfigRepository
+import com.opentune.provider.ProviderFieldKind
 import com.opentune.app.providers.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -43,11 +43,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val LOG_TAG = "OpenTuneServerAdd"
+private const val LOG_TAG = "OpenTuneEndpointAdd"
 
 @OptIn(ExperimentalTvMaterial3Api::class, FlowPreview::class)
 @Composable
-fun ServerAddRoute(
+fun EndpointAddRoute(
     protocol: String,
     onDone: () -> Unit,
 ) {
@@ -63,7 +63,7 @@ fun ServerAddRoute(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(protocol) {
-        val initial = ServerConfigRepository.loadAddDraft(protocol, app)
+        val initial = EndpointConfigRepository.loadAddDraft(protocol, app)
         values = fields.associate { it.id to (initial[it.id] ?: "") }
     }
 
@@ -73,7 +73,7 @@ fun ServerAddRoute(
             .debounce(600)
             .collect { v ->
                 withContext(Dispatchers.IO) {
-                    ServerConfigRepository.saveAddDraft(protocol, app, v)
+                    EndpointConfigRepository.saveAddDraft(protocol, app, v)
                 }
             }
     }
@@ -92,8 +92,8 @@ fun ServerAddRoute(
                 .verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.server_add_title))
-            Text(stringResource(R.string.server_add_hint_autosave))
+            Text(stringResource(R.string.endpoint_add_title))
+            Text(stringResource(R.string.endpoint_add_hint_autosave))
             fields.forEach { spec ->
                 val v = values[spec.id] ?: ""
                 OutlinedTextField(
@@ -104,8 +104,8 @@ fun ServerAddRoute(
                         val ph = providerFieldPlaceholder(spec.placeholderKey)
                         if (ph != null) ({ Text(ph) }) else null
                     },
-                    singleLine = spec.kind != ServerFieldKind.Text,
-                    visualTransformation = if (spec.kind == ServerFieldKind.Password) {
+                    singleLine = spec.kind != ProviderFieldKind.Text,
+                    visualTransformation = if (spec.kind == ProviderFieldKind.Password) {
                         PasswordVisualTransformation()
                     } else {
                         VisualTransformation.None
@@ -122,12 +122,12 @@ fun ServerAddRoute(
                     isLoading = true
                     try {
                         val result = withContext(Dispatchers.IO) {
-                            ServerConfigRepository.submitAdd(protocol, values, app)
+                            EndpointConfigRepository.submitAdd(protocol, values, app)
                         }
                         when (result) {
                             is SubmitResult.Success -> {
                                 withContext(Dispatchers.IO) {
-                                    ServerConfigRepository.clearAddDraft(protocol, app)
+                                    EndpointConfigRepository.clearAddDraft(protocol, app)
                                 }
                                 onDone()
                             }
@@ -150,7 +150,7 @@ fun ServerAddRoute(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 }
-                Text(stringResource(R.string.server_add_primary))
+                Text(stringResource(R.string.endpoint_add_primary))
             }
         }
         error?.let {

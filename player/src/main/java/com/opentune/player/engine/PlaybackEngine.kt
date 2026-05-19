@@ -32,9 +32,8 @@ import com.opentune.player.controller.resolveSubtitlePreference
 import com.opentune.player.controller.subtitleMimeType
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
-import com.opentune.storage.MediaStateKey
-import com.opentune.storage.UserMediaStateStore
-import com.opentune.storage.upsertPosition
+import com.opentune.storage.EntryStateKey
+import com.opentune.storage.EntryStateStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -55,7 +54,7 @@ private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
 // ---------------------------------------------------------------------------
 
 internal data class PlayerStores(
-    val mediaStateStore: UserMediaStateStore,
+    val entryStateStore: EntryStateStore,
     val appConfigStore: AppConfigStore?,
 )
 
@@ -72,8 +71,8 @@ internal class PlaybackEngine(
     val bandwidthMbps: MutableFloatState,
     private val released: AtomicBoolean,
     private val specState: State<PlaybackSpec>,
-    private val mediaStateStore: UserMediaStateStore,
-    private val mediaStateKey: MediaStateKey,
+    private val entryStateStore: EntryStateStore,
+    private val entryStateKey: EntryStateKey,
 ) {
     /** Idempotent — safe to call multiple times (e.g. from BackHandler and onDispose). */
     suspend fun release() {
@@ -82,7 +81,7 @@ internal class PlaybackEngine(
         if (!released.compareAndSet(false, true)) return
         withContext(NonCancellable) {
             val pos = withContext(Dispatchers.Main) { exo.currentPosition }
-            withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(mediaStateKey, pos) }
+            withContext(Dispatchers.IO) { entryStateStore.upsertPosition(entryStateKey, pos) }
             s.hooks.onStop(pos)
             withContext(Dispatchers.Main) { exo.release() }
             s.hooks.onDispose()
@@ -99,8 +98,8 @@ internal class PlaybackEngine(
 internal fun rememberPlaybackEngine(
     spec: PlaybackSpec,
     startMs: Long,
-    mediaStateStore: UserMediaStateStore,
-    mediaStateKey: MediaStateKey,
+    entryStateStore: EntryStateStore,
+    entryStateKey: EntryStateKey,
     appConfigStore: AppConfigStore?,
     initialSubtitleTrackId: String?,
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
@@ -109,7 +108,7 @@ internal fun rememberPlaybackEngine(
 ): PlaybackEngine {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val instanceKey = mediaStateKey
+    val instanceKey = entryStateKey
 
     val specState = rememberUpdatedState(spec)
     val hooksState = rememberUpdatedState(spec.hooks)
@@ -133,7 +132,7 @@ internal fun rememberPlaybackEngine(
     val bandwidthMeter = playerWithMeter.bandwidthMeter
     val released = remember(instanceKey, preBufferMs) { AtomicBoolean(false) }
 
-    val stores = remember { PlayerStores(mediaStateStore, appConfigStore) }
+    val stores = remember { PlayerStores(entryStateStore, appConfigStore) }
     val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
 
@@ -141,7 +140,7 @@ internal fun rememberPlaybackEngine(
         exo = exo,
         spec = spec,
         stores = stores,
-        mediaStateKey = instanceKey,
+        entryStateKey = instanceKey,
         initialTrackId = initialSubtitleTrackId,
         initialOffsetFraction = initialSubtitleOffsetFraction,
         initialSizeScale = initialSubtitleSizeScale,
@@ -149,12 +148,12 @@ internal fun rememberPlaybackEngine(
     val audioCtrl = rememberAudioController(
         exo = exo,
         stores = stores,
-        mediaStateKey = instanceKey,
+        entryStateKey = instanceKey,
     )
     val speedCtrl = rememberSpeedController(
         exo = exo,
         stores = stores,
-        mediaStateKey = instanceKey,
+        entryStateKey = instanceKey,
     )
 
     val engine = remember(instanceKey, preBufferMs) {
@@ -167,8 +166,8 @@ internal fun rememberPlaybackEngine(
             bandwidthMbps = bandwidthMbps,
             released = released,
             specState = specState,
-            mediaStateStore = mediaStateStore,
-            mediaStateKey = instanceKey,
+            entryStateStore = entryStateStore,
+            entryStateKey = instanceKey,
         )
     }
 
@@ -179,7 +178,7 @@ internal fun rememberPlaybackEngine(
         bandwidthMbps.floatValue = -1f
 
         val savedSpeed = withContext(Dispatchers.IO) {
-            mediaStateStore.get(instanceKey.protocol, instanceKey.sourceId, instanceKey.itemRef)
+            entryStateStore.get(instanceKey.protocol, instanceKey.endpointId, instanceKey.itemRef)
                 ?.playbackSpeed ?: 1f
         }.coerceIn(0.25f, 4f)
 
@@ -276,7 +275,7 @@ internal fun rememberPlaybackEngine(
             val isPaused = !exo.playWhenReady
             hooksState.value.onProgressTick(pos, exo.playbackParameters.speed, isPaused)
             if (!isPaused) {
-                withContext(Dispatchers.IO) { mediaStateStore.upsertPosition(instanceKey, pos) }
+                withContext(Dispatchers.IO) { entryStateStore.upsertPosition(instanceKey, pos) }
             }
         }
     }

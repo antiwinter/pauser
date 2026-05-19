@@ -13,7 +13,7 @@ interface StreamRegistrar {
      * (e.g. `http://127.0.0.1:<port>/stream/<token>`).
      * The token stays valid until [revokeToken] is called with the returned URL.
      */
-    fun registerStream(instance: OpenTuneProviderInstance, itemRef: String): String
+    fun registerStream(instance: EndpointClient, itemRef: String): String
 
     /** Revokes the token embedded in [url]. No-op if the token is unknown or already revoked. */
     fun revokeToken(url: String)

@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.MediaStateKey
+import com.opentune.storage.EntryStateKey
 
 internal class InfoOsd(
     private val spec: PlaybackSpec,
@@ -94,7 +94,7 @@ private fun formatDuration(ms: Long?): String {
 
 @Composable
 internal fun rememberInfoOsd(
-    instanceKey: MediaStateKey,
+    instanceKey: EntryStateKey,
     spec: PlaybackSpec,
     videoMime: String?,
     videoDecoderName: String?,

@@ -18,16 +18,16 @@ interface ProviderStream {
 
 
 // --- Field specs (moved from ConfigContracts.kt) ---
-enum class ServerFieldKind {
+enum class ProviderFieldKind {
     Text,
     SingleLineText,
     Password,
 }
 
-data class ServerFieldSpec(
+data class ProviderFieldSpec(
     val id: String,
     val labelKey: String,
-    val kind: ServerFieldKind,
+    val kind: ProviderFieldKind,
     val required: Boolean = true,
     val sensitive: Boolean = false,
     val order: Int = 0,
@@ -39,8 +39,8 @@ data class ServerFieldSpec(
 sealed class ValidationResult {
     /**
      * Provider connected, authenticated, and derived a stable identity.
-     * [fields] is the merged credential map the **app** serializes into [com.opentune.storage.ServerEntity.fieldsJson];
-     * [hash] is used by the app to compute sourceId = "${protocol}_${hash}".
+     * [fields] is the merged credential map the **app** serializes into [com.opentune.storage.EndpointEntity.fieldsJson];
+     * [hash] is used by the app to compute endpointId = "${protocol}_${hash}".
      */
     data class Success(
         val hash: String,
@@ -67,7 +67,7 @@ interface OpenTuneProvider {
     val providesArt: Boolean
 
     /** Single field spec for both add and edit forms. Does not include display_name. */
-    fun getFieldsSpec(): List<ServerFieldSpec>
+    fun getFieldsSpec(): List<ProviderFieldSpec>
 
     /**
      * Connect, authenticate, and verify the supplied credentials.
@@ -77,10 +77,10 @@ interface OpenTuneProvider {
     suspend fun validateFields(values: Map<String, String>): ValidationResult
 
     /**
-     * Construct a live instance from already-validated credentials.
-     * Called without a sourceId; the instance carries no identity state.
+     * Construct a live client from already-validated credentials.
+     * Called without an endpointId; the client carries no identity state.
      */
-    fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance
+    fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient
 }
 
 /**
@@ -92,13 +92,13 @@ interface OpenTuneProviderLoader {
     suspend fun load(register: (OpenTuneProvider) -> Unit)
 }
 
-// --- Provider instance ---
+// --- Endpoint client ---
 
 /**
- * Live protocol handle for a single configured server.
- * No identity fields — the app registry maps sourceId → instance externally.
+ * Live protocol handle for a single configured endpoint.
+ * No identity fields — the app registry maps endpointId → client externally.
  */
-interface OpenTuneProviderInstance {
+interface EndpointClient {
     suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList
     suspend fun search(scopeLocation: String, query: String): List<EntryInfo>
     suspend fun getDetail(itemRef: String): EntryDetail

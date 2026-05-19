@@ -32,9 +32,8 @@ import com.opentune.player.engine.PlayerStores
 import com.opentune.player.engine.toMediaSource
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.SubtitleTrack
-import com.opentune.storage.MediaStateKey
+import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
-import com.opentune.storage.upsertSubtitleTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -109,7 +108,7 @@ internal class SubtitleController(
     private val screenHeightPxState: MutableState<Float>,
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
-    private val mediaStateKey: MediaStateKey,
+    private val entryStateKey: EntryStateKey,
     private val specState: State<PlaybackSpec>,
     private val context: Context,
     private val exo: ExoPlayer,
@@ -169,8 +168,8 @@ internal class SubtitleController(
                     .build()
                 activeTrackIdState.value = null
                 scope.launch(Dispatchers.IO) {
-                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: Off for key=$mediaStateKey")
-                    stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, null)
+                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: Off for key=$entryStateKey")
+                    stores.entryStateStore.upsertSubtitleTrack(entryStateKey, null)
                 }
             },
         )
@@ -209,8 +208,8 @@ internal class SubtitleController(
                                 .build()
                             activeTrackIdState.value = gid
                             scope.launch(Dispatchers.IO) {
-                                Log.d(SUB_LOG_TAG, "SAVE subtitle track: ExoNative gid=$gid for key=$mediaStateKey")
-                                stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, gid)
+                                Log.d(SUB_LOG_TAG, "SAVE subtitle track: ExoNative gid=$gid for key=$entryStateKey")
+                                stores.entryStateStore.upsertSubtitleTrack(entryStateKey, gid)
                             }
                         },
                     )
@@ -237,8 +236,8 @@ internal class SubtitleController(
             exo.trackSelectionParameters = params.build()
             activeTrackIdState.value = track.trackId
             scope.launch(Dispatchers.IO) {
-                Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec embedded trackId=${track.trackId} for key=$mediaStateKey")
-                stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, track.trackId)
+                Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec embedded trackId=${track.trackId} for key=$entryStateKey")
+                stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
             }
         } else {
             // External sidecar: stop the player, re-prepare with a MergingMediaSource, then
@@ -258,8 +257,8 @@ internal class SubtitleController(
                 exo.seekTo(pos)
                 activeTrackIdState.value = track.trackId
                 withContext(Dispatchers.IO) {
-                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$mediaStateKey")
-                    stores.mediaStateStore.upsertSubtitleTrack(mediaStateKey, track.trackId)
+                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$entryStateKey")
+                    stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
                 }
             }
         }
@@ -272,7 +271,7 @@ internal fun rememberSubtitleController(
     exo: ExoPlayer,
     spec: PlaybackSpec,
     stores: PlayerStores,
-    mediaStateKey: MediaStateKey,
+    entryStateKey: EntryStateKey,
     initialTrackId: String?,
     initialOffsetFraction: Float,
     initialSizeScale: Float,
@@ -322,7 +321,7 @@ internal fun rememberSubtitleController(
             screenHeightPxState = screenHeightPxState,
             scope = scope,
             stores = stores,
-            mediaStateKey = mediaStateKey,
+            entryStateKey = entryStateKey,
             specState = specState,
             context = context,
             exo = exo,

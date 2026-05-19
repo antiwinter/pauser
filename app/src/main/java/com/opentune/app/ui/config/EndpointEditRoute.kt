@@ -27,20 +27,20 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.ServerConfigRepository
-import com.opentune.provider.ServerFieldKind
+import com.opentune.app.providers.EndpointConfigRepository
+import com.opentune.provider.ProviderFieldKind
 import com.opentune.app.providers.SubmitResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val LOG_TAG = "OpenTuneServerEdit"
+private const val LOG_TAG = "OpenTuneEndpointEdit"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ServerEditRoute(
+fun EndpointEditRoute(
     protocol: String,
-    sourceId: String,
+    endpointId: String,
     onDone: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
@@ -52,10 +52,10 @@ fun ServerEditRoute(
     var loaded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(protocol, sourceId) {
+    LaunchedEffect(protocol, endpointId) {
         loaded = false
         val initial = withContext(Dispatchers.IO) {
-            ServerConfigRepository.loadEditFields(protocol, app, sourceId)
+            EndpointConfigRepository.loadEditFields(protocol, app, endpointId)
         }
         values = fields.associate { it.id to (initial[it.id] ?: "") }
         loaded = true
@@ -75,7 +75,7 @@ fun ServerEditRoute(
                 .verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.server_edit_title))
+            Text(stringResource(R.string.endpoint_edit_title))
             if (!loaded) {
                 Text("Loading…")
             } else {
@@ -89,8 +89,8 @@ fun ServerEditRoute(
                             val ph = providerFieldPlaceholder(spec.placeholderKey)
                             if (ph != null) ({ Text(ph) }) else null
                         },
-                        singleLine = spec.kind != ServerFieldKind.Text,
-                        visualTransformation = if (spec.kind == ServerFieldKind.Password) {
+                        singleLine = spec.kind != ProviderFieldKind.Text,
+                        visualTransformation = if (spec.kind == ProviderFieldKind.Password) {
                             PasswordVisualTransformation()
                         } else {
                             VisualTransformation.None
@@ -105,7 +105,7 @@ fun ServerEditRoute(
                 scope.launch {
                     error = null
                     val result = withContext(Dispatchers.IO) {
-                        ServerConfigRepository.submitEdit(protocol, sourceId, values, app)
+                        EndpointConfigRepository.submitEdit(protocol, endpointId, values, app)
                     }
                     when (result) {
                         is SubmitResult.Success -> onDone()
@@ -118,7 +118,7 @@ fun ServerEditRoute(
             },
             enabled = loaded && fields.filter { it.required }.all { values[it.id]?.isNotBlank() == true },
         ) {
-            Text(stringResource(R.string.server_edit_primary))
+            Text(stringResource(R.string.endpoint_edit_primary))
         }
         Button(onClick = onDone) { Text(stringResource(R.string.action_cancel)) }
     }

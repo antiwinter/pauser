@@ -17,10 +17,8 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
-import com.opentune.storage.MediaStateKey
+import com.opentune.storage.EntryStateKey
 import com.opentune.storage.TitleLang
-import com.opentune.storage.get
-import com.opentune.storage.upsertFavorite
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,13 +31,13 @@ fun DetailRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
     protocol: String,
-    sourceId: String,
+    endpointId: String,
     itemRefEncoded: String,
 ) {
     val itemRefDecoded = remember(itemRefEncoded) { CatalogNav.decodeSegment(itemRefEncoded) }
     val scope = rememberCoroutineScope()
-    val stateKey = remember(protocol, sourceId, itemRefDecoded) {
-        MediaStateKey(protocol, sourceId, itemRefDecoded)
+    val stateKey = remember(protocol, endpointId, itemRefDecoded) {
+        EntryStateKey(protocol, endpointId, itemRefDecoded)
     }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -57,7 +55,7 @@ fun DetailRoute(
     var totalEpisodes by remember { mutableIntStateOf(0) }
     var episodePage by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(protocol, sourceId, itemRefDecoded) {
+    LaunchedEffect(protocol, endpointId, itemRefDecoded) {
         loading = true
         error = null
         seasons = null
@@ -65,20 +63,20 @@ fun DetailRoute(
         episodes = emptyList()
         episodePage = 0
         try {
-            val inst = app.instanceRegistry.getOrCreate(sourceId)
-                ?: throw IllegalStateException("No provider instance for $sourceId")
-            val mediaState = withContext(Dispatchers.IO) {
-                app.storageBindings.mediaStateStore.get(stateKey)
+            val inst = app.endpointClientRegistry.getOrCreate(endpointId)
+                ?: throw IllegalStateException("No provider instance for $endpointId")
+            val entryState = withContext(Dispatchers.IO) {
+                app.storageBindings.entryStateStore.get(stateKey)
             }
-            isFavorite = mediaState?.isFavorite ?: false
-            resumeMs = mediaState?.positionMs ?: 0L
+            isFavorite = entryState?.isFavorite ?: false
+            resumeMs = entryState?.positionMs ?: 0L
             val d = withContext(Dispatchers.IO) { inst.getDetail(itemRefDecoded) }
             detail = ArtUrlInjector.applyDetail(d, app, protocol)
             if (!d.isMedia) {
                 val result = withContext(Dispatchers.IO) {
                     inst.listEntry(itemRefDecoded, 0, 500)
                 }
-                seasons = ArtUrlInjector.apply(result.items, app, protocol, sourceId)
+                seasons = ArtUrlInjector.apply(result.items, app, protocol, endpointId)
             }
         } catch (e: Exception) {
             Log.e(LOG_TAG, "detail load", e)
@@ -93,11 +91,11 @@ fun DetailRoute(
         val seasonList = seasons ?: return@LaunchedEffect
         val season = seasonList.getOrNull(selectedSeasonIndex) ?: return@LaunchedEffect
         try {
-            val inst = app.instanceRegistry.getOrCreate(sourceId) ?: return@LaunchedEffect
+            val inst = app.endpointClientRegistry.getOrCreate(endpointId) ?: return@LaunchedEffect
             val result = withContext(Dispatchers.IO) {
                 inst.listEntry(season.id, episodePage * 50, 50)
             }
-            episodes = ArtUrlInjector.apply(result.items, app, protocol, sourceId, ArtType.Thumb)
+            episodes = ArtUrlInjector.apply(result.items, app, protocol, endpointId, ArtType.Thumb)
                 .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
             totalEpisodes = result.totalCount
         } catch (e: Exception) {
@@ -120,10 +118,10 @@ fun DetailRoute(
             episodePage = episodePage,
             onBack = { nav.popBackStack() },
             onPlayFromStart = {
-                nav.navigate(Routes.player(protocol, sourceId, itemRefDecoded, 0L))
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, 0L))
             },
             onResume = {
-                nav.navigate(Routes.player(protocol, sourceId, itemRefDecoded, resumeMs))
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, resumeMs))
             },
             onToggleFavorite = {
                 scope.launch {
@@ -131,7 +129,7 @@ fun DetailRoute(
                     isFavorite = newVal
                     try {
                         withContext(Dispatchers.IO) {
-                            app.storageBindings.mediaStateStore.upsertFavorite(stateKey, newVal)
+                            app.storageBindings.entryStateStore.upsertFavorite(stateKey, newVal)
                         }
                     } catch (e: Exception) {
                         Log.e(LOG_TAG, "favorite toggle", e)
@@ -142,7 +140,7 @@ fun DetailRoute(
             onSelectSeason = { index -> selectedSeasonIndex = index; episodePage = 0 },
             onSelectEpisode = { episode ->
                 val startMs = episode.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, sourceId, episode.id, startMs))
+                nav.navigate(Routes.player(protocol, endpointId, episode.id, startMs))
             },
             onSelectPage = { page -> episodePage = page },
         )

@@ -14,7 +14,7 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.provider.EntryInfo
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.storage.TitleLang
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -23,20 +23,20 @@ fun SearchRoute(
     nav: NavHostController,
     app: OpenTuneApplication,
     protocol: String,
-    sourceId: String,
+    endpointId: String,
     scopeLocationEncoded: String,
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
-    var instance by remember { mutableStateOf<OpenTuneProviderInstance?>(null) }
+    var instance by remember { mutableStateOf<EndpointClient?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val results = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    LaunchedEffect(protocol, sourceId) {
+    LaunchedEffect(protocol, endpointId) {
         try {
-            instance = app.instanceRegistry.getOrCreate(sourceId)
-                ?: throw IllegalStateException("No instance for $sourceId")
+            instance = app.endpointClientRegistry.getOrCreate(endpointId)
+                ?: throw IllegalStateException("No instance for $endpointId")
         } catch (e: Exception) {
             error = e.message
         }
@@ -48,16 +48,16 @@ fun SearchRoute(
         else -> {
             val inst = instance!!
             SearchScreen(
-                logTag = "OT_Search_$sourceId",
+                logTag = "OT_Search_$endpointId",
                 results = results,
                 searchFn = { query ->
                     inst.search(scopeDecoded, query)
-                        .let { ArtUrlInjector.apply(it, app, protocol, sourceId) }
+                        .let { ArtUrlInjector.apply(it, app, protocol, endpointId) }
                 },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
-                onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, sourceId, raw)) },
-                onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, sourceId, raw)) },
+                onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, endpointId, raw)) },
+                onOpenDetail = { raw -> nav.navigate(Routes.detail(protocol, endpointId, raw)) },
             )
         }
     }

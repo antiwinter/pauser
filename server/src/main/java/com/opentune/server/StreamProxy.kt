@@ -1,7 +1,7 @@
 package com.opentune.server
 
 import android.util.Log
-import com.opentune.provider.OpenTuneProviderInstance
+import com.opentune.provider.EndpointClient
 import com.opentune.provider.ProviderStream
 import com.opentune.provider.StreamRegistrar
 import io.ktor.http.ContentType
@@ -32,14 +32,14 @@ private const val PUMP_CHUNK_SIZE = 128 * 1024
 class StreamProxy : StreamRegistrar {
 
     private data class TokenEntry(
-        val instance: OpenTuneProviderInstance,
+        val instance: EndpointClient,
         val itemRef: String,
         @Volatile var cachedSize: Long = -1L,
     )
 
     private val registry = ConcurrentHashMap<String, TokenEntry>()
 
-    override fun registerStream(instance: OpenTuneProviderInstance, itemRef: String): String {
+    override fun registerStream(instance: EndpointClient, itemRef: String): String {
         val token = UUID.randomUUID().toString().replace("-", "")
         registry[token] = TokenEntry(instance, itemRef)
         return "http://127.0.0.1:${SERVER_PORT}/stream/$token"

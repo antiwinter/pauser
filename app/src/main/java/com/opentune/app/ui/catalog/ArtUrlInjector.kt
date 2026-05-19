@@ -14,7 +14,7 @@ object ArtUrlInjector {
         items: List<EntryInfo>,
         app: OpenTuneApplication,
         protocol: String,
-        sourceId: String,
+        endpointId: String,
         artType: ArtType = ArtType.Cover,
     ): List<EntryInfo> {
         val providesArt = app.providerRegistry.provider(protocol).providesArt
@@ -25,7 +25,7 @@ object ArtUrlInjector {
         }
         return items.map { item ->
             if (item.cover == null) {
-                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$sourceId/${item.id}")
+                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$endpointId/${item.id}")
             } else item
         }
     }

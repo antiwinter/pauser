@@ -3,9 +3,9 @@ package com.opentune.storage
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "servers")
-data class ServerEntity(
-    @PrimaryKey val sourceId: String,
+@Entity(tableName = "endpoints")
+data class EndpointEntity(
+    @PrimaryKey val endpointId: String,
     val protocol: String,
     val displayName: String,
     val fieldsJson: String,
@@ -15,11 +15,11 @@ data class ServerEntity(
 
 @Entity(
     tableName = "media_state",
-    primaryKeys = ["sourceId", "itemId"],
+    primaryKeys = ["endpointId", "itemId"],
 )
-data class MediaStateEntity(
+data class EntryStateEntity(
     val protocol: String,
-    val sourceId: String,
+    val endpointId: String,
     val itemId: String,
     val positionMs: Long = 0L,
     val playbackSpeed: Float = 1f,

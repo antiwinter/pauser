@@ -15,7 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.MediaStateKey
+import com.opentune.storage.EntryStateKey
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -121,7 +121,7 @@ internal fun PlaybackException.causeChainContains(vararg keywords: String): Bool
 @UnstableApi
 @Composable
 internal fun rememberFallbackCodecSelector(
-    instanceKey: MediaStateKey,
+    instanceKey: EntryStateKey,
     preBufferMs: Int,
 ): RetryableMediaCodecSelector? {
     if (!DECODER_FALLBACK_ENABLED) return null
@@ -141,7 +141,7 @@ internal fun rememberFallbackCodecSelector(
 @Composable
 internal fun FallbackEffect(
     exo: ExoPlayer,
-    instanceKey: MediaStateKey,
+    instanceKey: EntryStateKey,
     selector: RetryableMediaCodecSelector?,
     specState: State<PlaybackSpec>,
     trackInfoState: State<TrackInfo>,

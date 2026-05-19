@@ -16,8 +16,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
 import com.opentune.player.engine.PlayerStores
-import com.opentune.storage.MediaStateKey
-import com.opentune.storage.upsertAudioTrack
+import com.opentune.storage.EntryStateKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,7 +41,7 @@ internal class AudioController(
     private val activeTrackIdState: MutableState<String?>,
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
-    private val mediaStateKey: MediaStateKey,
+    private val entryStateKey: EntryStateKey,
     private val exo: ExoPlayer,
 ) {
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -66,8 +65,8 @@ internal class AudioController(
                     .build()
                 activeTrackIdState.value = null
                 scope.launch(Dispatchers.IO) {
-                    Log.d(AUDIO_LOG_TAG, "SAVE audio track: Auto for key=$mediaStateKey")
-                    stores.mediaStateStore.upsertAudioTrack(mediaStateKey, null)
+                    Log.d(AUDIO_LOG_TAG, "SAVE audio track: Auto for key=$entryStateKey")
+                    stores.entryStateStore.upsertAudioTrack(entryStateKey, null)
                 }
             },
         )
@@ -86,8 +85,8 @@ internal class AudioController(
                         .build()
                     activeTrackIdState.value = gid
                     scope.launch(Dispatchers.IO) {
-                        Log.d(AUDIO_LOG_TAG, "SAVE audio track: gid=$gid for key=$mediaStateKey")
-                        stores.mediaStateStore.upsertAudioTrack(mediaStateKey, gid)
+                        Log.d(AUDIO_LOG_TAG, "SAVE audio track: gid=$gid for key=$entryStateKey")
+                        stores.entryStateStore.upsertAudioTrack(entryStateKey, gid)
                     }
                 },
             )
@@ -102,7 +101,7 @@ internal class AudioController(
 internal fun rememberAudioController(
     exo: ExoPlayer,
     stores: PlayerStores,
-    mediaStateKey: MediaStateKey,
+    entryStateKey: EntryStateKey,
 ): AudioController {
     val scope = rememberCoroutineScope()
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
@@ -125,7 +124,7 @@ internal fun rememberAudioController(
             activeTrackIdState = activeTrackIdState,
             scope = scope,
             stores = stores,
-            mediaStateKey = mediaStateKey,
+            entryStateKey = entryStateKey,
             exo = exo,
         )
     }
