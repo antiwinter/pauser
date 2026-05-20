@@ -5,10 +5,13 @@ import com.opentune.emby.dto.DeviceProfile
 import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
+import com.opentune.provider.EntryTag
 import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
 import com.opentune.provider.SearchQuery
+import com.opentune.provider.SortField
+import com.opentune.provider.SortOrder
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackMimeTypes
@@ -17,6 +20,20 @@ import com.opentune.provider.StreamInfo
 import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun SortField.toEmby(): String = when (this) {
+    SortField.Title -> "SortName"
+    SortField.DatePlayed -> "DatePlayed"
+    SortField.DateAdded -> "DateCreated"
+    SortField.CommunityRating -> "CommunityRating"
+    SortField.Year -> "PremiereDate"
+    SortField.IndexNumber -> "IndexNumber"
+}
+
+private fun SortOrder.toEmby(): String = when (this) {
+    SortOrder.Ascending -> "Ascending"
+    SortOrder.Descending -> "Descending"
+}
 
 private val CONTAINER_TYPES = setOf(
     "BoxSet", "MusicAlbum",
@@ -82,7 +99,13 @@ class EmbyProviderInstance(
         )
     }
 
-    override suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList {
+    override suspend fun listEntry(
+        location: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField?,
+        sortOrder: SortOrder,
+    ): EntryList {
         val r = repo()
         return withContext(Dispatchers.IO) {
             if (location == null) {
@@ -98,6 +121,8 @@ class EmbyProviderInstance(
                     startIndex = startIndex,
                     limit = limit,
                     fields = EmbyFieldSets.BROWSE_FIELDS,
+                    sortBy = sortBy?.toEmby(),
+                    sortOrder = sortOrder.toEmby(),
                 )
                 EntryList(
                     items = result.items.mapNotNull { it.toListItem() },
@@ -135,6 +160,8 @@ class EmbyProviderInstance(
                 genres = query.genres?.joinToString(","),
                 studios = query.studios?.joinToString(","),
                 countries = query.countries?.joinToString(","),
+                sortBy = query.sortBy?.toEmby(),
+                sortOrder = query.sortOrder.toEmby(),
             )
             EntryList(
                 items = result.items.mapNotNull { it.toListItem() },
@@ -282,6 +309,69 @@ class EmbyProviderInstance(
                 hooks = hooks,
                 subtitleTracks = subtitleTracks,
             )
+        }
+    }
+
+    override suspend fun getEntries(itemRefs: List<String>): EntryList {
+        if (itemRefs.isEmpty()) return EntryList(emptyList(), 0)
+        val r = repo()
+        return withContext(Dispatchers.IO) {
+            val result = r.getItems(
+                ids = itemRefs.joinToString(","),
+                fields = EmbyFieldSets.BROWSE_FIELDS,
+            )
+            EntryList(
+                items = result.items.mapNotNull { it.toListItem() },
+                totalCount = result.totalRecordCount,
+            )
+        }
+    }
+
+    override suspend fun getTaggedEntries(
+        tag: EntryTag,
+        scopeLocation: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField?,
+        sortOrder: SortOrder,
+    ): EntryList {
+        val r = repo()
+        return withContext(Dispatchers.IO) {
+            val filters = when (tag) {
+                EntryTag.Recent -> "IsResumable"
+                EntryTag.Favorite -> "IsFavorite"
+                EntryTag.Played -> "IsPlayed"
+                EntryTag.Unplayed -> "IsUnplayed"
+            }
+            val defaultSort = when (tag) {
+                EntryTag.Recent, EntryTag.Played -> SortField.DatePlayed
+                EntryTag.Favorite, EntryTag.Unplayed -> SortField.Title
+            }
+            val result = r.getItems(
+                parentId = scopeLocation,
+                recursive = true,
+                startIndex = startIndex,
+                limit = limit,
+                fields = EmbyFieldSets.BROWSE_FIELDS,
+                filters = filters,
+                sortBy = (sortBy ?: defaultSort).toEmby(),
+                sortOrder = sortOrder.toEmby(),
+            )
+            EntryList(
+                items = result.items.mapNotNull { it.toListItem() },
+                totalCount = result.totalRecordCount,
+            )
+        }
+    }
+
+    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
+        val r = repo()
+        withContext(Dispatchers.IO) {
+            when (tag) {
+                EntryTag.Favorite -> if (value) r.markFavorite(itemRef) else r.unmarkFavorite(itemRef)
+                EntryTag.Played -> if (value) r.markPlayed(itemRef) else r.unmarkPlayed(itemRef)
+                EntryTag.Recent, EntryTag.Unplayed -> Unit
+            }
         }
     }
 }

@@ -24,6 +24,8 @@ class EmbyRepository(
         excludeItemTypes: String? = null,
         recursive: Boolean = false,
         searchTerm: String? = null,
+        sortBy: String? = null,
+        sortOrder: String? = null,
         startIndex: Int? = null,
         limit: Int? = null,
         fields: String? = null,
@@ -31,6 +33,8 @@ class EmbyRepository(
         genres: String? = null,
         studios: String? = null,
         countries: String? = null,
+        filters: String? = null,
+        ids: String? = null,
     ): QueryResultBaseItemDto = api.getItems(
         userId = userId,
         parentId = parentId,
@@ -38,7 +42,8 @@ class EmbyRepository(
         excludeItemTypes = excludeItemTypes,
         recursive = recursive,
         searchTerm = searchTerm,
-        sortBy = "SortName",
+        sortBy = sortBy ?: "SortName",
+        sortOrder = sortOrder,
         startIndex = startIndex,
         limit = limit,
         fields = fields,
@@ -46,7 +51,14 @@ class EmbyRepository(
         genres = genres,
         studios = studios,
         countries = countries,
+        filters = filters,
+        ids = ids,
     )
+
+    suspend fun markFavorite(itemId: String) = api.markFavorite(userId, itemId)
+    suspend fun unmarkFavorite(itemId: String) = api.unmarkFavorite(userId, itemId)
+    suspend fun markPlayed(itemId: String) = api.markPlayed(userId, itemId)
+    suspend fun unmarkPlayed(itemId: String) = api.unmarkPlayed(userId, itemId)
 
     suspend fun getItem(itemId: String, fields: String? = null): BaseItemDto =
         api.getItem(userId, itemId, fields = fields)

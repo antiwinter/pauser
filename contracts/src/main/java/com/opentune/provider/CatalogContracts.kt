@@ -91,6 +91,27 @@ data class SubtitleTrack(
 )
 
 @Serializable
+enum class SortOrder { Ascending, Descending }
+
+@Serializable
+enum class SortField {
+    Title,
+    DatePlayed,
+    DateAdded,
+    CommunityRating,
+    Year,
+    IndexNumber,
+}
+
+@Serializable
+enum class EntryTag {
+    Recent, // readonly
+    Favorite,
+    Played,
+    Unplayed,
+}
+
+@Serializable
 data class SearchQuery(
     val term: String = "",
     val years: List<Int>? = null,
@@ -100,6 +121,8 @@ data class SearchQuery(
     val excludeTypes: Set<EntryType> = emptySet(),
     val startIndex: Int = 0,
     val limit: Int = 100,
+    val sortBy: SortField? = null,
+    val sortOrder: SortOrder = SortOrder.Ascending,
 )
 
 // --- Route tokens ---

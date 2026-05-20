@@ -12,6 +12,7 @@ import com.opentune.emby.dto.QueryResultBaseItemDto
 import com.opentune.emby.dto.SystemInfoDto
 import com.opentune.emby.dto.UserDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -47,6 +48,7 @@ interface EmbyApi {
         @Query("Recursive") recursive: Boolean? = null,
         @Query("SearchTerm") searchTerm: String? = null,
         @Query("SortBy") sortBy: String? = null,
+        @Query("SortOrder") sortOrder: String? = null,
         @Query("StartIndex") startIndex: Int? = null,
         @Query("Limit") limit: Int? = null,
         @Query("Fields") fields: String? = null,
@@ -54,7 +56,33 @@ interface EmbyApi {
         @Query("Genres") genres: String? = null,
         @Query("Studios") studios: String? = null,
         @Query("Countries") countries: String? = null,
+        @Query("Filters") filters: String? = null,
+        @Query("Ids") ids: String? = null,
     ): QueryResultBaseItemDto
+
+    @POST("Users/{userId}/FavoriteItems/{itemId}")
+    suspend fun markFavorite(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+    )
+
+    @DELETE("Users/{userId}/FavoriteItems/{itemId}")
+    suspend fun unmarkFavorite(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+    )
+
+    @POST("Users/{userId}/PlayedItems/{itemId}")
+    suspend fun markPlayed(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+    )
+
+    @DELETE("Users/{userId}/PlayedItems/{itemId}")
+    suspend fun unmarkPlayed(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+    )
 
     @GET("Users/{userId}/Items/{itemId}")
     suspend fun getItem(

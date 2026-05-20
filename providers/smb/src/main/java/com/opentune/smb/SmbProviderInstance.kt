@@ -11,6 +11,8 @@ import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
 import com.opentune.provider.SearchQuery
+import com.opentune.provider.SortField
+import com.opentune.provider.SortOrder
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.ProviderStream
@@ -34,13 +36,23 @@ class SmbProviderInstance(
         domain = fields.domain,
     )
 
-    override suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList {
+    override suspend fun listEntry(
+        location: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField?,
+        sortOrder: SortOrder,
+    ): EntryList {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share
                 val all = share.listDirectory(location ?: "")
-                val slice = all.drop(startIndex).take(limit)
+                val sorted = when (sortBy) {
+                    SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.name }
+                    else -> all.sortedBy { it.name }
+                }.let { if (sortOrder == SortOrder.Descending) it.reversed() else it }
+                val slice = sorted.drop(startIndex).take(limit)
                 EntryList(items = slice.map { mapEntry(it) }, totalCount = all.size)
             } finally {
                 session.close()
@@ -58,8 +70,28 @@ class SmbProviderInstance(
                     .filterByName(query.term)
                     .map { mapEntry(it) }
                     .filter { it.type !in query.excludeTypes }
-                val page = all.drop(query.startIndex).take(query.limit)
+                val sorted = when (query.sortBy) {
+                    SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.title }
+                    else -> all.sortedBy { it.title }
+                }.let { if (query.sortOrder == SortOrder.Descending) it.reversed() else it }
+                val page = sorted.drop(query.startIndex).take(query.limit)
                 EntryList(items = page, totalCount = all.size)
+            } finally {
+                session.close()
+            }
+        }
+    }
+
+    override suspend fun getEntries(itemRefs: List<String>): EntryList {
+        if (itemRefs.isEmpty()) return EntryList(emptyList(), 0)
+        return withContext(Dispatchers.IO) {
+            val session = SmbSession.open(credentials())
+            try {
+                val share = session.share
+                val items = share.listDirectory("")
+                    .filter { it.path in itemRefs }
+                    .map { mapEntry(it) }
+                EntryList(items = items, totalCount = items.size)
             } finally {
                 session.close()
             }

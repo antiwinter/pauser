@@ -3,11 +3,14 @@ package com.opentune.provider.js
 import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
+import com.opentune.provider.EntryTag
 import com.opentune.provider.EntryType
 import com.opentune.provider.EntryUserData
 import com.opentune.provider.ExternalUrl
 import com.opentune.provider.OpenTunePlaybackHooks
 import com.opentune.provider.SearchQuery
+import com.opentune.provider.SortField
+import com.opentune.provider.SortOrder
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackSpec
@@ -79,12 +82,20 @@ class JsProviderInstance(
 
     // ── EndpointClient ───────────────────────────────────────────
 
-    override suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList {
+    override suspend fun listEntry(
+        location: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField?,
+        sortOrder: SortOrder,
+    ): EntryList {
         ensureReady()
         val args = buildJsonObject {
             if (location != null) put("location", location) else put("location", JsonNull)
             put("startIndex", startIndex)
             put("limit", limit)
+            sortBy?.let { put("sortBy", it.name) }
+            put("sortOrder", sortOrder.name)
         }
         val resultJson = engine.callMethod("listEntry", args.toString())
             ?: return EntryList(emptyList(), 0)
@@ -107,6 +118,8 @@ class JsProviderInstance(
             query.studios?.let { put("studios", kotlinx.serialization.json.JsonArray(it.map { s -> JsonPrimitive(s) })) }
             put("startIndex", query.startIndex)
             put("limit", query.limit)
+            query.sortBy?.let { put("sortBy", it.name) }
+            put("sortOrder", query.sortOrder.name)
         }
         val resultJson = engine.callMethod("search", args.toString())
             ?: return EntryList(emptyList(), 0)
@@ -114,6 +127,61 @@ class JsProviderInstance(
             .mapNotNull { parseListItem(it.jsonObject) }
             .filter { it.type !in query.excludeTypes }
         return EntryList(items = all, totalCount = all.size)
+    }
+
+    override suspend fun getEntries(itemRefs: List<String>): EntryList {
+        ensureReady()
+        val args = buildJsonObject {
+            put("itemRefs", kotlinx.serialization.json.JsonArray(itemRefs.map { JsonPrimitive(it) }))
+        }
+        val resultJson = engine.callMethod("getEntries", args.toString())
+            ?: return EntryList(emptyList(), 0)
+        val obj = json.parseToJsonElement(resultJson)
+        return if (obj is kotlinx.serialization.json.JsonObject) {
+            EntryList(
+                items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList(),
+                totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            )
+        } else {
+            val items = obj.jsonArray.mapNotNull { parseListItem(it.jsonObject) }
+            EntryList(items = items, totalCount = items.size)
+        }
+    }
+
+    override suspend fun getTaggedEntries(
+        tag: EntryTag,
+        scopeLocation: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField?,
+        sortOrder: SortOrder,
+    ): EntryList {
+        ensureReady()
+        val args = buildJsonObject {
+            put("tag", tag.name)
+            if (scopeLocation != null) put("scopeLocation", scopeLocation) else put("scopeLocation", JsonNull)
+            put("startIndex", startIndex)
+            put("limit", limit)
+            sortBy?.let { put("sortBy", it.name) }
+            put("sortOrder", sortOrder.name)
+        }
+        val resultJson = engine.callMethod("getTaggedEntries", args.toString())
+            ?: return EntryList(emptyList(), 0)
+        val obj = json.parseToJsonElement(resultJson).jsonObject
+        return EntryList(
+            items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList(),
+            totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+        )
+    }
+
+    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
+        ensureReady()
+        val args = buildJsonObject {
+            put("itemRef", itemRef)
+            put("tag", tag.name)
+            put("value", value)
+        }
+        runCatching { engine.callMethod("tagEntry", args.toString()) }
     }
 
     override suspend fun getDetail(itemRef: String): EntryDetail {

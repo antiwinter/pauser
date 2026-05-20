@@ -99,10 +99,26 @@ interface OpenTuneProviderLoader {
  * No identity fields — the app registry maps endpointId → client externally.
  */
 interface EndpointClient {
-    suspend fun listEntry(location: String?, startIndex: Int, limit: Int): EntryList
+    suspend fun listEntry(
+        location: String?,
+        startIndex: Int,
+        limit: Int,
+        sortBy: SortField? = null,
+        sortOrder: SortOrder = SortOrder.Ascending,
+    ): EntryList
     suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
     suspend fun getDetail(itemRef: String): EntryDetail
     suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
+    suspend fun getEntries(itemRefs: List<String>): EntryList
+    suspend fun getTaggedEntries(
+        tag: EntryTag,
+        scopeLocation: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 20,
+        sortBy: SortField? = null,
+        sortOrder: SortOrder = SortOrder.Descending,
+    ): EntryList = EntryList(emptyList(), 0)
+    suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
 
     /**
      * Opens a random-access [ProviderStream] for [itemRef].
@@ -110,5 +126,4 @@ interface EndpointClient {
      * The caller ([OpenTuneServer]) is responsible for calling [ProviderStream.close].
      */
     suspend fun openStream(itemRef: String): ProviderStream? = null
-
 }
