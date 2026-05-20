@@ -73,6 +73,9 @@ internal class PlaybackEngine(
     private val specState: State<PlaybackSpec>,
     private val entryStateStore: EntryStateStore,
     private val entryStateKey: EntryStateKey,
+    private val seriesStateKey: EntryStateKey?,
+    private val seriesSeasonNumber: Int?,
+    private val seriesEpisodeNumber: Int?,
 ) {
     /** Idempotent — safe to call multiple times (e.g. from BackHandler and onDispose). */
     suspend fun release() {
@@ -81,7 +84,12 @@ internal class PlaybackEngine(
         if (!released.compareAndSet(false, true)) return
         withContext(NonCancellable) {
             val pos = withContext(Dispatchers.Main) { exo.currentPosition }
-            withContext(Dispatchers.IO) { entryStateStore.upsertPosition(entryStateKey, pos) }
+            withContext(Dispatchers.IO) {
+                entryStateStore.upsertPosition(entryStateKey, pos)
+                if (seriesStateKey != null && seriesSeasonNumber != null && seriesEpisodeNumber != null) {
+                    entryStateStore.upsertSeriesProgress(seriesStateKey, seriesSeasonNumber, seriesEpisodeNumber)
+                }
+            }
             s.hooks.onStop(pos)
             withContext(Dispatchers.Main) { exo.release() }
             s.hooks.onDispose()
@@ -100,6 +108,10 @@ internal fun rememberPlaybackEngine(
     startMs: Long,
     entryStateStore: EntryStateStore,
     entryStateKey: EntryStateKey,
+    parentStateKey: EntryStateKey? = null,
+    seriesStateKey: EntryStateKey? = null,
+    seriesSeasonNumber: Int? = null,
+    seriesEpisodeNumber: Int? = null,
     appConfigStore: AppConfigStore?,
     initialSubtitleTrackId: String?,
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
@@ -141,6 +153,8 @@ internal fun rememberPlaybackEngine(
         spec = spec,
         stores = stores,
         entryStateKey = instanceKey,
+        parentStateKey = parentStateKey,
+        seriesStateKey = seriesStateKey,
         initialTrackId = initialSubtitleTrackId,
         initialOffsetFraction = initialSubtitleOffsetFraction,
         initialSizeScale = initialSubtitleSizeScale,
@@ -149,6 +163,8 @@ internal fun rememberPlaybackEngine(
         exo = exo,
         stores = stores,
         entryStateKey = instanceKey,
+        parentStateKey = parentStateKey,
+        seriesStateKey = seriesStateKey,
     )
     val speedCtrl = rememberSpeedController(
         exo = exo,
@@ -168,6 +184,9 @@ internal fun rememberPlaybackEngine(
             specState = specState,
             entryStateStore = entryStateStore,
             entryStateKey = instanceKey,
+            seriesStateKey = seriesStateKey,
+            seriesSeasonNumber = seriesSeasonNumber,
+            seriesEpisodeNumber = seriesEpisodeNumber,
         )
     }
 
@@ -275,7 +294,12 @@ internal fun rememberPlaybackEngine(
             val isPaused = !exo.playWhenReady
             hooksState.value.onProgressTick(pos, exo.playbackParameters.speed, isPaused)
             if (!isPaused) {
-                withContext(Dispatchers.IO) { entryStateStore.upsertPosition(instanceKey, pos) }
+                withContext(Dispatchers.IO) {
+                    entryStateStore.upsertPosition(instanceKey, pos)
+                    if (seriesStateKey != null && seriesSeasonNumber != null && seriesEpisodeNumber != null) {
+                        entryStateStore.upsertSeriesProgress(seriesStateKey, seriesSeasonNumber, seriesEpisodeNumber)
+                    }
+                }
             }
         }
     }

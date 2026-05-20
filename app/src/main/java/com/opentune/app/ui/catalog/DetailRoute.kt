@@ -172,17 +172,17 @@ fun DetailRoute(
             onSelectSeason = { index -> selectedSeasonIndex = index; episodePage = 0 },
             onSelectEpisode = { episode ->
                 val startMs = episode.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, episode.id, startMs))
+                nav.navigate(Routes.player(protocol, endpointId, episode.id, startMs, episode))
             },
             onSelectPage = { page -> episodePage = page },
             onSelectChild = { child ->
                 val startMs = child.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs))
+                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
             },
             onPlaySingleChild = {
                 val child = singleChild ?: return@DetailScreen
                 val startMs = child.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs))
+                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
             },
         )
     }

@@ -42,6 +42,8 @@ internal class AudioController(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
     private val entryStateKey: EntryStateKey,
+    private val parentStateKey: EntryStateKey?,
+    private val seriesStateKey: EntryStateKey?,
     private val exo: ExoPlayer,
 ) {
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -67,6 +69,8 @@ internal class AudioController(
                 scope.launch(Dispatchers.IO) {
                     Log.d(AUDIO_LOG_TAG, "SAVE audio track: Auto for key=$entryStateKey")
                     stores.entryStateStore.upsertAudioTrack(entryStateKey, null)
+                    parentStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, null) }
+                    seriesStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, null) }
                 }
             },
         )
@@ -87,6 +91,8 @@ internal class AudioController(
                     scope.launch(Dispatchers.IO) {
                         Log.d(AUDIO_LOG_TAG, "SAVE audio track: gid=$gid for key=$entryStateKey")
                         stores.entryStateStore.upsertAudioTrack(entryStateKey, gid)
+                        parentStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, gid) }
+                        seriesStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, gid) }
                     }
                 },
             )
@@ -102,6 +108,8 @@ internal fun rememberAudioController(
     exo: ExoPlayer,
     stores: PlayerStores,
     entryStateKey: EntryStateKey,
+    parentStateKey: EntryStateKey? = null,
+    seriesStateKey: EntryStateKey? = null,
 ): AudioController {
     val scope = rememberCoroutineScope()
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
@@ -125,6 +133,8 @@ internal fun rememberAudioController(
             scope = scope,
             stores = stores,
             entryStateKey = entryStateKey,
+            parentStateKey = parentStateKey,
+            seriesStateKey = seriesStateKey,
             exo = exo,
         )
     }

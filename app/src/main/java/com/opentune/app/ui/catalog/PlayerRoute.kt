@@ -17,6 +17,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.player.OpenTunePlayer
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -33,11 +34,19 @@ fun PlayerRoute(
     endpointId: String,
     itemRefDecoded: String,
     startMs: Long,
+    entryInfo: EntryInfo? = null,
     onExit: () -> Unit,
 ) {
     val stateKey = remember(protocol, endpointId, itemRefDecoded) {
         EntryStateKey(protocol, endpointId, itemRefDecoded)
     }
+    val parentKey = remember(protocol, endpointId, entryInfo) {
+        entryInfo?.parentId?.let { EntryStateKey(protocol, endpointId, it) }
+    }
+    val seriesKey = remember(protocol, endpointId, entryInfo) {
+        entryInfo?.seriesId?.let { EntryStateKey(protocol, endpointId, it) }
+    }
+
     var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var initialSubtitleTrackId by remember { mutableStateOf<String?>(null) }
@@ -52,12 +61,19 @@ fun PlayerRoute(
                 val inst = app.endpointClientRegistry.getOrCreate(endpointId)
                     ?: throw IllegalStateException("No provider instance for $endpointId")
                 val resolvedSpec = inst.getPlaybackSpec(itemRefDecoded, startMs)
-                val savedState = app.storageBindings.entryStateStore.get(protocol, endpointId, itemRefDecoded)
+                val store = app.storageBindings.entryStateStore
+                val episodeState = store.get(protocol, endpointId, itemRefDecoded)
+                val parentState = entryInfo?.parentId?.let { store.get(protocol, endpointId, it) }
+                val seriesState = entryInfo?.seriesId?.let { store.get(protocol, endpointId, it) }
                 val subtitlePrefs = app.storageBindings.appConfigStore.loadSubtitlePrefs()
-                initialSubtitleTrackId = savedState?.selectedSubtitleTrackId
-                initialAudioTrackId = savedState?.selectedAudioTrackId
+                initialSubtitleTrackId = episodeState?.selectedSubtitleTrackId
+                    ?: parentState?.selectedSubtitleTrackId
+                    ?: seriesState?.selectedSubtitleTrackId
+                initialAudioTrackId = episodeState?.selectedAudioTrackId
+                    ?: parentState?.selectedAudioTrackId
+                    ?: seriesState?.selectedAudioTrackId
                 initialSubtitlePrefs = subtitlePrefs
-                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${endpointId}/${itemRefDecoded} savedState=$savedState subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId subtitlePrefs=$subtitlePrefs")
+                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${endpointId}/${itemRefDecoded} subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId")
                 spec = resolvedSpec
             }
         } catch (e: Exception) {
@@ -79,6 +95,10 @@ fun PlayerRoute(
                     startMs = startMs,
                     entryStateStore = app.storageBindings.entryStateStore,
                     entryStateKey = stateKey,
+                    parentStateKey = parentKey,
+                    seriesStateKey = seriesKey,
+                    seriesSeasonNumber = entryInfo?.seasonNumber,
+                    seriesEpisodeNumber = entryInfo?.indexNumber,
                     onExit = onExit,
                     initialSubtitleTrackId = initialSubtitleTrackId,
                     initialAudioTrackId = initialAudioTrackId,

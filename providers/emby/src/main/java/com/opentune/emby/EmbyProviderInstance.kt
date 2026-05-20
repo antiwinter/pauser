@@ -96,6 +96,9 @@ class EmbyProviderInstance(
             indexNumber = indexNumber,
             overview = overview,
             childCount = childCount,
+            parentId = seasonId ?: parentBackdropItemId,
+            seriesId = seriesId,
+            seasonNumber = parentIndexNumber,
         )
     }
 

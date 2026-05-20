@@ -35,7 +35,7 @@ object Routes {
     const val HOME = "home"
     const val BROWSE = "browse/{provider}/{endpointId}/{location}"
     const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{infoJson}"
-    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}"
+    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{infoJson}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_ADD = "provider_add/{protocol}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}/{endpointId}"
@@ -58,8 +58,8 @@ object Routes {
     ) =
         "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(infoJson ?: "", UrlCharset)}"
 
-    fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long) =
-        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs"
+    fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long, info: EntryInfo? = null) =
+        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs/${URLEncoder.encode(info?.let { navJson.encodeToString(it) } ?: "", UrlCharset)}"
 
     fun search(protocol: String, endpointId: String, scopeLocationRaw: String) =
         "search/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
@@ -197,19 +197,23 @@ fun OpenTuneNavHost() {
                 navArgument("endpointId") { type = NavType.StringType },
                 navArgument("itemRef") { type = NavType.StringType },
                 navArgument("startMs") { type = NavType.LongType },
+                navArgument("infoJson") { type = NavType.StringType; nullable = true },
             ),
         ) {
             val protocol = it.arguments!!.getString("provider")!!
             val endpointId = it.arguments!!.getString("endpointId")!!
             val itemRef = it.arguments!!.getString("itemRef")!!
             val startMs = it.arguments!!.getLong("startMs")
+            val infoJsonStr = it.arguments!!.getString("infoJson")
             val itemRefDecoded = CatalogNav.decodeSegment(itemRef)
+            val entryInfo = if (!infoJsonStr.isNullOrBlank()) decodeEntryInfo(infoJsonStr) else null
             PlayerRoute(
                 app = app,
                 protocol = protocol,
                 endpointId = endpointId,
                 itemRefDecoded = itemRefDecoded,
                 startMs = startMs,
+                entryInfo = entryInfo,
                 onExit = { nav.popBackStack() },
             )
         }

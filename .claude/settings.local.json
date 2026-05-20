@@ -10,7 +10,13 @@
       "Read(//Users/warits/Library/Android/sdk/platform-tools/**)",
       "Bash(python3 -c ' *)",
       "Bash(*)",
-      "WebFetch(domain:cs.android.com)"
+      "WebFetch(domain:cs.android.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:gitcode.com)",
+      "WebFetch(domain:catvod.github.io)",
+      "WebFetch(domain:linux.do)",
+      "WebFetch(domain:www.cnblogs.com)"
     ]
   }
 }

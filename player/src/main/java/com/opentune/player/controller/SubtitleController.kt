@@ -109,6 +109,8 @@ internal class SubtitleController(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
     private val entryStateKey: EntryStateKey,
+    private val parentStateKey: EntryStateKey?,
+    private val seriesStateKey: EntryStateKey?,
     private val specState: State<PlaybackSpec>,
     private val context: Context,
     private val exo: ExoPlayer,
@@ -170,6 +172,8 @@ internal class SubtitleController(
                 scope.launch(Dispatchers.IO) {
                     Log.d(SUB_LOG_TAG, "SAVE subtitle track: Off for key=$entryStateKey")
                     stores.entryStateStore.upsertSubtitleTrack(entryStateKey, null)
+                    parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, null) }
+                    seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, null) }
                 }
             },
         )
@@ -210,6 +214,8 @@ internal class SubtitleController(
                             scope.launch(Dispatchers.IO) {
                                 Log.d(SUB_LOG_TAG, "SAVE subtitle track: ExoNative gid=$gid for key=$entryStateKey")
                                 stores.entryStateStore.upsertSubtitleTrack(entryStateKey, gid)
+                                parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, gid) }
+                                seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, gid) }
                             }
                         },
                     )
@@ -238,6 +244,8 @@ internal class SubtitleController(
             scope.launch(Dispatchers.IO) {
                 Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec embedded trackId=${track.trackId} for key=$entryStateKey")
                 stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
+                parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
+                seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
             }
         } else {
             // External sidecar: stop the player, re-prepare with a MergingMediaSource, then
@@ -259,6 +267,8 @@ internal class SubtitleController(
                 withContext(Dispatchers.IO) {
                     Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$entryStateKey")
                     stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
+                    parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
+                    seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
                 }
             }
         }
@@ -272,6 +282,8 @@ internal fun rememberSubtitleController(
     spec: PlaybackSpec,
     stores: PlayerStores,
     entryStateKey: EntryStateKey,
+    parentStateKey: EntryStateKey? = null,
+    seriesStateKey: EntryStateKey? = null,
     initialTrackId: String?,
     initialOffsetFraction: Float,
     initialSizeScale: Float,
@@ -322,6 +334,8 @@ internal fun rememberSubtitleController(
             scope = scope,
             stores = stores,
             entryStateKey = entryStateKey,
+            parentStateKey = parentStateKey,
+            seriesStateKey = seriesStateKey,
             specState = specState,
             context = context,
             exo = exo,

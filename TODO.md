@@ -32,7 +32,7 @@
 - [ ] common.js
 
 ## Player
-- [ ] Opt: episode track selection should persist on series
+- [x] Opt: episode track selection should persist on series
 - [x] Fix: subtitle position persistence
 - [ ] Fix: subtitle should align to bottom vertially
 - [ ] Fix: subtitle track/audio track not persistant or not applied on the next run

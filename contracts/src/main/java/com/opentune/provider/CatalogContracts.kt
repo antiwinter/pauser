@@ -38,6 +38,9 @@ data class EntryInfo(
     val indexNumber: Int? = null,
     val overview: String? = null,
     val childCount: Int? = null,
+    val parentId: String? = null,
+    val seriesId: String? = null,
+    val seasonNumber: Int? = null,   // parent season number for Episode items (Emby: ParentIndexNumber)
 )
 
 data class EntryList(
