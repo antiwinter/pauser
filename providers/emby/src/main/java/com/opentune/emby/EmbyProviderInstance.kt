@@ -107,10 +107,10 @@ class EmbyProviderInstance(
         }
     }
 
-    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
+    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
         if (query.term.isEmpty() && query.years == null && query.genres == null &&
             query.countries == null && query.studios == null
-        ) return emptyList()
+        ) return EntryList(emptyList(), 0)
         val r = repo()
         return withContext(Dispatchers.IO) {
             val parentId: String? = scopeLocation.ifEmpty { null }
@@ -128,7 +128,7 @@ class EmbyProviderInstance(
                 excludeItemTypes = excludeEmbyTypes,
                 recursive = true,
                 searchTerm = query.term.ifEmpty { null },
-                startIndex = 0,
+                startIndex = query.startIndex,
                 limit = query.limit,
                 fields = EmbyFieldSets.BROWSE_FIELDS,
                 years = query.years?.joinToString(","),
@@ -136,7 +136,10 @@ class EmbyProviderInstance(
                 studios = query.studios?.joinToString(","),
                 countries = query.countries?.joinToString(","),
             )
-            result.items.mapNotNull { it.toListItem() }
+            EntryList(
+                items = result.items.mapNotNull { it.toListItem() },
+                totalCount = result.totalRecordCount,
+            )
         }
     }
 

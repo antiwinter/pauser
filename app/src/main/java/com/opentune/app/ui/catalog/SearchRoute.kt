@@ -53,7 +53,7 @@ fun SearchRoute(
                 logTag = "OT_Search_$endpointId",
                 results = results,
                 searchFn = { query ->
-                    inst.search(scopeDecoded, SearchQuery(term = query))
+                    inst.search(scopeDecoded, SearchQuery(term = query)).items
                         .let { ArtUrlInjector.apply(it, app, protocol, endpointId) }
                 },
                 titleLang = titleLang,

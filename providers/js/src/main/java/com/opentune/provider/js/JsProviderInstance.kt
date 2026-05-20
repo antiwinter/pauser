@@ -95,7 +95,7 @@ class JsProviderInstance(
         )
     }
 
-    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
+    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
         ensureReady()
         val args = buildJsonObject {
             put("scopeLocation", scopeLocation)
@@ -105,13 +105,15 @@ class JsProviderInstance(
             query.genres?.let { put("genres", kotlinx.serialization.json.JsonArray(it.map { g -> JsonPrimitive(g) })) }
             query.countries?.let { put("countries", kotlinx.serialization.json.JsonArray(it.map { c -> JsonPrimitive(c) })) }
             query.studios?.let { put("studios", kotlinx.serialization.json.JsonArray(it.map { s -> JsonPrimitive(s) })) }
+            put("startIndex", query.startIndex)
             put("limit", query.limit)
         }
         val resultJson = engine.callMethod("search", args.toString())
-            ?: return emptyList()
-        return json.parseToJsonElement(resultJson).jsonArray
+            ?: return EntryList(emptyList(), 0)
+        val all = json.parseToJsonElement(resultJson).jsonArray
             .mapNotNull { parseListItem(it.jsonObject) }
             .filter { it.type !in query.excludeTypes }
+        return EntryList(items = all, totalCount = all.size)
     }
 
     override suspend fun getDetail(itemRef: String): EntryDetail {

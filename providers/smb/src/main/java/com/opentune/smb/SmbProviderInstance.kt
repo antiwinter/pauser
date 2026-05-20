@@ -48,16 +48,18 @@ class SmbProviderInstance(
         }
     }
 
-    override suspend fun search(scopeLocation: String, query: SearchQuery): List<EntryInfo> {
-        if (query.term.isBlank()) return emptyList()
+    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
+        if (query.term.isBlank()) return EntryList(emptyList(), 0)
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share
-                share.listDirectory(scopeLocation)
+                val all = share.listDirectory(scopeLocation)
                     .filterByName(query.term)
                     .map { mapEntry(it) }
                     .filter { it.type !in query.excludeTypes }
+                val page = all.drop(query.startIndex).take(query.limit)
+                EntryList(items = page, totalCount = all.size)
             } finally {
                 session.close()
             }

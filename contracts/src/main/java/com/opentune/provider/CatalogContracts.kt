@@ -98,6 +98,7 @@ data class SearchQuery(
     val countries: List<String>? = null,
     val studios: List<String>? = null,
     val excludeTypes: Set<EntryType> = emptySet(),
+    val startIndex: Int = 0,
     val limit: Int = 100,
 )
 
