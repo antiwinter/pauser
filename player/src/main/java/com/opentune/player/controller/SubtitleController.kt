@@ -82,8 +82,22 @@ internal fun prepareWithSidecar(
         .Builder(subtitleUri)
         .setMimeType(mimeType)
         .build()
-    val httpFactory = DefaultHttpDataSource.Factory()
-        .setDefaultRequestProperties(spec.headers)
+    val specHttpClient = spec.httpClient
+    val httpFactory = if (specHttpClient != null)
+        androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
+            specHttpClient.newBuilder()
+                .apply {
+                    if (spec.headers.isNotEmpty()) addInterceptor { chain ->
+                        val req = chain.request().newBuilder().apply {
+                            spec.headers.forEach { (k, v) -> header(k, v) }
+                        }.build()
+                        chain.proceed(req)
+                    }
+                }
+                .build()
+        )
+    else
+        DefaultHttpDataSource.Factory().setDefaultRequestProperties(spec.headers)
     val subtitleSource = SingleSampleMediaSource
         .Factory(DefaultDataSource.Factory(context, httpFactory))
         .createMediaSource(subtitleConfig, C.TIME_UNSET)

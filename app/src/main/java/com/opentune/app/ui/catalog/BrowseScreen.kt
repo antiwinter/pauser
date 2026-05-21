@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import coil3.ImageLoader
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.EntryList
 import com.opentune.provider.EntryType
@@ -48,6 +49,7 @@ fun BrowseScreen(
     loadPage: suspend (startIndex: Int, limit: Int) -> EntryList,
     subtitle: String,
     titleLang: TitleLang,
+    imageLoader: ImageLoader? = null,
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -149,6 +151,7 @@ fun BrowseScreen(
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
+                    imageLoader = imageLoader,
                     onClick = {
                         when (item.type) {
                             EntryType.Folder,

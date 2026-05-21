@@ -14,7 +14,9 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import coil3.ImageLoader
 import com.opentune.app.OpenTuneApplication
+import com.opentune.app.image.ProxyImageLoader
 import com.opentune.app.navigation.Routes
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.TitleLang
@@ -49,6 +51,7 @@ fun DetailRoute(
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(true) }
+    var imageLoader by remember { mutableStateOf<ImageLoader?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Series/season state
@@ -73,8 +76,10 @@ fun DetailRoute(
         digipakChildren.clear()
         singleChild = null
         try {
-            val inst = app.endpointClientRegistry.getOrCreate(endpointId)
+            val handle = app.endpointClientRegistry.getOrCreate(endpointId)
                 ?: throw IllegalStateException("No provider instance for $endpointId")
+            val inst = handle.client
+            imageLoader = ProxyImageLoader.get(endpointId, handle.httpClient, app)
             val entryState = withContext(Dispatchers.IO) {
                 app.storageBindings.entryStateStore.get(stateKey)
             }
@@ -120,7 +125,7 @@ fun DetailRoute(
         val seasonList = seasons ?: return@LaunchedEffect
         val season = seasonList.getOrNull(selectedSeasonIndex) ?: return@LaunchedEffect
         try {
-            val inst = app.endpointClientRegistry.getOrCreate(endpointId) ?: return@LaunchedEffect
+            val inst = app.endpointClientRegistry.getOrCreate(endpointId)?.client ?: return@LaunchedEffect
             val result = withContext(Dispatchers.IO) {
                 inst.listEntry(season.id, episodePage * 50, 50)
             }

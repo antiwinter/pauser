@@ -48,10 +48,9 @@ class EmbyProviderInstance(
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
 ) : EndpointClient {
 
-    private fun repo(): EmbyRepository = EmbyRepository(
-        baseUrl = fields.baseUrl,
+    private val repo: EmbyRepository = EmbyRepository(
+        api = EmbyClientFactory.create(fields.baseUrl, fields.accessToken),
         userId = fields.userId,
-        accessToken = fields.accessToken,
         deviceProfile = deviceProfile,
     )
 
@@ -109,7 +108,7 @@ class EmbyProviderInstance(
         sortBy: SortField?,
         sortOrder: SortOrder,
     ): EntryList {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             if (location == null) {
                 val views = r.getViews()
@@ -139,7 +138,7 @@ class EmbyProviderInstance(
         if (query.term.isEmpty() && query.years == null && query.genres == null &&
             query.countries == null && query.studios == null
         ) return EntryList(emptyList(), 0)
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val parentId: String? = scopeLocation.ifEmpty { null }
             val excludeEmbyTypes = query.excludeTypes.mapNotNull { type ->
@@ -174,7 +173,7 @@ class EmbyProviderInstance(
     }
 
     override suspend fun getDetail(itemRef: String): EntryDetail {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val item = r.getItem(itemRef, fields = EmbyFieldSets.DETAIL_FIELDS)
             val id = item.id ?: itemRef
@@ -244,7 +243,7 @@ class EmbyProviderInstance(
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         return withContext(Dispatchers.IO) {
-            val r = repo()
+            val r = repo
             val startTicks = if (startMs > 0) startMs * 10_000L else null
             val info = r.getPlaybackInfo(itemRef, startTimeTicks = startTicks)
             val source = info.mediaSources.firstOrNull() ?: error("No media sources")
@@ -317,7 +316,7 @@ class EmbyProviderInstance(
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {
         if (itemRefs.isEmpty()) return EntryList(emptyList(), 0)
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val result = r.getItems(
                 ids = itemRefs.joinToString(","),
@@ -338,7 +337,7 @@ class EmbyProviderInstance(
         sortBy: SortField?,
         sortOrder: SortOrder,
     ): EntryList {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val filters = when (tag) {
                 EntryTag.Recent -> "IsResumable"
@@ -368,7 +367,7 @@ class EmbyProviderInstance(
     }
 
     override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
-        val r = repo()
+        val r = repo
         withContext(Dispatchers.IO) {
             when (tag) {
                 EntryTag.Favorite -> if (value) r.markFavorite(itemRef) else r.unmarkFavorite(itemRef)

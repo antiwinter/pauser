@@ -88,6 +88,7 @@ android {
 dependencies {
     implementation(project(":contracts"))
     implementation(project(":providers:js"))
+    implementation(project(":proxy:http"))
 
     implementation(project(":player"))
     implementation(project(":storage"))
@@ -113,6 +114,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.media3.exoplayer)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.room.runtime)
     implementation(libs.androidx.datastore.preferences)
     implementation(project(":server"))

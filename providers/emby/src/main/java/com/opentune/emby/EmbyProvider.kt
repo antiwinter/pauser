@@ -25,6 +25,7 @@ class EmbyProvider : OpenTuneProvider {
 
     override val protocol: String = "emby-kt"
     override val providesArt: Boolean = true
+    override val supportsProxy: Boolean = true
 
     override fun getFieldsSpec(): List<ProviderFieldSpec> = listOf(
         ProviderFieldSpec(

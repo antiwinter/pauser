@@ -8,7 +8,8 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":contracts"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
-    compileOnly(libs.okhttp)
+    implementation(libs.okhttp)
 }

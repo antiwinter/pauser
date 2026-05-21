@@ -29,6 +29,42 @@ interface EndpointDao {
 }
 
 @Dao
+interface ProxyConfigDao {
+    @Query("SELECT * FROM proxy_configs ORDER BY createdAtEpochMs ASC")
+    fun observeAll(): Flow<List<ProxyConfigEntity>>
+
+    @Query("SELECT * FROM proxy_configs WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): ProxyConfigEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(entity: ProxyConfigEntity)
+
+    @Update
+    suspend fun update(entity: ProxyConfigEntity)
+
+    @Query("DELETE FROM proxy_configs WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface ProxyAssignmentDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: ProxyAssignmentEntity)
+
+    @Query("SELECT * FROM proxy_assignments WHERE endpointId = :endpointId LIMIT 1")
+    suspend fun getByEndpointId(endpointId: String): ProxyAssignmentEntity?
+
+    @Query("SELECT endpointId FROM proxy_assignments WHERE proxyConfigId = :proxyConfigId")
+    suspend fun getEndpointIdsForProxy(proxyConfigId: String): List<String>
+
+    @Query("DELETE FROM proxy_assignments WHERE endpointId = :endpointId")
+    suspend fun deleteByEndpointId(endpointId: String)
+
+    @Query("DELETE FROM proxy_assignments WHERE proxyConfigId = :proxyConfigId")
+    suspend fun deleteByProxyConfigId(proxyConfigId: String)
+}
+
+@Dao
 interface EntryStateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: EntryStateEntity)

@@ -66,6 +66,8 @@ interface OpenTuneProvider {
      */
     val providesArt: Boolean
 
+    val supportsProxy: Boolean get() = false
+
     /** Single field spec for both add and edit forms. Does not include display_name. */
     fun getFieldsSpec(): List<ProviderFieldSpec>
 

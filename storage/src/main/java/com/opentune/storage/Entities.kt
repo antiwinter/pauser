@@ -13,6 +13,22 @@ data class EndpointEntity(
     val updatedAtEpochMs: Long,
 )
 
+@Entity(tableName = "proxy_configs")
+data class ProxyConfigEntity(
+    @PrimaryKey val id: String,
+    val proxyType: String,
+    val displayName: String,
+    val fieldsJson: String,
+    val isEnabled: Boolean = true,
+    val createdAtEpochMs: Long,
+)
+
+@Entity(tableName = "proxy_assignments")
+data class ProxyAssignmentEntity(
+    @PrimaryKey val endpointId: String,
+    val proxyConfigId: String?,
+)
+
 @Entity(
     tableName = "media_state",
     primaryKeys = ["endpointId", "itemId"],

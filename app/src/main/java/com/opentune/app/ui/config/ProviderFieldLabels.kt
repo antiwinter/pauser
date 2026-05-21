@@ -13,6 +13,8 @@ fun providerFieldLabel(labelKey: String): String = when (labelKey) {
     "fld_network_host" -> stringResource(R.string.fld_network_host)
     "fld_share_name" -> stringResource(R.string.fld_share_name)
     "fld_domain_optional" -> stringResource(R.string.fld_domain_optional)
+    "fld_proxy_host" -> stringResource(R.string.fld_proxy_host)
+    "fld_proxy_port" -> stringResource(R.string.fld_proxy_port)
     else -> labelKey
 }
 
@@ -20,6 +22,8 @@ fun providerFieldLabel(labelKey: String): String = when (labelKey) {
 fun providerFieldPlaceholder(placeholderKey: String?): String? =
     when (placeholderKey) {
         "ph_http_library_url" -> stringResource(R.string.ph_http_library_url)
+        "ph_proxy_host" -> stringResource(R.string.ph_proxy_host)
+        "ph_proxy_port" -> stringResource(R.string.ph_proxy_port)
         null -> null
         else -> placeholderKey
     }

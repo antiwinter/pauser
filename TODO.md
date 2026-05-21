@@ -1,4 +1,5 @@
 # TODOs
+- [ ] move add server/ProviderFieldSpec/ValidationResult to utils.register
 - [x] Storage naming unification
 - [x] Fix: smb gen cover
 - [x] check if same local cache used for smb subtitles as thumb

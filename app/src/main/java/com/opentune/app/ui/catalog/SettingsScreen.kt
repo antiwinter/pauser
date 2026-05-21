@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     app: OpenTuneApplication,
     onBack: () -> Unit,
+    onManageProxies: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
@@ -39,6 +40,8 @@ fun SettingsScreen(
         Button(onClick = onBack) { Text("Back") }
 
         Text("Settings")
+
+        Button(onClick = onManageProxies) { Text("Manage Proxies") }
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Title Language")

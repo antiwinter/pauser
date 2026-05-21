@@ -15,6 +15,8 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.app.navigation.toJson
 import com.opentune.provider.EntryInfo
+import coil3.ImageLoader
+import com.opentune.app.image.ProxyImageLoader
 import com.opentune.provider.EndpointClient
 import com.opentune.provider.SearchQuery
 import com.opentune.storage.TitleLang
@@ -30,6 +32,7 @@ fun SearchRoute(
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
     var instance by remember { mutableStateOf<EndpointClient?>(null) }
+    var imageLoader by remember { mutableStateOf<ImageLoader?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val results = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
@@ -37,8 +40,10 @@ fun SearchRoute(
 
     LaunchedEffect(protocol, endpointId) {
         try {
-            instance = app.endpointClientRegistry.getOrCreate(endpointId)
+            val handle = app.endpointClientRegistry.getOrCreate(endpointId)
                 ?: throw IllegalStateException("No instance for $endpointId")
+            instance = handle.client
+            imageLoader = ProxyImageLoader.get(endpointId, handle.httpClient, app)
         } catch (e: Exception) {
             error = e.message
         }
@@ -52,6 +57,7 @@ fun SearchRoute(
             SearchScreen(
                 logTag = "OT_Search_$endpointId",
                 results = results,
+                imageLoader = imageLoader,
                 searchFn = { query ->
                     inst.search(scopeDecoded, SearchQuery(term = query)).items
                         .let { ArtUrlInjector.apply(it, app, protocol, endpointId) }

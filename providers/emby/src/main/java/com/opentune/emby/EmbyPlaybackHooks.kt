@@ -22,9 +22,8 @@ class EmbyPlaybackHooks(
 
     private fun repository(): EmbyRepository =
         EmbyRepository(
-            baseUrl = baseUrl,
+            api = EmbyClientFactory.create(baseUrl = baseUrl, accessToken = accessToken),
             userId = userId,
-            accessToken = accessToken,
             deviceProfile = deviceProfile,
         )
 

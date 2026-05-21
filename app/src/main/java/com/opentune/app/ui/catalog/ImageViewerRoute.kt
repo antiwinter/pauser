@@ -24,7 +24,7 @@ fun ImageViewerRoute(
         var spec: com.opentune.provider.PlaybackSpec? = null
         val job = MainScope().launch {
             val instance = withContext(Dispatchers.IO) { app.endpointClientRegistry.getOrCreate(endpointId) }
-            spec = withContext(Dispatchers.IO) { instance?.getPlaybackSpec(itemRefDecoded, 0) }
+            spec = withContext(Dispatchers.IO) { instance?.client?.getPlaybackSpec(itemRefDecoded, 0) }
             imageUrl = spec?.url
         }
         onDispose {
