@@ -15,8 +15,11 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import com.opentune.app.OpenTuneApplication
+import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.OpenTunePlayer
+import com.opentune.player.PlaybackStorageContext
 import com.opentune.provider.EntryInfo
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.EntryStateKey
@@ -89,23 +92,28 @@ fun PlayerRoute(
             }
         }
         spec != null -> {
-            PlayerShell {
-                OpenTunePlayer(
-                    spec = spec!!,
-                    startMs = startMs,
+            CompositionLocalProvider(
+                LocalPlaybackStorageContext provides PlaybackStorageContext(
                     entryStateStore = app.storageBindings.entryStateStore,
                     entryStateKey = stateKey,
                     parentStateKey = parentKey,
                     seriesStateKey = seriesKey,
                     seriesSeasonNumber = entryInfo?.seasonNumber,
                     seriesEpisodeNumber = entryInfo?.indexNumber,
-                    onExit = onExit,
-                    initialSubtitleTrackId = initialSubtitleTrackId,
-                    initialAudioTrackId = initialAudioTrackId,
-                    initialSubtitleOffsetFraction = initialSubtitlePrefs.offsetFraction,
-                    initialSubtitleSizeScale = initialSubtitlePrefs.sizeScale,
                     appConfigStore = app.storageBindings.appConfigStore,
                 )
+            ) {
+                PlayerShell {
+                    OpenTunePlayer(
+                        spec = spec!!,
+                        startMs = startMs,
+                        onExit = onExit,
+                        initialSubtitleTrackId = initialSubtitleTrackId,
+                        initialAudioTrackId = initialAudioTrackId,
+                        initialSubtitleOffsetFraction = initialSubtitlePrefs.offsetFraction,
+                        initialSubtitleSizeScale = initialSubtitlePrefs.sizeScale,
+                    )
+                }
             }
         }
         else -> {

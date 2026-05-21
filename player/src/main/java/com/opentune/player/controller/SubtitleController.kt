@@ -133,7 +133,7 @@ internal class SubtitleController(
         val scale = sizeScaleState.value
         Log.d(SUB_LOG_TAG, "confirmAdjust: offset=$offset scale=$scale")
         scope.launch(Dispatchers.IO) {
-            stores.appConfigStore?.saveSubtitlePrefs(SubtitlePrefs(offset, scale))
+            stores.appConfigStore.saveSubtitlePrefs(SubtitlePrefs(offset, scale))
             Log.d(SUB_LOG_TAG, "confirmAdjust: saved subtitle prefs")
         }
     }
