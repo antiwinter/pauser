@@ -1,353 +1,335 @@
-# Plan: `host.loadJar()` — Dynamic Spider JAR Loading
+# Plan: `host.jar` — Dynamic JAR Loading for OpenTune JS Provider
 
-**Goal:** Allow a JS provider running in QuickJS to load a TVBox-compatible `spider.jar` at runtime and call its Spider methods via `host.spider.*`.
+**Goal:** Extend OpenTune's JS provider with primitive host APIs that are fully agnostic to any specific protocol. All protocol knowledge lives in TypeScript.
 
----
-
-## Overview
-
-```
-JS provider (QuickJS)
-    host.loadJar({ url, md5 })
-        ↓ Kotlin: download JAR, verify MD5
-        ↓ extract ftyguard_v*.so from JAR assets/
-        ↓ System.loadLibrary() from temp dir
-        ↓ DexClassLoader loads JAR
-        ↓ Init class decrypts .guard payload
-        ↓ Spider classes become available
-    host.spider.homeContent({ filter })
-    host.spider.categoryContent({ tid, pg, filter, extend })
-    host.spider.detailContent({ ids })
-    host.spider.playerContent({ flag, id, vipFlags })
-    host.spider.searchContent({ key, quick, pg })
-```
-
-The JS provider never touches Java/DEX directly. It calls `host.loadJar()` once, then calls `host.spider.*` methods which dispatch to the loaded Spider instance.
+Three namespaces are added:
+- `host.jar` — load and reflect into Android JARs at runtime
+- `host.eval` — fetch and eval remote JS assets, with caching
+- Sync HTTP (`_http`) — blocking HTTP call required by drpy2's synchronous execution model
 
 ---
 
-## Architecture
+## Design Principle
 
-### New host namespace: `spider`
+Kotlin provides the minimum primitives needed:
 
-Add to `QuickJsEngine.dispatchHost()`:
+1. **Load** — download, verify, and make a JAR's classes available via `DexClassLoader`
+2. **Reflect** — call any public method on any class from a loaded JAR by name
+3. **Eval** — fetch a remote JS URL and eval it in the current QuickJS context, with caching
+4. **Sync HTTP** — a blocking `_http()` host call, required because drpy2 makes synchronous HTTP requests internally and QuickJS has no native `XMLHttpRequest`
 
-```kotlin
-"spider" -> hostApis.handleSpider(name, argsJson)
-```
-
-Add to `HostApis.kt`:
-
-```kotlin
-fun handleSpider(name: String, argsJson: String): String?
-```
-
-### New host namespace: `jar`
-
-```kotlin
-"jar" -> hostApis.handleJar(name, argsJson, context)
-```
+Kotlin has zero knowledge of CatVod, Spider, `csp_*`, or any JAR-specific convention. The TypeScript CatVod provider owns all of that.
 
 ---
 
-## Implementation Steps
+## Host API
 
-### Step 1 — `JarLoader.kt` (new file in `providers/js`)
+### `host.jar.load`
 
-Responsible for downloading, verifying, extracting, and loading a spider JAR.
+```typescript
+host.jar.load(args: {
+  url: string;
+  md5?: string;
+}): Promise<void>
+```
+
+Downloads the JAR to local cache (skips if already cached and MD5 matches), creates a `DexClassLoader`, and stores it keyed by `md5(url)`. Idempotent.
+
+### `host.jar.reflect`
+
+```typescript
+host.jar.reflect(args: {
+  url:       string;           // JAR URL — identifies which DexClassLoader to use
+  cls:       string;           // fully-qualified class name
+  method:    string;           // method name
+  instance?: string;           // opaque handle from a prior reflect call that returned an object
+  args?:     unknown[];        // method arguments (primitives, strings, arrays)
+}): Promise<string>            // JSON-serialized return value, or opaque handle for objects
+```
+
+Kotlin resolves the class from the `DexClassLoader` for `url`, resolves the method by name and argument count, invokes it, and returns the result as a JSON string. For non-primitive return values (objects), returns an opaque handle that can be passed back as `instance` on future calls.
+
+### `host.eval.script`
+
+```typescript
+host.eval.script(args: {
+  url: string;          // remote JS URL to fetch and eval
+  cache?: boolean;      // default true — skip re-fetch if already evaled this session
+}): Promise<void>
+```
+
+Fetches the JS at `url`, evals it in the current QuickJS context via `evalSnippet`, and caches the result for the session. Subsequent calls with the same URL are no-ops. Allows a provider to inject any JS library without bundling anything in the provider itself.
+
+### `_http` — Sync HTTP (injected as a global)
+
+drpy2 calls HTTP synchronously inside rule evaluation. QuickJS has no built-in blocking network primitive, so Kotlin must provide one as a `@JSMethod`-style global named `_http`:
+
+```typescript
+// Injected by Kotlin onto globalThis — not called directly by providers
+_http(url: string, options: {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  timeout?: number;
+  encoding?: string;    // e.g. "gbk"
+  buffer?: number;      // 2 = return base64 of binary body
+  withHeaders?: boolean;
+}): { content: string; headers: Record<string, string>; statusCode: number }
+```
+
+This is a **blocking** call that suspends the QuickJS engine thread until the response arrives. The async `req()` wrapper that drpy2 uses is built on top of `_http` in `http.js` (FongMi's pattern), which the provider fetches via `host.eval.script`.
+
+`local.get/set/delete` and `setTimeout` are also injected by Kotlin as globals (not `host.*` namespaced) since drpy2 expects them on `globalThis` directly.
+
+---
+
+## Kotlin Implementation
+
+### `JarLoader.kt` — new file in `providers/js/`
 
 ```kotlin
 class JarLoader(private val context: Context) {
 
-    // Cache: jarUrl → loaded Spider class
-    private val cache = ConcurrentHashMap<String, Class<*>>()
+    private val loaders   = ConcurrentHashMap<String, DexClassLoader>()
+    private val instances = ConcurrentHashMap<String, Any>()
+    private val instanceKeyGen = AtomicLong(0)
 
-    suspend fun load(url: String, md5: String?): Class<*> {
-        cache[url]?.let { return it }
-
-        // 1. Download JAR to cache dir
-        val jarFile = downloadJar(url, md5)
-
-        // 2. Extract native .so from JAR assets/
-        val soFile = extractNativeLib(jarFile)
-
-        // 3. Load native lib
-        System.load(soFile.absolutePath)
-
-        // 4. DexClassLoader
-        val dexOutputDir = File(context.codeCacheDir, "dex").also { it.mkdirs() }
-        val loader = DexClassLoader(
-            jarFile.absolutePath,
-            dexOutputDir.absolutePath,
-            null,
-            context.classLoader
+    fun load(url: String, md5: String?) {
+        val key = md5(url)
+        if (loaders.containsKey(key)) return
+        val jar    = downloadAndVerify(url, md5)
+        val dexOut = File(context.codeCacheDir, "dex/$key").also { it.mkdirs() }
+        val soOut  = File(context.cacheDir, "so/$key").also { it.mkdirs() }
+        extractNativeLibs(jar, soOut)           // no-op if jar has no assets/*.so
+        loaders[key] = DexClassLoader(
+            jar.absolutePath, dexOut.absolutePath,
+            soOut.absolutePath, context.classLoader
         )
-
-        // 5. Load Init class and call it (triggers .guard decryption)
-        val initClass = loader.loadClass("com.github.catvod.spider.Init")
-        val initMethod = initClass.getMethod("getLoader", Context::class.java)
-        initMethod.invoke(null, context)  // static call
-
-        // 6. Cache and return Spider base class
-        val spiderClass = loader.loadClass("com.github.catvod.crawler.Spider")
-        cache[url] = spiderClass
-        return spiderClass
     }
 
-    private fun extractNativeLib(jarFile: File): File {
-        val abi = if (Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()) "v8" else "v7"
-        val soName = "ftyguard_$abi.so"
-        val outFile = File(context.cacheDir, soName)
-        if (outFile.exists()) return outFile
+    fun reflect(url: String, cls: String, method: String,
+                instanceHandle: String?, rawArgs: JsonArray): String {
+        val loader   = loaders[md5(url)] ?: error("JAR not loaded: $url")
+        val clz      = loader.loadClass(cls)
+        val instance = instanceHandle?.let { instances[it] }
 
-        ZipFile(jarFile).use { zip ->
-            val entry = zip.getEntry("assets/$soName")
-                ?: error("Native lib $soName not found in JAR")
-            zip.getInputStream(entry).use { input ->
-                outFile.outputStream().use { output -> input.copyTo(output) }
+        // Resolve method by name + arg count (same as FongMi's approach)
+        val args     = rawArgs.toJvmArgs()
+        val m        = clz.methods.first { it.name == method && it.parameterCount == args.size }
+        val result   = m.invoke(instance, *args)
+
+        return when (result) {
+            null       -> "null"
+            is String  -> JsonPrimitive(result).toString()
+            is Boolean -> JsonPrimitive(result).toString()
+            is Number  -> JsonPrimitive(result).toString()
+            else       -> {
+                // Non-primitive: store and return an opaque handle
+                val handle = "obj_${instanceKeyGen.incrementAndGet()}"
+                instances[handle] = result
+                JsonPrimitive(handle).toString()
             }
         }
-        return outFile
     }
 
-    private suspend fun downloadJar(url: String, md5: String?): File {
-        val fileName = url.substringAfterLast("/").substringBefore(";")
-        val outFile = File(context.cacheDir, "spiders/$fileName").also {
-            it.parentFile?.mkdirs()
-        }
-        if (outFile.exists() && md5 != null && outFile.md5() == md5) return outFile
-
-        // Download via OkHttp
-        val response = httpClient.newCall(Request.Builder().url(url).build()).execute()
-        response.body!!.byteStream().use { input ->
-            outFile.outputStream().use { output -> input.copyTo(output) }
-        }
-        if (md5 != null && outFile.md5() != md5) error("MD5 mismatch for $url")
-        return outFile
+    fun clear() {
+        instances.clear()
+        loaders.clear()
     }
 }
 ```
 
-### Step 2 — `SpiderBridge.kt` (new file in `providers/js`)
+`extractNativeLibs` extracts any `assets/*.so` entries to `soOut` before creating the `DexClassLoader` — needed for JARs that bundle native libs (e.g. FTY's encrypted JAR). It is a no-op for plain JARs.
 
-Holds a loaded Spider instance and dispatches method calls.
+### `EvalLoader.kt` — new file in `providers/js/`
+
+Fetches remote JS and evals it into the engine. Caches by URL for the session.
 
 ```kotlin
-class SpiderBridge(
-    private val context: Context,
-    private val spiderClass: Class<*>,
-    private val spiderKey: String,
-) {
-    private var instance: Any? = null
+class EvalLoader(private val httpClient: OkHttpClient) {
+    private val evaled = ConcurrentHashMap<String, Boolean>()
 
-    fun init(ext: String) {
-        val cls = spiderClass.classLoader!!
-            .loadClass("com.github.catvod.spider.$spiderKey")
-        instance = cls.getDeclaredConstructor().newInstance()
-        cls.getMethod("init", Context::class.java, String::class.java)
-            .invoke(instance, context, ext)
+    suspend fun evalScript(url: String, cache: Boolean, engine: QuickJsEngine) {
+        if (cache && evaled.containsKey(url)) return
+        val js = httpClient.newCall(Request.Builder().url(url).build())
+            .execute().body!!.string()
+        engine.evalSnippet(js)
+        if (cache) evaled[url] = true
     }
 
-    fun homeContent(filter: Boolean): String =
-        call("homeContent", filter) as String
-
-    fun categoryContent(tid: String, pg: String, filter: Boolean,
-                        extend: Map<String, String>): String =
-        call("categoryContent", tid, pg, filter, HashMap(extend)) as String
-
-    fun detailContent(ids: List<String>): String =
-        call("detailContent", ids) as String
-
-    fun playerContent(flag: String, id: String, vipFlags: List<String>): String =
-        call("playerContent", flag, id, vipFlags) as String
-
-    fun searchContent(key: String, quick: Boolean, pg: String): String =
-        call("searchContent", key, quick, pg) as String
-
-    private fun call(method: String, vararg args: Any?): Any? {
-        val inst = instance ?: error("Spider not initialized")
-        return inst.javaClass.methods
-            .first { it.name == method && it.parameterCount == args.size }
-            .invoke(inst, *args)
-    }
+    fun clear() = evaled.clear()
 }
 ```
 
-### Step 3 — Extend `HostApis.kt`
+### Sync HTTP + global injections
 
-Add two new namespaces:
+Added to `QuickJsEngine` setup, injected onto `globalThis` before any provider code runs:
 
 ```kotlin
-// In HostApis.kt
-
-private var jarLoader: JarLoader? = null
-private var spiderBridge: SpiderBridge? = null
-
-fun setContext(context: Context) {
-    jarLoader = JarLoader(context)
+// Injected as blocking global — called synchronously from JS
+ctx.getGlobalObject().setProperty("_http") { args ->
+    val url     = args[0] as String
+    val options = args[1] as? JSObject
+    // Execute blocking OkHttp call on the engine thread
+    // Return JSObject { content, headers, statusCode }
+    executeSyncHttp(ctx, url, options)
 }
 
-suspend fun handleJar(name: String, argsJson: String): String? {
-    val args = json.parseToJsonElement(argsJson).jsonObject
-    return when (name) {
-        "load" -> {
-            val url = args["url"]!!.jsonPrimitive.content
-            val md5 = args["md5"]?.jsonPrimitive?.contentOrNull
-            val spiderKey = args["spiderKey"]!!.jsonPrimitive.content
-            val ext = args["ext"]?.jsonPrimitive?.content ?: ""
-            val spiderClass = jarLoader!!.load(url, md5)
-            spiderBridge = SpiderBridge(context, spiderClass, spiderKey)
-            spiderBridge!!.init(ext)
-            JsonPrimitive(true).toString()
-        }
-        else -> throw IllegalArgumentException("Unknown jar method: $name")
-    }
-}
+ctx.getGlobalObject().setProperty("local", LocalKvStore(engineKey))
 
-fun handleSpider(name: String, argsJson: String): String? {
-    val bridge = spiderBridge ?: error("No spider loaded. Call host.jar.load() first.")
-    val args = json.parseToJsonElement(argsJson).jsonObject
-    return when (name) {
-        "homeContent" -> {
-            val filter = args["filter"]?.jsonPrimitive?.boolean ?: false
-            bridge.homeContent(filter)
-        }
-        "categoryContent" -> {
-            val tid = args["tid"]!!.jsonPrimitive.content
-            val pg = args["pg"]?.jsonPrimitive?.content ?: "1"
-            val filter = args["filter"]?.jsonPrimitive?.boolean ?: false
-            val extend = args["extend"]?.jsonObject
-                ?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
-            bridge.categoryContent(tid, pg, filter, extend)
-        }
-        "detailContent" -> {
-            val ids = args["ids"]!!.jsonArray.map { it.jsonPrimitive.content }
-            bridge.detailContent(ids)
-        }
-        "playerContent" -> {
-            val flag = args["flag"]!!.jsonPrimitive.content
-            val id = args["id"]!!.jsonPrimitive.content
-            val vipFlags = args["vipFlags"]?.jsonArray
-                ?.map { it.jsonPrimitive.content } ?: emptyList()
-            bridge.playerContent(flag, id, vipFlags)
-        }
-        "searchContent" -> {
-            val key = args["key"]!!.jsonPrimitive.content
-            val quick = args["quick"]?.jsonPrimitive?.boolean ?: false
-            val pg = args["pg"]?.jsonPrimitive?.content ?: "1"
-            bridge.searchContent(key, quick, pg)
-        }
-        else -> throw IllegalArgumentException("Unknown spider method: $name")
-    }
+ctx.getGlobalObject().setProperty("setTimeout") { args ->
+    val fn    = args[0] as JSFunction
+    val delay = (args[1] as? Number)?.toLong() ?: 0
+    engineScope.launch { delay(delay); fn.call() }
+    null
 }
 ```
 
-### Step 4 — Extend `QuickJsEngine.dispatchHost()`
+`LocalKvStore` is a per-engine in-memory `ConcurrentHashMap` (or SQLite-backed for persistence across sessions).
+
+### `HostApis.kt` — add `eval` namespace
 
 ```kotlin
-private suspend fun dispatchHost(ns: String, name: String, argsJson: String): String? =
-    when (ns) {
-        "http"     -> hostApis.handleHttp(name, argsJson, httpClient)
-        "crypto"   -> hostApis.handleCrypto(name, argsJson)
-        "platform" -> hostApis.handlePlatform(name, argsJson)
-        "jar"      -> hostApis.handleJar(name, argsJson)      // NEW
-        "spider"   -> hostApis.handleSpider(name, argsJson)   // NEW
-        else       -> throw IllegalArgumentException("Unknown host namespace: $ns")
+"eval" -> when (name) {
+    "script" -> {
+        val args  = json.parseToJsonElement(argsJson).jsonObject
+        val url   = args["url"]!!.jsonPrimitive.content
+        val cache = args["cache"]?.jsonPrimitive?.boolean ?: true
+        evalLoader.evalScript(url, cache, engine)
+        "true"
     }
+    else -> throw IllegalArgumentException("Unknown eval method: $name")
+}
 ```
 
-### Step 5 — Expose in `types.ts`
+### `HOST_BOOTSTRAP_JS` — add `eval` namespace
 
-```typescript
-// In utils/types.ts
+```javascript
+globalThis.host = {
+  http:     ns('http'),
+  crypto:   ns('crypto'),
+  platform: ns('platform'),
+  jar:      ns('jar'),
+  eval:     ns('eval'),     // NEW
+};
+```
 
-export interface HostAPI {
-  http: { ... };
-  crypto: { ... };
-  platform: { ... };
 
-  // NEW
-  jar: {
-    load(args: {
-      url: string;
-      md5?: string;
-      spiderKey: string;
-      ext?: string;
-    }): Promise<void>;
-  };
 
-  spider: {
-    homeContent(args: { filter?: boolean }): Promise<string>;
-    categoryContent(args: {
-      tid: string;
-      pg?: string;
-      filter?: boolean;
-      extend?: Record<string, string>;
-    }): Promise<string>;
-    detailContent(args: { ids: string[] }): Promise<string>;
-    playerContent(args: {
-      flag: string;
-      id: string;
-      vipFlags?: string[];
-    }): Promise<string>;
-    searchContent(args: {
-      key: string;
-      quick?: boolean;
-      pg?: string;
-    }): Promise<string>;
-  };
+```kotlin
+"jar" -> when (name) {
+    "load"    -> {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        jarLoader.load(
+            args["url"]!!.jsonPrimitive.content,
+            args["md5"]?.jsonPrimitive?.contentOrNull
+        )
+        "true"
+    }
+    "reflect" -> {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        jarLoader.reflect(
+            url            = args["url"]!!.jsonPrimitive.content,
+            cls            = args["cls"]!!.jsonPrimitive.content,
+            method         = args["method"]!!.jsonPrimitive.content,
+            instanceHandle = args["instance"]?.jsonPrimitive?.contentOrNull,
+            rawArgs        = args["args"]?.jsonArray ?: JsonArray(emptyList())
+        )
+    }
+    "clear"   -> { jarLoader.clear(); "true" }
+    else      -> throw IllegalArgumentException("Unknown jar method: $name")
 }
+```
+
+### `QuickJsEngine.kt` — one new line in `dispatchHost`
+
+```kotlin
+"jar" -> hostApis.handleJar(name, argsJson)
+```
+
+### `HOST_BOOTSTRAP_JS` — add `jar` namespace
+
+```javascript
+globalThis.host = {
+  http:     ns('http'),
+  crypto:   ns('crypto'),
+  platform: ns('platform'),
+  jar:      ns('jar'),          // NEW
+};
 ```
 
 ---
 
-## Usage from a JS Provider
+## TypeScript Usage (CatVod provider)
+
+All CatVod conventions live here. Kotlin knows nothing of `Spider`, `Init`, `csp_*`.
 
 ```typescript
-// In a TVBox provider's init():
-await host.jar.load({
-  url: 'https://cdn.example.com/spider.jar',
-  md5: 'abc123...',
-  spiderKey: 'WoGGGuard',
-  ext: '{"Cloud-drive":"tvfan/Cloud-drive.txt"}',
+const JAR = config.spiderUrl;
+
+// 1. Load the JAR once
+await host.jar.load({ url: JAR, md5: config.spiderMd5 });
+
+// 2. Bootstrap — call Init.init(context) if present (decrypts encrypted JARs)
+await host.jar.reflect({
+  url: JAR, cls: 'com.github.catvod.spider.Init', method: 'init', args: []
+}).catch(() => {/* not all JARs have Init */});
+
+// 3. Instantiate a Spider and call init(ext)
+const spiderHandle = await host.jar.reflect({
+  url: JAR, cls: `com.github.catvod.spider.${site.api.replace('csp_', '')}`,
+  method: 'init', args: [site.ext ?? '']
 });
 
-// Then in listEntry():
-const raw = await host.spider.categoryContent({ tid, pg: String(startIndex / limit + 1) });
+// 4. Call Spider methods
+const raw = await host.jar.reflect({
+  url: JAR, cls: `com.github.catvod.spider.${site.api.replace('csp_', '')}`,
+  instance: spiderHandle,
+  method: 'homeContent', args: [false]
+});
 const data = JSON.parse(raw);
-// data.list → VodItem[]
 ```
 
----
-
-## Caching Strategy
-
-- JAR files cached in `context.cacheDir/spiders/` by filename
-- MD5 verified on each load; re-download if mismatch
-- Native `.so` cached in `context.cacheDir/` by ABI
-- `SpiderBridge` instance held per `QuickJsEngine` instance (one per endpoint)
-- On engine close, call `spider.destroy()` if available
+Instance caching (one Spider per site, reuse across calls) is managed in TypeScript, using the opaque handles returned by `reflect`.
 
 ---
 
-## Security Considerations
+## What Kotlin Knows vs What TypeScript Knows
 
-- Only load JARs from URLs explicitly configured by the user (not from arbitrary JS strings)
-- Verify MD5 before loading
-- The JAR runs in the same process — it has full app permissions
-- Consider running in a separate process (`:spider` process) for isolation (future work)
+| Concern | Owner |
+|---------|-------|
+| Download + cache JAR | Kotlin (`JarLoader`) |
+| Extract native `.so` from JAR | Kotlin (`JarLoader`) |
+| `DexClassLoader` lifecycle | Kotlin (`JarLoader`) |
+| Reflect into any class/method | Kotlin (`JarLoader`) |
+| CatVod `Spider` interface | TypeScript (CatVod provider) |
+| `csp_*` class naming convention | TypeScript (CatVod provider) |
+| `Init` / `Proxy` bootstrap | TypeScript (CatVod provider) |
+| Spider instance lifecycle | TypeScript (CatVod provider) |
+| Any other JAR convention | TypeScript (CatVod provider) |
 
 ---
 
-## Files to Create/Modify
+## Caching
+
+| Cache | Key | Lifecycle |
+|-------|-----|-----------|
+| JAR file on disk | `cacheDir/spiders/{filename}` | Persists; invalidated when MD5 changes |
+| `DexClassLoader` | `md5(jarUrl)` | Engine session; cleared on `jar.clear()` |
+| Object instance handles | auto-incremented key | Engine session; cleared on `jar.clear()` |
+| Extracted `.so` | `cacheDir/so/{md5}/` | Persists alongside JAR |
+
+---
+
+## Files to Create / Modify
 
 | File | Change |
 |------|--------|
-| `providers/js/.../JarLoader.kt` | New — JAR download, native lib extraction, DexClassLoader |
-| `providers/js/.../SpiderBridge.kt` | New — Spider instance wrapper |
-| `providers/js/.../HostApis.kt` | Add `handleJar()` and `handleSpider()` |
-| `providers/js/.../QuickJsEngine.kt` | Add `jar` and `spider` to `dispatchHost()` |
-| `providers-ts/utils/types.ts` | Add `jar` and `spider` to `HostAPI` |
+| `providers/js/src/.../JarLoader.kt` | New — JAR download, native extraction, DexClassLoader, reflect |
+| `providers/js/src/.../EvalLoader.kt` | New — remote JS fetch + eval with session cache |
+| `providers/js/src/.../HostApis.kt` | Add `handleJar()`, `handleEval()` |
+| `providers/js/src/.../QuickJsEngine.kt` | Add `"jar"`, `"eval"` to `dispatchHost()`; inject `_http`, `local`, `setTimeout` globals; add to `HOST_BOOTSTRAP_JS` |
+| `providers-ts/utils/types.ts` | Add `jar` and `eval` to `HostAPI` |
 
 ---
 
@@ -355,9 +337,10 @@ const data = JSON.parse(raw);
 
 | Task | Estimate |
 |------|----------|
-| `JarLoader.kt` (download + native extraction + DexClassLoader) | 1 day |
-| `SpiderBridge.kt` (reflection-based Spider dispatch) | 0.5 day |
-| `HostApis.kt` extensions | 0.5 day |
-| `types.ts` additions | 0.5 day |
-| Integration test with FTY spider.jar | 1 day |
-| **Total** | **~3.5 days** |
+| `JarLoader.kt` (download, native extraction, DexClassLoader, reflect) | 1 day |
+| `EvalLoader.kt` (fetch + eval + cache) | 0.5 day |
+| Sync `_http` + `local` + `setTimeout` globals in `QuickJsEngine.kt` | 1 day |
+| `HostApis.kt` + `HOST_BOOTSTRAP_JS` wiring | 0.5 day |
+| `types.ts` | 0.5 day |
+| Integration test | 1 day |
+| **Total** | **~4.5 days** |

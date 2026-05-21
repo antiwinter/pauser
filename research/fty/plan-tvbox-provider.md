@@ -1,16 +1,16 @@
-# Plan: TVBox Protocol Provider (TypeScript)
+# Plan: CatVod Protocol Provider (TypeScript)
 
-**Goal:** A JS provider (`providers-ts/providers/tvbox/`) that implements the full TVBox/CatVod protocol, exposing all site types (苹果CMS HTTP, drpy2 JS spiders, JAR spiders, IPTV M3U) as a unified OpenTune provider.
+**Goal:** A JS provider (`providers-ts/providers/catvod/`) that implements the CatVod protocol, exposing all site types (苹果CMS HTTP, drpy2 JS spiders, JAR spiders, IPTV M3U) as a unified OpenTune provider.
 
 ---
 
 ## Overview
 
-The user configures a TVBox subscription URL (e.g. `http://www.饭太硬.cc/tv`). The provider:
+The user configures a CatVod subscription URL. The provider:
 1. Fetches and decodes the config JSON (including JPEG-embedded base64)
 2. Exposes all `sites` as top-level `Folder` entries
 3. When the user browses into a site, delegates to the appropriate protocol handler
-4. Maps TVBox's `VodItem` / `VodDetail` / `playerContent` to OpenTune contracts
+4. Maps CatVod's `VodItem` / `VodDetail` response format to OpenTune contracts
 
 ```
 listEntry(null)
@@ -18,7 +18,7 @@ listEntry(null)
   → return sites[] as Folder entries
 
 listEntry("site:WoGGGuard")
-  → dispatch to JAR spider handler
+  → dispatch to JAR handler
   → homeContent() → categories as Folder entries
 
 listEntry("site:WoGGGuard/cat:1/pg:2")
@@ -36,16 +36,16 @@ getPlaybackSpec("site:WoGGGuard/vod:12345/flag:线路1/ep:EP1$https://...")
 ## Provider Structure
 
 ```
-providers-ts/providers/tvbox/
+providers-ts/providers/catvod/
 ├── index.ts          — OpenTune bridge (globalThis.opentuneProvider)
 ├── provider.ts       — getFieldsSpec, validateFields
 ├── instance.ts       — init, listEntry, search, getDetail, getPlaybackSpec
-├── config.ts         — fetch + decode TVBox config.json (JPEG base64 unwrap)
+├── config.ts         — fetch + decode CatVod config.json (JPEG base64 unwrap)
 ├── ref.ts            — itemRef encoding/decoding
 ├── handlers/
 │   ├── cms.ts        — 苹果CMS HTTP API handler (type 0/1/2)
 │   ├── drpy.ts       — drpy2/drpy3 JS spider handler (type 4/9/10)
-│   ├── jar.ts        — JAR spider handler (type 3, via host.jar/host.spider)
+│   ├── jar.ts        — JAR spider handler (type 3, via host.jar.reflect)
 │   └── iptv.ts       — IPTV M3U live handler
 └── mapper.ts         — VodItem/VodDetail → EntryInfo/EntryDetail
 ```
@@ -54,11 +54,11 @@ providers-ts/providers/tvbox/
 
 ## Step 1 — Config Fetching (`config.ts`)
 
-The TVBox config endpoint returns JSON embedded in a JPEG (base64 in the image data).
+The CatVod config endpoint may return JSON embedded in a JPEG (base64 in the image data).
 
 ```typescript
-export interface TvBoxConfig {
-  spider?: string;           // "url;md5;hash" or plain URL
+export interface CatVodConfig {
+  spider?: string;           // "url;md5;hash" or plain URL — JAR for csp_* sites
   sites: SiteEntry[];
   lives?: LiveEntry[];
   rules?: AdFilterRule[];
@@ -70,8 +70,8 @@ export interface TvBoxConfig {
 export interface SiteEntry {
   key: string;
   name: string;
-  type: number;              // 0/1/2 = CMS, 3 = JAR, 4/9 = drpy2, 10 = drpy3
-  api: string;               // URL or class name
+  type: number;              // 0/1/2 = CMS HTTP, 3 = JAR, 4/9 = drpy2, 10 = drpy3
+  api: string;               // HTTP URL (type 0/1/2/4/9/10) or class name (type 3)
   ext?: string | Record<string, unknown>;
   searchable?: 0 | 1;
   quickSearch?: 0 | 1;
@@ -82,25 +82,31 @@ export interface SiteEntry {
   style?: { type: string; ratio?: number };
 }
 
-export async function fetchConfig(url: string): Promise<TvBoxConfig> {
+export interface LiveEntry {
+  name: string;
+  type: 0;
+  url: string;
+  playerType: number;
+  epg?: string;
+  logo?: string;
+  ua?: string;
+  timeout?: number;
+}
+
+export async function fetchConfig(url: string): Promise<CatVodConfig> {
   const resp = await host.http.get({ url });
   const body = resp.body;
 
   // Try direct JSON parse first
-  try {
-    return JSON.parse(body);
-  } catch {}
+  try { return JSON.parse(body); } catch {}
 
-  // Try base64 extraction from JPEG/BMP (FTY-style embedding)
+  // Try base64 extraction from JPEG/BMP embedding
   const b64Match = body.match(/[A-Za-z0-9+/]{200,}={0,2}/);
   if (b64Match) {
-    try {
-      const decoded = atob(b64Match[0]);
-      return JSON.parse(decoded);
-    } catch {}
+    try { return JSON.parse(atob(b64Match[0])); } catch {}
   }
 
-  throw new Error(`Cannot parse TVBox config from ${url}`);
+  throw new Error(`Cannot parse CatVod config from ${url}`);
 }
 
 export function parseSpiderField(spider?: string): { url: string; md5?: string } | null {
@@ -114,16 +120,13 @@ export function parseSpiderField(spider?: string): { url: string; md5?: string }
 
 ## Step 2 — Item Ref Encoding (`ref.ts`)
 
-All OpenTune item refs are opaque strings. We encode TVBox location as structured refs.
-
 ```typescript
 // Ref formats:
-// "site:{key}"                                    → site root (homeContent)
-// "site:{key}/cat:{tid}"                          → category root
-// "site:{key}/cat:{tid}/pg:{n}"                   → category page
-// "site:{key}/vod:{id}"                           → vod detail
-// "site:{key}/vod:{id}/flag:{flag}/ep:{epUrl}"    → episode playback
-// "live:{name}"                                   → IPTV channel
+// "site:{key}"                                  → site root (homeContent)
+// "site:{key}/cat:{tid}/pg:{n}"                 → category page
+// "site:{key}/vod:{id}"                         → vod detail
+// "site:{key}/vod:{id}/flag:{flag}/ep:{epUrl}"  → episode playback
+// "live:{name}"                                 → IPTV channel
 
 export interface SiteRef { type: 'site'; key: string }
 export interface CatRef  { type: 'cat';  key: string; tid: string; pg: number }
@@ -131,169 +134,196 @@ export interface VodRef  { type: 'vod';  key: string; id: string }
 export interface EpRef   { type: 'ep';   key: string; id: string; flag: string; epUrl: string }
 export interface LiveRef { type: 'live'; name: string; url: string }
 
-export type TvBoxRef = SiteRef | CatRef | VodRef | EpRef | LiveRef
+export type CatVodRef = SiteRef | CatRef | VodRef | EpRef | LiveRef
 
-export function encodeRef(ref: TvBoxRef): string {
-  return JSON.stringify(ref);
-}
-
-export function decodeRef(s: string): TvBoxRef {
-  return JSON.parse(s);
-}
+export const encodeRef = (ref: CatVodRef): string => JSON.stringify(ref);
+export const decodeRef = (s: string): CatVodRef => JSON.parse(s);
 ```
 
 ---
 
 ## Step 3 — CMS Handler (`handlers/cms.ts`)
 
-Handles type 0/1/2 sites — plain HTTP API.
+Handles type 0/1/2 sites — plain 苹果CMS HTTP API.
 
 ```typescript
 export async function cmsHome(api: string): Promise<EntryList> {
-  const resp = await host.http.get({ url: `${api}?ac=list` });
-  const data = JSON.parse(resp.body);
-  const categories: EntryInfo[] = (data.class ?? []).map((c: any) => ({
-    id: encodeRef({ type: 'cat', key: '?', tid: String(c.type_id), pg: 1 }),
-    title: c.type_name,
-    type: 'Folder' as EntryType,
-    cover: null,
-  }));
-  return { items: categories, totalCount: categories.length };
-}
-
-export async function cmsCategory(
-  api: string, tid: string, pg: number, limit: number
-): Promise<EntryList> {
-  const resp = await host.http.get({
-    url: `${api}?ac=list&t=${tid}&pg=${pg}`
-  });
-  const data = JSON.parse(resp.body);
+  const data = JSON.parse((await host.http.get({ url: `${api}?ac=list` })).body);
   return {
-    items: (data.list ?? []).map(vodItemToEntry),
-    totalCount: data.total ?? 0,
+    items: (data.class ?? []).map((c: any) => ({
+      id: encodeRef({ type: 'cat', key: '', tid: String(c.type_id), pg: 1 }),
+      title: c.type_name,
+      type: 'Folder' as EntryType,
+      cover: null,
+    })),
+    totalCount: data.class?.length ?? 0,
   };
 }
 
+export async function cmsCategory(api: string, tid: string, pg: number): Promise<EntryList> {
+  const data = JSON.parse((await host.http.get({ url: `${api}?ac=list&t=${tid}&pg=${pg}` })).body);
+  return { items: (data.list ?? []).map(vodItemToEntry), totalCount: data.total ?? 0 };
+}
+
 export async function cmsDetail(api: string, id: string): Promise<EntryDetail> {
-  const resp = await host.http.get({ url: `${api}?ac=detail&ids=${id}` });
-  const data = JSON.parse(resp.body);
+  const data = JSON.parse((await host.http.get({ url: `${api}?ac=detail&ids=${id}` })).body);
   return vodDetailToEntryDetail(data.list?.[0]);
 }
 
 export async function cmsSearch(api: string, keyword: string, pg: number): Promise<EntryList> {
-  const resp = await host.http.get({
+  const data = JSON.parse((await host.http.get({
     url: `${api}?ac=list&wd=${encodeURIComponent(keyword)}&pg=${pg}`
-  });
-  const data = JSON.parse(resp.body);
+  })).body);
   return { items: (data.list ?? []).map(vodItemToEntry), totalCount: data.total ?? 0 };
 }
 ```
 
 ---
 
-## Step 4 — drpy2 Handler (`handlers/drpy.ts`)
+## Step 4 — JAR Handler (`handlers/jar.ts`)
 
-Handles type 4/9/10 sites — JS spider files run via drpy2 engine.
-
-The drpy2 engine requires a bootstrap environment. We pre-load it before calling spider methods.
+Handles type 3 sites via `host.jar.load` + `host.jar.reflect`. All CatVod class naming conventions live here — Kotlin knows nothing of them.
 
 ```typescript
-// drpy2 bootstrap is pre-bundled as a string constant (built at compile time)
-import DRPY2_BUNDLE from './drpy2-bundle.js';  // pre-built IIFE string
+// Spider instance handles, keyed by siteKey
+const spiderHandles = new Map<string, string>();
 
-let drpyInitialized = false;
-
-async function ensureDrpy() {
-  if (drpyInitialized) return;
-  // The drpy2 bundle + all its asset dependencies are pre-loaded
-  // via host.drpy.eval() — a new host namespace that evals JS in a
-  // separate QuickJS context dedicated to drpy
-  // (or we can eval it in the same context before the provider bundle)
-  drpyInitialized = true;
+async function ensureJar(jarUrl: string, md5?: string) {
+  await host.jar.load({ url: jarUrl, md5 });
+  // Bootstrap: call Init.init() if present (decrypts encrypted JARs)
+  await host.jar.reflect({
+    url: jarUrl,
+    cls: 'com.github.catvod.spider.Init',
+    method: 'init',
+    args: [],
+  }).catch(() => { /* not all JARs have Init */ });
 }
 
-export async function drpyHome(apiUrl: string, extUrl: string): Promise<EntryList> {
-  await ensureDrpy();
-  // Fetch the spider rule JS file
-  const ruleResp = await host.http.get({ url: apiUrl });
-  // init() the drpy engine with the rule
-  // home() returns JSON string
-  const homeJson = await host.drpy.call({ method: 'home', ruleJs: ruleResp.body });
-  const data = JSON.parse(homeJson);
-  return { items: data.class.map(classToFolder), totalCount: data.class.length };
+async function getSpider(jarUrl: string, api: string, ext: string, siteKey: string): Promise<string> {
+  if (spiderHandles.has(siteKey)) return spiderHandles.get(siteKey)!;
+  const cls = `com.github.catvod.spider.${api.replace('csp_', '')}`;
+  // newInstance() then init(ext) — reflect returns opaque handle for objects
+  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
+  await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] });
+  spiderHandles.set(siteKey, handle);
+  return handle;
+}
+
+export async function jarHome(jarUrl: string, md5: string | undefined,
+                               api: string, ext: string, siteKey: string): Promise<EntryList> {
+  await ensureJar(jarUrl, md5);
+  const handle = await getSpider(jarUrl, api, ext, siteKey);
+  const cls = `com.github.catvod.spider.${api.replace('csp_', '')}`;
+  const raw = await host.jar.reflect({ url: jarUrl, cls, method: 'homeContent',
+                                        instance: handle, args: [false] });
+  const data = JSON.parse(raw);
+  return {
+    items: (data.class ?? []).map((c: any) => ({
+      id: encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id), pg: 1 }),
+      title: c.type_name, type: 'Folder' as EntryType, cover: null,
+    })),
+    totalCount: data.class?.length ?? 0,
+  };
+}
+
+export async function jarCategory(jarUrl: string, api: string, siteKey: string,
+                                   tid: string, pg: number): Promise<EntryList> {
+  const handle = await getSpider(jarUrl, api, '', siteKey);
+  const cls = `com.github.catvod.spider.${api.replace('csp_', '')}`;
+  const raw = await host.jar.reflect({ url: jarUrl, cls, method: 'categoryContent',
+                                        instance: handle, args: [tid, String(pg), false, {}] });
+  const data = JSON.parse(raw);
+  return { items: (data.list ?? []).map(vodItemToEntry), totalCount: data.total ?? 0 };
+}
+
+export async function jarDetail(jarUrl: string, api: string,
+                                 siteKey: string, id: string): Promise<EntryDetail> {
+  const handle = await getSpider(jarUrl, api, '', siteKey);
+  const cls = `com.github.catvod.spider.${api.replace('csp_', '')}`;
+  const raw = await host.jar.reflect({ url: jarUrl, cls, method: 'detailContent',
+                                        instance: handle, args: [[id]] });
+  return vodDetailToEntryDetail(JSON.parse(raw).list?.[0]);
+}
+
+export async function jarPlay(jarUrl: string, api: string, siteKey: string,
+                               flag: string, epUrl: string): Promise<PlaybackSpec> {
+  const handle = await getSpider(jarUrl, api, '', siteKey);
+  const cls = `com.github.catvod.spider.${api.replace('csp_', '')}`;
+  const raw = await host.jar.reflect({ url: jarUrl, cls, method: 'playerContent',
+                                        instance: handle, args: [flag, epUrl, []] });
+  const data = JSON.parse(raw);
+  return { url: data.url, headers: data.header ?? {}, mimeType: data.type ?? null,
+           title: '', durationMs: null, subtitleTracks: [], hooksState: {} };
 }
 ```
-
-**Note:** drpy2 support requires the host API extensions from the drpy2 plan (dom parsing, KV store, charset). This handler is a stub until those are implemented.
 
 ---
 
-## Step 5 — JAR Handler (`handlers/jar.ts`)
+## Step 5 — drpy2 Handler (`handlers/drpy.ts`)
 
-Handles type 3 sites — delegates to `host.jar` / `host.spider`.
+Handles type 4/9/10 sites. No JS libraries are bundled — the provider fetches them at runtime via `host.eval.script()` and caches them for the session.
+
+### Asset loading strategy
+
+FongMi bundles these assets in the APK. We fetch them from public sources instead:
+
+| Asset | Source | Purpose |
+|-------|--------|---------|
+| `cat.js` (drpy2 engine + cheerio) | FongMi GitHub raw or mirror | drpy2 runtime + `pdfh/pdfa/pd` + DOM parsing |
+| `crypto-js.js` | jsDelivr CDN | `CryptoJS` global |
+| `gbk.js` | FongMi GitHub raw or mirror | `gbkTool` global |
+| `http.js` | FongMi GitHub raw or mirror | `req()` wrapper over `_http` |
+
+`pdfh`, `pdfa`, `pd` are implemented inside `cat.js` using the bundled cheerio — no separate Kotlin host call needed.
+
+Kotlin must provide three globals injected directly onto `globalThis` (not `host.*`) before any drpy2 code runs:
+- `_http(url, options)` — **blocking** HTTP (drpy2 calls HTTP synchronously)
+- `local.get/set/delete` — per-engine KV store
+- `setTimeout(fn, delay)` — timer
+
+These are documented in the `host.jar` plan.
+
+### Implementation
 
 ```typescript
-let jarLoaded = false;
+const DRPY_ASSETS = [
+  'https://raw.githubusercontent.com/FongMi/TV/main/quickjs/src/main/assets/js/lib/http.js',
+  'https://raw.githubusercontent.com/FongMi/TV/main/quickjs/src/main/assets/js/lib/crypto-js.js',
+  'https://raw.githubusercontent.com/FongMi/TV/main/quickjs/src/main/assets/js/lib/gbk.js',
+  'https://raw.githubusercontent.com/FongMi/TV/main/quickjs/src/main/assets/js/lib/cat.js',
+];
 
-async function ensureJar(spiderUrl: string, md5: string | undefined,
-                          spiderKey: string, ext: string) {
-  if (jarLoaded) return;
-  await host.jar.load({ url: spiderUrl, md5, spiderKey, ext });
-  jarLoaded = true;
+let assetsLoaded = false;
+
+async function ensureAssets() {
+  if (assetsLoaded) return;
+  for (const url of DRPY_ASSETS) {
+    await host.eval.script({ url });   // cached after first load
+  }
+  assetsLoaded = true;
 }
 
-export async function jarHome(
-  spiderUrl: string, md5: string | undefined,
-  spiderKey: string, ext: string, filter: boolean
-): Promise<EntryList> {
-  await ensureJar(spiderUrl, md5, spiderKey, ext);
-  const raw = await host.spider.homeContent({ filter });
-  const data = JSON.parse(raw);
-  const categories: EntryInfo[] = (data.class ?? []).map((c: any) => ({
-    id: encodeRef({ type: 'cat', key: spiderKey, tid: String(c.type_id), pg: 1 }),
-    title: c.type_name,
-    type: 'Folder' as EntryType,
-    cover: null,
-  }));
-  return { items: categories, totalCount: categories.length };
-}
-
-export async function jarCategory(
-  spiderKey: string, tid: string, pg: number,
-  filter: boolean, extend: Record<string, string>
-): Promise<EntryList> {
-  const raw = await host.spider.categoryContent({
-    tid, pg: String(pg), filter, extend
-  });
-  const data = JSON.parse(raw);
+export async function drpyHome(apiUrl: string, ext: string): Promise<EntryList> {
+  await ensureAssets();
+  // cat.js exposes the drpy2 engine on globalThis
+  // Load the rule JS file and init the engine
+  const ruleJs = (await host.http.get({ url: apiUrl })).body;
+  await host.eval.script({ url: apiUrl, cache: false }); // eval rule into context
+  // drpy2 engine API: init(rule) → home() → JSON string
+  // These are called via evalExpression since drpy2 exposes a global API
+  const homeJson: string = await (globalThis as any).drpy.home();
+  const data = JSON.parse(homeJson);
   return {
-    items: (data.list ?? []).map(vodItemToEntry),
-    totalCount: data.total ?? 999,
-  };
-}
-
-export async function jarDetail(spiderKey: string, id: string): Promise<EntryDetail> {
-  const raw = await host.spider.detailContent({ ids: [id] });
-  const data = JSON.parse(raw);
-  return vodDetailToEntryDetail(data.list?.[0]);
-}
-
-export async function jarPlay(
-  flag: string, epUrl: string, vipFlags: string[]
-): Promise<PlaybackSpec> {
-  const raw = await host.spider.playerContent({ flag, id: epUrl, vipFlags });
-  const data = JSON.parse(raw);
-  return {
-    url: data.url,
-    headers: data.header ?? {},
-    mimeType: data.type ?? null,
-    title: '',
-    durationMs: null,
-    subtitleTracks: [],
-    hooksState: {},
+    items: (data.class ?? []).map((c: any) => ({
+      id: encodeRef({ type: 'cat', key: '', tid: String(c.type_id), pg: 1 }),
+      title: c.type_name, type: 'Folder' as EntryType, cover: null,
+    })),
+    totalCount: data.class?.length ?? 0,
   };
 }
 ```
+
+**Note:** The exact drpy2 API surface (how `cat.js` exposes `init/home/category/detail/play/search`) needs to be confirmed by reading `cat.js` before implementation. The handler above is illustrative. This is Phase 3 work.
 
 ---
 
@@ -305,33 +335,27 @@ Handles `lives[]` entries — M3U playlists.
 export async function fetchLiveChannels(lives: LiveEntry[]): Promise<EntryList> {
   const items: EntryInfo[] = [];
   for (const live of lives) {
-    const resp = await host.http.get({ url: live.url });
-    const channels = parseM3U(resp.body);
+    const channels = parseM3U((await host.http.get({ url: live.url })).body);
     for (const ch of channels) {
       items.push({
         id: encodeRef({ type: 'live', name: ch.name, url: ch.url }),
-        title: ch.name,
-        type: 'Playable',
-        cover: ch.logo ?? null,
+        title: ch.name, type: 'Playable', cover: ch.logo ?? null,
       });
     }
   }
   return { items, totalCount: items.length };
 }
 
-function parseM3U(content: string): Array<{ name: string; url: string; logo?: string }> {
+function parseM3U(content: string) {
   const lines = content.split('\n');
-  const channels = [];
+  const channels: Array<{ name: string; url: string; logo?: string }> = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (line.startsWith('#EXTINF:')) {
-      const nameMatch = line.match(/,(.+)$/);
-      const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-      const url = lines[i + 1]?.trim();
-      if (nameMatch && url && !url.startsWith('#')) {
-        channels.push({ name: nameMatch[1], url, logo: logoMatch?.[1] });
-      }
-    }
+    if (!line.startsWith('#EXTINF:')) continue;
+    const name = line.match(/,(.+)$/)?.[1];
+    const logo = line.match(/tvg-logo="([^"]+)"/)?.[1];
+    const url  = lines[i + 1]?.trim();
+    if (name && url && !url.startsWith('#')) channels.push({ name, url, logo });
   }
   return channels;
 }
@@ -341,7 +365,7 @@ function parseM3U(content: string): Array<{ name: string; url: string; logo?: st
 
 ## Step 7 — Mapper (`mapper.ts`)
 
-Maps TVBox VodItem/VodDetail to OpenTune contracts.
+Maps CatVod VodItem/VodDetail response format to OpenTune contracts.
 
 ```typescript
 export function vodItemToEntry(item: any): EntryInfo {
@@ -358,19 +382,17 @@ export function vodItemToEntry(item: any): EntryInfo {
 }
 
 export function vodDetailToEntryDetail(item: any): EntryDetail {
-  // Parse vod_play_from / vod_play_url into episode list
-  const sources = (item.vod_play_from ?? '').split('$$$');
-  const urlGroups = (item.vod_play_url ?? '').split('$$$');
+  // vod_play_from: "src1$$$src2"
+  // vod_play_url:  "EP1$url1#EP2$url2$$$EP1$url1b#EP2$url2b"
+  const sources   = (item.vod_play_from ?? '').split('$$$');
+  const urlGroups = (item.vod_play_url  ?? '').split('$$$');
 
-  // Build externalUrls from episode list (each episode = one ExternalUrl)
-  // The actual episode selection happens in getPlaybackSpec
-  const externalUrls: ExternalUrl[] = sources.flatMap((src: string, i: number) => {
-    const eps = (urlGroups[i] ?? '').split('#');
-    return eps.map((ep: string) => {
+  const externalUrls: ExternalUrl[] = sources.flatMap((src: string, i: number) =>
+    (urlGroups[i] ?? '').split('#').map((ep: string) => {
       const [epName, epUrl] = ep.split('$');
       return { name: `${src} / ${epName}`, url: epUrl ?? '' };
-    });
-  });
+    })
+  );
 
   return {
     title: item.vod_name ?? '',
@@ -378,13 +400,10 @@ export function vodDetailToEntryDetail(item: any): EntryDetail {
     logo: null,
     backdrop: item.vod_pic ? [item.vod_pic] : [],
     isMedia: true,
-    rating: null,
-    bitrate: null,
+    rating: null, bitrate: null,
     externalUrls,
     year: item.vod_year ? parseInt(item.vod_year) : null,
-    providerIds: {},
-    streams: [],
-    etag: null,
+    providerIds: {}, streams: [], etag: null,
   };
 }
 ```
@@ -393,67 +412,43 @@ export function vodDetailToEntryDetail(item: any): EntryDetail {
 
 ## Step 8 — Instance (`instance.ts`)
 
-The main dispatch logic.
-
 ```typescript
-export async function listEntry(
-  config: TvBoxConfig,
-  location: string | null,
-  startIndex: number,
-  limit: number,
-): Promise<EntryList> {
-  // Root: show all sites + live section
+export async function listEntry(config: CatVodConfig, location: string | null,
+                                 startIndex: number, limit: number): Promise<EntryList> {
   if (location === null) {
-    const siteEntries: EntryInfo[] = config.sites.map(site => ({
+    const items: EntryInfo[] = config.sites.map(site => ({
       id: encodeRef({ type: 'site', key: site.key }),
-      title: site.name,
-      type: 'Folder',
-      cover: null,
+      title: site.name, type: 'Folder', cover: null,
     }));
     if (config.lives?.length) {
-      siteEntries.push({
-        id: 'live:__all__',
-        title: '📺 直播',
-        type: 'Folder',
-        cover: null,
-      });
+      items.push({ id: 'live:__all__', title: '直播', type: 'Folder', cover: null });
     }
-    return { items: siteEntries, totalCount: siteEntries.length };
+    return { items, totalCount: items.length };
   }
 
   const ref = decodeRef(location);
+  const jar = parseSpiderField(config.spider);
 
   if (ref.type === 'site') {
     const site = config.sites.find(s => s.key === ref.key)!;
-    return dispatchHome(config, site);
+    const ext  = typeof site.ext === 'string' ? site.ext : JSON.stringify(site.ext ?? {});
+    if (site.type === 3)
+      return jarHome(jar!.url, jar?.md5, site.api, ext, site.key);
+    if (site.type === 4 || site.type === 9 || site.type === 10)
+      return drpyHome(site.api, ext);
+    return cmsHome(site.api);
   }
 
   if (ref.type === 'cat') {
     const site = config.sites.find(s => s.key === ref.key)!;
-    return dispatchCategory(config, site, ref.tid, ref.pg, limit);
+    if (site.type === 3)
+      return jarCategory(jar!.url, site.api, ref.key, ref.tid, ref.pg);
+    return cmsCategory(site.api, ref.tid, ref.pg);
   }
 
-  if (ref.type === 'live') {
-    return fetchLiveChannels(config.lives ?? []);
-  }
+  if (ref.type === 'live') return fetchLiveChannels(config.lives ?? []);
 
   return { items: [], totalCount: 0 };
-}
-
-function dispatchHome(config: TvBoxConfig, site: SiteEntry): Promise<EntryList> {
-  const spiderInfo = parseSpiderField(config.spider);
-  const ext = typeof site.ext === 'string' ? site.ext : JSON.stringify(site.ext ?? {});
-
-  if (site.type === 3) {
-    // JAR spider
-    return jarHome(spiderInfo!.url, spiderInfo?.md5, site.api, ext, false);
-  } else if (site.type === 4 || site.type === 9 || site.type === 10) {
-    // drpy2/3 JS spider
-    return drpyHome(site.api, ext);
-  } else {
-    // CMS HTTP API (type 0/1/2)
-    return cmsHome(site.api);
-  }
 }
 ```
 
@@ -463,30 +458,21 @@ function dispatchHome(config: TvBoxConfig, site: SiteEntry): Promise<EntryList> 
 
 ```typescript
 export function getFieldsSpec(): ProviderFieldSpec[] {
-  return [
-    {
-      id: 'config_url',
-      labelKey: 'tvbox.field.config_url',
-      kind: 'singleLine',
-      required: true,
-      order: 0,
-      placeholderKey: 'tvbox.field.config_url.placeholder',
-    },
-  ];
+  return [{
+    id: 'config_url', labelKey: 'catvod.field.config_url',
+    kind: 'singleLine', required: true, order: 0,
+    placeholderKey: 'catvod.field.config_url.placeholder',
+  }];
 }
 
-export async function validateFields(
-  values: Record<string, string>
-): Promise<ValidationResult> {
+export async function validateFields(values: Record<string, string>): Promise<ValidationResult> {
   try {
     const url = values['config_url'] ?? '';
     if (!url) throw new Error('Config URL is required');
     const config = await fetchConfig(url);
     if (!config.sites?.length) throw new Error('No sites found in config');
-
     const hash = await host.crypto.sha256({ input: url });
-    const name = `TVBox (${config.sites.length} sources)`;
-    return { success: true, hash, name, fields: { config_url: url } };
+    return { success: true, hash, name: `CatVod (${config.sites.length} sources)`, fields: { config_url: url } };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -499,73 +485,44 @@ export async function validateFields(
 
 ```typescript
 import { getFieldsSpec, validateFields } from './provider.js';
-import { fetchConfig } from './config.js';
+import { fetchConfig, parseSpiderField, CatVodConfig } from './config.js';
 import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
 
-let config: TvBoxConfig | null = null;
+let config: CatVodConfig | null = null;
 
 (globalThis as any).opentuneProvider = {
   providesArt: true,
-
-  async getFieldsSpec() { return getFieldsSpec(); },
-  async validateFields(args) { return validateFields(args.values); },
-
-  async init(args) {
-    config = await fetchConfig(args.credentials['config_url']);
-  },
-
-  async listEntry(args) {
-    return listEntry(config!, args.location, args.startIndex, args.limit);
-  },
-
-  async search(args) {
-    return search(config!, args.scopeLocation, JSON.parse(args.query));
-  },
-
-  async getDetail(args) {
-    return getDetail(config!, args.itemRef);
-  },
-
-  async getPlaybackSpec(args) {
-    return getPlaybackSpec(config!, args.itemRef, args.startMs);
-  },
-
-  async onPlaybackReady() {},
-  async onProgressTick() {},
-  async onStop() {},
+  async getFieldsSpec()        { return getFieldsSpec(); },
+  async validateFields(args)   { return validateFields(args.values); },
+  async init(args)             { config = await fetchConfig(args.credentials['config_url']); },
+  async listEntry(args)        { return listEntry(config!, args.location, args.startIndex, args.limit); },
+  async search(args)           { return search(config!, args.scopeLocation, JSON.parse(args.query)); },
+  async getDetail(args)        { return getDetail(config!, args.itemRef); },
+  async getPlaybackSpec(args)  { return getPlaybackSpec(config!, args.itemRef, args.startMs); },
+  async onPlaybackReady()      {},
+  async onProgressTick()       {},
+  async onStop()               {},
 };
 ```
 
 ---
 
-## Rollup Config Addition
-
-Add `tvbox` to the providers list — it will be auto-discovered since `providers/tvbox/index.ts` exists.
-
----
-
 ## Phased Delivery
 
-### Phase 1 — CMS + IPTV (no new host APIs needed) — ~3 days
+### Phase 1 — CMS + IPTV (~3 days, no new host APIs)
+- `config.ts`, `handlers/cms.ts`, `handlers/iptv.ts`, `mapper.ts`, `ref.ts`, `provider.ts`, `instance.ts`, `index.ts`
+- Works with type 0/1/2 sites and all `lives[]` entries
 
-- `config.ts` (fetch + JPEG base64 decode)
-- `handlers/cms.ts` (苹果CMS HTTP API)
-- `handlers/iptv.ts` (M3U live channels)
-- `mapper.ts`, `ref.ts`
-- `provider.ts`, `instance.ts`, `index.ts`
-- Works with any type 0/1/2 site and all `lives[]` entries
-
-### Phase 2 — JAR Spider support — ~3.5 days (depends on `host.loadJar` plan)
-
+### Phase 2 — JAR spider support (~3 days, depends on `host.jar` plan)
 - `handlers/jar.ts`
-- Requires `host.jar.*` and `host.spider.*` from the `host.loadJar` plan
-- Unlocks all `csp_*` type 3 sites (FTY's 49 sites)
+- Requires `host.jar.load` + `host.jar.reflect` from the `host.jar` plan
+- Unlocks all type 3 (`csp_*`) sites
 
-### Phase 3 — drpy2 JS spider support — ~1–2 weeks
-
-- `handlers/drpy.ts`
-- Requires drpy2 host API extensions (dom parsing, KV store, charset)
-- Unlocks type 4/9/10 sites and the broader drpy2 ecosystem
+### Phase 3 — drpy2 JS spider support (~1 week)
+- `handlers/drpy.ts` (full implementation)
+- Requires `host.eval.script` + sync `_http` global from the `host.jar` plan
+- No bundled libraries — assets fetched from FongMi GitHub / CDN at runtime via `host.eval.script`
+- Unlocks type 4/9/10 sites
 
 ---
 
@@ -573,16 +530,16 @@ Add `tvbox` to the providers list — it will be auto-discovered since `provider
 
 | File | Notes |
 |------|-------|
-| `providers-ts/providers/tvbox/index.ts` | Entry point |
-| `providers-ts/providers/tvbox/provider.ts` | Fields + validation |
-| `providers-ts/providers/tvbox/instance.ts` | Core dispatch |
-| `providers-ts/providers/tvbox/config.ts` | Config fetch + decode |
-| `providers-ts/providers/tvbox/ref.ts` | ItemRef encoding |
-| `providers-ts/providers/tvbox/mapper.ts` | VodItem → EntryInfo |
-| `providers-ts/providers/tvbox/handlers/cms.ts` | 苹果CMS HTTP |
-| `providers-ts/providers/tvbox/handlers/iptv.ts` | M3U live |
-| `providers-ts/providers/tvbox/handlers/jar.ts` | JAR spider |
-| `providers-ts/providers/tvbox/handlers/drpy.ts` | drpy2 JS spider |
+| `providers-ts/providers/catvod/index.ts` | Entry point |
+| `providers-ts/providers/catvod/provider.ts` | Fields + validation |
+| `providers-ts/providers/catvod/instance.ts` | Core dispatch |
+| `providers-ts/providers/catvod/config.ts` | Config fetch + decode |
+| `providers-ts/providers/catvod/ref.ts` | ItemRef encoding |
+| `providers-ts/providers/catvod/mapper.ts` | VodItem → EntryInfo |
+| `providers-ts/providers/catvod/handlers/cms.ts` | 苹果CMS HTTP |
+| `providers-ts/providers/catvod/handlers/iptv.ts` | M3U live |
+| `providers-ts/providers/catvod/handlers/jar.ts` | JAR spider via host.jar.reflect |
+| `providers-ts/providers/catvod/handlers/drpy.ts` | drpy2 JS spider (stub) |
 
 ---
 
@@ -591,6 +548,6 @@ Add `tvbox` to the providers list — it will be auto-discovered since `provider
 | Phase | Effort |
 |-------|--------|
 | Phase 1 (CMS + IPTV) | 3 days |
-| Phase 2 (JAR spiders) | 3.5 days + host.loadJar plan |
-| Phase 3 (drpy2) | 1–2 weeks + drpy2 host extensions |
-| **Total (all phases)** | **~4–5 weeks** |
+| Phase 2 (JAR spiders) | 3 days + host.jar plan |
+| Phase 3 (drpy2) | 1 week + host.eval + sync _http |
+| **Total (all phases)** | **~4 weeks** |

@@ -10,6 +10,17 @@
 
 饭太硬 ("FTY", literally "rice is too hard") is a curated **TVBox configuration index** — a well-known Chinese IPTV/VOD aggregator config popular in mainland China. The `/tv` endpoint is the "空壳接口" (skeleton interface): a single JSON blob that TVBox-compatible Android TV apps (FongMi/TV, CatVOD, etc.) consume to discover dozens of media sources.
 
+### Authorship & Relationships
+
+| Entity | Role | Relation |
+|--------|------|----------|
+| **FongMi / 肥猫** | App developer (`github.com/FongMi/TV`, GPL-3.0) | Wrote the client app and the CatVod Spider framework |
+| **影视仓 (Yingshicang)** | App fork, different author ("瘦鹅") | Compatible client, same protocol |
+| **饭太硬 (FTY)** | Config curator, `github.com/fantaiying7` | Publishes `config.json` + spider JAR, not the app |
+| **肥猫 (feimao)** | Config curator, `肥猫.live` | Different person from FongMi despite same name |
+
+Config curators (FTY, feimao) are to the app what podcast publishers are to a podcast app. They don't write the client — they publish subscription feeds.
+
 ### Delivery mechanism
 
 The JSON is **not served as `application/json`**. Instead, it is base64-encoded and embedded inside a JPEG image (JFIF, 100×100, ~20 KB). The host server returns `Content-Type: image/jpeg` or `image/x-ms-bmp` to evade scraping/blocking. The TVBox client decodes the embedded payload client-side. This is an intentional obfuscation layer.
@@ -20,7 +31,7 @@ The JSON is **not served as `application/json`**. Instead, it is base64-encoded 
 
 ```
 {
-  "spider":    "<JAR URL>;md5;<hash>",    // optional — TVBox spider JAR
+  "spider":    "<JAR URL>;md5;<hash>",    // spider JAR for csp_* providers
   "wallpaper": "<URL>",
   "sites":     [ <SiteEntry>... ],        // 52 entries
   "lives":     [ <LiveEntry>... ],        //  7 entries
@@ -36,9 +47,9 @@ The JSON is **not served as `application/json`**. Instead, it is base64-encoded 
 {
   key:           string;          // stable ID used in URL params
   name:          string;          // display name (with emoji prefix)
-  type:          3;               // always 3 in this config (= "VOD API")
-  api:           string;          // see § API Types
-  ext?:          string | object; // encrypted payload or cloud-drive config
+  type:          number;          // 0/1/2=CMS HTTP, 3=JAR spider, 4/9=drpy2, 10=drpy3
+  api:           string;          // class name (type 3) or URL (type 0/1/2/4/9/10)
+  ext?:          string | object; // config payload; may be AES-encrypted base64 for some csp_* entries
   searchable?:   0 | 1;
   quickSearch?:  0 | 1;
   changeable?:   0 | 1;
@@ -66,20 +77,63 @@ The JSON is **not served as `application/json`**. Instead, it is base64-encoded 
 
 ---
 
-## 3. API Types in This Config (52 Sites)
+## 3. Site Types in This Config (52 Sites)
 
-| Type | Count | Description |
+**All 52 sites in the FTY config use `type: 3`** (JAR spider). There are no bare type 4/9 drpy2 entries at the top level. The 3 sites that internally use JS rules (虎牙直播, 斗鱼直播, 兔小贝) are wrapped inside a `csp_drpy` Java class — the `api` field for those entries is a `.js` URL, but the site type is still `3` and the JAR must be loaded first.
+
+| Protocol type | Count | Description |
 |------|-------|-------------|
-| `csp_*` (TVBox native Java) | 49 | Closed-source Android JAR spiders bundled with TVBox |
-| `drpy2` JS engine | 3 | Open-source JS rule engine (see §4) |
-
-The 3 drpy2 sites are: **虎牙直播** (Huya live), **斗鱼直播** (Douyu live), **兔小贝** (children's content).
+| `type: 3` — JAR spider (`csp_*`) | 49 | Java spider classes loaded from `spider.jar` at runtime |
+| `type: 3` — JAR + drpy2 bridge | 3 | Java `csp_drpy` class that loads and runs a `.js` rule file |
+| IPTV M3U (`lives`) | 7 | Plain M3U playlists (separate from the `sites` array) |
 
 ---
 
-## 4. drpy2 — The JS Engine
+## 4. The Spider JAR Architecture
 
-`drpy2.min.js` (~67 KB) is the open-source rule execution engine used by 3 of the 52 sites. It is a significant reference point for a JS provider integration.
+The `spider.jar` (downloaded at runtime from the config's `spider` field) is **self-contained**:
+
+```
+spider.jar (972 KB)
+├── classes.dex           — decryption bootstrap (Init + DexNative)
+└── assets/
+    ├── ftyguard_v7.so    — ARM 32-bit JNI native lib (holds AES key + decryption routine)
+    ├── ftyguard_v8.so    — ARM 64-bit JNI native lib (holds AES key + decryption routine)
+    └── ftyshinidie.guard — custom-encrypted container (~2 MB DEX when decrypted)
+```
+
+The `classes.dex` in the outer JAR is only a **decryption bootstrap** — it contains `Init` and `DexNative` but not the real Spider implementations. The actual 46 Spider classes live inside `ftyshinidie.guard`, which is decrypted at runtime by the native `.so`.
+
+Loading flow:
+1. App downloads `spider.jar` from config URL
+2. `Init` extracts `ftyguard_v8.so` (or `v7` for 32-bit) to a temp dir
+3. `System.loadLibrary()` loads it
+4. Native `datadiv_decode*` decrypts `ftyshinidie.guard` into a real DEX (~2 MB)
+5. `DexClassLoader` loads the decrypted DEX (46 Spider classes)
+6. Spider classes are cast to `com.github.catvod.crawler.Spider` and called
+
+**Different config providers use different JARs with different native libs.** The app is provider-agnostic.
+
+---
+
+## 5. csp_* Providers
+
+The 46 Spider implementations in the decrypted DEX all extend `com.github.catvod.crawler.Spider` (open-source interface from FongMi/TV). Notable entries:
+
+- `csp_BiliGuard` — Bilibili
+- `csp_WoGGGuard` — 4K VOD with danmaku
+- `csp_T4Guard`, `csp_AppSxGuard` — Multi-source aggregators (encrypted `ext`)
+- `csp_LibvioGuard`, `csp_NewCzGuard` — VOD with instant playback
+- `csp_SixVGuard` — Magnetic torrent sources
+- `csp_MyDriveGuard` — Personal cloud drive
+
+The Spider interface is open source; the specific implementations are compiled into the encrypted `.guard` payload. The `ext` field for some entries (e.g. `T4Guard`, `AppSxGuard`) is an AES-encrypted base64 string — it is decrypted internally by `DexNative` using a key embedded in the `.so`. We pass the raw `ext` string through to `Spider.init()` and the spider decrypts it itself.
+
+---
+
+## 6. drpy2 — The JS Engine
+
+`drpy2.min.js` (~67 KB) is the open-source rule execution engine. In the FTY config the 3 drpy2-backed sites go through a `csp_drpy` JAR bridge, but drpy2 can also run standalone (type 4/9/10 in other configs).
 
 ### Exported API surface
 
@@ -92,58 +146,20 @@ detail(id)         → item detail + episodes
 play(flag, id, vipFlags) → playback URL resolution
 search(qs, quick, pg)    → search
 proxy(params)      → local proxy for encrypted streams
-sniffer()          → enable auxiliary sniffer
-isVideo(url)       → video URL validator
 ```
 
-### drpy2 site rule format (e.g. `虎牙.js`)
+### drpy2 host API requirements
 
-```javascript
-var rule = {
-  title:      "虎牙直播",
-  host:       "https://www.huya.com",
-  homeUrl:    "/cache.php?...",
-  url:        "/cache.php?...&page=fypage",
-  class_name: "娱乐&网游&单机&手游",
-  class_url:  "8&1&2&3",
-  detailUrl:  "https://m.huya.com/fyid",
-  filterable: 1,
-  filter:     { ... },         // per-category filter options
-  // parsing rules can be CSS/XPath/JSONPath/regex or inline JS
-};
-```
+drpy2 requires several host globals and pre-loaded assets:
 
-Each rule is a plain JS object; drpy2 interprets it to fetch & parse pages.
+**Required globals:** `req`, `local`, `joinUrl`, `pdfh`, `pdfa`, `pd`, `jinja`  
+**Required assets:** `cheerio`, `crypto-js`, `pako`, `node-rsa`, `json5`, `jinja`, `gbkTool`
 
-### drpy2 dependencies
-
-drpy2 requires several bundled assets that it imports via `assets://` scheme:
-- `cheerio.min.js` (DOM parsing)
-- `crypto-js.js`
-- `node-rsa.js`, `pako.min.js`, `json5.js`, `jinja.js`
-- `gbk.js` (GBK encoding support)
-
-These are expected to be pre-loaded in the host environment (TVBox's embedded V8/QuickJS).
+These are expected to be pre-loaded in the host environment. Our QuickJS currently provides `host.http` and `host.crypto.sha256` only — implementing full drpy2 support requires extending the host API (see §8b below).
 
 ---
 
-## 5. csp_* Providers
-
-The 49 `csp_*` entries (e.g. `csp_WoGGGuard`, `csp_T4Guard`, `csp_AppSxGuard`) are **Java-class spider plugins** compiled into the TVBox APK. They are **not open source** and are not accessible outside the TVBox Android runtime. The names follow the pattern `csp_{ProviderName}Guard`.
-
-Many of these accept an encrypted `ext` field (base64+AES) that contains per-source configuration (API keys, base URLs), so the config itself is intentionally opaque even if you were to reverse the JAR.
-
-Some notable `csp_*` providers:
-- `csp_BiliGuard` — Bilibili (video platform, with danmaku)
-- `csp_MyDriveGuard` — Personal cloud drive
-- `csp_WoGGGuard` — 4K VOD with danmaku
-- `csp_T4Guard`, `csp_AppSxGuard` — Multi-source aggregators (encrypted ext)
-- `csp_LibvioGuard`, `csp_NewCzGuard` — VOD with instant playback
-- `csp_SixVGuard` — Magnetic torrent sources
-
----
-
-## 6. Content Categories
+## 7. Content Categories
 
 | Category | Examples |
 |----------|---------|
@@ -160,82 +176,105 @@ Some notable `csp_*` providers:
 
 ---
 
-## 7. Feasibility Assessment
+## 8. Feasibility Assessment
 
-### Can we implement FTY as a JS provider?
+### What can we implement?
 
-**Short answer: Partially feasible — the drpy2 subset is implementable, the csp_* majority is not.**
+| Component | Feasibility | Effort |
+|-----------|------------|--------|
+| Fetch & decode the `/tv` config (JPEG base64 unwrap) | ✅ Trivial | Hours |
+| IPTV M3U live sources (7 `lives` entries) | ✅ Easy | 1 day |
+| 苹果CMS HTTP API (type 0/1/2 sites) | ✅ Easy | 1–2 days |
+| JAR spider loading (`host.loadJar`, `host.spider.*`) | ✅ Feasible on Android | ~3.5 days |
+| drpy2 JS spider support (type 4/9/10) | ✅ Feasible | 1–2 weeks |
+| FTY's specific `csp_*` Spider behavior | ⚠️ Opaque source | Call the JAR (above); no reimplementation needed |
+| Encrypted `ext` fields | ✅ Transparent | Passed through to `Spider.init()`; spider decrypts internally |
 
-#### What's achievable
+#### 8a. JAR spider loading
 
-| Component | Feasibility | Notes |
-|-----------|------------|-------|
-| Fetch & decode the `/tv` config | ✅ Trivial | HTTP GET + base64 from JPEG |
-| Present the 52 sites as `Folder` entries | ✅ Easy | Static from JSON |
-| drpy2 JS sites (3 sites) | ✅ Possible | See §7a |
-| IPTV live M3U sources (7 lives) | ✅ Easy | Fetch M3U, map channels to `Playable` entries |
-| `csp_*` providers (49 sites) | ❌ Blocked | Java-only, no public API |
-| Encrypted `ext` fields | ❌/⚠️ Blocked | AES key is in the TVBox JAR |
+**Our app is Android and can load the JAR.** The mechanism is standard:
+- `DexClassLoader` (Android API, no special permissions)
+- `System.loadLibrary()` from a temp path (standard Android)
+- Extract `ftyguard_v8.so` from JAR `assets/` to `cacheDir` before loading
 
-#### 7a. drpy2 integration path
+`Spider.init(Context, ext)` uses only standard Android APIs. The `ext` decryption is **transparent to us** — we pass the raw encrypted string to `Spider.init()` and the spider's native code decrypts it internally using its own embedded key. We never need to know the AES key.
 
-The drpy2 engine itself (`drpy2.min.js`) is open-source ES module code. In principle it could run inside our QuickJS sandbox **if** all its `assets://` imports were satisfied. The blockers are:
+A concrete `host.loadJar()` / `host.spider.*` implementation plan is documented in [plan-host-load-jar.md](./plan-host-load-jar.md). Estimated effort: **~3.5 days**.
 
-1. **Asset bundle**: drpy2 expects `cheerio`, `crypto-js`, `pako`, `node-rsa`, `gbk`, `json5`, `jinja` to be pre-loaded under the `assets://js/lib/` virtual scheme. Our current QuickJS engine provides `host.http` and `host.crypto.sha256` only — no DOM/CSS parsing, no GBK codec.
-2. **Dynamic import model**: drpy2 uses ES module `import` with custom URL schemes. Our engine executes a single IIFE bundle; it has no ES module resolver.
-3. **Proxy / sniffer**: Several drpy2 rules use a local HTTP proxy for stream decryption. This requires a side-channel not present in our architecture.
+#### 8b. drpy2 JS spider support
 
-**Effort to close these gaps**: Large. Would require implementing a module resolver, polyfilling 5–7 libraries, and potentially adding a GBK transcoder to the host API.
+The drpy2 engine is open-source and can run in our QuickJS sandbox once the host API gaps are filled:
 
-#### 7b. IPTV / M3U lives (easy win)
+| Gap | Solution |
+|-----|---------|
+| `req()` HTTP | Adapter over existing `host.http` |
+| `pdfh/pdfa/pd` DOM parsing | Kotlin-side Jsoup host calls (avoids bundling 300KB cheerio) |
+| `local.*` KV store | In-memory `ConcurrentHashMap` per engine instance |
+| `CryptoJS`, `pako`, `node-rsa`, `json5`, `jinja` | Pre-bundled JS assets |
+| `gbkTool` | Kotlin-side `host.charset.decode` |
+| `assets://` module resolver | Pre-bundle all assets into a single IIFE before loading drpy2 |
 
-The 7 live sources are plain M3U playlists hosted on public GitHub/CDN URLs. These could be ingested as a flat list of `Playable` channel entries with no dependencies. This is independent of the csp_*/drpy2 question.
+Estimated effort: **1–2 weeks**.
+
+#### 8c. IPTV / M3U lives (easy win)
+
+The 7 live sources are plain M3U playlists hosted on public GitHub/CDN URLs. These can be ingested as a flat list of `Playable` channel entries with no dependencies on either the JAR or drpy2.
 
 ---
 
-## 8. Implementation Options (Ranked)
+## 9. Implementation Options (Ranked)
 
-### Option A — IPTV-only JS provider (Low effort, narrow scope)
+### Option A — IPTV-only (Low effort, narrow scope)
 - Fetch live M3U sources from the `lives` array
 - Map channels to `EntryInfo { type: "Playable" }`
-- No drpy2, no csp_* needed
+- No JAR, no drpy2 needed
 - Delivers ~50–100 live Chinese TV channels
+- **Effort: 1 day**
+
+### Option B — 苹果CMS HTTP API provider (Low effort, broad ecosystem)
+- Implement type 0/1/2 HTTP API
+- Works with hundreds of self-hosted VOD sites, not just FTY
+- No native code, no drpy2 needed
 - **Effort: 1–2 days**
 
-### Option B — Static catalog + drpy2 for live streams (Medium)
-- Expose all 52 sites as `Folder` items at the top level
-- For drpy2 sites, polyfill the required asset libraries in our QuickJS environment and run drpy2 natively
-- csp_* folders show up but browsing them returns an error/stub
-- **Effort: 1–2 weeks** (mainly library polyfilling)
+### Option C — Full TVBox provider with JAR + drpy2 support (Phased, ~4–5 weeks total)
+- Phase 1: CMS HTTP + IPTV (3 days) — see [plan-tvbox-provider.md](./plan-tvbox-provider.md)
+- Phase 2: JAR spider loading (3.5 days) — see [plan-host-load-jar.md](./plan-host-load-jar.md)
+- Phase 3: drpy2 JS spider support (1–2 weeks)
+- Unlocks the full TVBox ecosystem including FTY's 49 csp_* sites
 
-### Option C — Full csp_* compatibility (Very high effort, likely infeasible)
-- Would require reimplementing or reverse-engineering 49 closed-source Java spiders
-- Legally and technically risky
-- **Effort: months; not recommended**
-
----
-
-## 9. Technical Risks & Concerns
-
-1. **Legal / content legitimacy**: FTY aggregates content from unauthorized streaming sources. The csp_* providers in particular are known to scrape licensed platforms (Bilibili, iQiyi, Youku) without authorization. Implementing full support would facilitate copyright infringement.
-
-2. **Stability**: The config URL and embedded sources change frequently (note `in.bmp` is a content-addressed blob hash). Any hardcoded URL will break.
-
-3. **Config obfuscation**: The JPEG-hiding trick means standard HTTP clients silently get garbage unless they implement the decode step. This is an intentional anti-bot measure and could change at any time.
-
-4. **drpy2 asset dependencies**: The `assets://` import scheme is TVBox-specific. Satisfying it requires bundling ~500 KB of additional JS libraries into our QuickJS environment.
-
-5. **Encrypted ext fields**: The `csp_AppSxGuard` / `csp_T4Guard` entries use AES-encrypted `ext` blobs. The decryption key is embedded in the TVBox JAR — we'd need to reverse it.
+### Option D — Target open ecosystem instead of FTY specifically
+- The TVBox protocol has thousands of open drpy2 `.js` spiders and hundreds of public 苹果CMS endpoints
+- Implementing Options B + drpy2 (Option C Phase 3) gives access to this broader ecosystem without any JAR dependency
+- FTY's specific JAR is a curatorial convenience, not a unique content source
 
 ---
 
-## 10. Recommendation
+## 10. Technical Risks & Concerns
 
-**Pursue Option A (IPTV M3U live channels only)** if the goal is "get Chinese live TV into OpenTune with minimal work." The 7 `lives` entries are a clean, public-domain-ish source of M3U playlists that require zero proprietary code.
+1. **Legal / content legitimacy**: FTY aggregates content from unauthorized streaming sources. The `csp_*` providers in particular are known to scrape licensed platforms. Implementing JAR loading would facilitate use of these spiders.
 
-**Avoid Options B and C** in the short term. The drpy2 polyfilling work is significant, and the csp_* providers are a legal and technical dead-end.
+2. **Stability**: The config URL and embedded sources change frequently. Any hardcoded URL will break.
 
-If the team wants a real Chinese VOD provider in the future, a dedicated provider targeting a single open API (e.g. a self-hosted AList instance backed by cloud drive) would be a cleaner and more maintainable approach than trying to emulate the full TVBox ecosystem.
+3. **Config obfuscation**: The JPEG-hiding trick means standard HTTP clients silently get garbage unless the decode step is implemented. This is intentional and could change at any time.
+
+4. **JAR execution security**: The JAR runs in the same process with full app permissions. Only load JARs from URLs explicitly configured by the user; verify MD5 before loading.
+
+5. **drpy2 asset bundle size**: Pre-bundling `crypto-js`, `pako`, `node-rsa`, `json5`, `jinja` adds ~500KB to the JS environment. Acceptable but worth noting.
+
+6. **ARM `.so` on non-Android**: The native libs are ARM-compiled. They can only run on Android devices (armv7 or armv8). No desktop/server support possible.
+
+---
+
+## 11. Recommendation
+
+**Pursue Option C in phases**, starting with Phase 1 (CMS HTTP + IPTV) as the immediate deliverable.
+
+- **Phase 1** (CMS + IPTV, ~3 days): Immediate value with no new host APIs. Works with the `lives` array and any type 0/1/2 site.
+- **Phase 2** (JAR loading, ~3.5 days): Unlocks FTY's 49 csp_* sites via `host.loadJar`. The technical path is clear and the effort is bounded.
+- **Phase 3** (drpy2, 1–2 weeks): Unlocks the broader open JS spider ecosystem; worthwhile after Phase 2.
+
+If the goal is narrowly "get Chinese live TV with minimal work," Option A (IPTV only) is sufficient. But the full protocol implementation (Option C) is achievable within reasonable effort and gives access to the entire TVBox ecosystem.
 
 ---
 
@@ -249,3 +288,7 @@ If the team wants a real Chinese VOD provider in the future, a dedicated provide
 | drpy2 engine | `https://github.com/fantaiying7/EXT` (main/drpy2.min.js) |
 | TVBox client | `https://github.com/FongMi/TV` |
 | Decoded JSON | [fty_tv.json](./fty_tv.json) |
+| Spider JAR analysis | [spider-jar-analysis.md](./spider-jar-analysis.md) |
+| Protocol deep dive | [tvbox-protocol-deep-dive.md](./tvbox-protocol-deep-dive.md) |
+| JAR loading plan | [plan-host-load-jar.md](./plan-host-load-jar.md) |
+| TVBox provider plan | [plan-tvbox-provider.md](./plan-tvbox-provider.md) |
