@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class QuickJsEngine(
     private val hostApis: HostApis,
-    private val httpClient: OkHttpClient = defaultHttpClient(),
+    private val httpClient: OkHttpClient,
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -232,7 +232,5 @@ class QuickJsEngine(
         init {
             System.loadLibrary("quickjs_engine")
         }
-
-        private fun defaultHttpClient() = OkHttpClient.Builder().build()
     }
 }

@@ -6,6 +6,7 @@ import com.opentune.provider.EndpointClient
 import com.opentune.provider.ProviderFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -45,7 +46,7 @@ class JsProvider private constructor(
             val argsJson = buildJsonObject {
                 put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
             }.toString()
-            val resultJson = withEngine { engine ->
+            val resultJson = withEngine(httpClient) { engine ->
                 engine.callMethod("validateFields", argsJson)
             } ?: return ValidationResult.Error("Validation returned null")
 
@@ -83,8 +84,8 @@ class JsProvider private constructor(
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
-    private suspend fun <T> withEngine(block: suspend (QuickJsEngine) -> T): T {
-        val engine = QuickJsEngine(hostApis)
+    private suspend fun <T> withEngine(httpClient: OkHttpClient, block: suspend (QuickJsEngine) -> T): T {
+        val engine = QuickJsEngine(hostApis, httpClient)
         return try {
             engine.init()
             installHostApis(engine)
@@ -108,7 +109,7 @@ class JsProvider private constructor(
         suspend fun create(assetPath: String, jsBundle: String, hostApis: HostApis): JsProvider {
             var cover = false
             var fields: List<ProviderFieldSpec> = emptyList()
-            val engine = QuickJsEngine(hostApis)
+            val engine = QuickJsEngine(hostApis, OkHttpClient())
             try {
                 engine.init()
                 engine.evalSnippet(HOST_BOOTSTRAP_JS)

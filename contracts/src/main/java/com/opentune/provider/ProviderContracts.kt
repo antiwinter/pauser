@@ -100,20 +100,20 @@ interface OpenTuneProviderLoader {
  * Live protocol handle for a single configured endpoint.
  * No identity fields — the app registry maps endpointId → client externally.
  */
-interface EndpointClient {
-    var imageLoader: coil3.ImageLoader?
-    suspend fun listEntry(
+abstract class EndpointClient {
+    open var imageLoader: coil3.ImageLoader? = null
+    abstract suspend fun listEntry(
         location: String?,
         startIndex: Int,
         limit: Int,
         sortBy: SortField? = null,
         sortOrder: SortOrder = SortOrder.Ascending,
     ): EntryList
-    suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
-    suspend fun getDetail(itemRef: String): EntryDetail
-    suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
-    suspend fun getEntries(itemRefs: List<String>): EntryList
-    suspend fun getTaggedEntries(
+    abstract suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
+    abstract suspend fun getDetail(itemRef: String): EntryDetail
+    abstract suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
+    abstract suspend fun getEntries(itemRefs: List<String>): EntryList
+    open suspend fun getTaggedEntries(
         tag: EntryTag,
         scopeLocation: String? = null,
         startIndex: Int = 0,
@@ -121,12 +121,12 @@ interface EndpointClient {
         sortBy: SortField? = null,
         sortOrder: SortOrder = SortOrder.Descending,
     ): EntryList = EntryList(emptyList(), 0)
-    suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
+    open suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
 
     /**
      * Opens a random-access [ProviderStream] for [itemRef].
      * Returns null if this provider does not support direct byte streaming (default — Emby, JS).
      * The caller ([OpenTuneServer]) is responsible for calling [ProviderStream.close].
      */
-    suspend fun openStream(itemRef: String): ProviderStream? = null
+    open suspend fun openStream(itemRef: String): ProviderStream? = null
 }

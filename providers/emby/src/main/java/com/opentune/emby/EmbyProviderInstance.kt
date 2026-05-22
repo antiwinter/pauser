@@ -48,9 +48,7 @@ class EmbyProviderInstance(
     private val deviceProfile: DeviceProfile,
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
     private val httpClient: OkHttpClient = OkHttpClient(),
-) : EndpointClient {
-
-    override var imageLoader: coil3.ImageLoader? = null
+) : EndpointClient() {
 
     private val repo: EmbyRepository = EmbyRepository(
         api = EmbyClientFactory.create(fields.baseUrl, fields.accessToken),

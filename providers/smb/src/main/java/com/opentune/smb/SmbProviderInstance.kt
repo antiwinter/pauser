@@ -28,9 +28,7 @@ private const val SMB_LOG = "OpenTunePlayer"
 class SmbProviderInstance(
     private val fields: SmbServerFieldsJson,
     private val httpClient: OkHttpClient = OkHttpClient(),
-) : EndpointClient {
-
-    override var imageLoader: coil3.ImageLoader? = null
+) : EndpointClient() {
 
     private fun credentials() = SmbCredentials(
         host = fields.host,

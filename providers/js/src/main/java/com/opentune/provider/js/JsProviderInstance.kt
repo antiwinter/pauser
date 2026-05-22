@@ -43,9 +43,8 @@ class JsProviderInstance(
     private val values: Map<String, String>,
     private val capabilities: PlatformCapabilities,
     private val httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
-) : EndpointClient {
+) : EndpointClient() {
 
-    override var imageLoader: coil3.ImageLoader? = null
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
@@ -59,7 +58,7 @@ class JsProviderInstance(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            engine = QuickJsEngine(hostApis)
+            engine = QuickJsEngine(hostApis, httpClient)
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
