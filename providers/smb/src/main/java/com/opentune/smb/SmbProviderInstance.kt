@@ -20,13 +20,14 @@ import com.opentune.provider.StreamRegistrarHolder
 import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import java.util.EnumSet
 
 private const val SMB_LOG = "OpenTunePlayer"
 
 class SmbProviderInstance(
     private val fields: SmbServerFieldsJson,
-) : EndpointClient {
+) : EndpointClient() {
 
     private fun credentials() = SmbCredentials(
         host = fields.host,
@@ -154,6 +155,7 @@ class SmbProviderInstance(
                 durationMs = null,
                 hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
+                httpClient = httpClient,
             )
         }
     }

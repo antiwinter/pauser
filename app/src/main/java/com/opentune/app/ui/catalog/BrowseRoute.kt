@@ -15,8 +15,8 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.app.navigation.toJson
-import com.opentune.provider.EntryInfo
 import com.opentune.provider.EndpointClient
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +26,7 @@ private const val LOG_TAG = "OpenTuneBrowseRoute"
 sealed interface BrowseState {
     data object Loading : BrowseState
     data class Error(val message: String) : BrowseState
-    data class Ready(val instance: EndpointClient) : BrowseState
+    data class Ready(val client: EndpointClient) : BrowseState
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -47,16 +47,14 @@ fun BrowseRoute(
     LaunchedEffect(app, protocol, endpointId) {
         state = BrowseState.Loading
         items.clear()
-        val instance = app.endpointClientRegistry.getOrCreate(endpointId)
-        state = if (instance == null) {
+        val client = app.endpointClientRegistry.getOrCreate(endpointId)
+        state = if (client == null) {
             Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
             BrowseState.Error("Endpoint not found")
         } else {
-            BrowseState.Ready(instance)
+            BrowseState.Ready(client)
         }
     }
-
-    val instance = (state as? BrowseState.Ready)?.instance
 
     when (val s = state) {
         is BrowseState.Loading -> Text("Loading…")
@@ -64,9 +62,10 @@ fun BrowseRoute(
         is BrowseState.Ready -> BrowseScreen(
             logTag = "OT_Browse_$endpointId",
             items = items,
+            imageLoader = s.client.imageLoader!!,
             loadPage = { startIndex, limit ->
                 withContext(Dispatchers.IO) {
-                    s.instance.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
+                    s.client.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
                 }.let { result ->
                     result.copy(items = ArtUrlInjector.apply(result.items, app, protocol, endpointId))
                 }

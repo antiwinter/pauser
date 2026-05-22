@@ -7,13 +7,10 @@ import com.opentune.emby.dto.PlaybackInfoResponse
 import com.opentune.emby.dto.QueryResultBaseItemDto
 
 class EmbyRepository(
-    baseUrl: String,
+    private val api: EmbyApi,
     private val userId: String,
-    accessToken: String,
     private val deviceProfile: DeviceProfile,
 ) {
-    private val api: EmbyApi = EmbyClientFactory.create(EmbyClientFactory.normalizeBaseUrl(baseUrl), accessToken)
-
     suspend fun systemInfo() = api.getSystemInfo()
 
     suspend fun getViews(): QueryResultBaseItemDto = api.getViews(userId)

@@ -34,10 +34,16 @@ object EndpointConfigRepository {
     suspend fun submitAdd(
         protocol: String,
         values: Map<String, String>,
+        proxyId: String?,
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
         val provider = app.providerRegistry.provider(protocol)
-        when (val result = provider.validateFields(values)) {
+        val httpClient = app.endpointClientRegistry.buildHttpClient(proxyId)
+        val client = runCatching {
+            provider.createClient(values, app.providerRegistry.platformCapabilities)
+        }.getOrElse { return@withContext SubmitResult.Error(it.message ?: "Failed to create client") }
+        client.httpClient = httpClient
+        when (val result = client.test()) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
                 val endpointId = "${protocol}_${result.hash}"
@@ -47,6 +53,7 @@ object EndpointConfigRepository {
                     protocol = protocol,
                     displayName = result.name,
                     fieldsJson = encodeFields(result.fields),
+                    proxyId = proxyId,
                     createdAtEpochMs = now,
                     updatedAtEpochMs = now,
                 )
@@ -55,7 +62,7 @@ object EndpointConfigRepository {
                 } catch (e: android.database.sqlite.SQLiteConstraintException) {
                     return@withContext SubmitResult.Error("Endpoint already exists")
                 }
-                app.endpointClientRegistry.registerClient(endpointId, entity)
+                app.endpointClientRegistry.registerHandle(endpointId, entity)
                 SubmitResult.Success
             }
         }
@@ -76,41 +83,47 @@ object EndpointConfigRepository {
         spec.associate { it.id to (stored[it.id] ?: "") }
     }
 
+    suspend fun loadEditProxyId(endpointId: String, app: OpenTuneApplication): String? =
+        withContext(Dispatchers.IO) {
+            app.storageBindings.endpointDao.getByEndpointId(endpointId)?.proxyId
+        }
+
     suspend fun submitEdit(
         protocol: String,
         endpointId: String,
         values: Map<String, String>,
+        proxyId: String?,
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
         val provider = app.providerRegistry.provider(protocol)
-        when (val result = provider.validateFields(values)) {
+        val httpClient = app.endpointClientRegistry.buildHttpClient(proxyId)
+        val client = runCatching {
+            provider.createClient(values, app.providerRegistry.platformCapabilities)
+        }.getOrElse { return@withContext SubmitResult.Error(it.message ?: "Failed to create client") }
+        client.httpClient = httpClient
+        when (val result = client.test()) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
                 val newEndpointId = "${protocol}_${result.hash}"
                 val now = System.currentTimeMillis()
                 if (newEndpointId == endpointId) {
-                    // Same identity — update fields only
                     val existing = app.storageBindings.endpointDao.getByEndpointId(endpointId)
                         ?: return@withContext SubmitResult.Error("Endpoint not found")
-                    app.storageBindings.endpointDao.update(
-                        existing.copy(
-                            displayName = result.name,
-                            fieldsJson = encodeFields(result.fields),
-                            updatedAtEpochMs = now,
-                        ),
-                    )
-                    app.endpointClientRegistry.update(endpointId, existing.copy(
+                    val updated = existing.copy(
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
+                        proxyId = proxyId,
                         updatedAtEpochMs = now,
-                    ))
+                    )
+                    app.storageBindings.endpointDao.update(updated)
+                    app.endpointClientRegistry.update(endpointId, updated)
                 } else {
-                    // Identity changed — insert new, cascade-delete old
                     val newEntity = EndpointEntity(
                         endpointId = newEndpointId,
                         protocol = protocol,
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
+                        proxyId = proxyId,
                         createdAtEpochMs = now,
                         updatedAtEpochMs = now,
                     )
@@ -119,7 +132,7 @@ object EndpointConfigRepository {
                     } catch (e: android.database.sqlite.SQLiteConstraintException) {
                         return@withContext SubmitResult.Error("An endpoint with the new credentials already exists")
                     }
-                    app.endpointClientRegistry.registerClient(newEndpointId, newEntity)
+                    app.endpointClientRegistry.registerHandle(newEndpointId, newEntity)
                     app.storageBindings.entryStateStore.deleteByEndpoint(endpointId)
                     app.storageBindings.endpointDao.deleteByEndpointId(endpointId)
                     app.endpointClientRegistry.remove(endpointId)

@@ -10,32 +10,17 @@ import androidx.media3.common.util.UnstableApi
 import com.opentune.player.ui.pad.PadPlayer
 import com.opentune.player.ui.tv.TvPlayer
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.AppConfigStore
-import com.opentune.storage.EntryStateKey
-import com.opentune.storage.EntryStateStore
 
-/**
- * Platform selector. Reads [UiModeManager] once and routes to [TvPlayer] or [PadPlayer].
- * Argument list is identical to both shells so [PlayerRoute] can call this without any
- * conditional logic.
- */
 @UnstableApi
 @Composable
 fun OpenTunePlayer(
     spec: PlaybackSpec,
     startMs: Long = 0L,
-    entryStateStore: EntryStateStore,
-    entryStateKey: EntryStateKey,
-    parentStateKey: EntryStateKey? = null,
-    seriesStateKey: EntryStateKey? = null,
-    seriesSeasonNumber: Int? = null,
-    seriesEpisodeNumber: Int? = null,
     onExit: () -> Unit,
     initialSubtitleTrackId: String? = null,
     initialAudioTrackId: String? = null,
     initialSubtitleOffsetFraction: Float = 0f,
     initialSubtitleSizeScale: Float = 1f,
-    appConfigStore: AppConfigStore? = null,
 ) {
     val context = LocalContext.current
     val isTv = remember {
@@ -47,35 +32,21 @@ fun OpenTunePlayer(
         TvPlayer(
             spec = spec,
             startMs = startMs,
-            entryStateStore = entryStateStore,
-            entryStateKey = entryStateKey,
-            parentStateKey = parentStateKey,
-            seriesStateKey = seriesStateKey,
-            seriesSeasonNumber = seriesSeasonNumber,
-            seriesEpisodeNumber = seriesEpisodeNumber,
             onExit = onExit,
             initialSubtitleTrackId = initialSubtitleTrackId,
             initialAudioTrackId = initialAudioTrackId,
             initialSubtitleOffsetFraction = initialSubtitleOffsetFraction,
             initialSubtitleSizeScale = initialSubtitleSizeScale,
-            appConfigStore = appConfigStore,
         )
     } else {
         PadPlayer(
             spec = spec,
             startMs = startMs,
-            entryStateStore = entryStateStore,
-            entryStateKey = entryStateKey,
-            parentStateKey = parentStateKey,
-            seriesStateKey = seriesStateKey,
-            seriesSeasonNumber = seriesSeasonNumber,
-            seriesEpisodeNumber = seriesEpisodeNumber,
             onExit = onExit,
             initialSubtitleTrackId = initialSubtitleTrackId,
             initialAudioTrackId = initialAudioTrackId,
             initialSubtitleOffsetFraction = initialSubtitleOffsetFraction,
             initialSubtitleSizeScale = initialSubtitleSizeScale,
-            appConfigStore = appConfigStore,
         )
     }
 }

@@ -26,38 +26,8 @@ object EmbyClientFactory {
             .connectTimeout(connectTimeoutSec, TimeUnit.SECONDS)
             .readTimeout(readTimeoutSec, TimeUnit.SECONDS)
             .writeTimeout(readTimeoutSec, TimeUnit.SECONDS)
-            .addInterceptor { chain ->
-                val ident = EmbyClientIdentificationStore.current()
-                val mediaBrowser = ident.mediaBrowserAuthorizationHeader()
-                val req = chain.request().newBuilder()
-                req.header("Accept", "application/json")
-                // Jellyfin accepts either header; some reverse proxies strip `Authorization` but keep X-Emby-*.
-                req.header("Authorization", mediaBrowser)
-                req.header("X-Emby-Authorization", mediaBrowser)
-                if (!accessToken.isNullOrBlank()) {
-                    req.header("X-Emby-Token", accessToken)
-                }
-                chain.proceed(req.build())
-            }
-            .addInterceptor { chain ->
-                val request = chain.request()
-                val response = chain.proceed(request)
-                if (!response.isSuccessful) {
-                    val snippet = try {
-                        response.peekBody(8192).string()
-                    } catch (e: Exception) {
-                        "(peekBody failed: ${e.message})"
-                    }
-                    logUnsuccessfulEmbyResponse(
-                        request.method,
-                        request.url,
-                        response.code,
-                        response.message,
-                        snippet,
-                    )
-                }
-                response
-            }
+            .addInterceptor(authInterceptor(accessToken))
+            .addInterceptor(loggingResponseInterceptor())
             .apply {
                 if (enableLogging) {
                     addInterceptor(HttpLoggingInterceptor().apply {
@@ -66,14 +36,63 @@ object EmbyClientFactory {
                 }
             }
             .build()
+        return buildRetrofit(normalized, client, json)
+    }
 
-        return Retrofit.Builder()
-            .baseUrl(normalized)
+    fun create(
+        client: OkHttpClient,
+        baseUrl: String,
+        accessToken: String?,
+        json: Json = embyJson(),
+    ): EmbyApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val wrappedClient = client.newBuilder()
+            .addInterceptor(authInterceptor(accessToken))
+            .addInterceptor(loggingResponseInterceptor())
+            .build()
+        return buildRetrofit(normalized, wrappedClient, json)
+    }
+
+    private fun authInterceptor(accessToken: String?) = okhttp3.Interceptor { chain ->
+        val ident = EmbyClientIdentificationStore.current()
+        val mediaBrowser = ident.mediaBrowserAuthorizationHeader()
+        val req = chain.request().newBuilder()
+        req.header("Accept", "application/json")
+        req.header("Authorization", mediaBrowser)
+        req.header("X-Emby-Authorization", mediaBrowser)
+        if (!accessToken.isNullOrBlank()) {
+            req.header("X-Emby-Token", accessToken)
+        }
+        chain.proceed(req.build())
+    }
+
+    private fun loggingResponseInterceptor() = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (!response.isSuccessful) {
+            val snippet = try {
+                response.peekBody(8192).string()
+            } catch (e: Exception) {
+                "(peekBody failed: ${e.message})"
+            }
+            logUnsuccessfulEmbyResponse(
+                request.method,
+                request.url,
+                response.code,
+                response.message,
+                snippet,
+            )
+        }
+        response
+    }
+
+    private fun buildRetrofit(baseUrl: String, client: OkHttpClient, json: Json): EmbyApi =
+        Retrofit.Builder()
+            .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(json.asConverterFactory(jsonContent))
             .build()
             .create(EmbyApi::class.java)
-    }
 
     fun normalizeBaseUrl(input: String): String {
         val trimmed = input.trim().trimEnd('/')

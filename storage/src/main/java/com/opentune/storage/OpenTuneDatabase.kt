@@ -7,11 +7,13 @@ import androidx.room.RoomDatabase
     entities = [
         EndpointEntity::class,
         EntryStateEntity::class,
+        ProxyEntity::class,
     ],
-    version = 9,
+    version = 12,
     exportSchema = false,
 )
 abstract class OpenTuneDatabase : RoomDatabase() {
     abstract fun endpointDao(): EndpointDao
     abstract fun entryStateDao(): EntryStateDao
+    abstract fun proxyDao(): ProxyDao
 }

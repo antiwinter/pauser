@@ -25,6 +25,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.provider.EntryType
+import coil3.ImageLoader
 import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,7 @@ fun SearchScreen(
     results: SnapshotStateList<EntryInfo>,
     searchFn: suspend (String) -> List<EntryInfo>,
     titleLang: TitleLang,
+    imageLoader: coil3.ImageLoader,
     onBack: () -> Unit,
     onOpenBrowse: (String) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
@@ -98,6 +100,7 @@ fun SearchScreen(
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
+                    imageLoader = imageLoader,
                     onClick = {
                         when (item.type) {
                             EntryType.Folder,

@@ -2,7 +2,6 @@ package com.opentune.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -17,14 +16,13 @@ import com.opentune.app.ui.catalog.ImageViewerRoute
 import com.opentune.app.ui.catalog.PlayerRoute
 import com.opentune.app.ui.catalog.SearchRoute
 import com.opentune.app.ui.catalog.SettingsScreen
-import com.opentune.app.ui.config.EndpointAddRoute
-import com.opentune.app.ui.config.EndpointEditRoute
+import com.opentune.app.ui.config.FormEntityType
+import com.opentune.app.ui.config.ProviderFormRoute
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.provider.EntryInfo
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
 import java.net.URLEncoder
-import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -39,6 +37,8 @@ object Routes {
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_ADD = "provider_add/{protocol}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}/{endpointId}"
+    const val PROXY_ADD = "proxy_add/{proxyType}"
+    const val PROXY_EDIT = "proxy_edit/{proxyType}/{proxyId}"
     const val SETTINGS = "settings"
     const val IMAGE_VIEWER = "image_viewer/{provider}/{endpointId}/{itemRef}"
 
@@ -46,6 +46,11 @@ object Routes {
 
     fun providerEdit(protocol: String, endpointId: String) =
         "provider_edit/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}"
+
+    fun proxyAdd(proxyType: String) = "proxy_add/$proxyType"
+
+    fun proxyEdit(proxyType: String, proxyId: String) =
+        "proxy_edit/$proxyType/${URLEncoder.encode(proxyId, UrlCharset)}"
 
     fun browse(protocol: String, endpointId: String, locationRaw: String) =
         "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
@@ -98,10 +103,10 @@ fun OpenTuneNavHost() {
         composable(Routes.HOME) {
             HomeRoute(
                 onAddProvider = { pt -> nav.navigate(Routes.providerAdd(pt)) },
-                onOpenBrowse = { pt, sid, path ->
-                    nav.navigate(Routes.browse(pt, sid, path))
-                },
+                onOpenBrowse = { pt, sid, path -> nav.navigate(Routes.browse(pt, sid, path)) },
                 onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
+                onAddProxy = { pt -> nav.navigate(Routes.proxyAdd(pt)) },
+                onEditProxy = { pt, id -> nav.navigate(Routes.proxyEdit(pt, id)) },
             )
         }
         composable(
@@ -109,7 +114,8 @@ fun OpenTuneNavHost() {
             listOf(navArgument("protocol") { type = NavType.StringType }),
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
-            EndpointAddRoute(
+            ProviderFormRoute(
+                entityType = FormEntityType.ENDPOINT,
                 protocol = protocol,
                 onDone = { nav.popBackStack() },
             )
@@ -123,9 +129,37 @@ fun OpenTuneNavHost() {
         ) {
             val protocol = it.arguments!!.getString("protocol")!!
             val endpointId = it.arguments!!.getString("endpointId")!!
-            EndpointEditRoute(
+            ProviderFormRoute(
+                entityType = FormEntityType.ENDPOINT,
                 protocol = protocol,
-                endpointId = endpointId,
+                existingId = endpointId,
+                onDone = { nav.popBackStack() },
+            )
+        }
+        composable(
+            Routes.PROXY_ADD,
+            listOf(navArgument("proxyType") { type = NavType.StringType }),
+        ) {
+            val proxyType = it.arguments!!.getString("proxyType")!!
+            ProviderFormRoute(
+                entityType = FormEntityType.PROXY,
+                protocol = proxyType,
+                onDone = { nav.popBackStack() },
+            )
+        }
+        composable(
+            Routes.PROXY_EDIT,
+            listOf(
+                navArgument("proxyType") { type = NavType.StringType },
+                navArgument("proxyId") { type = NavType.StringType },
+            ),
+        ) {
+            val proxyType = it.arguments!!.getString("proxyType")!!
+            val proxyId = it.arguments!!.getString("proxyId")!!
+            ProviderFormRoute(
+                entityType = FormEntityType.PROXY,
+                protocol = proxyType,
+                existingId = proxyId,
                 onDone = { nav.popBackStack() },
             )
         }

@@ -4,4 +4,5 @@ data class OpenTuneStorageBindings(
     val endpointDao: EndpointDao,
     val entryStateStore: EntryStateStore,
     val appConfigStore: AppConfigStore,
+    val proxyDao: ProxyDao,
 )

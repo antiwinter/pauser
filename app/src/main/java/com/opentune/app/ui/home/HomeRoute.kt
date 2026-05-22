@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +22,9 @@ import androidx.compose.ui.unit.sp
 import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
+import com.opentune.app.providers.ProxyRepository
 import com.opentune.storage.EndpointEntity
+import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -33,14 +36,15 @@ fun HomeRoute(
     onAddProvider: (String) -> Unit,
     onOpenBrowse: (String, String, String) -> Unit,
     onEditProvider: (String, String) -> Unit,
+    onAddProxy: (String) -> Unit,
+    onEditProxy: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
     val providers by app.providerRegistry.providersFlow.collectAsState()
     var endpointsByType by remember { mutableStateOf<Map<String, List<EndpointEntity>>>(emptyMap()) }
+    val proxies by app.storageBindings.proxyDao.observeAll().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
 
-    // Start watching endpoint list for each provider as it arrives.
-    // Uses an observed-protocols set so existing watchers are never cancelled when
-    // the list grows — only new providers get a new watcher coroutine.
     LaunchedEffect(app) {
         val observedProtocols = mutableSetOf<String>()
         app.providerRegistry.providersFlow.collect { allProviders ->
@@ -78,7 +82,22 @@ fun HomeRoute(
                     }
                 }
             }
-        } // end Column
+            app.proxyProviderRegistry.allProxies().forEach { proxyProvider ->
+                Button(onClick = { onAddProxy(proxyProvider.proxyType) }) {
+                    Text("+ Add ${proxyProvider.proxyType} proxy")
+                }
+            }
+            proxies.forEach { proxy ->
+                Button(
+                    onClick = { onEditProxy(proxy.proxyType, proxy.id) },
+                    modifier = Modifier.onTvMenuKeyDown {
+                        scope.launch { ProxyRepository.delete(proxy.id, app) }
+                    },
+                ) {
+                    Text(proxy.displayName)
+                }
+            }
+        }
         Text(
             text = BuildConfig.GIT_VERSION,
             fontSize = 11.sp,
@@ -86,5 +105,5 @@ fun HomeRoute(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         )
-    } // end Box
+    }
 }

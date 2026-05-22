@@ -10,4 +10,6 @@ kotlin {
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    compileOnly(libs.okhttp)
+    compileOnly(libs.coil.core)
 }

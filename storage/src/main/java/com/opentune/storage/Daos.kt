@@ -24,8 +24,29 @@ interface EndpointDao {
     @Update
     suspend fun update(endpoint: EndpointEntity)
 
+    @Query("SELECT * FROM endpoints WHERE proxyId = :proxyId")
+    suspend fun getByProxyId(proxyId: String): List<EndpointEntity>
+
     @Query("DELETE FROM endpoints WHERE endpointId = :endpointId")
     suspend fun deleteByEndpointId(endpointId: String)
+}
+
+@Dao
+interface ProxyDao {
+    @Query("SELECT * FROM proxies ORDER BY createdAtEpochMs ASC")
+    fun observeAll(): Flow<List<ProxyEntity>>
+
+    @Query("SELECT * FROM proxies WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): ProxyEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(entity: ProxyEntity)
+
+    @Update
+    suspend fun update(entity: ProxyEntity)
+
+    @Query("DELETE FROM proxies WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
 
 @Dao

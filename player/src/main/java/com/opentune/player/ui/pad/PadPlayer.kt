@@ -23,9 +23,6 @@ import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
 import com.opentune.provider.PlaybackSpec
-import com.opentune.storage.AppConfigStore
-import com.opentune.storage.EntryStateKey
-import com.opentune.storage.EntryStateStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -36,29 +33,15 @@ private const val PAD_CONTROLLER_AUTO_HIDE_MS = 3_000L
 fun PadPlayer(
     spec: PlaybackSpec,
     startMs: Long = 0L,
-    entryStateStore: EntryStateStore,
-    entryStateKey: EntryStateKey,
-    parentStateKey: EntryStateKey? = null,
-    seriesStateKey: EntryStateKey? = null,
-    seriesSeasonNumber: Int? = null,
-    seriesEpisodeNumber: Int? = null,
     onExit: () -> Unit,
     initialSubtitleTrackId: String? = null,
     initialAudioTrackId: String? = null,
     initialSubtitleOffsetFraction: Float = 0f,
     initialSubtitleSizeScale: Float = 1f,
-    appConfigStore: AppConfigStore? = null,
 ) {
     val engine = rememberPlaybackEngine(
         spec = spec,
         startMs = startMs,
-        entryStateStore = entryStateStore,
-        entryStateKey = entryStateKey,
-        parentStateKey = parentStateKey,
-        seriesStateKey = seriesStateKey,
-        seriesSeasonNumber = seriesSeasonNumber,
-        seriesEpisodeNumber = seriesEpisodeNumber,
-        appConfigStore = appConfigStore,
         initialSubtitleTrackId = initialSubtitleTrackId,
         initialAudioTrackId = initialAudioTrackId,
         initialSubtitleOffsetFraction = initialSubtitleOffsetFraction,

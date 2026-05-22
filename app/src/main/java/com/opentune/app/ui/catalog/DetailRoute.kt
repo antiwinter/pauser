@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import coil3.ImageLoader
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.storage.EntryStateKey
@@ -49,6 +50,7 @@ fun DetailRoute(
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(true) }
+    var imageLoader by remember { mutableStateOf<ImageLoader?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Series/season state
@@ -73,28 +75,29 @@ fun DetailRoute(
         digipakChildren.clear()
         singleChild = null
         try {
-            val inst = app.endpointClientRegistry.getOrCreate(endpointId)
+            val client = app.endpointClientRegistry.getOrCreate(endpointId)
                 ?: throw IllegalStateException("No provider instance for $endpointId")
+            imageLoader = client.imageLoader
             val entryState = withContext(Dispatchers.IO) {
                 app.storageBindings.entryStateStore.get(stateKey)
             }
             isFavorite = entryState?.isFavorite ?: false
             resumeMs = entryState?.positionMs ?: 0L
-            val d = withContext(Dispatchers.IO) { inst.getDetail(itemRefDecoded) }
+            val d = withContext(Dispatchers.IO) { client.getDetail(itemRefDecoded) }
             detail = ArtUrlInjector.applyDetail(d, app, protocol)
 
             // Fetch children based on type
             when (initialInfo?.type) {
                 EntryType.Series -> {
                     val result = withContext(Dispatchers.IO) {
-                        inst.listEntry(itemRefDecoded, 0, 500)
+                        client.listEntry(itemRefDecoded, 0, 500)
                     }
                     seasons = ArtUrlInjector.apply(result.items, app, protocol, endpointId)
                 }
                 EntryType.Digipak -> {
                     val childCount = initialInfo.childCount ?: 0
                     val result = withContext(Dispatchers.IO) {
-                        inst.listEntry(itemRefDecoded, 0, maxOf(childCount, 1))
+                        client.listEntry(itemRefDecoded, 0, maxOf(childCount, 1))
                     }
                     val filtered = result.items
                     if (childCount <= 1 && filtered.isNotEmpty()) {
@@ -141,6 +144,7 @@ fun DetailRoute(
             isFavorite = isFavorite,
             resumeMs = resumeMs,
             titleLang = titleLang,
+            imageLoader = imageLoader!!,
             seasons = seasons,
             selectedSeasonIndex = selectedSeasonIndex,
             episodes = episodes,

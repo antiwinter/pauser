@@ -16,6 +16,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.provider.EntryInfo
 import java.io.File
@@ -32,6 +33,7 @@ private fun coverImageModel(cover: String?): Any? = when {
 fun ThumbEntryComponent(
     item: EntryInfo,
     onClick: () -> Unit,
+    imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -60,6 +62,7 @@ fun ThumbEntryComponent(
                     AsyncImage(
                         model = model,
                         contentDescription = item.title,
+                        imageLoader = imageLoader,
                         modifier = Modifier.fillMaxWidth(),
                         contentScale = ContentScale.Crop,
                     )

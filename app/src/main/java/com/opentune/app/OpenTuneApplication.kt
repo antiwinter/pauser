@@ -8,6 +8,7 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
 import com.opentune.app.providers.OpenTuneProviderRegistry
+import com.opentune.proxy.ProxyProviderRegistry
 import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
@@ -38,11 +39,22 @@ class OpenTuneApplication : Application() {
     lateinit var providerRegistry: OpenTuneProviderRegistry
         private set
 
+    lateinit var proxyProviderRegistry: ProxyProviderRegistry
+        private set
+
     lateinit var endpointClientRegistry: EndpointClientRegistry
         private set
 
     lateinit var openTuneServer: OpenTuneServer
         private set
+
+    /** Shared disk cache — one instance, one size limit, correct LRU across all image loaders. */
+    val sharedDiskCache: DiskCache by lazy {
+        DiskCache.Builder()
+            .directory(File(cacheDir, "coil").toOkioPath())
+            .maxSizeBytes(200L * 1024 * 1024)
+            .build()
+    }
 
     val imageLoader: ImageLoader by lazy { buildImageLoader() }
 
@@ -57,13 +69,20 @@ class OpenTuneApplication : Application() {
             endpointDao = database.endpointDao(),
             entryStateStore = EntryStateStore(database),
             appConfigStore = DataStoreAppConfigStore(applicationContext),
+            proxyDao = database.proxyDao(),
         )
         val platformInfo = AndroidPlatformInfo(this)
         PlatformInfoHolder.set(platformInfo)
         providerRegistry = OpenTuneProviderRegistry()
+        proxyProviderRegistry = ProxyProviderRegistry.discover()
+        proxyProviderRegistry.allProxies().forEach { it.bootstrap(platformInfo) }
         endpointClientRegistry = EndpointClientRegistry(
             endpointDao = storageBindings.endpointDao,
             providerRegistry = providerRegistry,
+            proxyDao = storageBindings.proxyDao,
+            proxyProviderRegistry = proxyProviderRegistry,
+            sharedDiskCache = sharedDiskCache,
+            appContext = this,
         )
         openTuneServer = OpenTuneServer(
             appContext = object : AppContext {
@@ -71,7 +90,7 @@ class OpenTuneApplication : Application() {
                 override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
                 override fun platformCapabilities() = providerRegistry.platformCapabilities
                 override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
-                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerClient(endpointId, entity)
+                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
                 override val endpointDao get() = storageBindings.endpointDao
                 override val entryStateStore get() = storageBindings.entryStateStore
                 override val appConfigStore get() = storageBindings.appConfigStore

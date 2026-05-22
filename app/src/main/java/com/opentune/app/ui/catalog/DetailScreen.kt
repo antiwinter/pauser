@@ -27,6 +27,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.provider.EntryDetail
 import com.opentune.provider.EntryInfo
@@ -52,6 +53,7 @@ fun DetailScreen(
     isFavorite: Boolean,
     resumeMs: Long,
     titleLang: TitleLang,
+    imageLoader: coil3.ImageLoader,
     seasons: List<EntryInfo>?,
     selectedSeasonIndex: Int,
     episodes: List<EntryInfo>,
@@ -237,6 +239,7 @@ fun DetailScreen(
                             ThumbEntryComponent(
                                 item = episode,
                                 onClick = { onSelectEpisode(episode) },
+                                imageLoader = imageLoader,
                                 modifier = Modifier.width(200.dp),
                             )
                         }
@@ -267,6 +270,7 @@ fun DetailScreen(
                             ThumbEntryComponent(
                                 item = child,
                                 onClick = { onSelectChild(child) },
+                                imageLoader = imageLoader,
                                 modifier = Modifier.width(200.dp),
                             )
                         }

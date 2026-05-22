@@ -9,8 +9,18 @@ data class EndpointEntity(
     val protocol: String,
     val displayName: String,
     val fieldsJson: String,
+    val proxyId: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
+)
+
+@Entity(tableName = "proxies")
+data class ProxyEntity(
+    @PrimaryKey val id: String,
+    val proxyType: String,
+    val displayName: String,
+    val fieldsJson: String,
+    val createdAtEpochMs: Long,
 )
 
 @Entity(

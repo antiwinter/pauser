@@ -18,6 +18,7 @@ import com.opentune.provider.PlaybackMimeTypes
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.StreamInfo
 import com.opentune.provider.SubtitleTrack
+import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,14 +47,29 @@ class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
     private val deviceProfile: DeviceProfile,
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
-) : EndpointClient {
+) : EndpointClient() {
 
-    private fun repo(): EmbyRepository = EmbyRepository(
-        baseUrl = fields.baseUrl,
+    private val repo: EmbyRepository = EmbyRepository(
+        api = EmbyClientFactory.create(fields.baseUrl, fields.accessToken),
         userId = fields.userId,
-        accessToken = fields.accessToken,
         deviceProfile = deviceProfile,
     )
+
+    override suspend fun test(): ValidationResult = withContext(Dispatchers.IO) {
+        runCatching {
+            val info = repo.systemInfo()
+            ValidationResult.Success(
+                hash = EmbyProvider.sha256("${fields.baseUrl}${fields.userId}"),
+                name = info.serverName ?: fields.baseUrl,
+                fields = mapOf(
+                    "base_url" to fields.baseUrl,
+                    "user_id" to fields.userId,
+                    "access_token" to fields.accessToken,
+                    "server_id" to (fields.serverId ?: ""),
+                ),
+            )
+        }.getOrElse { ValidationResult.Error(it.message ?: "Emby connection failed") }
+    }
 
     private fun BaseItemDto.toListItem(): EntryInfo? {
         val id = id ?: return null
@@ -109,7 +125,7 @@ class EmbyProviderInstance(
         sortBy: SortField?,
         sortOrder: SortOrder,
     ): EntryList {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             if (location == null) {
                 val views = r.getViews()
@@ -139,7 +155,7 @@ class EmbyProviderInstance(
         if (query.term.isEmpty() && query.years == null && query.genres == null &&
             query.countries == null && query.studios == null
         ) return EntryList(emptyList(), 0)
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val parentId: String? = scopeLocation.ifEmpty { null }
             val excludeEmbyTypes = query.excludeTypes.mapNotNull { type ->
@@ -174,7 +190,7 @@ class EmbyProviderInstance(
     }
 
     override suspend fun getDetail(itemRef: String): EntryDetail {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val item = r.getItem(itemRef, fields = EmbyFieldSets.DETAIL_FIELDS)
             val id = item.id ?: itemRef
@@ -244,7 +260,7 @@ class EmbyProviderInstance(
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         return withContext(Dispatchers.IO) {
-            val r = repo()
+            val r = repo
             val startTicks = if (startMs > 0) startMs * 10_000L else null
             val info = r.getPlaybackInfo(itemRef, startTimeTicks = startTicks)
             val source = info.mediaSources.firstOrNull() ?: error("No media sources")
@@ -311,13 +327,14 @@ class EmbyProviderInstance(
                 durationMs = null,
                 hooks = hooks,
                 subtitleTracks = subtitleTracks,
+                httpClient = httpClient,
             )
         }
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {
         if (itemRefs.isEmpty()) return EntryList(emptyList(), 0)
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val result = r.getItems(
                 ids = itemRefs.joinToString(","),
@@ -338,7 +355,7 @@ class EmbyProviderInstance(
         sortBy: SortField?,
         sortOrder: SortOrder,
     ): EntryList {
-        val r = repo()
+        val r = repo
         return withContext(Dispatchers.IO) {
             val filters = when (tag) {
                 EntryTag.Recent -> "IsResumable"
@@ -368,7 +385,7 @@ class EmbyProviderInstance(
     }
 
     override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
-        val r = repo()
+        val r = repo
         withContext(Dispatchers.IO) {
             when (tag) {
                 EntryTag.Favorite -> if (value) r.markFavorite(itemRef) else r.unmarkFavorite(itemRef)

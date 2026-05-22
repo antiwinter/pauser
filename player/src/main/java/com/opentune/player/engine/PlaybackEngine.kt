@@ -30,6 +30,7 @@ import com.opentune.player.controller.rememberSpeedController
 import com.opentune.player.controller.rememberSubtitleController
 import com.opentune.player.controller.resolveSubtitlePreference
 import com.opentune.player.controller.subtitleMimeType
+import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.provider.PlaybackSpec
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.EntryStateKey
@@ -37,7 +38,6 @@ import com.opentune.storage.EntryStateStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -55,7 +55,7 @@ private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
 
 internal data class PlayerStores(
     val entryStateStore: EntryStateStore,
-    val appConfigStore: AppConfigStore?,
+    val appConfigStore: AppConfigStore,
 )
 
 // ---------------------------------------------------------------------------
@@ -106,18 +106,19 @@ internal class PlaybackEngine(
 internal fun rememberPlaybackEngine(
     spec: PlaybackSpec,
     startMs: Long,
-    entryStateStore: EntryStateStore,
-    entryStateKey: EntryStateKey,
-    parentStateKey: EntryStateKey? = null,
-    seriesStateKey: EntryStateKey? = null,
-    seriesSeasonNumber: Int? = null,
-    seriesEpisodeNumber: Int? = null,
-    appConfigStore: AppConfigStore?,
     initialSubtitleTrackId: String?,
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
     initialSubtitleOffsetFraction: Float,
     initialSubtitleSizeScale: Float,
 ): PlaybackEngine {
+    val storageCtx = LocalPlaybackStorageContext.current
+    val entryStateStore = storageCtx.entryStateStore
+    val entryStateKey = storageCtx.entryStateKey
+    val parentStateKey = storageCtx.parentStateKey
+    val seriesStateKey = storageCtx.seriesStateKey
+    val seriesSeasonNumber = storageCtx.seriesSeasonNumber
+    val seriesEpisodeNumber = storageCtx.seriesEpisodeNumber
+    val appConfigStore = storageCtx.appConfigStore
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val instanceKey = entryStateKey
@@ -126,8 +127,7 @@ internal fun rememberPlaybackEngine(
     val hooksState = rememberUpdatedState(spec.hooks)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
-    val preBufferMs by (appConfigStore?.preBufferMsFlow
-        ?: flowOf(AppConfigStore.DEFAULT_PRE_BUFFER_MS))
+    val preBufferMs by appConfigStore.preBufferMsFlow
         .collectAsState(initial = AppConfigStore.DEFAULT_PRE_BUFFER_MS)
 
     // preBufferMs is a key so the player is recreated if the setting changes.

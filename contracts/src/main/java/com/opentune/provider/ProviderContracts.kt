@@ -69,17 +69,9 @@ interface OpenTuneProvider {
     /** Single field spec for both add and edit forms. Does not include display_name. */
     fun getFieldsSpec(): List<ProviderFieldSpec>
 
-    /**
-     * Connect, authenticate, and verify the supplied credentials.
-     * Returns [ValidationResult.Success] with [hash], human-readable [name], and [fields] to persist,
-     * or [ValidationResult.Error].
-     */
+    /** Connect, authenticate, and verify the supplied credentials. */
     suspend fun validateFields(values: Map<String, String>): ValidationResult
 
-    /**
-     * Construct a live client from already-validated credentials.
-     * Called without an endpointId; the client carries no identity state.
-     */
     fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient
 }
 
@@ -98,19 +90,22 @@ interface OpenTuneProviderLoader {
  * Live protocol handle for a single configured endpoint.
  * No identity fields — the app registry maps endpointId → client externally.
  */
-interface EndpointClient {
-    suspend fun listEntry(
+abstract class EndpointClient {
+    open var imageLoader: coil3.ImageLoader? = null
+    open var httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient()
+    open suspend fun test(): ValidationResult = ValidationResult.Success("", "", emptyMap())
+    abstract suspend fun listEntry(
         location: String?,
         startIndex: Int,
         limit: Int,
         sortBy: SortField? = null,
         sortOrder: SortOrder = SortOrder.Ascending,
     ): EntryList
-    suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
-    suspend fun getDetail(itemRef: String): EntryDetail
-    suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
-    suspend fun getEntries(itemRefs: List<String>): EntryList
-    suspend fun getTaggedEntries(
+    abstract suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
+    abstract suspend fun getDetail(itemRef: String): EntryDetail
+    abstract suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
+    abstract suspend fun getEntries(itemRefs: List<String>): EntryList
+    open suspend fun getTaggedEntries(
         tag: EntryTag,
         scopeLocation: String? = null,
         startIndex: Int = 0,
@@ -118,12 +113,12 @@ interface EndpointClient {
         sortBy: SortField? = null,
         sortOrder: SortOrder = SortOrder.Descending,
     ): EntryList = EntryList(emptyList(), 0)
-    suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
+    open suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
 
     /**
      * Opens a random-access [ProviderStream] for [itemRef].
      * Returns null if this provider does not support direct byte streaming (default — Emby, JS).
      * The caller ([OpenTuneServer]) is responsible for calling [ProviderStream.close].
      */
-    suspend fun openStream(itemRef: String): ProviderStream? = null
+    open suspend fun openStream(itemRef: String): ProviderStream? = null
 }

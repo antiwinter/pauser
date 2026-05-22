@@ -26,4 +26,6 @@ data class PlaybackSpec(
     val durationMs: Long?,
     val hooks: OpenTunePlaybackHooks,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
+    /** OkHttpClient for stream and subtitle requests. Always non-null; proxied or plain. */
+    val httpClient: okhttp3.OkHttpClient,
 )

@@ -40,7 +40,8 @@ class JsProviderInstance(
     private val hostApis: HostApis,
     private val values: Map<String, String>,
     private val capabilities: PlatformCapabilities,
-) : EndpointClient {
+) : EndpointClient() {
+
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
@@ -54,7 +55,7 @@ class JsProviderInstance(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            engine = QuickJsEngine(hostApis)
+            engine = QuickJsEngine(hostApis, httpClient)
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
@@ -336,6 +337,7 @@ class JsProviderInstance(
             durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
             hooks = hooks,
             subtitleTracks = subtitles,
+            httpClient = httpClient,
         )
     }
 }
