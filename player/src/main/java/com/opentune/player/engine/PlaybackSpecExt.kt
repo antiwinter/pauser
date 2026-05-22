@@ -18,12 +18,9 @@ internal fun PlaybackSpec.toMediaSource(context: android.content.Context): Media
         chain.proceed(req)
     }
     val okHttp = httpClient
-        ?.newBuilder()
-        ?.apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
-        ?.build()
-        ?: OkHttpClient.Builder()
-            .apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
-            .build()
+        .newBuilder()
+        .apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
+        .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
     val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     val mediaItem = MediaItem.Builder()

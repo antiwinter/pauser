@@ -3,12 +3,12 @@ package com.opentune.app.providers
 import com.opentune.app.OpenTuneApplication
 import com.opentune.provider.ValidationResult
 import com.opentune.storage.EndpointEntity
-import com.opentune.storage.ProxyAssignmentEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 
 object EndpointConfigRepository {
 
@@ -39,7 +39,8 @@ object EndpointConfigRepository {
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
         val provider = app.providerRegistry.provider(protocol)
-        when (val result = provider.validateFields(values)) {
+        val httpClient = app.endpointClientRegistry.buildHttpClient(proxyConfigId)
+        when (val result = provider.validateFields(values, httpClient)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
                 val endpointId = "${protocol}_${result.hash}"
@@ -49,6 +50,7 @@ object EndpointConfigRepository {
                     protocol = protocol,
                     displayName = result.name,
                     fieldsJson = encodeFields(result.fields),
+                    proxyConfigId = proxyConfigId,
                     createdAtEpochMs = now,
                     updatedAtEpochMs = now,
                 )
@@ -57,9 +59,6 @@ object EndpointConfigRepository {
                 } catch (e: android.database.sqlite.SQLiteConstraintException) {
                     return@withContext SubmitResult.Error("Endpoint already exists")
                 }
-                app.storageBindings.proxyAssignmentDao.upsert(
-                    ProxyAssignmentEntity(endpointId = endpointId, proxyConfigId = proxyConfigId)
-                )
                 app.endpointClientRegistry.registerHandle(endpointId, entity)
                 SubmitResult.Success
             }
@@ -83,7 +82,7 @@ object EndpointConfigRepository {
 
     suspend fun loadEditProxyConfigId(endpointId: String, app: OpenTuneApplication): String? =
         withContext(Dispatchers.IO) {
-            app.storageBindings.proxyAssignmentDao.getByEndpointId(endpointId)?.proxyConfigId
+            app.storageBindings.endpointDao.getByEndpointId(endpointId)?.proxyConfigId
         }
 
     suspend fun submitEdit(
@@ -94,7 +93,8 @@ object EndpointConfigRepository {
         app: OpenTuneApplication,
     ): SubmitResult = withContext(Dispatchers.IO) {
         val provider = app.providerRegistry.provider(protocol)
-        when (val result = provider.validateFields(values)) {
+        val httpClient = app.endpointClientRegistry.buildHttpClient(proxyConfigId)
+        when (val result = provider.validateFields(values, httpClient)) {
             is ValidationResult.Error -> SubmitResult.Error(result.message)
             is ValidationResult.Success -> {
                 val newEndpointId = "${protocol}_${result.hash}"
@@ -105,12 +105,10 @@ object EndpointConfigRepository {
                     val updated = existing.copy(
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
+                        proxyConfigId = proxyConfigId,
                         updatedAtEpochMs = now,
                     )
                     app.storageBindings.endpointDao.update(updated)
-                    app.storageBindings.proxyAssignmentDao.upsert(
-                        ProxyAssignmentEntity(endpointId = endpointId, proxyConfigId = proxyConfigId)
-                    )
                     app.endpointClientRegistry.update(endpointId, updated)
                 } else {
                     val newEntity = EndpointEntity(
@@ -118,6 +116,7 @@ object EndpointConfigRepository {
                         protocol = protocol,
                         displayName = result.name,
                         fieldsJson = encodeFields(result.fields),
+                        proxyConfigId = proxyConfigId,
                         createdAtEpochMs = now,
                         updatedAtEpochMs = now,
                     )
@@ -126,12 +125,8 @@ object EndpointConfigRepository {
                     } catch (e: android.database.sqlite.SQLiteConstraintException) {
                         return@withContext SubmitResult.Error("An endpoint with the new credentials already exists")
                     }
-                    app.storageBindings.proxyAssignmentDao.upsert(
-                        ProxyAssignmentEntity(endpointId = newEndpointId, proxyConfigId = proxyConfigId)
-                    )
                     app.endpointClientRegistry.registerHandle(newEndpointId, newEntity)
                     app.storageBindings.entryStateStore.deleteByEndpoint(endpointId)
-                    app.storageBindings.proxyAssignmentDao.deleteByEndpointId(endpointId)
                     app.storageBindings.endpointDao.deleteByEndpointId(endpointId)
                     app.endpointClientRegistry.remove(endpointId)
                 }
@@ -145,7 +140,6 @@ object EndpointConfigRepository {
     suspend fun removeEndpoint(endpointId: String, app: OpenTuneApplication) =
         withContext(Dispatchers.IO) {
             app.storageBindings.entryStateStore.deleteByEndpoint(endpointId)
-            app.storageBindings.proxyAssignmentDao.deleteByEndpointId(endpointId)
             app.storageBindings.endpointDao.deleteByEndpointId(endpointId)
             app.endpointClientRegistry.remove(endpointId)
         }

@@ -9,6 +9,7 @@ data class EndpointEntity(
     val protocol: String,
     val displayName: String,
     val fieldsJson: String,
+    val proxyConfigId: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
 )
@@ -19,14 +20,7 @@ data class ProxyConfigEntity(
     val proxyType: String,
     val displayName: String,
     val fieldsJson: String,
-    val isEnabled: Boolean = true,
     val createdAtEpochMs: Long,
-)
-
-@Entity(tableName = "proxy_assignments")
-data class ProxyAssignmentEntity(
-    @PrimaryKey val endpointId: String,
-    val proxyConfigId: String?,
 )
 
 @Entity(

@@ -38,6 +38,7 @@ dependencies {
     api(project(":contracts"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    implementation(libs.coil.core)
     implementation(libs.kotlinx.serialization.json)
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.startup:startup-runtime:1.2.0")

@@ -15,9 +15,8 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.app.navigation.toJson
-import com.opentune.provider.EntryInfo
-import com.opentune.app.image.ProxyImageLoader
 import com.opentune.provider.EndpointClient
+import com.opentune.provider.EntryInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,7 +26,7 @@ private const val LOG_TAG = "OpenTuneBrowseRoute"
 sealed interface BrowseState {
     data object Loading : BrowseState
     data class Error(val message: String) : BrowseState
-    data class Ready(val instance: EndpointClient, val imageLoader: coil3.ImageLoader?) : BrowseState
+    data class Ready(val client: EndpointClient) : BrowseState
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -48,17 +47,14 @@ fun BrowseRoute(
     LaunchedEffect(app, protocol, endpointId) {
         state = BrowseState.Loading
         items.clear()
-        val handle = app.endpointClientRegistry.getOrCreate(endpointId)
-        state = if (handle == null) {
+        val client = app.endpointClientRegistry.getOrCreate(endpointId)
+        state = if (client == null) {
             Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
             BrowseState.Error("Endpoint not found")
         } else {
-            val loader = ProxyImageLoader.get(endpointId, handle.httpClient, app)
-            BrowseState.Ready(handle.client, loader)
+            BrowseState.Ready(client)
         }
     }
-
-    val instance = (state as? BrowseState.Ready)?.instance
 
     when (val s = state) {
         is BrowseState.Loading -> Text("Loading…")
@@ -66,10 +62,10 @@ fun BrowseRoute(
         is BrowseState.Ready -> BrowseScreen(
             logTag = "OT_Browse_$endpointId",
             items = items,
-            imageLoader = s.imageLoader,
+            imageLoader = s.client.imageLoader,
             loadPage = { startIndex, limit ->
                 withContext(Dispatchers.IO) {
-                    s.instance.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
+                    s.client.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
                 }.let { result ->
                     result.copy(items = ArtUrlInjector.apply(result.items, app, protocol, endpointId))
                 }

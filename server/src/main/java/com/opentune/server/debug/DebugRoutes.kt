@@ -70,7 +70,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     )
                     return@post
                 }
-                val result = runCatching { provider.validateFields(body.fields) }.getOrElse {
+                val result = runCatching { provider.validateFields(body.fields, okhttp3.OkHttpClient()) }.getOrElse {
                     Log.e(LOG_TAG, "validateFields failed", it)
                     com.opentune.provider.ValidationResult.Error(it.message ?: "validation failed")
                 }

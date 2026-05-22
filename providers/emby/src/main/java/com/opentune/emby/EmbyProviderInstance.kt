@@ -20,6 +20,7 @@ import com.opentune.provider.StreamInfo
 import com.opentune.provider.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 
 private fun SortField.toEmby(): String = when (this) {
     SortField.Title -> "SortName"
@@ -46,7 +47,10 @@ class EmbyProviderInstance(
     private val fields: EmbyServerFieldsJson,
     private val deviceProfile: DeviceProfile,
     private val capabilities: PlatformCapabilities = PlatformCapabilities(emptyList(), emptyList()),
+    private val httpClient: OkHttpClient = OkHttpClient(),
 ) : EndpointClient {
+
+    override var imageLoader: coil3.ImageLoader? = null
 
     private val repo: EmbyRepository = EmbyRepository(
         api = EmbyClientFactory.create(fields.baseUrl, fields.accessToken),
@@ -310,6 +314,7 @@ class EmbyProviderInstance(
                 durationMs = null,
                 hooks = hooks,
                 subtitleTracks = subtitleTracks,
+                httpClient = httpClient,
             )
         }
     }

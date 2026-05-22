@@ -47,7 +47,6 @@ object ProxyConfigRepository {
                     proxyType = proxyType,
                     displayName = result.name,
                     fieldsJson = encodeFields(result.fields),
-                    isEnabled = true,
                     createdAtEpochMs = System.currentTimeMillis(),
                 )
                 try {
@@ -79,30 +78,26 @@ object ProxyConfigRepository {
                         fieldsJson = encodeFields(result.fields),
                     )
                 )
-                invalidateAffectedHandles(proxyConfigId, app)
+                invalidateAffectedEndpoints(proxyConfigId, app)
                 SubmitResult.Success
             }
         }
     }
 
-    suspend fun setEnabled(proxyConfigId: String, enabled: Boolean, app: OpenTuneApplication) =
-        withContext(Dispatchers.IO) {
-            val existing = app.storageBindings.proxyConfigDao.getById(proxyConfigId) ?: return@withContext
-            app.storageBindings.proxyConfigDao.update(existing.copy(isEnabled = enabled))
-            invalidateAffectedHandles(proxyConfigId, app)
-        }
-
     suspend fun delete(proxyConfigId: String, app: OpenTuneApplication): Int =
         withContext(Dispatchers.IO) {
-            val affected = app.storageBindings.proxyAssignmentDao.getEndpointIdsForProxy(proxyConfigId)
-            app.storageBindings.proxyAssignmentDao.deleteByProxyConfigId(proxyConfigId)
+            // Find endpoints assigned to this proxy, clear their assignment, invalidate clients
+            val affected = app.storageBindings.endpointDao.getByProxyConfigId(proxyConfigId)
+            affected.forEach { entity ->
+                app.storageBindings.endpointDao.update(entity.copy(proxyConfigId = null))
+                app.endpointClientRegistry.remove(entity.endpointId)
+            }
             app.storageBindings.proxyConfigDao.deleteById(proxyConfigId)
-            affected.forEach { app.endpointClientRegistry.remove(it) }
             affected.size
         }
 
-    private suspend fun invalidateAffectedHandles(proxyConfigId: String, app: OpenTuneApplication) {
-        val affected = app.storageBindings.proxyAssignmentDao.getEndpointIdsForProxy(proxyConfigId)
-        affected.forEach { app.endpointClientRegistry.remove(it) }
+    private suspend fun invalidateAffectedEndpoints(proxyConfigId: String, app: OpenTuneApplication) {
+        val affected = app.storageBindings.endpointDao.getByProxyConfigId(proxyConfigId)
+        affected.forEach { app.endpointClientRegistry.remove(it.endpointId) }
     }
 }

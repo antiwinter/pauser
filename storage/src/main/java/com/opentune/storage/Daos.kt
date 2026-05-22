@@ -24,6 +24,9 @@ interface EndpointDao {
     @Update
     suspend fun update(endpoint: EndpointEntity)
 
+    @Query("SELECT * FROM endpoints WHERE proxyConfigId = :proxyConfigId")
+    suspend fun getByProxyConfigId(proxyConfigId: String): List<EndpointEntity>
+
     @Query("DELETE FROM endpoints WHERE endpointId = :endpointId")
     suspend fun deleteByEndpointId(endpointId: String)
 }
@@ -44,24 +47,6 @@ interface ProxyConfigDao {
 
     @Query("DELETE FROM proxy_configs WHERE id = :id")
     suspend fun deleteById(id: String)
-}
-
-@Dao
-interface ProxyAssignmentDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(entity: ProxyAssignmentEntity)
-
-    @Query("SELECT * FROM proxy_assignments WHERE endpointId = :endpointId LIMIT 1")
-    suspend fun getByEndpointId(endpointId: String): ProxyAssignmentEntity?
-
-    @Query("SELECT endpointId FROM proxy_assignments WHERE proxyConfigId = :proxyConfigId")
-    suspend fun getEndpointIdsForProxy(proxyConfigId: String): List<String>
-
-    @Query("DELETE FROM proxy_assignments WHERE endpointId = :endpointId")
-    suspend fun deleteByEndpointId(endpointId: String)
-
-    @Query("DELETE FROM proxy_assignments WHERE proxyConfigId = :proxyConfigId")
-    suspend fun deleteByProxyConfigId(proxyConfigId: String)
 }
 
 @Dao

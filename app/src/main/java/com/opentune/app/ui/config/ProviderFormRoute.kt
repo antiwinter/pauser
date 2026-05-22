@@ -70,10 +70,7 @@ fun ProviderFormRoute(
             FormEntityType.PROXY -> app.proxyProviderRegistry.proxy(protocol).getFieldsSpec().sortedBy { it.order }
         }
     }
-    val supportsProxy = remember(entityType, protocol) {
-        entityType == FormEntityType.ENDPOINT &&
-            app.providerRegistry.provider(protocol).supportsProxy
-    }
+    val isEndpoint = entityType == FormEntityType.ENDPOINT
 
     var values by remember { mutableStateOf(fields.associate { it.id to "" }) }
     var selectedProxyConfigId by remember { mutableStateOf<String?>(null) }
@@ -84,7 +81,6 @@ fun ProviderFormRoute(
 
     val proxies by app.storageBindings.proxyConfigDao.observeAll()
         .collectAsState(initial = emptyList())
-    val enabledProxies = proxies.filter { it.isEnabled }
 
     LaunchedEffect(entityType, protocol, existingId) {
         if (isAdd && entityType == FormEntityType.ENDPOINT) {
@@ -99,7 +95,7 @@ fun ProviderFormRoute(
                 }
             }
             values = fields.associate { it.id to (initial[it.id] ?: "") }
-            if (supportsProxy) {
+            if (isEndpoint) {
                 selectedProxyConfigId = withContext(Dispatchers.IO) {
                     EndpointConfigRepository.loadEditProxyConfigId(existingId!!, app)
                 }
@@ -170,9 +166,9 @@ fun ProviderFormRoute(
                     )
                 }
 
-                if (supportsProxy) {
+                if (isEndpoint) {
                     ProxySelector(
-                        proxies = enabledProxies,
+                        proxies = proxies,
                         selectedId = selectedProxyConfigId,
                         onSelect = { selectedProxyConfigId = it },
                         enabled = !isLoading,

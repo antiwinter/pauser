@@ -71,15 +71,6 @@ fun ProxyManageRoute(
                     Text(proxy.displayName, style = MaterialTheme.typography.bodyLarge)
                     Text(proxy.proxyType, style = MaterialTheme.typography.bodySmall)
                 }
-                Button(
-                    onClick = {
-                        scope.launch {
-                            ProxyConfigRepository.setEnabled(proxy.id, !proxy.isEnabled, app)
-                        }
-                    }
-                ) {
-                    Text(if (proxy.isEnabled) "Enabled" else "Disabled")
-                }
                 Button(onClick = { onEditProxy(proxy.proxyType, proxy.id) }) {
                     Text("Edit")
                 }

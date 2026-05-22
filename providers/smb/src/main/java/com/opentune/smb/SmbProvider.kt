@@ -8,6 +8,7 @@ import com.opentune.provider.ProviderFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import java.security.MessageDigest
 
 class SmbProvider : OpenTuneProvider {
@@ -53,7 +54,7 @@ class SmbProvider : OpenTuneProvider {
         ),
     )
 
-    override suspend fun validateFields(values: Map<String, String>): ValidationResult =
+    override suspend fun validateFields(values: Map<String, String>, httpClient: okhttp3.OkHttpClient): ValidationResult =
         withContext(Dispatchers.IO) {
             try {
                 val host = values["host"]?.trim().orEmpty()
@@ -89,7 +90,7 @@ class SmbProvider : OpenTuneProvider {
             }
         }
 
-    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
+    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities, httpClient: OkHttpClient): EndpointClient {
         val fields = SmbServerFieldsJson(
             host = values["host"] ?: error("Missing host"),
             shareName = values["share_name"] ?: error("Missing share_name"),
@@ -97,7 +98,7 @@ class SmbProvider : OpenTuneProvider {
             password = values["password"] ?: error("Missing password"),
             domain = values["domain"],
         )
-        return SmbProviderInstance(fields = fields)
+        return SmbProviderInstance(fields = fields, httpClient = httpClient)
     }
 
     companion object {

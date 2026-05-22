@@ -40,7 +40,7 @@ class JsProvider private constructor(
 
     // ── Validation ─────────────────────────────────────────────────────────
 
-    override suspend fun validateFields(values: Map<String, String>): ValidationResult {
+    override suspend fun validateFields(values: Map<String, String>, httpClient: okhttp3.OkHttpClient): ValidationResult {
         return try {
             val argsJson = buildJsonObject {
                 put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
@@ -70,13 +70,14 @@ class JsProvider private constructor(
 
     // ── Instance creation ──────────────────────────────────────────────────
 
-    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
+    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities, httpClient: okhttp3.OkHttpClient): EndpointClient {
         return JsProviderInstance(
             protocol = protocol,
             jsBundle     = jsBundle,
             hostApis     = hostApis,
             values       = values,
             capabilities = capabilities,
+            httpClient   = httpClient,
         )
     }
 

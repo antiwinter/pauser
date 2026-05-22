@@ -18,6 +18,7 @@ import com.opentune.provider.ProviderFieldSpec
 import com.opentune.provider.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import java.security.MessageDigest
 import kotlin.math.sqrt
 
@@ -25,7 +26,6 @@ class EmbyProvider : OpenTuneProvider {
 
     override val protocol: String = "emby-kt"
     override val providesArt: Boolean = true
-    override val supportsProxy: Boolean = true
 
     override fun getFieldsSpec(): List<ProviderFieldSpec> = listOf(
         ProviderFieldSpec(
@@ -53,7 +53,7 @@ class EmbyProvider : OpenTuneProvider {
         ),
     )
 
-    override suspend fun validateFields(values: Map<String, String>): ValidationResult =
+    override suspend fun validateFields(values: Map<String, String>, httpClient: OkHttpClient): ValidationResult =
         withContext(Dispatchers.IO) {
             try {
                 val baseUrl = EmbyClientFactory.normalizeBaseUrl(values["base_url"]?.trim().orEmpty())
@@ -81,7 +81,7 @@ class EmbyProvider : OpenTuneProvider {
             }
         }
 
-    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
+    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities, httpClient: OkHttpClient): EndpointClient {
         val fields = EmbyServerFieldsJson(
             baseUrl = values["base_url"] ?: error("Missing base_url"),
             userId = values["user_id"] ?: error("Missing user_id"),
@@ -97,7 +97,7 @@ class EmbyProvider : OpenTuneProvider {
                 clientVersion = info.clientVersion,
             ),
         )
-        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities)
+        return EmbyProviderInstance(fields = fields, deviceProfile = buildDeviceProfile(capabilities), capabilities = capabilities, httpClient = httpClient)
     }
 
     private fun buildDeviceProfile(caps: PlatformCapabilities): DeviceProfile {

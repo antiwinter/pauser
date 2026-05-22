@@ -26,6 +26,6 @@ data class PlaybackSpec(
     val durationMs: Long?,
     val hooks: OpenTunePlaybackHooks,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
-    /** Proxied OkHttpClient injected by the app layer. Null means direct connection. */
-    val httpClient: okhttp3.OkHttpClient? = null,
+    /** OkHttpClient for stream and subtitle requests. Always non-null; proxied or plain. */
+    val httpClient: okhttp3.OkHttpClient,
 )

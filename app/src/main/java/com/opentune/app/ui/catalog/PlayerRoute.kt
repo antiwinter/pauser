@@ -61,10 +61,9 @@ fun PlayerRoute(
         error = null
         try {
             withContext(Dispatchers.IO) {
-                val handle = app.endpointClientRegistry.getOrCreate(endpointId)
+                val client = app.endpointClientRegistry.getOrCreate(endpointId)
                     ?: throw IllegalStateException("No provider instance for $endpointId")
-                val resolvedSpec = handle.client.getPlaybackSpec(itemRefDecoded, startMs)
-                    .copy(httpClient = handle.httpClient)
+                val resolvedSpec = client.getPlaybackSpec(itemRefDecoded, startMs)
                 val store = app.storageBindings.entryStateStore
                 val episodeState = store.get(protocol, endpointId, itemRefDecoded)
                 val parentState = entryInfo?.parentId?.let { store.get(protocol, endpointId, it) }

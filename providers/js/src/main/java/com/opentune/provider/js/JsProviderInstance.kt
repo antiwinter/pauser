@@ -16,6 +16,8 @@ import com.opentune.provider.PlatformCapabilities
 import com.opentune.provider.PlaybackSpec
 import com.opentune.provider.StreamInfo
 import com.opentune.provider.SubtitleTrack
+import coil3.ImageLoader
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -40,7 +42,10 @@ class JsProviderInstance(
     private val hostApis: HostApis,
     private val values: Map<String, String>,
     private val capabilities: PlatformCapabilities,
+    private val httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient(),
 ) : EndpointClient {
+
+    override var imageLoader: coil3.ImageLoader? = null
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
@@ -336,6 +341,7 @@ class JsProviderInstance(
             durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
             hooks = hooks,
             subtitleTracks = subtitles,
+            httpClient = httpClient,
         )
     }
 }

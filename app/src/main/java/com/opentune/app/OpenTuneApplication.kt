@@ -48,6 +48,14 @@ class OpenTuneApplication : Application() {
     lateinit var openTuneServer: OpenTuneServer
         private set
 
+    /** Shared disk cache — one instance, one size limit, correct LRU across all image loaders. */
+    val sharedDiskCache: DiskCache by lazy {
+        DiskCache.Builder()
+            .directory(File(cacheDir, "coil").toOkioPath())
+            .maxSizeBytes(200L * 1024 * 1024)
+            .build()
+    }
+
     val imageLoader: ImageLoader by lazy { buildImageLoader() }
 
     override fun onCreate() {
@@ -62,7 +70,6 @@ class OpenTuneApplication : Application() {
             entryStateStore = EntryStateStore(database),
             appConfigStore = DataStoreAppConfigStore(applicationContext),
             proxyConfigDao = database.proxyConfigDao(),
-            proxyAssignmentDao = database.proxyAssignmentDao(),
         )
         val platformInfo = AndroidPlatformInfo(this)
         PlatformInfoHolder.set(platformInfo)
@@ -73,16 +80,17 @@ class OpenTuneApplication : Application() {
             endpointDao = storageBindings.endpointDao,
             providerRegistry = providerRegistry,
             proxyConfigDao = storageBindings.proxyConfigDao,
-            proxyAssignmentDao = storageBindings.proxyAssignmentDao,
             proxyProviderRegistry = proxyProviderRegistry,
+            sharedDiskCache = sharedDiskCache,
+            appContext = this,
         )
         openTuneServer = OpenTuneServer(
             appContext = object : AppContext {
                 override fun getProviders() = providerRegistry.providersFlow.value
                 override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
                 override fun platformCapabilities() = providerRegistry.platformCapabilities
-                override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)?.client
-                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)?.client
+                override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
+                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
                 override val endpointDao get() = storageBindings.endpointDao
                 override val entryStateStore get() = storageBindings.entryStateStore
                 override val appConfigStore get() = storageBindings.appConfigStore

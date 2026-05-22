@@ -14,10 +14,8 @@ import androidx.tv.material3.Text
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.navigation.Routes
 import com.opentune.app.navigation.toJson
-import com.opentune.provider.EntryInfo
-import coil3.ImageLoader
-import com.opentune.app.image.ProxyImageLoader
 import com.opentune.provider.EndpointClient
+import com.opentune.provider.EntryInfo
 import com.opentune.provider.SearchQuery
 import com.opentune.storage.TitleLang
 
@@ -31,8 +29,7 @@ fun SearchRoute(
     scopeLocationEncoded: String,
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
-    var instance by remember { mutableStateOf<EndpointClient?>(null) }
-    var imageLoader by remember { mutableStateOf<ImageLoader?>(null) }
+    var client by remember { mutableStateOf<EndpointClient?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val results = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by app.storageBindings.appConfigStore.titleLangFlow
@@ -40,10 +37,8 @@ fun SearchRoute(
 
     LaunchedEffect(protocol, endpointId) {
         try {
-            val handle = app.endpointClientRegistry.getOrCreate(endpointId)
+            client = app.endpointClientRegistry.getOrCreate(endpointId)
                 ?: throw IllegalStateException("No instance for $endpointId")
-            instance = handle.client
-            imageLoader = ProxyImageLoader.get(endpointId, handle.httpClient, app)
         } catch (e: Exception) {
             error = e.message
         }
@@ -51,15 +46,15 @@ fun SearchRoute(
 
     when {
         error != null -> Text("Error: $error")
-        instance == null -> Text("Loading…")
+        client == null -> Text("Loading…")
         else -> {
-            val inst = instance!!
+            val c = client!!
             SearchScreen(
                 logTag = "OT_Search_$endpointId",
                 results = results,
-                imageLoader = imageLoader,
+                imageLoader = c.imageLoader,
                 searchFn = { query ->
-                    inst.search(scopeDecoded, SearchQuery(term = query)).items
+                    c.search(scopeDecoded, SearchQuery(term = query)).items
                         .let { ArtUrlInjector.apply(it, app, protocol, endpointId) }
                 },
                 titleLang = titleLang,

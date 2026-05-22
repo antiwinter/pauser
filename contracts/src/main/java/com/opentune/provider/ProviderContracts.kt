@@ -66,23 +66,23 @@ interface OpenTuneProvider {
      */
     val providesArt: Boolean
 
-    val supportsProxy: Boolean get() = false
-
     /** Single field spec for both add and edit forms. Does not include display_name. */
     fun getFieldsSpec(): List<ProviderFieldSpec>
 
     /**
      * Connect, authenticate, and verify the supplied credentials.
+     * [httpClient] is the proxy-configured (or plain) OkHttpClient for reaching the server.
      * Returns [ValidationResult.Success] with [hash], human-readable [name], and [fields] to persist,
      * or [ValidationResult.Error].
      */
-    suspend fun validateFields(values: Map<String, String>): ValidationResult
+    suspend fun validateFields(values: Map<String, String>, httpClient: okhttp3.OkHttpClient): ValidationResult
 
     /**
      * Construct a live client from already-validated credentials.
-     * Called without an endpointId; the client carries no identity state.
+     * [httpClient] is the proxy-configured (or plain) OkHttpClient — stored internally by the client
+     * and used for all network calls including [PlaybackSpec.httpClient].
      */
-    fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient
+    fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities, httpClient: okhttp3.OkHttpClient): EndpointClient
 }
 
 /**
@@ -101,6 +101,7 @@ interface OpenTuneProviderLoader {
  * No identity fields — the app registry maps endpointId → client externally.
  */
 interface EndpointClient {
+    var imageLoader: coil3.ImageLoader?
     suspend fun listEntry(
         location: String?,
         startIndex: Int,

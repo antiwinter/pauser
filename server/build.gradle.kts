@@ -19,6 +19,7 @@ dependencies {
     implementation(project(":gen-art"))
     implementation(libs.ktor.server.cio)
     implementation(libs.ktor.server.core)
+    implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 }
