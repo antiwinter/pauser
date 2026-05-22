@@ -197,3 +197,35 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 ## Playback hooks
 
 Implement `OpenTunePlaybackHooks` from `:contracts`. HTTP-library: `EmbyPlaybackHooks` in `:providers:emby`. File-share: `SmbPlaybackHooks` in `:providers:smb` (revokes stream tokens on dispose).
+
+---
+
+## Cursor Cloud specific instructions
+
+### Environment prerequisites
+
+| Component | Path / Version |
+|-----------|---------------|
+| JDK 17 | `/usr/lib/jvm/java-17-openjdk-amd64` |
+| Android SDK | `/opt/android-sdk` (platforms 35, build-tools 35, NDK 30.0.14904198, CMake 3.22.1) |
+| Gradle wrapper | `./gradlew` (downloads Gradle 9.4.1 on first run) |
+| QuickJS submodule | `providers/js/src/main/jni/quickjs_ng` — must be initialized |
+
+Environment variables (`JAVA_HOME`, `ANDROID_SDK_ROOT`, `PATH`) are set in `~/.bashrc`.
+
+### Key commands
+
+| Task | Command |
+|------|---------|
+| Build debug APK | `./gradlew assembleDebug` |
+| Run unit tests | `./gradlew testDebugUnitTest` |
+| Lint (all modules) | `./gradlew lint` |
+| Lint (app only) | `./gradlew :app:lintDebug` |
+
+### Caveats
+
+- `local.properties` must exist with `sdk.dir=/opt/android-sdk`. It is gitignored; the update script recreates it.
+- `providers-ts/dist/` is referenced as an assets source dir by `:app`. If missing, create an empty directory — the build won't fail but the assets merge step needs the path to exist.
+- Pre-existing lint errors: `:gen-art` has a `NewApi` error (`MediaMetadataRetriever.use` on API < 29) and `:app` has an `UnsafeOptInUsageError` for Media3 unstable API usage. These are not regressions.
+- The project uses `--no-daemon` by default in CI-like environments. For faster iteration in a long-lived session, omit `--no-daemon` to keep the Gradle daemon alive.
+- This is an Android TV app — there is no web server or backend to start. "Running" the app means building the APK. End-to-end testing requires an Android TV emulator or device plus an Emby server or SMB share on the network.
