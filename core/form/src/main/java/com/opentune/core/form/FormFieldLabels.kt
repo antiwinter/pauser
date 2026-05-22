@@ -1,0 +1,27 @@
+package com.opentune.core.form
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+
+@Composable
+fun formFieldLabel(labelKey: String): String = when (labelKey) {
+    "fld_http_library_url" -> stringResource(R.string.fld_http_library_url)
+    "fld_account_username" -> stringResource(R.string.fld_account_username)
+    "fld_account_password" -> stringResource(R.string.fld_account_password)
+    "fld_display_name" -> stringResource(R.string.fld_display_name)
+    "fld_network_host" -> stringResource(R.string.fld_network_host)
+    "fld_share_name" -> stringResource(R.string.fld_share_name)
+    "fld_domain_optional" -> stringResource(R.string.fld_domain_optional)
+    "fld_proxy_host" -> stringResource(R.string.fld_proxy_host)
+    "fld_proxy_port" -> stringResource(R.string.fld_proxy_port)
+    else -> labelKey
+}
+
+@Composable
+fun formFieldPlaceholder(placeholderKey: String?): String? = when (placeholderKey) {
+    "ph_http_library_url" -> stringResource(R.string.ph_http_library_url)
+    "ph_proxy_host" -> stringResource(R.string.ph_proxy_host)
+    "ph_proxy_port" -> stringResource(R.string.ph_proxy_port)
+    null -> null
+    else -> placeholderKey
+}

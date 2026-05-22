@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.app.providers.ProxyRepository
+import com.opentune.content.ui.providers.ProxyRepository
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
@@ -91,7 +91,7 @@ fun HomeRoute(
                 Button(
                     onClick = { onEditProxy(proxy.proxyType, proxy.id) },
                     modifier = Modifier.onTvMenuKeyDown {
-                        scope.launch { ProxyRepository.delete(proxy.id, app) }
+                        scope.launch { ProxyRepository.delete(proxy.id) }
                     },
                 ) {
                     Text(proxy.displayName)

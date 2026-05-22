@@ -36,7 +36,7 @@ import com.opentune.player.engine.TrackInfo
 import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
-import com.opentune.provider.PlaybackSpec
+import com.opentune.content.contract.PlaybackSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

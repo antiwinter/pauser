@@ -3,8 +3,9 @@ package com.opentune.app.providers
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import com.opentune.proxy.ProxyProviderRegistry
-import com.opentune.provider.EndpointClient
+import com.opentune.proxy.contract.ProxyProviderRegistry
+import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EndpointClientAccess
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.ProxyDao
@@ -20,12 +21,12 @@ class EndpointClientRegistry(
     private val proxyProviderRegistry: ProxyProviderRegistry,
     private val sharedDiskCache: DiskCache,
     private val appContext: android.content.Context,
-) {
+) : EndpointClientAccess {
     private val mutex = Mutex()
     private val clients = mutableMapOf<String, EndpointClient>()
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun getOrCreate(endpointId: String): EndpointClient? = mutex.withLock {
+    override suspend fun getOrCreate(endpointId: String): EndpointClient? = mutex.withLock {
         clients[endpointId] ?: run {
             val entity = endpointDao.getByEndpointId(endpointId) ?: return@withLock null
             val client = buildClient(entity) ?: return@withLock null
@@ -34,19 +35,19 @@ class EndpointClientRegistry(
         }
     }
 
-    suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient? =
+    override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient? =
         mutex.withLock {
             val client = buildClient(entity) ?: return@withLock null
             clients[endpointId] = client
             client
         }
 
-    suspend fun update(endpointId: String, entity: EndpointEntity): Unit = mutex.withLock {
+    override suspend fun update(endpointId: String, entity: EndpointEntity): Unit = mutex.withLock {
         val client = buildClient(entity)
         if (client != null) clients[endpointId] = client else clients.remove(endpointId)
     }
 
-    suspend fun remove(endpointId: String): Unit = mutex.withLock {
+    override suspend fun remove(endpointId: String): Unit = mutex.withLock {
         clients.remove(endpointId)
     }
 
@@ -59,7 +60,7 @@ class EndpointClientRegistry(
         }
     }
 
-    suspend fun buildHttpClient(proxyId: String?): OkHttpClient =
+    override suspend fun buildHttpClient(proxyId: String?): OkHttpClient =
         proxyId?.let { id ->
             runCatching {
                 val proxy = proxyDao.getById(id) ?: return@runCatching null

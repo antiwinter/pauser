@@ -2,7 +2,7 @@ package com.opentune.server.debug
 
 import android.util.Log
 import com.opentune.server.AppContext
-import com.opentune.provider.SearchQuery
+import com.opentune.content.contract.SearchQuery
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -72,17 +72,17 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 }
                 val result = runCatching { provider.validateFields(body.fields) }.getOrElse {
                     Log.e(LOG_TAG, "validateFields failed", it)
-                    com.opentune.provider.ValidationResult.Error(it.message ?: "validation failed")
+                    com.opentune.content.contract.EndpointValidationResult.Error(it.message ?: "validation failed")
                 }
                 when (result) {
-                    is com.opentune.provider.ValidationResult.Error -> {
+                    is com.opentune.content.contract.EndpointValidationResult.Error -> {
                         call.respondText(
                             json.encodeToString(AddServerResponse(error = result.message)),
                             ContentType.Application.Json,
                             HttpStatusCode.UnprocessableEntity,
                         )
                     }
-                    is com.opentune.provider.ValidationResult.Success -> {
+                    is com.opentune.content.contract.EndpointValidationResult.Success -> {
                         val endpointId = "${body.protocol}_${result.hash}"
                         val now = System.currentTimeMillis()
                         val entity = EndpointEntity(

@@ -1,8 +1,8 @@
 package com.opentune.server
 
-import com.opentune.provider.EndpointClient
-import com.opentune.provider.OpenTuneProvider
-import com.opentune.provider.PlatformCapabilities
+import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.OpenTuneProvider
+import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.storage.AppConfigStore
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity

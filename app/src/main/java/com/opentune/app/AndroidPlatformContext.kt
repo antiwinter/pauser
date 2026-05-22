@@ -3,7 +3,7 @@ package com.opentune.app
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
-import com.opentune.provider.PlatformInfo
+import com.opentune.content.contract.PlatformInfo
 import java.io.File
 import java.util.UUID
 

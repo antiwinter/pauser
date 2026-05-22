@@ -14,7 +14,7 @@ android {
 }
 
 dependencies {
-    api(project(":contracts"))
+    api(project(":content:contract"))
     api(project(":storage"))
     implementation(project(":gen-art"))
     implementation(libs.ktor.server.cio)

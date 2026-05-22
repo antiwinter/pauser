@@ -8,14 +8,18 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
 import com.opentune.app.providers.OpenTuneProviderRegistry
-import com.opentune.proxy.ProxyProviderRegistry
+import com.opentune.proxy.contract.ProxyProviderRegistry
 import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
 import com.opentune.storage.EndpointEntity
-import com.opentune.provider.PlatformCapabilities
-import com.opentune.provider.PlatformInfoHolder
-import com.opentune.provider.StreamRegistrarHolder
+import com.opentune.content.contract.PlatformCapabilities
+import com.opentune.content.contract.PlatformInfoHolder
+import com.opentune.content.contract.StreamRegistrarHolder
+import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.proxy.contract.ProxyProviderRegistryHolder
+import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.EntryStateStore
@@ -84,6 +88,10 @@ class OpenTuneApplication : Application() {
             sharedDiskCache = sharedDiskCache,
             appContext = this,
         )
+        StorageBindingsHolder.set(storageBindings)
+        EndpointClientRegistryHolder.set(endpointClientRegistry)
+        OpenTuneProviderRegistryHolder.set(providerRegistry)
+        ProxyProviderRegistryHolder.set(proxyProviderRegistry)
         openTuneServer = OpenTuneServer(
             appContext = object : AppContext {
                 override fun getProviders() = providerRegistry.providersFlow.value

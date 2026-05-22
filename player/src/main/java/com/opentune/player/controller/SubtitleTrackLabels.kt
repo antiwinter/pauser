@@ -3,7 +3,7 @@ package com.opentune.player.controller
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import com.opentune.provider.SubtitleTrack
+import com.opentune.content.contract.SubtitleTrack
 
 internal fun buildTrackLabel(
     track: SubtitleTrack,

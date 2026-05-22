@@ -1,7 +1,7 @@
 package com.opentune.server
 
 import android.util.Log
-import com.opentune.provider.StreamRegistrar
+import com.opentune.content.contract.StreamRegistrar
 import com.opentune.server.debug.installDebugRoutes
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer

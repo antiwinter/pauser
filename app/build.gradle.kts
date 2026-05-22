@@ -86,14 +86,13 @@ android {
 }
 
 dependencies {
-    implementation(project(":contracts"))
-    implementation(project(":providers:js"))
-    implementation(project(":proxy:http"))
-
-    implementation(project(":player"))
+    implementation(project(":content:ui"))
+    implementation(project(":proxy:ui"))
+    implementation(project(":content:providers:js"))
+    implementation(project(":proxy:providers:http"))
     implementation(project(":storage"))
-    implementation(project(":providers:emby"))
-    implementation(project(":providers:smb"))
+    implementation(project(":content:providers:emby"))
+    implementation(project(":content:providers:smb"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

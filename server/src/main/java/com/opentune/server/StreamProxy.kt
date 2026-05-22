@@ -1,9 +1,9 @@
 package com.opentune.server
 
 import android.util.Log
-import com.opentune.provider.EndpointClient
-import com.opentune.provider.ProviderStream
-import com.opentune.provider.StreamRegistrar
+import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.ProviderStream
+import com.opentune.content.contract.StreamRegistrar
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode

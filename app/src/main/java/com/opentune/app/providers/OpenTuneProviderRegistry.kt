@@ -1,8 +1,9 @@
 package com.opentune.app.providers
 
-import com.opentune.provider.PlatformCapabilities
-import com.opentune.provider.OpenTuneProvider
-import com.opentune.provider.OpenTuneProviderLoader
+import com.opentune.content.contract.PlatformCapabilities
+import com.opentune.content.contract.OpenTuneProvider
+import com.opentune.content.contract.OpenTuneProviderAccess
+import com.opentune.content.contract.OpenTuneProviderLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +14,7 @@ import kotlinx.coroutines.launch
 import java.util.ServiceLoader
 import java.util.concurrent.ConcurrentHashMap
 
-class OpenTuneProviderRegistry {
+class OpenTuneProviderRegistry : OpenTuneProviderAccess {
     private val providersById = ConcurrentHashMap<String, OpenTuneProvider>()
 
     private val _providersFlow = MutableStateFlow<List<OpenTuneProvider>>(emptyList())
@@ -21,7 +22,7 @@ class OpenTuneProviderRegistry {
     /** Emits the current list of registered providers, growing as discovery completes. */
     val providersFlow: StateFlow<List<OpenTuneProvider>> = _providersFlow.asStateFlow()
 
-    @Volatile var platformCapabilities: PlatformCapabilities = PlatformCapabilities(
+    @Volatile override var platformCapabilities: PlatformCapabilities = PlatformCapabilities(
         videoMime = listOf("video/avc"),
         audioMime = listOf("audio/mp4a-latm"),
     )
@@ -36,8 +37,10 @@ class OpenTuneProviderRegistry {
         _providersFlow.update { it + provider }
     }
 
-    fun provider(protocol: String): OpenTuneProvider =
+    override fun provider(protocol: String): OpenTuneProvider =
         providersById[protocol] ?: error("Unknown provider: $protocol")
+
+    override fun allProviders(): List<OpenTuneProvider> = _providersFlow.value
 
     /**
      * Discovers all [OpenTuneProviderLoader]s via [ServiceLoader] and runs them in parallel

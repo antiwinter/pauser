@@ -21,7 +21,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":contracts"))
+    implementation(project(":content:contract"))
     implementation(project(":storage"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
