@@ -2,6 +2,7 @@
 
 3. split contract into proxy/provider
 6. what is EndpointConfigRepository?
+StreamRegistrarHolder, PlatformInfoHolder
 - [ ] error osd
 - [ ] move add server/ProviderFieldSpec/ValidationResult to utils.register
 - [x] Storage naming unification
