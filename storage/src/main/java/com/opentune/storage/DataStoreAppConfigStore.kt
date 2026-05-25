@@ -1,4 +1,4 @@
-package com.opentune.app
+package com.opentune.storage
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -6,9 +6,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.opentune.storage.AppConfigStore
-import com.opentune.storage.SubtitlePrefs
-import com.opentune.storage.TitleLang
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map

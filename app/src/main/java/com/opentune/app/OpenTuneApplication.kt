@@ -7,8 +7,9 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
-import com.opentune.app.providers.OpenTuneProviderRegistry
+import com.opentune.content.contract.OpenTuneProviderRegistry
 import com.opentune.proxy.contract.ProxyProviderRegistry
+import com.opentune.storage.DataStoreAppConfigStore
 import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer

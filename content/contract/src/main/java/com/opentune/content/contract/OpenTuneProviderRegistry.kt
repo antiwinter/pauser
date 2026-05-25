@@ -1,9 +1,5 @@
-package com.opentune.app.providers
+package com.opentune.content.contract
 
-import com.opentune.content.contract.PlatformCapabilities
-import com.opentune.content.contract.OpenTuneProvider
-import com.opentune.content.contract.OpenTuneProviderAccess
-import com.opentune.content.contract.OpenTuneProviderLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +15,6 @@ class OpenTuneProviderRegistry : OpenTuneProviderAccess {
 
     private val _providersFlow = MutableStateFlow<List<OpenTuneProvider>>(emptyList())
 
-    /** Emits the current list of registered providers, growing as discovery completes. */
     val providersFlow: StateFlow<List<OpenTuneProvider>> = _providersFlow.asStateFlow()
 
     @Volatile override var platformCapabilities: PlatformCapabilities = PlatformCapabilities(
@@ -42,11 +37,6 @@ class OpenTuneProviderRegistry : OpenTuneProviderAccess {
 
     override fun allProviders(): List<OpenTuneProvider> = _providersFlow.value
 
-    /**
-     * Discovers all [OpenTuneProviderLoader]s via [ServiceLoader] and runs them in parallel
-     * on [Dispatchers.IO]. Each loader calls [register] as soon as its provider is ready.
-     * Suspends until all loaders have completed.
-     */
     suspend fun discoverAsync() = coroutineScope {
         ServiceLoader
             .load(OpenTuneProviderLoader::class.java, OpenTuneProviderLoader::class.java.classLoader)

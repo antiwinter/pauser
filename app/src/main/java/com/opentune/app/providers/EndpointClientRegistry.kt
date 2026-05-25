@@ -3,6 +3,7 @@ package com.opentune.app.providers
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import com.opentune.content.contract.OpenTuneProviderRegistry
 import com.opentune.proxy.contract.ProxyProviderRegistry
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientAccess
