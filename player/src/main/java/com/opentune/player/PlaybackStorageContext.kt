@@ -1,7 +1,7 @@
 package com.opentune.player
 
 import androidx.compose.runtime.staticCompositionLocalOf
-import com.opentune.storage.AppConfigStore
+import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
 
@@ -12,7 +12,7 @@ data class PlaybackStorageContext(
     val seriesStateKey: EntryStateKey? = null,
     val seriesSeasonNumber: Int? = null,
     val seriesEpisodeNumber: Int? = null,
-    val appConfigStore: AppConfigStore,
+    val appConfigStore: AppPrefsStore,
 )
 
 val LocalPlaybackStorageContext = staticCompositionLocalOf<PlaybackStorageContext> {

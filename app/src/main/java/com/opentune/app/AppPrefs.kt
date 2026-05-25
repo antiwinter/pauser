@@ -1,4 +1,4 @@
-package com.opentune.storage
+package com.opentune.app
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.opentune.storage.AppPrefsStore
+import com.opentune.storage.SubtitlePrefs
+import com.opentune.storage.TitleLang
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -14,7 +17,7 @@ import kotlinx.serialization.json.Json
 
 private val Context.appConfigDataStore by preferencesDataStore(name = "opentune_app_config")
 
-class DataStoreAppConfigStore(private val context: Context) : AppConfigStore {
+class AppPrefs(private val context: Context) : AppPrefsStore {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -72,7 +75,7 @@ class DataStoreAppConfigStore(private val context: Context) : AppConfigStore {
 
     override val preBufferMsFlow: Flow<Int>
         get() = context.appConfigDataStore.data.map { prefs ->
-            prefs[preBufferMsKey] ?: AppConfigStore.DEFAULT_PRE_BUFFER_MS
+            prefs[preBufferMsKey] ?: AppPrefsStore.DEFAULT_PRE_BUFFER_MS
         }
 
     override suspend fun savePreBufferMs(ms: Int) {

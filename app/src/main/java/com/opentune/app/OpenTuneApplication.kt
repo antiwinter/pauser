@@ -9,7 +9,6 @@ import coil3.disk.DiskCache
 import okio.Path.Companion.toOkioPath
 import com.opentune.content.contract.OpenTuneProviderRegistry
 import com.opentune.proxy.contract.ProxyProviderRegistry
-import com.opentune.storage.DataStoreAppConfigStore
 import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
@@ -73,7 +72,7 @@ class OpenTuneApplication : Application() {
         storageBindings = OpenTuneStorageBindings(
             endpointDao = database.endpointDao(),
             entryStateStore = EntryStateStore(database),
-            appConfigStore = DataStoreAppConfigStore(applicationContext),
+            appConfigStore = AppPrefs(applicationContext),
             proxyDao = database.proxyDao(),
         )
         val platformInfo = AndroidPlatformInfo(this)

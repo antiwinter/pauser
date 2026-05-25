@@ -3,7 +3,7 @@ package com.opentune.server
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.PlatformCapabilities
-import com.opentune.storage.AppConfigStore
+import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.EntryStateStore
@@ -22,5 +22,5 @@ interface AppContext {
     suspend fun registerClient(endpointId: String, entity: EndpointEntity): EndpointClient?
     val endpointDao: EndpointDao
     val entryStateStore: EntryStateStore
-    val appConfigStore: AppConfigStore
+    val appConfigStore: AppPrefsStore
 }

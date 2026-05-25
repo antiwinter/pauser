@@ -115,6 +115,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.room.runtime)
+    implementation(libs.androidx.datastore.preferences)
     implementation(project(":server"))
     implementation(project(":image-viewer"))
 

@@ -9,7 +9,7 @@ data class SubtitlePrefs(
 
 enum class TitleLang { Local, Original }
 
-interface AppConfigStore {
+interface AppPrefsStore {
     suspend fun loadDraft(providerId: String): Map<String, String>
     suspend fun saveDraft(providerId: String, values: Map<String, String>)
     suspend fun clearDraft(providerId: String)

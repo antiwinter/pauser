@@ -6,7 +6,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
-import com.opentune.storage.AppConfigStore
+import com.opentune.storage.AppPrefsStore
 
 @UnstableApi
 object OpenTuneExoPlayer {
@@ -24,7 +24,7 @@ object OpenTuneExoPlayer {
      */
     fun createForBundledSources(
         context: Context,
-        preBufferMs: Int = AppConfigStore.DEFAULT_PRE_BUFFER_MS,
+        preBufferMs: Int = AppPrefsStore.DEFAULT_PRE_BUFFER_MS,
         codecSelector: MediaCodecSelector = MediaCodecSelector.DEFAULT,
     ): PlayerWithMeter {
         val loadControl = DefaultLoadControl.Builder()

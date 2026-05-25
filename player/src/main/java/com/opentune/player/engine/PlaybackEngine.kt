@@ -32,7 +32,7 @@ import com.opentune.player.controller.resolveSubtitlePreference
 import com.opentune.player.controller.subtitleMimeType
 import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.content.contract.PlaybackSpec
-import com.opentune.storage.AppConfigStore
+import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +55,7 @@ private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
 
 internal data class PlayerStores(
     val entryStateStore: EntryStateStore,
-    val appConfigStore: AppConfigStore,
+    val appConfigStore: AppPrefsStore,
 )
 
 // ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ internal fun rememberPlaybackEngine(
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     val preBufferMs by appConfigStore.preBufferMsFlow
-        .collectAsState(initial = AppConfigStore.DEFAULT_PRE_BUFFER_MS)
+        .collectAsState(initial = AppPrefsStore.DEFAULT_PRE_BUFFER_MS)
 
     // preBufferMs is a key so the player is recreated if the setting changes.
     // fallbackSelector is null when DECODER_FALLBACK_ENABLED = false.
