@@ -6,8 +6,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.opentune.content.ui.Routes
-import com.opentune.content.ui.config.FormEntityType
-import com.opentune.content.ui.config.ProviderFormRoute
+import com.opentune.content.ui.providers.ProxyRepository
+import com.opentune.core.form.ProviderFormRoute
+import com.opentune.proxy.contract.ProxyProviderRegistryHolder
 
 fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
     composable(
@@ -15,7 +16,12 @@ fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
         listOf(navArgument("proxyType") { type = NavType.StringType }),
     ) {
         val proxyType = it.arguments!!.getString("proxyType")!!
-        ProviderFormRoute(entityType = FormEntityType.PROXY, protocol = proxyType, onDone = { nav.popBackStack() })
+        val proxy = ProxyProviderRegistryHolder.get().proxy(proxyType)
+        ProviderFormRoute(
+            fields = proxy.getFieldsSpec(),
+            onSubmit = { values, _ -> ProxyRepository.submitAdd(proxyType, values) },
+            onDone = { nav.popBackStack() },
+        )
     }
     composable(
         Routes.PROXY_EDIT,
@@ -26,6 +32,15 @@ fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
     ) {
         val proxyType = it.arguments!!.getString("proxyType")!!
         val proxyId = it.arguments!!.getString("proxyId")!!
-        ProviderFormRoute(entityType = FormEntityType.PROXY, protocol = proxyType, existingId = proxyId, onDone = { nav.popBackStack() })
+        val proxy = ProxyProviderRegistryHolder.get().proxy(proxyType)
+        ProviderFormRoute(
+            fields = proxy.getFieldsSpec(),
+            onLoad = {
+                val fields = ProxyRepository.loadEditFields(proxyType, proxyId)
+                fields to null
+            },
+            onSubmit = { values, _ -> ProxyRepository.submitEdit(proxyType, proxyId, values) },
+            onDone = { nav.popBackStack() },
+        )
     }
 }

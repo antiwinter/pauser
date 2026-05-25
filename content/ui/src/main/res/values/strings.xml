@@ -1,27 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="endpoint_add_title">Add source</string>
-    <string name="endpoint_add_hint_autosave">Fields are saved automatically if you leave before finishing.</string>
-    <string name="endpoint_add_primary">Save and connect</string>
-    <string name="endpoint_edit_title">Edit source</string>
-    <string name="endpoint_edit_primary">Save changes</string>
-    <string name="proxy_add_title">Add proxy</string>
-    <string name="proxy_add_primary">Save proxy</string>
-    <string name="proxy_edit_title">Edit proxy</string>
-    <string name="proxy_edit_primary">Save changes</string>
-    <string name="proxy_section_title">Proxy</string>
-    <string name="proxy_none">None (direct connection)</string>
-    <string name="action_cancel">Cancel</string>
-    <string name="fld_http_library_url">Server URL (e.g. http://192.168.1.10:8096)</string>
-    <string name="ph_http_library_url">http://host:8096</string>
-    <string name="fld_account_username">Username</string>
-    <string name="fld_account_password">Password</string>
-    <string name="fld_display_name">Display name</string>
-    <string name="fld_network_host">Host / IP</string>
-    <string name="fld_share_name">Share name</string>
-    <string name="fld_domain_optional">Domain (optional)</string>
-    <string name="fld_proxy_host">Proxy host</string>
-    <string name="ph_proxy_host">192.168.1.1</string>
-    <string name="fld_proxy_port">Port</string>
-    <string name="ph_proxy_port">8080</string>
 </resources>

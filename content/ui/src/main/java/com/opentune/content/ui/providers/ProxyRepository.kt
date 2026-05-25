@@ -1,6 +1,7 @@
 package com.opentune.content.ui.providers
 
 import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.core.form.SubmitResult
 import com.opentune.proxy.contract.ProxyProviderRegistryHolder
 import com.opentune.proxy.contract.ProxyValidationResult
 import com.opentune.storage.ProxyEntity

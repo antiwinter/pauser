@@ -1,4 +1,4 @@
-package com.opentune.content.ui.config
+package com.opentune.core.form
 
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -31,13 +31,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.opentune.content.contract.OpenTuneProviderRegistryHolder
-import com.opentune.content.ui.R
-import com.opentune.content.ui.providers.EndpointConfigRepository
-import com.opentune.content.ui.providers.ProxyRepository
-import com.opentune.content.ui.providers.SubmitResult
-import com.opentune.core.form.FormFieldsRenderer
-import com.opentune.proxy.contract.ProxyProviderRegistryHolder
+import com.opentune.content.contract.FormFieldKind
+import com.opentune.content.contract.FormFieldSpec
 import com.opentune.storage.ProxyEntity
 import com.opentune.storage.StorageBindingsHolder
 import kotlinx.coroutines.Dispatchers
@@ -49,82 +44,46 @@ import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "ProviderFormRoute"
 
-enum class FormEntityType { ENDPOINT, PROXY }
-
 @OptIn(ExperimentalTvMaterial3Api::class, FlowPreview::class)
 @Composable
 fun ProviderFormRoute(
-    entityType: FormEntityType,
-    protocol: String,
-    existingId: String? = null,
+    fields: List<FormFieldSpec>,
+    onLoad: (suspend () -> Pair<Map<String, String>, String?>)? = null,
+    onDraftSave: (suspend (Map<String, String>) -> Unit)? = null,
+    onSubmit: suspend (values: Map<String, String>, proxyId: String?) -> SubmitResult,
     onDone: () -> Unit,
 ) {
-    val isAdd = existingId == null
+    val sortedFields = remember(fields) { fields.sortedBy { it.order } }
+    val inputFields = remember(sortedFields) { sortedFields.filter { it.kind != FormFieldKind.ProxySelector } }
+    val hasProxySelector = remember(sortedFields) { sortedFields.any { it.kind == FormFieldKind.ProxySelector } }
 
-    val fields = remember(entityType, protocol) {
-        when (entityType) {
-            FormEntityType.ENDPOINT -> OpenTuneProviderRegistryHolder.get().provider(protocol).getFieldsSpec().sortedBy { it.order }
-            FormEntityType.PROXY -> ProxyProviderRegistryHolder.get().proxy(protocol).getFieldsSpec().sortedBy { it.order }
-        }
-    }
-    val isEndpoint = entityType == FormEntityType.ENDPOINT
-
-    var values by remember { mutableStateOf(fields.associate { it.id to "" }) }
+    var values by remember { mutableStateOf(inputFields.associate { it.id to "" }) }
     var selectedProxyId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
-    var loaded by remember { mutableStateOf(isAdd) }
+    var loaded by remember { mutableStateOf(onLoad == null) }
     val scope = rememberCoroutineScope()
 
     val proxies by StorageBindingsHolder.get().proxyDao.observeAll()
         .collectAsState(initial = emptyList())
 
-    LaunchedEffect(entityType, protocol, existingId) {
-        if (isAdd && entityType == FormEntityType.ENDPOINT) {
-            val draft = EndpointConfigRepository.loadAddDraft(protocol)
-            values = fields.associate { it.id to (draft[it.id] ?: "") }
-        } else if (!isAdd) {
+    LaunchedEffect(Unit) {
+        if (onLoad != null) {
             loaded = false
-            val initial = withContext(Dispatchers.IO) {
-                when (entityType) {
-                    FormEntityType.ENDPOINT -> EndpointConfigRepository.loadEditFields(protocol, existingId!!)
-                    FormEntityType.PROXY -> ProxyRepository.loadEditFields(protocol, existingId!!)
-                }
-            }
-            values = fields.associate { it.id to (initial[it.id] ?: "") }
-            if (isEndpoint) {
-                selectedProxyId = withContext(Dispatchers.IO) {
-                    EndpointConfigRepository.loadEditProxyId(existingId!!)
-                }
-            }
+            val (initial, proxyId) = withContext(Dispatchers.IO) { onLoad() }
+            values = inputFields.associate { it.id to (initial[it.id] ?: "") }
+            selectedProxyId = proxyId
             loaded = true
         }
     }
 
-    if (isAdd && entityType == FormEntityType.ENDPOINT) {
-        LaunchedEffect(protocol, fields) {
+    if (onDraftSave != null) {
+        LaunchedEffect(inputFields) {
             snapshotFlow { values }
                 .distinctUntilChanged()
                 .debounce(600)
-                .collect { v ->
-                    withContext(Dispatchers.IO) {
-                        EndpointConfigRepository.saveAddDraft(protocol, v)
-                    }
-                }
+                .collect { v -> withContext(Dispatchers.IO) { onDraftSave(v) } }
         }
-    }
-
-    val titleRes = when {
-        entityType == FormEntityType.PROXY && isAdd -> R.string.proxy_add_title
-        entityType == FormEntityType.PROXY && !isAdd -> R.string.proxy_edit_title
-        isAdd -> R.string.endpoint_add_title
-        else -> R.string.endpoint_edit_title
-    }
-    val primaryRes = when {
-        entityType == FormEntityType.PROXY && isAdd -> R.string.proxy_add_primary
-        entityType == FormEntityType.PROXY && !isAdd -> R.string.proxy_edit_primary
-        isAdd -> R.string.endpoint_add_primary
-        else -> R.string.endpoint_edit_primary
     }
 
     val scroll = rememberScrollState()
@@ -136,21 +95,17 @@ fun ProviderFormRoute(
             modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(titleRes))
-            if (isAdd && entityType == FormEntityType.ENDPOINT) {
-                Text(stringResource(R.string.endpoint_add_hint_autosave))
-            }
-
+            Text(stringResource(R.string.form_title))
             if (!loaded) {
-                Text("Loading…")
+                Text(stringResource(R.string.form_loading))
             } else {
                 FormFieldsRenderer(
-                    fields = fields,
+                    fields = inputFields,
                     values = values,
                     onValueChange = { id, nv -> values = values + (id to nv) },
                     enabled = !isLoading,
                 )
-                if (isEndpoint) {
+                if (hasProxySelector) {
                     ProxySelector(
                         proxies = proxies,
                         selectedId = selectedProxyId,
@@ -159,7 +114,6 @@ fun ProviderFormRoute(
                     )
                 }
             }
-
             error?.let { Text("Error: $it", color = MaterialTheme.colorScheme.error) }
         }
 
@@ -170,27 +124,8 @@ fun ProviderFormRoute(
                     error = null
                     isLoading = true
                     try {
-                        val result: SubmitResult = withContext(Dispatchers.IO) {
-                            when {
-                                entityType == FormEntityType.ENDPOINT && isAdd ->
-                                    EndpointConfigRepository.submitAdd(protocol, values, selectedProxyId)
-                                entityType == FormEntityType.ENDPOINT && !isAdd ->
-                                    EndpointConfigRepository.submitEdit(protocol, existingId!!, values, selectedProxyId)
-                                entityType == FormEntityType.PROXY && isAdd ->
-                                    ProxyRepository.submitAdd(protocol, values)
-                                else ->
-                                    ProxyRepository.submitEdit(protocol, existingId!!, values)
-                            }
-                        }
-                        when (result) {
-                            is SubmitResult.Success -> {
-                                if (isAdd && entityType == FormEntityType.ENDPOINT) {
-                                    withContext(Dispatchers.IO) {
-                                        EndpointConfigRepository.clearAddDraft(protocol)
-                                    }
-                                }
-                                onDone()
-                            }
+                        when (val result = withContext(Dispatchers.IO) { onSubmit(values, selectedProxyId) }) {
+                            is SubmitResult.Success -> onDone()
                             is SubmitResult.Error -> {
                                 Log.e(LOG_TAG, "submit failed: ${result.message}")
                                 error = result.message
@@ -208,10 +143,10 @@ fun ProviderFormRoute(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text(stringResource(primaryRes))
+                Text(stringResource(R.string.form_button))
             }
         }
-        Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.action_cancel)) }
+        Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.form_action_cancel)) }
     }
 }
 
@@ -225,15 +160,15 @@ private fun ProxySelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedLabel = proxies.find { it.id == selectedId }?.displayName
-        ?: stringResource(R.string.proxy_none)
+        ?: stringResource(R.string.form_proxy_none)
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(stringResource(R.string.proxy_section_title), style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.form_proxy_section_title), style = MaterialTheme.typography.labelMedium)
         Box {
             Button(onClick = { expanded = true }, enabled = enabled) { Text(selectedLabel) }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.proxy_none)) },
+                    text = { Text(stringResource(R.string.form_proxy_none)) },
                     onClick = { onSelect(null); expanded = false },
                 )
                 proxies.forEach { proxy ->

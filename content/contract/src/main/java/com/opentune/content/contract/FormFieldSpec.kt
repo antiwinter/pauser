@@ -4,6 +4,7 @@ enum class FormFieldKind {
     Text,
     SingleLineText,
     Password,
+    ProxySelector,
 }
 
 data class FormFieldSpec(

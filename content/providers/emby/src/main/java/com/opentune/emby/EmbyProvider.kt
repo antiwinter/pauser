@@ -50,6 +50,7 @@ class EmbyProvider : OpenTuneProvider {
             sensitive = true,
             order = 2,
         ),
+        FormFieldSpec(id = "proxy", labelKey = "", kind = FormFieldKind.ProxySelector, order = Int.MAX_VALUE),
     )
 
     override suspend fun validateFields(values: Map<String, String>): EndpointValidationResult =

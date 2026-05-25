@@ -16,7 +16,8 @@ android {
 
 dependencies {
     api(project(":proxy:contract"))
-    api(project(":content:ui"))
+    implementation(project(":content:ui"))
+    implementation(project(":core:form"))
     implementation(project(":storage"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

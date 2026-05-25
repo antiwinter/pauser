@@ -51,6 +51,7 @@ class SmbProvider : OpenTuneProvider {
             required = false,
             order = 4,
         ),
+        FormFieldSpec(id = "proxy", labelKey = "", kind = FormFieldKind.ProxySelector, order = Int.MAX_VALUE),
     )
 
     override suspend fun validateFields(values: Map<String, String>): EndpointValidationResult =

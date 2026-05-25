@@ -12,8 +12,9 @@ import com.opentune.content.ui.catalog.ImageViewerRoute
 import com.opentune.content.ui.catalog.PlayerRoute
 import com.opentune.content.ui.catalog.SearchRoute
 import com.opentune.content.ui.catalog.SettingsScreen
-import com.opentune.content.ui.config.FormEntityType
-import com.opentune.content.ui.config.ProviderFormRoute
+import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.content.ui.providers.EndpointConfigRepository
+import com.opentune.core.form.ProviderFormRoute
 
 fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
     composable(
@@ -21,7 +22,19 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
         listOf(navArgument("protocol") { type = NavType.StringType }),
     ) {
         val protocol = it.arguments!!.getString("protocol")!!
-        ProviderFormRoute(entityType = FormEntityType.ENDPOINT, protocol = protocol, onDone = { nav.popBackStack() })
+        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        ProviderFormRoute(
+            fields = provider.getFieldsSpec(),
+            onDraftSave = { v -> EndpointConfigRepository.saveAddDraft(protocol, v) },
+            onSubmit = { values, proxyId ->
+                val result = EndpointConfigRepository.submitAdd(protocol, values, proxyId)
+                if (result is com.opentune.core.form.SubmitResult.Success) {
+                    EndpointConfigRepository.clearAddDraft(protocol)
+                }
+                result
+            },
+            onDone = { nav.popBackStack() },
+        )
     }
     composable(
         Routes.PROVIDER_EDIT,
@@ -32,7 +45,19 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
     ) {
         val protocol = it.arguments!!.getString("protocol")!!
         val endpointId = it.arguments!!.getString("endpointId")!!
-        ProviderFormRoute(entityType = FormEntityType.ENDPOINT, protocol = protocol, existingId = endpointId, onDone = { nav.popBackStack() })
+        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        ProviderFormRoute(
+            fields = provider.getFieldsSpec(),
+            onLoad = {
+                val fields = EndpointConfigRepository.loadEditFields(protocol, endpointId)
+                val proxyId = EndpointConfigRepository.loadEditProxyId(endpointId)
+                fields to proxyId
+            },
+            onSubmit = { values, proxyId ->
+                EndpointConfigRepository.submitEdit(protocol, endpointId, values, proxyId)
+            },
+            onDone = { nav.popBackStack() },
+        )
     }
     composable(
         Routes.BROWSE,

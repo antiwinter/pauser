@@ -12,4 +12,11 @@
     <string name="ph_proxy_host">192.168.1.1</string>
     <string name="fld_proxy_port">Port</string>
     <string name="ph_proxy_port">8080</string>
+
+    <string name="form_title">Edit</string>
+    <string name="form_button">Save</string>
+    <string name="form_loading">Loading…</string>
+    <string name="form_action_cancel">Cancel</string>
+    <string name="form_proxy_section_title">Proxy</string>
+    <string name="form_proxy_none">None (direct connection)</string>
 </resources>
