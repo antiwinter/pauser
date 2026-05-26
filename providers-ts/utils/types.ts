@@ -56,6 +56,8 @@ export interface PlatformInfo {
 /** Injected by QuickJsEngine before the bundle runs. Available as a global. */
 declare global {
   const host: HostAPI;
+  function atob(data: string): string;
+  function btoa(data: string): string;
 }
 
 // ── Provider contracts ────────────────────────────────────────────────────────

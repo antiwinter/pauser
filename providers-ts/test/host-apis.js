@@ -20,6 +20,9 @@ export class HostApis {
         return JSON.stringify(this.handleCrypto(name, args));
       case 'platform':
         return JSON.stringify(this.handlePlatform(name));
+      case 'jar':
+      case 'eval':
+        throw new Error(`host.${namespace}.${name} is not available in the test harness (requires Android runtime)`);
       default:
         throw new Error(`Unknown host namespace: ${namespace}`);
     }
