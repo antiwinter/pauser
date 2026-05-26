@@ -1,4 +1,4 @@
-import type { EntryList, EntryDetail, PlaybackSpec } from '../../utils/types.js';
+import type { EntryList, EntryInfo, EntryDetail, PlaybackSpec } from '../../utils/types.js';
 import type { CatVodConfig, SiteEntry } from './config.js';
 import { parseSpiderField, siteExt } from './config.js';
 import { decodeRef, encodeRef } from './ref.js';
@@ -25,7 +25,8 @@ export async function listEntry(
 
   if (ref.type === 'site') {
     const site = requireSite(state, ref.key);
-    return dispatchHome(site, state);
+    const all  = await dispatchHome(site, state);
+    return { items: all.items.slice(startIndex, startIndex + limit), totalCount: all.totalCount };
   }
 
   if (ref.type === 'cat') {
@@ -45,11 +46,12 @@ export async function listEntry(
       type:  'Playable' as const,
       cover: raw.vod_pic ?? null,
     }));
-    return { items, totalCount: items.length };
+    return { items: items.slice(startIndex, startIndex + limit), totalCount: items.length };
   }
 
   if (ref.type === 'live') {
-    return fetchLiveChannels(state.config.lives ?? []);
+    const all = await fetchLiveChannels(state.config.lives ?? []);
+    return { items: all.items.slice(startIndex, startIndex + limit), totalCount: all.totalCount };
   }
 
   return { items: [], totalCount: 0 };
@@ -61,8 +63,8 @@ export async function search(
   state: CatVodState,
   _scopeLocation: string,
   query: string,
-): Promise<EntryList> {
-  const results: EntryList['items'] = [];
+): Promise<EntryInfo[]> {
+  const results: EntryInfo[] = [];
   for (const site of state.config.sites) {
     if (!site.searchable && site.searchable !== undefined) continue;
     if (site.type !== 0 && site.type !== 1 && site.type !== 2 && !isDrpy(site)) continue;
@@ -76,7 +78,7 @@ export async function search(
       }
     } catch (_) {}
   }
-  return { items: results, totalCount: results.length };
+  return results;
 }
 
 // ── getDetail ─────────────────────────────────────────────────────────────────

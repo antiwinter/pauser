@@ -21,7 +21,7 @@ export class HostApis {
       case 'platform':
         return JSON.stringify(this.handlePlatform(name));
       case 'jar':
-        throw new Error(`host.${namespace}.${name} is not available in the test harness (requires Android runtime)`);
+        return JSON.stringify(this.handleJarStub(name, args));
       default:
         throw new Error(`Unknown host namespace: ${namespace}`);
     }
@@ -46,6 +46,25 @@ export class HostApis {
       body: await response.text(),
       headers: Object.fromEntries(response.headers.entries()),
     };
+  }
+
+  handleJarStub(name, args) {
+    switch (name) {
+      case 'load':   return true;
+      case 'clear':  return true;
+      case 'reflect': {
+        const method = args?.method;
+        if (method === 'newInstance') return 'stub';
+        if (method === 'init')           return null;
+        if (method === 'homeContent')    return JSON.stringify({ class: [] });
+        if (method === 'categoryContent') return JSON.stringify({ list: [], total: 0 });
+        if (method === 'detailContent')  return JSON.stringify({ list: [] });
+        if (method === 'playerContent')  return JSON.stringify({ url: null });
+        return null;
+      }
+      default:
+        throw new Error(`host.jar.${name} is not available in the test harness`);
+    }
   }
 
   handleCrypto(name, args) {

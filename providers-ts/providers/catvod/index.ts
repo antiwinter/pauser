@@ -6,6 +6,7 @@ import type {
   ProviderFieldSpec,
   ValidationResult,
   EntryList,
+  EntryInfo,
   EntryDetail,
   PlaybackSpec,
   PlatformCapabilities,
@@ -44,9 +45,8 @@ let state: CatVodState | null = null;
   async search(args: {
     scopeLocation: string;
     query: string;
-  }): Promise<EntryList> {
-    const items = (await search(state!, args.scopeLocation, args.query)).items;
-    return { items, totalCount: items.length };
+  }): Promise<EntryInfo[]> {
+    return search(state!, args.scopeLocation, args.query);
   },
 
   async getDetail(args: { itemRef: string }): Promise<EntryDetail> {

@@ -24,16 +24,22 @@ export interface LiveEntry {
   timeout?:    number;
 }
 
+// Strip // line comments (JSONC — common in CatVod configs)
+function parseJsonc(text: string): CatVodConfig {
+  return JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
+}
+
 export async function fetchConfig(url: string): Promise<CatVodConfig> {
   const resp = await host.http.get({ url });
   const body = resp.body.trim();
 
-  try { return JSON.parse(body); } catch (_) {}
+  try { return parseJsonc(body); } catch (_) {}
 
   // Config may be base64-encoded (embedded in JPEG/BMP)
   const b64 = body.match(/[A-Za-z0-9+/]{200,}={0,2}/);
   if (b64) {
-    try { return JSON.parse(atob(b64[0])); } catch (_) {}
+    // atob returns Latin-1 bytes; decodeURIComponent(escape(...)) re-encodes them as UTF-8
+    try { return parseJsonc(decodeURIComponent(escape(atob(b64[0])))); } catch (_) {}
   }
 
   throw new Error(`Cannot parse CatVod config from ${url}`);

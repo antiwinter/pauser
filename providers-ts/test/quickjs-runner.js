@@ -20,7 +20,21 @@ const HOST_BOOTSTRAP_JS = `
     http:     ns('http'),
     crypto:   ns('crypto'),
     platform: ns('platform'),
+    jar:      ns('jar'),
   };
+  if (typeof atob === 'undefined') {
+    var _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    globalThis.atob = function(b64) {
+      b64 = b64.replace(/[^A-Za-z0-9+/]/g, '');
+      var bits = 0, acc = 0, out = '';
+      for (var i = 0; i < b64.length; i++) {
+        acc = (acc << 6) | _b64chars.indexOf(b64[i]);
+        bits += 6;
+        if (bits >= 8) { bits -= 8; out += String.fromCharCode((acc >> bits) & 0xff); }
+      }
+      return out;
+    };
+  }
 })();
 `;
 
