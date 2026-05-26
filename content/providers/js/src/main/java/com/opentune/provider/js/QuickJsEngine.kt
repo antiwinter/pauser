@@ -33,8 +33,7 @@ class QuickJsEngine(
     private val httpClient: OkHttpClient,
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val jarLoader  = JarLoader(httpClient)
-    private val evalLoader = EvalLoader(httpClient)
+    private val jarLoader   = JarLoader(httpClient)
 
     /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
     private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
@@ -215,11 +214,21 @@ class QuickJsEngine(
             "crypto"   -> hostApis.handleCrypto(name, argsJson)
             "platform" -> hostApis.handlePlatform(name, argsJson)
             "jar"      -> hostApis.handleJar(name, argsJson, jarLoader)
-            "eval"     -> hostApis.handleEval(name, argsJson, evalLoader, this)
             else       -> throw IllegalArgumentException("Unknown host namespace: $ns")
         }
 
-    // ── JNI externals ──────────────────────────────────────────────────────
+    // ── JNI callbacks and sync host functions ──────────────────────────────
+
+    /**
+     * Called synchronously from C when JS invokes `__hostDispatchSync(ns, name, argsJson)`.
+     * Runs on the engine thread — blocks it for the duration of the call.
+     */
+    @Keep
+    fun invokeHostFunctionSync(namespace: String, name: String, argsJson: String): String? =
+        when (namespace) {
+            "http" -> hostApis.handleHttpSync(name, argsJson, httpClient)
+            else   -> throw IllegalArgumentException("No sync handler for namespace: $namespace")
+        }
 
     private external fun nativeCreateContext(): Long
     private external fun nativeDestroyContext(ctxPtr: Long)

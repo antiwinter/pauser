@@ -167,7 +167,6 @@ class JsProvider private constructor(
     crypto:   ns('crypto'),
     platform: ns('platform'),
     jar:      ns('jar'),
-    eval:     ns('eval'),
   };
 })();
 """

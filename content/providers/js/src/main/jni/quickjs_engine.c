@@ -22,9 +22,10 @@
 typedef struct {
     JavaVM    *jvm;
     jobject    engineRef;
-    jmethodID  resolveId;    /* resolveCallback(key:Long, value:String?) */
-    jmethodID  rejectId;     /* rejectCallback(key:Long, msg:String)     */
-    jmethodID  invokeHostId; /* invokeHostFunction(ns,name,args):String  */
+    jmethodID  resolveId;        /* resolveCallback(key:Long, value:String?)                  */
+    jmethodID  rejectId;         /* rejectCallback(key:Long, msg:String)                      */
+    jmethodID  invokeHostId;     /* invokeHostFunction(ns,name,args):String  — async          */
+    jmethodID  invokeSyncHostId; /* invokeHostFunctionSync(ns,name,args):String — blocking    */
 } EngineState;
 
 static EngineState *get_state(JSContext *ctx) {
@@ -116,6 +117,40 @@ static JSValue js_host_dispatch(JSContext *ctx, JSValueConst this_val,
     return JS_Eval(ctx,buf,strlen(buf),"<hp>",JS_EVAL_TYPE_GLOBAL);
 }
 
+/* ─── globalThis.__hostDispatchSync(ns, name, argsJson) — blocking ──────── */
+static JSValue js_host_dispatch_sync(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv, int magic) {
+    if(argc<3) return JS_ThrowTypeError(ctx,"__hostDispatchSync: 3 args required");
+    EngineState *s=get_state(ctx); if(!s) return JS_ThrowInternalError(ctx,"no state");
+    const char *ns  =JS_ToCString(ctx,argv[0]);
+    const char *name=JS_ToCString(ctx,argv[1]);
+    const char *args=JS_ToCString(ctx,argv[2]);
+    int att; JNIEnv *env=attach_jni(s->jvm,&att);
+    jstring jns  =(*env)->NewStringUTF(env,ns  ?ns  :"");
+    jstring jname=(*env)->NewStringUTF(env,name?name:"");
+    jstring jargs=(*env)->NewStringUTF(env,args?args:"null");
+    jstring jres=(jstring)(*env)->CallObjectMethod(env,s->engineRef,s->invokeSyncHostId,jns,jname,jargs);
+    jboolean exc=(*env)->ExceptionCheck(env);
+    if(exc) (*env)->ExceptionClear(env);
+    (*env)->DeleteLocalRef(env,jns);
+    (*env)->DeleteLocalRef(env,jname);
+    (*env)->DeleteLocalRef(env,jargs);
+    detach_if(s->jvm,att);
+    if(ns)   JS_FreeCString(ctx,ns);
+    if(name) JS_FreeCString(ctx,name);
+    if(args) JS_FreeCString(ctx,args);
+    if(exc)  return JS_ThrowInternalError(ctx,"sync host error");
+    if(!jres) return JS_NULL;
+    att=0; env=attach_jni(s->jvm,&att);
+    const char *res=(*env)->GetStringUTFChars(env,jres,NULL);
+    JSValue parsed=JS_ParseJSON(ctx,res,strlen(res),"<sync>");
+    (*env)->ReleaseStringUTFChars(env,jres,res);
+    (*env)->DeleteLocalRef(env,jres);
+    detach_if(s->jvm,att);
+    if(JS_IsException(parsed)){char *m=exc_str(ctx);LOGE("dispatchSync JSON: %s",m);free(m);return JS_NULL;}
+    return parsed;
+}
+
 /* ─── nativeCreateContext ───────────────────────────────────────────────── */
 JNIEXPORT jlong JNICALL
 Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, jobject thiz) {
@@ -133,6 +168,8 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, job
     s->rejectId    =(*env)->GetMethodID(env,cls,"rejectCallback",    "(JLjava/lang/String;)V");
     s->invokeHostId=(*env)->GetMethodID(env,cls,"invokeHostFunction",
         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    s->invokeSyncHostId=(*env)->GetMethodID(env,cls,"invokeHostFunctionSync",
+        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     JS_SetContextOpaque(ctx,s);
     JSValue g=JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx,g,"__resolveCallback",
@@ -141,6 +178,8 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, job
         JS_NewCFunctionMagic(ctx,js_reject, "__rejectCallback", 2,JS_CFUNC_generic_magic,0));
     JS_SetPropertyStr(ctx,g,"__hostDispatch",
         JS_NewCFunctionMagic(ctx,js_host_dispatch,"__hostDispatch",3,JS_CFUNC_generic_magic,0));
+    JS_SetPropertyStr(ctx,g,"__hostDispatchSync",
+        JS_NewCFunctionMagic(ctx,js_host_dispatch_sync,"__hostDispatchSync",3,JS_CFUNC_generic_magic,0));
     JS_FreeValue(ctx,g);
     return (jlong)(uintptr_t)ctx;
 }

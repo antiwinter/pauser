@@ -36,6 +36,15 @@ class HostApis {
         }
     }
 
+    fun handleHttpSync(name: String, argsJson: String, client: OkHttpClient): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        return when (name) {
+            "get"  -> executeHttp(args, "GET",  null, client)
+            "post" -> executeHttp(args, "POST", args["body"]?.jsonPrimitive?.content, client)
+            else   -> throw IllegalArgumentException("Unknown http sync method: $name")
+        }
+    }
+
     private fun executeHttp(
         args: JsonObject,
         method: String,
@@ -129,19 +138,5 @@ class HostApis {
             else -> throw IllegalArgumentException("Unknown jar method: $name")
         }
     }
-
-    // ── eval ───────────────────────────────────────────────────────────────
-
-    suspend fun handleEval(name: String, argsJson: String, evalLoader: EvalLoader, engine: QuickJsEngine): String? {
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        return when (name) {
-            "script" -> {
-                val url   = args["url"]!!.jsonPrimitive.content
-                val cache = args["cache"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.booleanOrNull ?: true
-                evalLoader.evalScript(url, cache, engine)
-                "true"
-            }
-            else -> throw IllegalArgumentException("Unknown eval method: $name")
-        }
-    }
 }
+

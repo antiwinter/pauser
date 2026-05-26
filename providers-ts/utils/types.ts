@@ -42,9 +42,6 @@ export interface HostAPI {
     }): Promise<string>;
     clear(args?: null): Promise<void>;
   };
-  eval: {
-    script(args: { url: string; cache?: boolean }): Promise<void>;
-  };
 }
 
 export interface PlatformInfo {
