@@ -1,5 +1,6 @@
 package com.opentune.content.ui.providers
 
+import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
@@ -19,6 +20,13 @@ object EndpointConfigRepository {
     private fun encodeFields(fields: Map<String, String>): String =
         json.encodeToString(stringMapSerializer, fields)
 
+    private suspend fun buildClient(protocol: String, values: Map<String, String>, proxyId: String?): EndpointClient {
+        val provider   = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
+        return provider.createClient(values, OpenTuneProviderRegistryHolder.get().platformCapabilities)
+            .also { it.httpClient = httpClient }
+    }
+
     suspend fun loadAddDraft(protocol: String): Map<String, String> =
         StorageBindingsHolder.get().appConfigStore.loadDraft(protocol)
 
@@ -33,12 +41,9 @@ object EndpointConfigRepository {
         values: Map<String, String>,
         proxyId: String?,
     ): SubmitResult = withContext(Dispatchers.IO) {
-        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
-        val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
         val client = runCatching {
-            provider.createClient(values, OpenTuneProviderRegistryHolder.get().platformCapabilities)
+            buildClient(protocol, values, proxyId)
         }.getOrElse { return@withContext SubmitResult.Error(it.message ?: "Failed to create client") }
-        client.httpClient = httpClient
         when (val result = client.test()) {
             is EndpointValidationResult.Error -> SubmitResult.Error(result.message)
             is EndpointValidationResult.Success -> {
@@ -86,12 +91,9 @@ object EndpointConfigRepository {
         values: Map<String, String>,
         proxyId: String?,
     ): SubmitResult = withContext(Dispatchers.IO) {
-        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
-        val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
         val client = runCatching {
-            provider.createClient(values, OpenTuneProviderRegistryHolder.get().platformCapabilities)
+            buildClient(protocol, values, proxyId)
         }.getOrElse { return@withContext SubmitResult.Error(it.message ?: "Failed to create client") }
-        client.httpClient = httpClient
         when (val result = client.test()) {
             is EndpointValidationResult.Error -> SubmitResult.Error(result.message)
             is EndpointValidationResult.Success -> {

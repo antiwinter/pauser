@@ -1,5 +1,6 @@
 package com.opentune.content.ui
 
+import androidx.compose.runtime.remember
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -12,50 +13,51 @@ import com.opentune.content.ui.catalog.ImageViewerRoute
 import com.opentune.content.ui.catalog.PlayerRoute
 import com.opentune.content.ui.catalog.SearchRoute
 import com.opentune.content.ui.catalog.SettingsScreen
+import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.content.contract.FormFieldKind
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.content.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute
 
 fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
     composable(
-        Routes.PROVIDER_ADD,
-        listOf(navArgument("protocol") { type = NavType.StringType }),
-    ) {
-        val protocol = it.arguments!!.getString("protocol")!!
-        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
-        ProviderFormRoute(
-            fields = provider.getFieldsSpec(),
-            onDraftSave = { v -> EndpointConfigRepository.saveAddDraft(protocol, v) },
-            onSubmit = { values, proxyId ->
-                val result = EndpointConfigRepository.submitAdd(protocol, values, proxyId)
-                if (result is com.opentune.core.form.SubmitResult.Success) {
-                    EndpointConfigRepository.clearAddDraft(protocol)
-                }
-                result
-            },
-            onDone = { nav.popBackStack() },
-        )
-    }
-    composable(
         Routes.PROVIDER_EDIT,
         listOf(
             navArgument("protocol") { type = NavType.StringType },
-            navArgument("endpointId") { type = NavType.StringType },
+            navArgument("endpointId") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
     ) {
-        val protocol = it.arguments!!.getString("protocol")!!
-        val endpointId = it.arguments!!.getString("endpointId")!!
-        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        val protocol   = it.arguments!!.getString("protocol")!!
+        val endpointId = it.arguments!!.getString("endpointId")
+        val isAdd      = endpointId == null
+        val provider   = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        val fields     = provider.getFieldsSpec()
+        val hasQr      = isAdd && fields.any { f -> f.kind == FormFieldKind.QrCode }
+        val qrClientRef = remember { arrayOfNulls<EndpointClient>(1) }
         ProviderFormRoute(
-            fields = provider.getFieldsSpec(),
-            onLoad = {
-                val fields = EndpointConfigRepository.loadEditFields(protocol, endpointId)
-                val proxyId = EndpointConfigRepository.loadEditProxyId(endpointId)
-                fields to proxyId
-            },
+            fields   = fields,
+            draftKey = if (isAdd) protocol else null,
+            onLoad   = if (!isAdd) {
+                {
+                    EndpointConfigRepository.loadEditFields(protocol, endpointId) to
+                    EndpointConfigRepository.loadEditProxyId(endpointId)
+                }
+            } else null,
             onSubmit = { values, proxyId ->
-                EndpointConfigRepository.submitEdit(protocol, endpointId, values, proxyId)
+                if (isAdd) EndpointConfigRepository.submitAdd(protocol, values, proxyId)
+                else       EndpointConfigRepository.submitEdit(protocol, endpointId, values, proxyId)
             },
+            onGetQr = if (hasQr) { proxyId ->
+                val client = provider.createClient(emptyMap(), OpenTuneProviderRegistryHolder.get().platformCapabilities)
+                client.httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
+                qrClientRef[0] = client
+                client.getQr()
+            } else null,
+            onPollQr = if (hasQr) { token ->
+                qrClientRef[0]?.pollQr(token) ?: QrResult.Error("no client")
+            } else null,
             onDone = { nav.popBackStack() },
         )
     }

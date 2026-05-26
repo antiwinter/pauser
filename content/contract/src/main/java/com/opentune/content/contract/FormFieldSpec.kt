@@ -5,6 +5,7 @@ enum class FormFieldKind {
     SingleLineText,
     Password,
     ProxySelector,
+    QrCode,
 }
 
 data class FormFieldSpec(
@@ -15,4 +16,5 @@ data class FormFieldSpec(
     val sensitive: Boolean = false,
     val order: Int = 0,
     val placeholderKey: String? = null,
+    val defaultValue: String? = null,
 )

@@ -23,7 +23,7 @@ fun FormFieldsRenderer(
     fields.forEach { spec ->
         OutlinedTextField(
             modifier = Modifier.fillMaxWidth(),
-            value = values[spec.id] ?: "",
+            value = values[spec.id] ?: spec.defaultValue ?: "",
             onValueChange = { nv -> onValueChange(spec.id, nv) },
             label = { Text(formFieldLabel(spec.labelKey)) },
             placeholder = formFieldPlaceholder(spec.placeholderKey)?.let { ph -> { Text(ph) } },

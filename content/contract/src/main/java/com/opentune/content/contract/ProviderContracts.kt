@@ -63,4 +63,7 @@ abstract class EndpointClient {
     ): EntryList = EntryList(emptyList(), 0)
     open suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
     open suspend fun openStream(itemRef: String): ProviderStream? = null
+
+    open suspend fun getQr(): QrResult.QrReady? = null
+    open suspend fun pollQr(token: String): QrResult = QrResult.Error("not supported")
 }

@@ -19,4 +19,10 @@
     <string name="form_action_cancel">Cancel</string>
     <string name="form_proxy_section_title">Proxy</string>
     <string name="form_proxy_none">None (direct connection)</string>
+
+    <string name="qr_status_new">Scan with your phone</string>
+    <string name="qr_status_scanned">Scanned — confirm on phone</string>
+    <string name="qr_status_expired">QR expired</string>
+    <string name="qr_status_confirmed">Authentication successful</string>
+    <string name="qr_refresh">Refresh</string>
 </resources>

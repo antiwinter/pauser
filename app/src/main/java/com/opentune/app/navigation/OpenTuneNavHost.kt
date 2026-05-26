@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.content.ui.Routes
 import com.opentune.content.ui.contentRoutes
+import com.opentune.proxy.ui.ProxyRoutes
 import com.opentune.proxy.ui.proxyRoutes
 import com.opentune.server.debug.NavCommand
 import com.opentune.server.debug.NavigationBridge
@@ -33,11 +34,11 @@ fun OpenTuneNavHost() {
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeRoute(
-                onAddProvider = { pt -> nav.navigate(Routes.providerAdd(pt)) },
+                onAddProvider = { pt -> nav.navigate(Routes.providerEdit(pt)) },
                 onOpenBrowse = { pt, sid, path -> nav.navigate(Routes.browse(pt, sid, path)) },
                 onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
-                onAddProxy = { pt -> nav.navigate(Routes.proxyAdd(pt)) },
-                onEditProxy = { pt, id -> nav.navigate(Routes.proxyEdit(pt, id)) },
+                onAddProxy = { pt -> nav.navigate(ProxyRoutes.proxyEdit(pt)) },
+                onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
             )
         }
         contentRoutes(nav)

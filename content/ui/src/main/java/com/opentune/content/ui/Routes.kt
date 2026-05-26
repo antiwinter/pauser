@@ -19,19 +19,13 @@ object Routes {
     const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{infoJson}"
     const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{infoJson}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
-    const val PROVIDER_ADD = "provider_add/{protocol}"
-    const val PROVIDER_EDIT = "provider_edit/{protocol}/{endpointId}"
-    const val PROXY_ADD = "proxy_add/{proxyType}"
-    const val PROXY_EDIT = "proxy_edit/{proxyType}/{proxyId}"
+    const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
     const val IMAGE_VIEWER = "image_viewer/{provider}/{endpointId}/{itemRef}"
 
-    fun providerAdd(protocol: String) = "provider_add/$protocol"
-    fun providerEdit(protocol: String, endpointId: String) =
-        "provider_edit/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}"
-    fun proxyAdd(proxyType: String) = "proxy_add/$proxyType"
-    fun proxyEdit(proxyType: String, proxyId: String) =
-        "proxy_edit/$proxyType/${URLEncoder.encode(proxyId, UrlCharset)}"
+    fun providerEdit(protocol: String, endpointId: String? = null) =
+        if (endpointId != null) "provider_edit/$protocol?endpointId=${URLEncoder.encode(endpointId, UrlCharset)}"
+        else "provider_edit/$protocol"
     fun browse(protocol: String, endpointId: String, locationRaw: String) =
         "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(locationRaw, UrlCharset)}"
     fun detail(protocol: String, endpointId: String, itemRefRaw: String, infoJson: String? = null) =
