@@ -1,10 +1,10 @@
 # TODOs
 
-3. split contract into proxy/provider
-6. what is EndpointConfigRepository?
-StreamRegistrarHolder, PlatformInfoHolder
+- [x] split contract into proxy/provider
+- [-] what is EndpointConfigRepository?
+- [-] StreamRegistrarHolder, PlatformInfoHolder
 - [ ] error osd
-- [ ] move add server/ProviderFieldSpec/ValidationResult to utils.register
+- [x] move add server/ProviderFieldSpec/ValidationResult to utils.register
 - [x] Storage naming unification
 - [x] Fix: smb gen cover
 - [x] check if same local cache used for smb subtitles as thumb
@@ -19,7 +19,7 @@ StreamRegistrarHolder, PlatformInfoHolder
 - [x] Fix: smb loading speed
 
 - [x] split server from app, debug skill
-- [ ] proxy provider
+- [x] proxy provider
 - [ ] telegram, auto-proxy, extent add server screen & process
 - [ ] ali, extent provider support: resolveUrl() => playbackSpec:  alipan.com/xxx
 
@@ -67,3 +67,9 @@ StreamRegistrarHolder, PlatformInfoHolder
 - [ ] HDR support
 - [ ] release insomnia-x86_64-vx.x.x.apk
 - [ ] pro user decoration. ICON/badge
+
+## Providers
+- [ ] clash controller
+- [ ] tg
+- [ ] xhs
+- [ ] aliyun
