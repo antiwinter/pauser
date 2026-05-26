@@ -31,6 +31,20 @@ export interface HostAPI {
   platform: {
     getPlatformInfo(args?: null): Promise<PlatformInfo>;
   };
+  jar: {
+    load(args: { url: string; md5?: string }): Promise<void>;
+    reflect(args: {
+      url: string;
+      cls: string;
+      method: string;
+      instance?: string;
+      args?: unknown[];
+    }): Promise<string>;
+    clear(args?: null): Promise<void>;
+  };
+  eval: {
+    script(args: { url: string; cache?: boolean }): Promise<void>;
+  };
 }
 
 export interface PlatformInfo {

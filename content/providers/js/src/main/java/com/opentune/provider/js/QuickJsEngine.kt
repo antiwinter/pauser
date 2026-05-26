@@ -33,6 +33,8 @@ class QuickJsEngine(
     private val httpClient: OkHttpClient,
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val jarLoader  = JarLoader(httpClient)
+    private val evalLoader = EvalLoader(httpClient)
 
     /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
     private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
@@ -212,6 +214,8 @@ class QuickJsEngine(
             "http"     -> hostApis.handleHttp(name, argsJson, httpClient)
             "crypto"   -> hostApis.handleCrypto(name, argsJson)
             "platform" -> hostApis.handlePlatform(name, argsJson)
+            "jar"      -> hostApis.handleJar(name, argsJson, jarLoader)
+            "eval"     -> hostApis.handleEval(name, argsJson, evalLoader, this)
             else       -> throw IllegalArgumentException("Unknown host namespace: $ns")
         }
 

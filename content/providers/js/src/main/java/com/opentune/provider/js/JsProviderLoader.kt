@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 
 class JsProviderLoader : OpenTuneProviderLoader {
     override suspend fun load(register: (OpenTuneProvider) -> Unit) {
-        val assets = AssetManagerHolder.get()
+        val assets = ContextHolder.get().assets
         val hostApis = HostApis()
         val bundleFiles = withContext(Dispatchers.IO) {
             assets.list("")?.filter { it.endsWith(".js") } ?: emptyList()

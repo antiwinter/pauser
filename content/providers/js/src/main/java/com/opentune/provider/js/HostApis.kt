@@ -5,7 +5,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -98,6 +100,48 @@ class HostApis {
                 }.toString()
             }
             else -> throw IllegalArgumentException("Unknown platform method: $name")
+        }
+    }
+
+    // ── jar ────────────────────────────────────────────────────────────────
+
+    fun handleJar(name: String, argsJson: String, jarLoader: JarLoader): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        return when (name) {
+            "load" -> {
+                val url = args["url"]!!.jsonPrimitive.content
+                val md5 = args["md5"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                jarLoader.load(url, md5)
+                "true"
+            }
+            "reflect" -> {
+                val url      = args["url"]!!.jsonPrimitive.content
+                val cls      = args["cls"]!!.jsonPrimitive.content
+                val method   = args["method"]!!.jsonPrimitive.content
+                val instance = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                val rawArgs  = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
+                jarLoader.reflect(url, cls, method, instance, rawArgs)
+            }
+            "clear" -> {
+                jarLoader.clear()
+                "true"
+            }
+            else -> throw IllegalArgumentException("Unknown jar method: $name")
+        }
+    }
+
+    // ── eval ───────────────────────────────────────────────────────────────
+
+    suspend fun handleEval(name: String, argsJson: String, evalLoader: EvalLoader, engine: QuickJsEngine): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        return when (name) {
+            "script" -> {
+                val url   = args["url"]!!.jsonPrimitive.content
+                val cache = args["cache"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.booleanOrNull ?: true
+                evalLoader.evalScript(url, cache, engine)
+                "true"
+            }
+            else -> throw IllegalArgumentException("Unknown eval method: $name")
         }
     }
 }
