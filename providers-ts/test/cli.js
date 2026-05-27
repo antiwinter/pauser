@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 import { HostApis } from './host-apis.js';
 import { QuickJsProviderRunner } from './quickjs-runner.js';
@@ -39,6 +39,9 @@ const program = new Command()
   .option('--no-color', 'disable colored terminal output')
   .option('--no-ffprobe', 'disable ffprobe media validation checks')
   .option('--case <substring>', 'run only test steps whose name contains this substring (case-insensitive)')
+  .option('--generic', 'run only generic tests (default)')
+  .option('--sub',     'run only provider-specific tests')
+  .option('--all',     'run generic and provider-specific tests')
   .parse();
 
 const options = program.opts();
@@ -145,6 +148,9 @@ async function run(providerName, opts, out) {
 
   // ── Phase 2: instance checks (initialized runner) ─────────────────────────
 
+  const runGeneric = !opts.sub || opts.all;
+  const runSub     = opts.sub  || opts.all;
+
   const instanceRunner = new QuickJsProviderRunner({ bundle, hostApis, filename: bundlePath });
   try {
     await instanceRunner.init();
@@ -153,18 +159,30 @@ async function run(providerName, opts, out) {
       capabilities: defaultCapabilities(),
     });
 
-    const catalogContext = await runCatalogChecks(out, instanceRunner, { providesArt, ffprobe });
+    if (runGeneric) {
+      const catalogContext = await runCatalogChecks(out, instanceRunner, { providesArt, ffprobe });
 
-    await runDetailChecks(out, instanceRunner, {
-      firstItem: catalogContext.playableItem ?? catalogContext.firstItem,
-      ffprobe,
-    });
+      await runDetailChecks(out, instanceRunner, {
+        firstItem: catalogContext.playableItem ?? catalogContext.firstItem,
+        ffprobe,
+      });
 
-    await runPlaybackChecks(out, instanceRunner, {
-      playableItem: catalogContext.playableItem,
-      hooks: opts.hooks ?? false,
-      ffprobe,
-    });
+      await runPlaybackChecks(out, instanceRunner, {
+        playableItem: catalogContext.playableItem,
+        hooks: opts.hooks ?? false,
+        ffprobe,
+      });
+    }
+
+    if (runSub) {
+      const subTestPath = join(providerDir, 'test', 'index.js');
+      if (existsSync(subTestPath)) {
+        const { runProviderChecks } = await import(pathToFileURL(subTestPath).href);
+        await runProviderChecks(out, { bundle, bundlePath });
+      } else if (!opts.all) {
+        out.line(`  No provider-specific tests found at providers/${providerName}/test/index.js`);
+      }
+    }
   } finally {
     instanceRunner.dispose();
   }

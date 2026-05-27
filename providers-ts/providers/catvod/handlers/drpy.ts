@@ -29,6 +29,19 @@ _g['_http'] = (url: string, opts: Record<string, unknown> = {}) => {
            content: result.body, body: result.body, headers: result.headers, url };
 };
 
+// Inlined from https://github.com/FongMi/TV — drpy2 spiders depend on these wrappers
+_g['req'] = (url: string, opts: Record<string, unknown> = {}) =>
+  _g['http'](url, Object.assign({ async: false }, opts));
+_g['http'] = (url: string, opts: Record<string, unknown> = {}) => {
+  if (opts?.['async'] === false) return _g['_http'](url, opts);
+  return new Promise((resolve) =>
+    _g['_http'](url, Object.assign({ complete: (res: unknown) => resolve(res) }, opts)),
+  ).catch((err: Error) => {
+    console.error(err.name, err.message, err.stack);
+    return { ok: false, status: 500, url };
+  });
+};
+
 // ── Spider contract ───────────────────────────────────────────────────────────
 
 interface SpiderObject {
@@ -42,30 +55,13 @@ interface SpiderObject {
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-const spiders  = new Map<string, SpiderObject>();
-const evalCache = new Set<string>();
-
-const HTTP_JS_URL =
-  'https://raw.githubusercontent.com/FongMi/TV/release/quickjs/src/main/assets/js/lib/http.js';
+const spiders = new Map<string, SpiderObject>();
 
 // ── Spider lifecycle ──────────────────────────────────────────────────────────
-
-async function evalScript(url: string): Promise<void> {
-  if (evalCache.has(url)) return;
-  // eslint-disable-next-line no-eval
-  (0, eval)((await host.http.get({ url })).body);
-  evalCache.add(url);
-}
-
-async function ensureAssets(): Promise<void> {
-  await evalScript(HTTP_JS_URL);
-}
 
 async function getSpider(api: string, ext: string, siteKey: string): Promise<SpiderObject> {
   const cached = spiders.get(siteKey);
   if (cached) return cached;
-
-  await ensureAssets();
 
   // Fetch the spider script and strip ES module syntax so it runs as a classic script
   const code = (await host.http.get({ url: api })).body
