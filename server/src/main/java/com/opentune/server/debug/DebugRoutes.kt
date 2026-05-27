@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -105,6 +106,11 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         )
                     }
                 }
+            }
+            delete("/{endpointId}") {
+                val endpointId = call.parameters["endpointId"] ?: return@delete call.respond400("missing endpointId")
+                ctx.endpointDao.deleteByEndpointId(endpointId)
+                call.respondText("{}", ContentType.Application.Json)
             }
         }
 
@@ -226,6 +232,24 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 
         // --- Debug routes for media state ---
         route("/debug") {
+            // JAR bridge — proxies host.jar.* calls from the Node test harness via adb forward
+            post("/jar") {
+                val body = runCatching { json.decodeFromString<JarRequest>(call.receiveText()) }.getOrNull()
+                if (body == null) {
+                    call.respond400("invalid request body"); return@post
+                }
+                val result = runCatching { ctx.jarBridge.dispatch(body.name, body.args) }.getOrElse {
+                    Log.e(LOG_TAG, "jar.${body.name} error", it)
+                    call.respondText(
+                        json.encodeToString(JarResponse(error = it.message ?: "jar error")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.InternalServerError,
+                    )
+                    return@post
+                }
+                call.respondText(json.encodeToString(JarResponse(result = result)), ContentType.Application.Json)
+            }
+
             route("/subtitle-prefs") {
                 get {
                     val prefs = ctx.appConfigStore.loadSubtitlePrefs()
@@ -244,8 +268,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 }
             }
 
-            route("/media-state") {
-                get {
+            route("/media-state") {                get {
                     val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
                     val endpointId = call.request.queryParameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                     val all = ctx.entryStateStore.observeForEndpoint(protocol, endpointId).first()

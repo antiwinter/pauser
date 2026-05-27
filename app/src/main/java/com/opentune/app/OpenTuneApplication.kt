@@ -23,10 +23,15 @@ import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.OpenTuneDatabase
 import com.opentune.storage.OpenTuneStorageBindings
 import com.opentune.storage.EntryStateStore
+import com.opentune.provider.js.HostApis
+import com.opentune.provider.js.JarLoader
+import com.opentune.server.debug.JarBridge
+import com.github.catvod.Init as CatVodInit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import java.io.File
 
 class OpenTuneApplication : Application() {
@@ -52,6 +57,10 @@ class OpenTuneApplication : Application() {
     lateinit var openTuneServer: OpenTuneServer
         private set
 
+    /** Shared JAR loader for the debug JAR bridge — separate from per-engine loaders. */
+    private val debugJarLoader: JarLoader by lazy { JarLoader(OkHttpClient()) }
+    private val debugJarBridge: JarBridge by lazy { JarBridgeImpl(debugJarLoader, HostApis()) }
+
     /** Shared disk cache — one instance, one size limit, correct LRU across all image loaders. */
     val sharedDiskCache: DiskCache by lazy {
         DiskCache.Builder()
@@ -64,6 +73,7 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CatVodInit.set(this)
         SingletonImageLoader.setSafe { buildImageLoader() }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
@@ -102,6 +112,7 @@ class OpenTuneApplication : Application() {
                 override val endpointDao get() = storageBindings.endpointDao
                 override val entryStateStore get() = storageBindings.entryStateStore
                 override val appConfigStore get() = storageBindings.appConfigStore
+                override val jarBridge get() = debugJarBridge
             },
         )
         StreamRegistrarHolder.set(openTuneServer)

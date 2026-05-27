@@ -4,7 +4,8 @@
 
 ## Local Source Code
 
-FongMi/TV source code is available at `~/src/TV` (downloaded 2026-05-21).
+FongMi/TV source code is available at `~/src/fongmi`
+tvbox source code is available at `~/src/tvbox` 
 
 Key files relevant to this research:
 

@@ -3,6 +3,7 @@ package com.opentune.server
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.PlatformCapabilities
+import com.opentune.server.debug.JarBridge
 import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity
@@ -23,4 +24,5 @@ interface AppContext {
     val endpointDao: EndpointDao
     val entryStateStore: EntryStateStore
     val appConfigStore: AppPrefsStore
+    val jarBridge: JarBridge
 }

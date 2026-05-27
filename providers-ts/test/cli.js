@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
-import { HostApis } from './host-apis.js';
+import { HostApis, setupAdbForward } from './host-apis.js';
 import { QuickJsProviderRunner } from './quickjs-runner.js';
 import {
   missingRequiredFields,
@@ -47,6 +47,10 @@ const program = new Command()
 const options = program.opts();
 const provider = program.args[0];
 const reporter = new Reporter({ json: options.json, color: options.color, filter: options.case ?? null });
+
+// Attempt adb forward so JAR bridge is reachable if a device is connected.
+// Silently ignored when adb is not installed or no device is attached.
+setupAdbForward();
 
 try {
   if (options.list) {
@@ -178,7 +182,7 @@ async function run(providerName, opts, out) {
       const subTestPath = join(providerDir, 'test', 'index.js');
       if (existsSync(subTestPath)) {
         const { runProviderChecks } = await import(pathToFileURL(subTestPath).href);
-        await runProviderChecks(out, { bundle, bundlePath });
+        await runProviderChecks(out, { bundle, bundlePath, runner: instanceRunner, credentials, ffprobe, providesArt });
       } else if (!opts.all) {
         out.line(`  No provider-specific tests found at providers/${providerName}/test/index.js`);
       }

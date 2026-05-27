@@ -18,7 +18,7 @@ export async function validateFields(
   values: Record<string, string>,
 ): Promise<ValidationResult> {
   try {
-    const url = values['config_url'] ?? '';
+    const url = (values['config_url'] ?? '').trim();
     if (!url) throw new Error('Config URL is required');
     const config = await fetchConfig(url);
     if (!config.sites?.length) throw new Error('No sites found in config');

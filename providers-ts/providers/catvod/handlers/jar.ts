@@ -6,17 +6,21 @@ import { encodeRef } from '../ref.js';
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
 
+export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void> {
+  spiderHandles.clear();
+  // Use clearInstances rather than clear() — Guard JARs rely on native state set up by
+  // Init.init(Context) / DexNative.getLoader(). Calling clear() recreates the primary
+  // DexClassLoader and re-runs Init.init(), but the native .so is process-global and
+  // does not reinitialize cleanly on a second getLoader() call, leaving the secondary
+  // loader's Context reference null. clearInstances() drops spider handles without
+  // touching the loaded JAR or native state.
+  await host.jar.clearInstances();
+}
+
 // ── JAR bootstrap ─────────────────────────────────────────────────────────────
 
 export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
   await host.jar.load({ url: jarUrl, md5 });
-  // Init.init() bootstraps encrypted JARs — not present in all JARs, ignore error
-  await host.jar.reflect({
-    url: jarUrl,
-    cls: 'com.github.catvod.spider.Init',
-    method: 'init',
-    args: [],
-  }).catch(() => undefined);
 }
 
 // ── Spider instance lifecycle ─────────────────────────────────────────────────
@@ -32,7 +36,12 @@ async function getSpider(
 
   const cls = spiderClass(api);
   const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
-  await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] });
+  // Guard spiders (class name ends in "Guard") get their config from the encrypted JAR's
+  // internal state set up by Init.init(Context) during load(). Calling spider.init() on them
+  // corrupts their internal state via a failed getSite() call. Skip init for Guard spiders.
+  if (!cls.endsWith('Guard')) {
+    await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
+  }
   spiderHandles.set(siteKey, handle);
   return handle;
 }
@@ -98,8 +107,8 @@ export async function jarDetail(
     url: jarUrl, cls, method: 'detailContent',
     instance: handle, args: [[id]],
   });
-  const data = JSON.parse(raw);
-  return data.list?.[0] ?? { vod_id: id };
+  const data = raw && raw !== 'null' ? JSON.parse(raw) : {};
+  return data.list?.[0] ?? { vod_id: id, vod_name: id };
 }
 
 export async function jarPlay(

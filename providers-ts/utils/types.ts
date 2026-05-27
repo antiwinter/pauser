@@ -41,6 +41,7 @@ export interface HostAPI {
       args?: unknown[];
     }): Promise<string>;
     clear(args?: null): Promise<void>;
+    clearInstances(args?: null): Promise<void>;
   };
 }
 

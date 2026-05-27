@@ -118,3 +118,15 @@ data class SetTrackRequest(
     val itemId: String,
     val trackId: String?,
 )
+
+@Serializable
+data class JarRequest(
+    val name: String,
+    val args: String,  // raw JSON object — same shape as HostApis.handleJar argsJson
+)
+
+@Serializable
+data class JarResponse(
+    val result: String? = null,
+    val error: String? = null,
+)
