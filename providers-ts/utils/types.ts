@@ -70,10 +70,11 @@ export interface ProviderFieldSpec {
   sensitive?: boolean;
   order?: number;
   placeholderKey?: string;
+  identity?: boolean;
 }
 
 export type ValidationResult =
-  | { success: true; hash: string; name: string; fields: Record<string, string> }
+  | { success: true; fields: Record<string, string> }
   | { success: false; error: string };
 
 export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other' | 'Digipak' | 'Image';

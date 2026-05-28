@@ -32,8 +32,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.opentune.content.contract.FormFieldKind
-import com.opentune.content.contract.FormFieldSpec
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.content.contract.QrResult
 import com.opentune.content.contract.QrStatus
 import com.opentune.storage.ProxyEntity

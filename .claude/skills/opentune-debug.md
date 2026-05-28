@@ -5,9 +5,17 @@ description: Debug OpenTune on a connected Android TV device via the embedded HT
 
 ## Setup
 
-The OpenTune app runs an embedded HTTP server on fixed port 7920. Forward the port via ADB:
+### Build & Deploy
 
 ```sh
+# 1. Build TypeScript providers (bundled JS runs inside the app)
+cd providers-ts && npm run build && cd ..
+
+# 2. Build and install debug APK
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 3. Forward debug API port
 adb forward tcp:7920 tcp:7920
 ```
 

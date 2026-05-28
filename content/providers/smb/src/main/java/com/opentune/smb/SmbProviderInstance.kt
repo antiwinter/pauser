@@ -14,6 +14,7 @@ import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.content.contract.PlaybackSpec
 import com.opentune.content.contract.ProviderStream
 import com.opentune.content.contract.StreamRegistrarHolder
@@ -36,6 +37,25 @@ class SmbProviderInstance(
         password = fields.password,
         domain = fields.domain,
     )
+
+    override suspend fun test(): EndpointValidationResult = withContext(Dispatchers.IO) {
+        try {
+            val session = SmbSession.open(credentials())
+            session.close()
+            EndpointValidationResult.Success(
+                fields = buildMap {
+                    put("host", fields.host)
+                    put("share_name", fields.shareName)
+                    put("username", fields.username)
+                    put("password", fields.password)
+                    put("name", fields.shareName)
+                    fields.domain?.let { put("domain", it) }
+                },
+            )
+        } catch (e: Exception) {
+            EndpointValidationResult.Error(e.message ?: "SMB validation failed")
+        }
+    }
 
     override suspend fun listEntry(
         location: String?,

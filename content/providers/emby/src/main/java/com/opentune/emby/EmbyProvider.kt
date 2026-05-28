@@ -1,6 +1,5 @@
 package com.opentune.emby
 
-import com.opentune.emby.dto.AuthenticateByNameRequest
 import com.opentune.emby.dto.CodecProfile
 import com.opentune.emby.dto.DeviceIdentification
 import com.opentune.emby.dto.DeviceProfile
@@ -13,11 +12,8 @@ import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.PlatformInfoHolder
-import com.opentune.content.contract.FormFieldKind
-import com.opentune.content.contract.FormFieldSpec
-import com.opentune.content.contract.EndpointValidationResult
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import java.security.MessageDigest
 import kotlin.math.sqrt
 
@@ -32,6 +28,7 @@ class EmbyProvider : OpenTuneProvider {
             labelKey = "fld_http_library_url",
             kind = FormFieldKind.SingleLineText,
             required = true,
+            identity = true,
             order = 0,
             placeholderKey = "ph_http_library_url",
         ),
@@ -40,6 +37,7 @@ class EmbyProvider : OpenTuneProvider {
             labelKey = "fld_account_username",
             kind = FormFieldKind.SingleLineText,
             required = true,
+            identity = true,
             order = 1,
         ),
         FormFieldSpec(
@@ -51,35 +49,8 @@ class EmbyProvider : OpenTuneProvider {
             order = 2,
         ),
         FormFieldSpec(id = "proxy", labelKey = "", kind = FormFieldKind.ProxySelector, order = Int.MAX_VALUE),
+        FormFieldSpec(id = "name", labelKey = "fld_endpoint_name", kind = FormFieldKind.SingleLineText, required = false, order = 100),
     )
-
-    override suspend fun validateFields(values: Map<String, String>): EndpointValidationResult =
-        withContext(Dispatchers.IO) {
-            try {
-                val baseUrl = EmbyClientFactory.normalizeBaseUrl(values["base_url"]?.trim().orEmpty())
-                val username = values["username"]?.trim().orEmpty()
-                val password = values["password"].orEmpty()
-                val unauth: EmbyApi = EmbyClientFactory.create(baseUrl, accessToken = null)
-                val auth = runEmbyHttpPhase("authenticateByName") {
-                    unauth.authenticateByName(AuthenticateByNameRequest(username, password))
-                }
-                val token = auth.accessToken ?: error("No access token")
-                val userId = auth.user?.id ?: error("No user id")
-                val api = EmbyClientFactory.create(baseUrl, token)
-                val info = runEmbyHttpPhase("getSystemInfo") { api.getSystemInfo() }
-                val hash = sha256("$baseUrl$userId")
-                val displayName = info.serverName ?: baseUrl
-                val fields = buildMap {
-                    put("base_url", baseUrl)
-                    put("user_id", userId)
-                    put("access_token", token)
-                    put("server_id", info.id.orEmpty())
-                }
-                EndpointValidationResult.Success(hash = hash, name = displayName, fields = fields)
-            } catch (e: Exception) {
-                EndpointValidationResult.Error(e.message ?: "Emby validation failed")
-            }
-        }
 
     override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
         val fields = EmbyServerFieldsJson(

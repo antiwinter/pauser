@@ -15,8 +15,8 @@ import com.opentune.content.ui.catalog.SearchRoute
 import com.opentune.content.ui.catalog.SettingsScreen
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
-import com.opentune.content.contract.FormFieldKind
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.core.form.contract.FormFieldKind
 import com.opentune.content.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute

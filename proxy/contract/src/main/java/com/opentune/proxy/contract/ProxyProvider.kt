@@ -1,7 +1,7 @@
 package com.opentune.proxy.contract
 
 import com.opentune.content.contract.PlatformInfo
-import com.opentune.content.contract.FormFieldSpec
+import com.opentune.core.form.contract.FormFieldSpec
 import okhttp3.OkHttpClient
 
 sealed class ProxyValidationResult {

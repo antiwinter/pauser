@@ -15,7 +15,7 @@ android {
 }
 
 dependencies {
-    api(project(":content:contract"))
+    implementation(project(":core:form:contract"))
     implementation(project(":storage"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.androidx.compose.bom))

@@ -1,6 +1,6 @@
 package com.opentune.core.form
-import com.opentune.content.contract.FormFieldKind
-import com.opentune.content.contract.FormFieldSpec
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField

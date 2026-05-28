@@ -1,15 +1,11 @@
 package com.opentune.content.contract
 
+import com.opentune.core.form.contract.FormFieldSpec
 
 // --- Endpoint-level validation result (extends core with domain fields) ---
 
 sealed class EndpointValidationResult {
-    data class Success(
-        val hash: String,
-        val name: String,
-        val fields: Map<String, String>,
-    ) : EndpointValidationResult()
-
+    data class Success(val fields: Map<String, String>) : EndpointValidationResult()
     data class Error(val message: String) : EndpointValidationResult()
 }
 
@@ -28,7 +24,6 @@ interface OpenTuneProvider {
     val providesArt: Boolean
 
     fun getFieldsSpec(): List<FormFieldSpec>
-    suspend fun validateFields(values: Map<String, String>): EndpointValidationResult
     fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient
 }
 
@@ -41,7 +36,7 @@ interface OpenTuneProviderLoader {
 abstract class EndpointClient {
     open var imageLoader: coil3.ImageLoader? = null
     open var httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient()
-    open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success("", "", emptyMap())
+    open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
     abstract suspend fun listEntry(
         location: String?,
         startIndex: Int,
