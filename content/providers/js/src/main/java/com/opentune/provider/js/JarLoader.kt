@@ -176,7 +176,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
     }
 
     private fun tryLoadClass(loader: DexClassLoader, url: String, cls: String): Class<*>? =
-        try { loader.loadClass(cls) } catch (_: ClassNotFoundException) { null }
+        try { loader.loadClass(cls) } catch (_: Throwable) { null }
 
     private fun initGetSpider(loader: DexClassLoader, shortName: String): Any? =
         try {

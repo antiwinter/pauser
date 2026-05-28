@@ -10,6 +10,7 @@ import { drpyHome, drpyCategory, drpyDetail, drpyPlay, drpySearch } from './hand
 
 export interface CatVodState {
   config: CatVodConfig;
+  unsupportedSites?: Set<string>;
 }
 
 // ── listEntry ─────────────────────────────────────────────────────────────────
@@ -20,8 +21,12 @@ export async function listEntry(
   startIndex: number,
   limit: number,
 ): Promise<EntryList> {
-  if (location === null) return listRoot(state);
+  if (location === null) return await listRoot(state);
   const ref = decodeRef(location);
+
+  if (ref.type === 'unsupported') {
+    return { items: [], totalCount: 0 };
+  }
 
   if (ref.type === 'site') {
     const site = requireSite(state, ref.key);
@@ -143,13 +148,43 @@ export async function getPlaybackSpec(
 
 // ── Dispatch helpers ──────────────────────────────────────────────────────────
 
-function listRoot(state: CatVodState): EntryList {
-  const items: EntryList['items'] = state.config.sites.map((site) => ({
-    id:    encodeRef({ type: 'site', key: site.key }),
-    title: site.name,
-    type:  'Folder' as const,
-    cover: null,
-  }));
+async function initJar(state: CatVodState) {
+  if (state.unsupportedSites) return;
+
+  state.unsupportedSites = new Set();
+  const jar = parseSpiderField(state.config.spider);
+  if (!jar) return;
+
+  try {
+    await ensureJar(jar.url, jar.md5);
+  } catch {
+    // jar.load failed — all jar sites are unsupported
+    state.unsupportedSites = new Set(state.config.sites.filter(isJar).map(s => s.key));
+  }
+}
+
+async function listRoot(state: CatVodState): Promise<EntryList> {
+  await initJar(state);
+  const failed = state.unsupportedSites!;
+
+  const items: EntryList['items'] = state.config.sites
+    .filter(site => !isJar(site) || !failed.has(site.key))
+    .map((site) => ({
+      id:    encodeRef({ type: 'site', key: site.key }),
+      title: site.name,
+      type:  'Folder' as const,
+      cover: null,
+    }));
+
+  if (failed.size > 0) {
+    items.push({
+      id:    encodeRef({ type: 'unsupported', count: failed.size }),
+      title: `${failed.size} site${failed.size > 1 ? 's' : ''} unsupported`,
+      type:  'Folder' as const,
+      cover: null,
+    });
+  }
+
   if (state.config.lives?.length) {
     items.push({ id: encodeRef({ type: 'live', name: '__all__', url: '' }), title: '直播', type: 'Folder', cover: null });
   }
@@ -166,7 +201,7 @@ async function dispatchHome(site: SiteEntry, state: CatVodState): Promise<EntryL
   if (isCms(site)) return cmsHome(site.api, site.key);
   if (isJar(site)) {
     const jar = requireJar(state);
-    return jarHome(jar.url, jar.md5, site.api, siteExt(site), site.key);
+    return await jarHome(jar.url, jar.md5, site.api, siteExt(site), site.key);
   }
   if (isDrpy(site)) return drpyHome(site.api, siteExt(site), site.key);
   throw new Error(`Site type ${site.type} not supported yet`);
@@ -176,7 +211,7 @@ async function dispatchCategory(site: SiteEntry, state: CatVodState, tid: string
   if (isCms(site)) return cmsCategory(site.api, site.key, tid, pg);
   if (isJar(site)) {
     const jar = requireJar(state);
-    return jarCategory(jar.url, site.api, siteExt(site), site.key, tid, pg);
+    return await jarCategory(jar.url, site.api, siteExt(site), site.key, tid, pg);
   }
   if (isDrpy(site)) return drpyCategory(site.api, siteExt(site), site.key, tid, pg);
   throw new Error(`Site type ${site.type} not supported yet`);
@@ -186,7 +221,7 @@ async function dispatchDetail(site: SiteEntry, state: CatVodState, id: string) {
   if (isCms(site)) return cmsDetail(site.api, id);
   if (isJar(site)) {
     const jar = requireJar(state);
-    return jarDetail(jar.url, site.api, siteExt(site), site.key, id);
+    return await jarDetail(jar.url, site.api, siteExt(site), site.key, id);
   }
   if (isDrpy(site)) return drpyDetail(site.api, siteExt(site), site.key, id);
   throw new Error(`Site type ${site.type} not supported yet`);
@@ -198,7 +233,7 @@ async function dispatchPlay(site: SiteEntry, state: CatVodState, flag: string, e
   }
   if (isJar(site)) {
     const jar = requireJar(state);
-    return jarPlay(jar.url, site.api, siteExt(site), site.key, flag, epUrl);
+    return await jarPlay(jar.url, site.api, siteExt(site), site.key, flag, epUrl);
   }
   if (isDrpy(site)) return drpyPlay(site.api, siteExt(site), site.key, flag, epUrl);
   throw new Error(`Site type ${site.type} not supported yet`);
