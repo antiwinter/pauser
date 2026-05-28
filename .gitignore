@@ -24,3 +24,4 @@ providers-ts/dist/
 providers-ts/providers/*/.env
 **/bin/
 .env
+classes.dex

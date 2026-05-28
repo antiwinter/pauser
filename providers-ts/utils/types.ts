@@ -33,12 +33,16 @@ export interface HostAPI {
   };
   jar: {
     load(args: { url: string; md5?: string }): Promise<void>;
+    loadAsset(args: { name: string }): Promise<void>;
+    boot(args: { url: string; initClass: string; dexNativeClass: string; initOriginClass: string }): Promise<void>;
     reflect(args: {
       url: string;
       cls: string;
       method: string;
       instance?: string;
       args?: unknown[];
+      factoryCls?: string;
+      factoryMethod?: string;
     }): Promise<string>;
     clear(args?: null): Promise<void>;
     clearInstances(args?: null): Promise<void>;

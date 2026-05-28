@@ -26,7 +26,6 @@ import com.opentune.storage.EntryStateStore
 import com.opentune.provider.js.HostApis
 import com.opentune.provider.js.JarLoader
 import com.opentune.server.debug.JarBridge
-import com.github.catvod.Init as CatVodInit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -73,7 +72,6 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        CatVodInit.set(this)
         SingletonImageLoader.setSafe { buildImageLoader() }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,

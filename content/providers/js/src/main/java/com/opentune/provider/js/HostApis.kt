@@ -126,13 +126,28 @@ class HostApis {
                 jarLoader.load(url, md5)
                 "true"
             }
+            "loadAsset" -> {
+                val name = args["name"]!!.jsonPrimitive.content
+                jarLoader.loadAsset(name)
+                "true"
+            }
+            "boot" -> {
+                val url            = args["url"]!!.jsonPrimitive.content
+                val initClass      = args["initClass"]!!.jsonPrimitive.content
+                val dexNativeClass = args["dexNativeClass"]!!.jsonPrimitive.content
+                val initOriginClass = args["initOriginClass"]!!.jsonPrimitive.content
+                jarLoader.boot(url, initClass, dexNativeClass, initOriginClass)
+                "true"
+            }
             "reflect" -> {
-                val url      = args["url"]!!.jsonPrimitive.content
-                val cls      = args["cls"]!!.jsonPrimitive.content
-                val method   = args["method"]!!.jsonPrimitive.content
-                val instance = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                val rawArgs  = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
-                jarLoader.reflect(url, cls, method, instance, rawArgs)
+                val url           = args["url"]!!.jsonPrimitive.content
+                val cls           = args["cls"]!!.jsonPrimitive.content
+                val method        = args["method"]!!.jsonPrimitive.content
+                val instance      = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                val rawArgs       = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
+                val factoryCls    = args["factoryCls"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                val factoryMethod = args["factoryMethod"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                jarLoader.reflect(url, cls, method, instance, rawArgs, factoryCls, factoryMethod)
             }
             "clear" -> {
                 jarLoader.clear()

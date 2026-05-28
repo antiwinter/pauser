@@ -19,8 +19,7 @@ import java.util.zip.ZipFile
 
 /**
  * Downloads and caches Android JARs, then reflectively invokes methods on their classes.
- *
- * All CatVod/Spider conventions are owned by the TypeScript layer. This class is protocol-agnostic.
+ * Protocol-agnostic: all domain conventions (class names, method names) are supplied by callers.
  */
 class JarLoader(private val httpClient: OkHttpClient) {
 
@@ -37,123 +36,145 @@ class JarLoader(private val httpClient: OkHttpClient) {
         if (loaders.containsKey(key)) return
         synchronized(loadLocks.getOrPut(key) { Any() }) {
             if (loaders.containsKey(key)) return
-            val ctx    = ContextHolder.get()
-            val jar    = downloadAndVerify(url, md5)
-            val gen    = loadGen.get()
-            val dexOut = File(ctx.codeCacheDir, "dex/$key/$gen").also { it.mkdirs() }
-            val soOut  = File(ctx.cacheDir, "so/$key").also { it.mkdirs() }
-            extractNativeLibs(jar, soOut)
-            val primary = DexClassLoader(
-                jar.absolutePath,
-                dexOut.absolutePath,
-                soOut.absolutePath,
-                ctx.classLoader,
-            )
-
-            // FongMi Guard JAR pattern: Init.init(Context) decrypts assets/ftyshinidie.guard into
-            // a secondary DexClassLoader (config.db). Spider classes live in that secondary loader
-            // and use InitOrigin (not spider.Init) as their context singleton.
-            //
-            // Boot sequence:
-            //  1. Pre-set spider.Init.Application field so DexNative.<clinit> sees non-null context.
-            //  2. Force-load DexNative to trigger <clinit> (loads ftyguard_v8.so).
-            //  3. Call spider.Init.init(ctx) — decrypts guard, creates secondary DexClassLoader.
-            //  4. Patch secondary loader's parent → primary DexClassLoader (so KL can find spider.Init).
-            //  5. Call InitOrigin.init(ctx) on secondary loader — populates InitOrigin.N (Application).
-            //     Without this, OB$tF.<clinit> → OB.<init> → getSharedPreferences(null) → NPE.
-            val initCls = try {
-                primary.loadClass("com.github.catvod.spider.Init")
-            } catch (e: ClassNotFoundException) {
-                // Init class not found — not a Guard JAR, that's fine
-                null
-            }
-
-            initCls?.let { cls ->
-                // Step 1: pre-set Application field before DexNative.<clinit> runs
-                try {
-                    val inst = cls.methods.firstOrNull { it.name == "get" && it.parameterCount == 0 }
-                        ?.also { it.isAccessible = true }?.invoke(null)
-                    if (inst != null) {
-                        inst.javaClass.declaredFields
-                            .firstOrNull { it.type == android.app.Application::class.java }
-                            ?.also { it.isAccessible = true }
-                            ?.set(inst, ctx as? android.app.Application ?: ctx.applicationContext as? android.app.Application)
-                    }
-                } catch (_: Throwable) {}
-
-                // Step 2: force DexNative <clinit> — throws UnsatisfiedLinkError on wrong arch
-                primary.loadClass("com.github.catvod.spider.DexNative")
-
-                // Step 3: Init.init(ctx) — bootstraps secondary loader
-                val initMethod = cls.methods.firstOrNull { m ->
-                    m.name == "init" && (m.parameterCount == 0 ||
-                        (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
-                }
-                if (initMethod != null) {
-                    initMethod.isAccessible = true
-                    val args = if (initMethod.parameterCount == 1) arrayOf(ctx) else emptyArray()
-                    initMethod.invoke(null, *args)
-                }
-
-                // Steps 4 & 5: patch secondary loader and call InitOrigin.init
-                val loaderMethod = cls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
-                if (loaderMethod != null) {
-                    loaderMethod.isAccessible = true
-                    val secondaryLoader = loaderMethod.invoke(null) as? ClassLoader
-                    if (secondaryLoader != null) {
-                        // Step 4: reparent secondary → primary so KL can resolve spider.Init
-                        try {
-                            ClassLoader::class.java.getDeclaredField("parent")
-                                .also { it.isAccessible = true }
-                                .set(secondaryLoader, primary)
-                        } catch (_: Throwable) {}
-
-                        // Step 5: InitOrigin.init(ctx) — populates context singleton in config.db
-                        try {
-                            val initOriginCls = secondaryLoader.loadClass("com.github.catvod.spider.InitOrigin")
-                            initOriginCls.methods.firstOrNull { m ->
-                                m.name == "init" && m.parameterCount == 1 &&
-                                m.parameterTypes[0].name == "android.content.Context"
-                            }?.also { it.isAccessible = true }?.invoke(null, ctx)
-                        } catch (_: Throwable) {}
-                    }
-                }
-            }
-            loaders[key] = primary
+            loadJarFile(key, downloadAndVerify(url, md5), shimLoader())
         }
     }
 
+    fun loadAsset(assetName: String) {
+        val key = "asset:$assetName"
+        if (loaders.containsKey(key)) return
+        synchronized(loadLocks.getOrPut(key) { Any() }) {
+            if (loaders.containsKey(key)) return
+            val ctx  = ContextHolder.get()
+            val dir  = File(ctx.cacheDir, "jars").also { it.mkdirs() }
+            val dest = File(dir, assetName)
+            dest.setWritable(true)
+            ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
+            dest.setReadOnly()
+            loadJarFile(key, dest, null)
+        }
+    }
+
+    // Returns the first asset-loaded classloader as parent for URL-loaded JARs, so
+    // runtime JARs can resolve classes defined in asset shims.
+    private fun shimLoader(): ClassLoader? =
+        loaders.entries.firstOrNull { it.key.startsWith("asset:") }?.value
+
+    private fun loadJarFile(key: String, jar: File, parent: ClassLoader?) {
+        val ctx    = ContextHolder.get()
+        val gen    = loadGen.get()
+        val dexOut = File(ctx.codeCacheDir, "dex/$key/$gen").also { it.mkdirs() }
+        val soOut  = File(ctx.cacheDir, "so/$key").also { it.mkdirs() }
+        extractNativeLibs(jar, soOut)
+        loaders[key] = DexClassLoader(
+            jar.absolutePath,
+            dexOut.absolutePath,
+            soOut.absolutePath,
+            parent ?: ctx.classLoader,
+        )
+    }
+
+    /**
+     * Runs a protocol-specific boot sequence after [load].
+     *
+     * [initClass]       — singleton that holds the Application reference and creates the secondary loader
+     * [dexNativeClass]  — class whose <clinit> loads the native .so; force-loaded before init()
+     * [initOriginClass] — class on the secondary loader that needs its own init(Context) call
+     *
+     * Boot steps (mirrors the FongMi Guard pattern but is entirely class-name-driven):
+     *  1. Pre-set Application field on the initClass singleton (so DexNative.<clinit> sees non-null context).
+     *  2. Force-load dexNativeClass to trigger <clinit>.
+     *  3. Call initClass.init(Context) — decrypts guard, creates secondary DexClassLoader.
+     *  4. Patch secondary loader's parent → primary (so the secondary can resolve classes from primary).
+     *  5. Call initOriginClass.init(Context) on secondary loader — populates its context singleton.
+     */
+    fun boot(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
+        val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
+        val ctx     = ContextHolder.get()
+
+        val initCls = try { primary.loadClass(initClass) } catch (_: Throwable) { return }
+
+        // Step 1: pre-set Application field before dexNativeClass.<clinit> runs
+        try {
+            val inst = initCls.methods.firstOrNull { it.name == "get" && it.parameterCount == 0 }
+                ?.also { it.isAccessible = true }?.invoke(null)
+            if (inst != null) {
+                inst.javaClass.declaredFields
+                    .firstOrNull { it.type == android.app.Application::class.java }
+                    ?.also { it.isAccessible = true }
+                    ?.set(inst, ctx as? android.app.Application ?: ctx.applicationContext as? android.app.Application)
+            }
+        } catch (_: Throwable) {}
+
+        // Step 2: force dexNativeClass <clinit>
+        try { primary.loadClass(dexNativeClass) } catch (_: Throwable) {}
+
+        // Step 3: initClass.init(Context)
+        val initMethod = initCls.methods.firstOrNull { m ->
+            m.name == "init" && (m.parameterCount == 0 ||
+                (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
+        }
+        if (initMethod != null) {
+            initMethod.isAccessible = true
+            val args = if (initMethod.parameterCount == 1) arrayOf(ctx) else emptyArray()
+            initMethod.invoke(null, *args)
+        }
+
+        // Steps 4 & 5: patch secondary loader and call initOriginClass.init(Context)
+        val loaderMethod = initCls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
+            ?: return
+        loaderMethod.isAccessible = true
+        val secondaryLoader = loaderMethod.invoke(null) as? ClassLoader ?: return
+
+        try {
+            ClassLoader::class.java.getDeclaredField("parent")
+                .also { it.isAccessible = true }
+                .set(secondaryLoader, primary)
+        } catch (_: Throwable) {}
+
+        try {
+            val originCls = secondaryLoader.loadClass(initOriginClass)
+            originCls.methods.firstOrNull { m ->
+                m.name == "init" && m.parameterCount == 1 &&
+                m.parameterTypes[0].name == "android.content.Context"
+            }?.also { it.isAccessible = true }?.invoke(null, ctx)
+        } catch (_: Throwable) {}
+    }
+
+    /**
+     * [factoryCls] / [factoryMethod] — optional fallback for newInstance: if [cls] can't be
+     * loaded directly, calls factoryCls.factoryMethod(shortName) to obtain the instance.
+     */
     fun reflect(
         url: String,
         cls: String,
         method: String,
         instanceHandle: String?,
         rawArgs: JsonArray,
+        factoryCls: String? = null,
+        factoryMethod: String? = null,
     ): String {
         val loader   = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
         val instance = instanceHandle?.let { instances[it] }
 
-        // For newInstance with no handle, try direct constructor first.
-        // Encrypted JARs (Guard pattern) can't be instantiated directly — fall back to
-        // Init.getSpider(siteKey) where siteKey is the last segment of the class name.
         if (method == "newInstance" && instance == null) {
-            val clz = tryLoadClass(loader, url, cls)
+            val clz = tryLoadClass(loader, cls)
             if (clz != null) {
                 val obj    = clz.getDeclaredConstructor().also { it.isAccessible = true }.newInstance()
                 val handle = "obj_${keyGen.incrementAndGet()}"
                 instances[handle] = obj
                 return JsonPrimitive(handle).toString()
             }
-            // Encrypted JAR: use Init.getSpider(shortClassName) to get the spider
             val shortName = cls.substringAfterLast('.')
-            val obj = initGetSpider(loader, shortName)
-                ?: error("Cannot instantiate $cls — not found in loader and Init.getSpider failed")
+            val obj = if (factoryCls != null && factoryMethod != null)
+                invokeFactory(loader, factoryCls, factoryMethod, shortName) else null
+            obj ?: error("Cannot instantiate $cls — not in loader and no factory provided")
             val handle = "obj_${keyGen.incrementAndGet()}"
             instances[handle] = obj
             return JsonPrimitive(handle).toString()
         }
 
-        val clz      = tryLoadClass(loader, url, cls) ?: instance?.javaClass ?: error("Cannot load class $cls")
+        val clz      = tryLoadClass(loader, cls) ?: instance?.javaClass ?: error("Cannot load class $cls")
         val jvmArgs = buildArgs(clz, method, rawArgs)
         val m = resolveMethod(clz, method, jvmArgs.size)
             ?: error("No method '$method' with ${jvmArgs.size} params in $cls")
@@ -180,13 +201,13 @@ class JarLoader(private val httpClient: OkHttpClient) {
         }
     }
 
-    private fun tryLoadClass(loader: DexClassLoader, url: String, cls: String): Class<*>? =
+    private fun tryLoadClass(loader: ClassLoader, cls: String): Class<*>? =
         try { loader.loadClass(cls) } catch (_: Throwable) { null }
 
-    private fun initGetSpider(loader: DexClassLoader, shortName: String): Any? =
+    private fun invokeFactory(loader: ClassLoader, factoryCls: String, factoryMethod: String, shortName: String): Any? =
         try {
-            val initCls = loader.loadClass("com.github.catvod.spider.Init")
-            val m = initCls.methods.firstOrNull { it.name == "getSpider" && it.parameterCount == 1 }
+            val factory = loader.loadClass(factoryCls)
+            val m = factory.methods.firstOrNull { it.name == factoryMethod && it.parameterCount == 1 }
                 ?: return null
             m.isAccessible = true
             m.invoke(null, shortName)

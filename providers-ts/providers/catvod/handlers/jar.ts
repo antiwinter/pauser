@@ -17,10 +17,25 @@ export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void>
   await host.jar.clearInstances();
 }
 
+// ── CatVod/spider class name constants ───────────────────────────────────────
+
+const CATVOD_INIT         = 'com.github.catvod.spider.Init';
+const CATVOD_DEX_NATIVE   = 'com.github.catvod.spider.DexNative';
+const CATVOD_INIT_ORIGIN  = 'com.github.catvod.spider.InitOrigin';
+const CATVOD_GET_SPIDER   = 'getSpider';
+const CATVOD_SHIM_ASSET   = 'catvod-shim.jar';
+
 // ── JAR bootstrap ─────────────────────────────────────────────────────────────
 
 export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
+  await host.jar.loadAsset({ name: CATVOD_SHIM_ASSET });
   await host.jar.load({ url: jarUrl, md5 });
+  await host.jar.boot({
+    url: jarUrl,
+    initClass: CATVOD_INIT,
+    dexNativeClass: CATVOD_DEX_NATIVE,
+    initOriginClass: CATVOD_INIT_ORIGIN,
+  });
 }
 
 // ── Spider instance lifecycle ─────────────────────────────────────────────────
@@ -35,7 +50,7 @@ async function getSpider(
   if (cached) return cached;
 
   const cls = spiderClass(api);
-  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
+  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [], factoryCls: CATVOD_INIT, factoryMethod: CATVOD_GET_SPIDER });
   // Guard spiders (class name ends in "Guard") get their config from the encrypted JAR's
   // internal state set up by Init.init(Context) during load(). Calling spider.init() on them
   // corrupts their internal state via a failed getSite() call. Skip init for Guard spiders.
