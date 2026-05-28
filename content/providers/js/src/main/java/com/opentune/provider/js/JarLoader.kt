@@ -106,8 +106,8 @@ class JarLoader(private val httpClient: OkHttpClient) {
             }
         } catch (_: Throwable) {}
 
-        // Step 2: force dexNativeClass <clinit>
-        try { primary.loadClass(dexNativeClass) } catch (_: Throwable) {}
+        // Step 2: force dexNativeClass <clinit> — UnsatisfiedLinkError means wrong arch, let it propagate
+        try { primary.loadClass(dexNativeClass) } catch (e: UnsatisfiedLinkError) { throw e } catch (_: Throwable) {}
 
         // Step 3: initClass.init(Context)
         val initMethod = initCls.methods.firstOrNull { m ->
@@ -117,7 +117,10 @@ class JarLoader(private val httpClient: OkHttpClient) {
         if (initMethod != null) {
             initMethod.isAccessible = true
             val args = if (initMethod.parameterCount == 1) arrayOf(ctx) else emptyArray()
-            initMethod.invoke(null, *args)
+            try { initMethod.invoke(null, *args) } catch (e: java.lang.reflect.InvocationTargetException) {
+                val cause = e.cause
+                if (cause is UnsatisfiedLinkError) throw cause
+            } catch (_: Throwable) {}
         }
 
         // Steps 4 & 5: patch secondary loader and call initOriginClass.init(Context)

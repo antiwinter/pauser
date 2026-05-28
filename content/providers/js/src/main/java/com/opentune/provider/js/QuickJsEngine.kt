@@ -199,7 +199,7 @@ class QuickJsEngine(
             try {
                 val result = dispatchHost(namespace, name, argsJson)
                 taskChannel.trySend(EngineTask.SettleHost(key, result, false))
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "host async failed: $namespace.$name", e)
                 taskChannel.trySend(EngineTask.SettleHost(key, e.message ?: "host error", true))
             }

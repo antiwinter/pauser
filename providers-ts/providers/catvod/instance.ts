@@ -54,12 +54,16 @@ export async function listEntry(
     return { items: items.slice(startIndex, startIndex + limit), totalCount: items.length };
   }
 
-  if (ref.type === 'live') {
-    const all = await fetchLiveChannels(state.config.lives ?? []);
+  if (ref.type === 'live-source') {
+    const live = state.config.lives?.[ref.index];
+    if (!live) return { items: [], totalCount: 0 };
+    const all = await fetchLiveChannels(live);
     return { items: all.items.slice(startIndex, startIndex + limit), totalCount: all.totalCount };
   }
 
-  return { items: [], totalCount: 0 };
+  if (ref.type === 'live') {
+    return { items: [], totalCount: 0 };
+  }
 }
 
 // ── search ────────────────────────────────────────────────────────────────────
@@ -98,6 +102,15 @@ export async function getDetail(
     const site = requireSite(state, ref.key);
     const raw  = await dispatchDetail(site, state, ref.id);
     return buildDetail(raw);
+  }
+
+  if (ref.type === 'live-source') {
+    const live = state.config.lives?.[ref.index];
+    return {
+      title: live?.name ?? '', overview: null, logo: null, backdrop: [],
+      isMedia: false, rating: null, bitrate: null, externalUrls: [],
+      year: null, providerIds: {}, streams: [], etag: null,
+    };
   }
 
   if (ref.type === 'live') {
@@ -186,7 +199,14 @@ async function listRoot(state: CatVodState): Promise<EntryList> {
   }
 
   if (state.config.lives?.length) {
-    items.push({ id: encodeRef({ type: 'live', name: '__all__', url: '' }), title: '直播', type: 'Folder', cover: null });
+    for (let i = 0; i < state.config.lives.length; i++) {
+      items.push({
+        id:    encodeRef({ type: 'live-source', index: i }),
+        title: state.config.lives[i].name,
+        type:  'Folder' as const,
+        cover: null,
+      });
+    }
   }
   return { items, totalCount: items.length };
 }

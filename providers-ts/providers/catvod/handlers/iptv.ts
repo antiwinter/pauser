@@ -1,23 +1,14 @@
 import type { EntryList } from '../../../utils/types.js';
 import type { LiveEntry } from '../config.js';
 
-export async function fetchLiveChannels(lives: LiveEntry[]): Promise<EntryList> {
-  const items: EntryList['items'] = [];
-  for (const live of lives) {
-    try {
-      const resp = await host.http.get({ url: live.url });
-      for (const ch of parseM3U(resp.body)) {
-        items.push({
-          id:    JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
-          title: ch.name,
-          type:  'Playable' as const,
-          cover: ch.logo ?? null,
-        });
-      }
-    } catch (_) {
-      // skip unreachable live source
-    }
-  }
+export async function fetchLiveChannels(live: LiveEntry): Promise<EntryList> {
+  const resp = await host.http.get({ url: live.url });
+  const items: EntryList['items'] = parseM3U(resp.body).map((ch) => ({
+    id:    JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
+    title: ch.name,
+    type:  'Playable' as const,
+    cover: ch.logo ?? null,
+  }));
   return { items, totalCount: items.length };
 }
 
