@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$SCRIPT_DIR/.."
-SRC="$ROOT/shim/src"
-BUILD="$ROOT/shim/build"
+ROOT="$SCRIPT_DIR/../../.."
+SRC="$SCRIPT_DIR/src"
+BUILD="$SCRIPT_DIR/build"
 DIST="$ROOT/dist"
 
 ANDROID_JAR="${ANDROID_HOME:-$HOME/Android/Sdk}/platforms/android-35/android.jar"
