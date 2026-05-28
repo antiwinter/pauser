@@ -59,6 +59,9 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
                 qrClientRef[0]?.pollQr(token) ?: QrResult.Error("no client")
             } else null,
             onDone = { nav.popBackStack() },
+            onDelete = if (!isAdd) {
+                { EndpointConfigRepository.removeEndpoint(endpointId) }
+            } else null,
         )
     }
     composable(

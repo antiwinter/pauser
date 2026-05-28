@@ -17,6 +17,7 @@
     <string name="form_button">Save</string>
     <string name="form_loading">Loading…</string>
     <string name="form_action_cancel">Cancel</string>
+    <string name="form_action_delete">Delete</string>
     <string name="form_proxy_section_title">Proxy</string>
     <string name="form_proxy_none">None (direct connection)</string>
 
