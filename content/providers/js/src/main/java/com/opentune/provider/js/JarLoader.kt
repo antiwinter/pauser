@@ -49,7 +49,6 @@ class JarLoader(private val httpClient: OkHttpClient) {
                 soOut.absolutePath,
                 ctx.classLoader,
             )
-            loaders[key] = primary
 
             // FongMi Guard JAR pattern: Init.init(Context) decrypts assets/ftyshinidie.guard into
             // a secondary DexClassLoader (config.db). Spider classes live in that secondary loader
@@ -62,12 +61,17 @@ class JarLoader(private val httpClient: OkHttpClient) {
             //  4. Patch secondary loader's parent → primary DexClassLoader (so KL can find spider.Init).
             //  5. Call InitOrigin.init(ctx) on secondary loader — populates InitOrigin.N (Application).
             //     Without this, OB$tF.<clinit> → OB.<init> → getSharedPreferences(null) → NPE.
-            try {
-                val initCls = primary.loadClass("com.github.catvod.spider.Init")
+            val initCls = try {
+                primary.loadClass("com.github.catvod.spider.Init")
+            } catch (e: ClassNotFoundException) {
+                // Init class not found — not a Guard JAR, that's fine
+                null
+            }
 
+            initCls?.let { cls ->
                 // Step 1: pre-set Application field before DexNative.<clinit> runs
                 try {
-                    val inst = initCls.methods.firstOrNull { it.name == "get" && it.parameterCount == 0 }
+                    val inst = cls.methods.firstOrNull { it.name == "get" && it.parameterCount == 0 }
                         ?.also { it.isAccessible = true }?.invoke(null)
                     if (inst != null) {
                         inst.javaClass.declaredFields
@@ -77,11 +81,11 @@ class JarLoader(private val httpClient: OkHttpClient) {
                     }
                 } catch (_: Throwable) {}
 
-                // Step 2: force DexNative <clinit>
-                try { primary.loadClass("com.github.catvod.spider.DexNative") } catch (_: Throwable) {}
+                // Step 2: force DexNative <clinit> — throws UnsatisfiedLinkError on wrong arch
+                primary.loadClass("com.github.catvod.spider.DexNative")
 
                 // Step 3: Init.init(ctx) — bootstraps secondary loader
-                val initMethod = initCls.methods.firstOrNull { m ->
+                val initMethod = cls.methods.firstOrNull { m ->
                     m.name == "init" && (m.parameterCount == 0 ||
                         (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
                 }
@@ -92,7 +96,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
                 }
 
                 // Steps 4 & 5: patch secondary loader and call InitOrigin.init
-                val loaderMethod = initCls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
+                val loaderMethod = cls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
                 if (loaderMethod != null) {
                     loaderMethod.isAccessible = true
                     val secondaryLoader = loaderMethod.invoke(null) as? ClassLoader
@@ -114,7 +118,8 @@ class JarLoader(private val httpClient: OkHttpClient) {
                         } catch (_: Throwable) {}
                     }
                 }
-            } catch (_: Throwable) { /* Not an encrypted JAR — fine */ }
+            }
+            loaders[key] = primary
         }
     }
 
