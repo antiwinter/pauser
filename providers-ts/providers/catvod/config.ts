@@ -2,6 +2,7 @@ export interface CatVodConfig {
   spider?: string;
   sites:   SiteEntry[];
   lives?:  LiveEntry[];
+  hosts?:  string[];
 }
 
 export interface SiteEntry {

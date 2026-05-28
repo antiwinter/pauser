@@ -136,7 +136,7 @@ export async function getPlaybackSpec(
   // Direct episode ref → already has the URL
   if (ref.type === 'ep') {
     const site = requireSite(state, ref.key);
-    return dispatchPlay(site, state, ref.flag, ref.epUrl);
+    return applyHosts(await dispatchPlay(site, state, ref.flag, ref.epUrl), state.config.hosts);
   }
 
   // Vod ref with single episode → resolve inline
@@ -145,15 +145,15 @@ export async function getPlaybackSpec(
     const raw  = await dispatchDetail(site, state, ref.id);
     const eps  = parseEpisodes(raw);
     if (eps.length === 0) throw new Error('No episodes found');
-    return dispatchPlay(site, state, eps[0].flag, eps[0].url);
+    return applyHosts(await dispatchPlay(site, state, eps[0].flag, eps[0].url), state.config.hosts);
   }
 
   // Live channel → direct URL
   if (ref.type === 'live') {
-    return {
+    return applyHosts({
       url: ref.url, headers: {}, mimeType: null,
       title: ref.name, durationMs: null, subtitleTracks: [], hooksState: {},
-    };
+    }, state.config.hosts);
   }
 
   throw new Error(`getPlaybackSpec: unsupported ref type ${(ref as { type: string }).type}`);
@@ -275,4 +275,25 @@ function requireJar(state: CatVodState): { url: string; md5?: string } {
   const jar = parseSpiderField(state.config.spider);
   if (!jar) throw new Error('Site requires a JAR spider but config.spider is not set');
   return jar;
+}
+
+function applyHosts(spec: PlaybackSpec, hosts: string[] | undefined): PlaybackSpec {
+  if (!hosts?.length || !spec.url) return spec;
+  const map = new Map(hosts.map((h) => h.split('=') as [string, string]));
+  const remap = (url: string) => {
+    try {
+      const u = new URL(url);
+      const to = map.get(u.hostname);
+      if (!to) return url;
+      u.hostname = to;
+      return u.toString();
+    } catch { return url; }
+  };
+  return {
+    ...spec,
+    url: remap(spec.url),
+    headers: Object.fromEntries(
+      Object.entries(spec.headers).map(([k, v]) => [k, remap(v)])
+    ),
+  };
 }
