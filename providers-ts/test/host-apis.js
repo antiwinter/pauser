@@ -109,6 +109,7 @@ export class HostApis {
   handleJarStub(name, args) {
     switch (name) {
       case 'load':   return true;
+      case 'loadAsset': return true;
       case 'clear':  return true;
       case 'clearInstances': return true;
       case 'reflect': {
@@ -118,7 +119,9 @@ export class HostApis {
         if (method === 'homeContent')    return JSON.stringify({ class: [] });
         if (method === 'categoryContent') return JSON.stringify({ list: [], total: 0 });
         if (method === 'detailContent')  return JSON.stringify({ list: [] });
+        if (method === 'searchContent')  return JSON.stringify({ list: [], total: 0 });
         if (method === 'playerContent')  return JSON.stringify({ url: null });
+        if (method === 'getSprite')      return null;
         return null;
       }
       default:

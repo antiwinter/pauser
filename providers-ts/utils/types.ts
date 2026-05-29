@@ -64,7 +64,7 @@ declare global {
 
 // ── Provider contracts ────────────────────────────────────────────────────────
 
-export type ProviderFieldKind = 'text' | 'singleLine' | 'password';
+export type ProviderFieldKind = 'text' | 'singleLine' | 'password' | 'QrCode';
 
 export interface ProviderFieldSpec {
   id: string;
@@ -78,7 +78,7 @@ export interface ProviderFieldSpec {
 }
 
 export type ValidationResult =
-  | { success: true; fields: Record<string, string> }
+  | { success: true; fields: Record<string, string>; hash: string; name: string }
   | { success: false; error: string };
 
 export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other' | 'Digipak' | 'Image';
@@ -220,4 +220,6 @@ export interface OpenTuneProviderBridge {
     hooksState: HooksState;
     positionMs: number;
   }): Promise<void>;
+
+  getSprite?(args: { itemRef: string; ts: number }): Promise<string | null>;
 }

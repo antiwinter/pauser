@@ -1,9 +1,5 @@
 {
   "permissions": {
-        "additionalDirectories": [
-      "/Users/warits/src/fongmi",
-      "/Users/warits/src/tvbox"
-    ],
     "allow": [
       "WebSearch",
       "Bash(./gradlew assembleDebug)",
@@ -21,7 +17,13 @@
       "WebFetch(domain:www.cnblogs.com)",
       "WebFetch(domain:core.telegram.org)",
       "WebFetch(domain:abase.pro)",
-      "WebFetch(domain:security.stackexchange.com)"
+      "WebFetch(domain:security.stackexchange.com)",
+      "Bash(rm -rf /Users/warits/code/pauser/providers-ts/providers/telegram/tdlib/build/openssl /Users/warits/code/pauser/providers-ts/providers/telegram/tdlib/build/td)",
+      "Bash(bash build-tdlib.sh --force)"
+    ],
+    "additionalDirectories": [
+      "/Users/warits/src/fongmi",
+      "/Users/warits/src/tvbox"
     ]
   }
 }

@@ -8,7 +8,7 @@ import {
 } from '../validators.js';
 import { NAError } from '../reporter.js';
 
-const VALID_FIELD_KINDS = new Set(['text', 'singleLine', 'password']);
+const VALID_FIELD_KINDS = new Set(['text', 'singleLine', 'password', 'QrCode']);
 
 /**
  * Category: Config
