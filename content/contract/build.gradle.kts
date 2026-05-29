@@ -9,6 +9,7 @@ kotlin {
 
 dependencies {
     api(project(":storage"))
+    api(project(":core:form:contract"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)

@@ -3,17 +3,14 @@ package com.opentune.provider.js
 import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.EndpointClient
-import com.opentune.content.contract.FormFieldSpec
-import com.opentune.content.contract.EndpointValidationResult
-import kotlinx.coroutines.Dispatchers
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 /**
  * An [OpenTuneProvider] backed by a JavaScript bundle running inside QuickJS.
@@ -40,36 +37,6 @@ class JsProvider private constructor(
 
     override fun getFieldsSpec(): List<FormFieldSpec> = cachedFieldsSpec
 
-    // ── Validation ─────────────────────────────────────────────────────────
-
-    override suspend fun validateFields(values: Map<String, String>): EndpointValidationResult {
-        return try {
-            val argsJson = buildJsonObject {
-                put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
-            }.toString()
-            val resultJson = withEngine(OkHttpClient()) { engine ->
-                engine.callMethod("validateFields", argsJson)
-            } ?: return EndpointValidationResult.Error("Validation returned null")
-
-            val obj = json.parseToJsonElement(resultJson).jsonObject
-            val success = obj["success"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            if (success) {
-                val fieldsEl = obj["fields"] ?: return EndpointValidationResult.Error("Missing fields in validation response")
-                val fieldsObj = fieldsEl.jsonObject
-                val fields = fieldsObj.mapValues { (_, v) -> v.jsonPrimitive.content }
-                EndpointValidationResult.Success(
-                    hash = obj["hash"]?.jsonPrimitive?.content ?: "",
-                    name = obj["name"]?.jsonPrimitive?.content ?: protocol,
-                    fields = fields,
-                )
-            } else {
-                EndpointValidationResult.Error(obj["error"]?.jsonPrimitive?.content ?: "Validation failed")
-            }
-        } catch (e: Exception) {
-            EndpointValidationResult.Error(e.message ?: "JS validation error")
-        }
-    }
-
     // ── Instance creation ──────────────────────────────────────────────────
 
     override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
@@ -80,24 +47,6 @@ class JsProvider private constructor(
             values       = values,
             capabilities = capabilities,
         )
-    }
-
-    // ── Helpers ────────────────────────────────────────────────────────────
-
-    private suspend fun <T> withEngine(httpClient: OkHttpClient, block: suspend (QuickJsEngine) -> T): T {
-        val engine = QuickJsEngine(hostApis, httpClient)
-        return try {
-            engine.init()
-            installHostApis(engine)
-            engine.evalBundle(jsBundle)
-            block(engine)
-        } finally {
-            engine.close()
-        }
-    }
-
-    private suspend fun installHostApis(engine: QuickJsEngine) {
-        engine.evalSnippet(HOST_BOOTSTRAP_JS)
     }
 
     companion object {
@@ -132,9 +81,9 @@ class JsProvider private constructor(
                     val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
                     val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
                     val kind = when (obj["kind"]?.jsonPrimitive?.content) {
-                        "password"   -> com.opentune.content.contract.FormFieldKind.Password
-                        "singleLine" -> com.opentune.content.contract.FormFieldKind.SingleLineText
-                        else         -> com.opentune.content.contract.FormFieldKind.Text
+                        "password"   -> FormFieldKind.Password
+                        "singleLine" -> FormFieldKind.SingleLineText
+                        else         -> FormFieldKind.Text
                     }
                     FormFieldSpec(
                         id             = id,
@@ -144,6 +93,7 @@ class JsProvider private constructor(
                         sensitive      = obj["sensitive"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                         order          = obj["order"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
                         placeholderKey = obj["placeholderKey"]?.jsonPrimitive?.content,
+                        identity       = obj["identity"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                     )
                 }
             } catch (_: Exception) {

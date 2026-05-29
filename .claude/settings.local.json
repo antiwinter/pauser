@@ -1,10 +1,12 @@
 {
   "permissions": {
+        "additionalDirectories": [
+      "/Users/warits/src/fongmi",
+      "/Users/warits/src/tvbox"
+    ],
     "allow": [
-      "Bash(./gradlew :providers:smb:compileDebugKotlin)",
       "WebSearch",
       "Bash(./gradlew assembleDebug)",
-      "Bash(java -jar gradle/wrapper/gradle-wrapper.jar :player:assembleDebug)",
       "Bash(gradle --version)",
       "Read(//Users/warits/Library/Android/sdk/**)",
       "Read(//Users/warits/Library/Android/sdk/platform-tools/**)",

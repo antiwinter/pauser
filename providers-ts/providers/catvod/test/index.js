@@ -1,6 +1,19 @@
+import { writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { HostApis } from '../../../test/host-apis.js';
 import { QuickJsProviderRunner } from '../../../test/quickjs-runner.js';
-import { assert, assertArray, parseJsonResult } from '../../../test/validators.js';
+import {
+  assert,
+  assertArray,
+  assertUrl,
+  parseJsonResult,
+  checkMediaWithFfprobe,
+} from '../../../test/validators.js';
+import { NAError } from '../../../test/reporter.js';
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const DUMP_PATH = join(testDir, 'dump.json');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -22,7 +35,6 @@ const MOCK_DETAIL = JSON.stringify({
   }],
 });
 
-// Minimal drpy2 spider using the __jsEvalReturn factory pattern
 const DRPY_SPIDER = `var __jsEvalReturn = function() {
   return {
     init: function(ext) {},
@@ -67,15 +79,9 @@ class MockHostApis extends HostApis {
 
   async handleHttp(name, args) {
     const url = args?.url ?? '';
-    // 1. Exact match
-    if (url in this.mocks) {
-      return mockResponse(this.mocks[url], url);
-    }
-    // 2. Base-URL match (strips query string) — handles `?ac=list`, `?ac=videolist`, etc.
+    if (url in this.mocks) return mockResponse(this.mocks[url], url);
     const base = url.split('?')[0];
-    if (base in this.mocks) {
-      return mockResponse(this.mocks[base], url);
-    }
+    if (base in this.mocks) return mockResponse(this.mocks[base], url);
     return super.handleHttp(name, args);
   }
 }
@@ -85,7 +91,7 @@ function mockResponse(value, url) {
   return { status: 200, body, headers: {} };
 }
 
-// ── Runner factory ────────────────────────────────────────────────────────────
+// ── Mock runner factory ───────────────────────────────────────────────────────
 
 async function createMockRunner(bundle, bundlePath, mocks) {
   const hostApis = new MockHostApis(mocks);
@@ -117,8 +123,6 @@ function makeDrpyConfig(type) {
   });
 }
 
-// ── CMS mock handler (dispatches on ?ac=...) ──────────────────────────────────
-
 function cmsMock(url) {
   if (url.includes('ac=list'))      return MOCK_CATEGORIES;
   if (url.includes('ac=videolist')) return MOCK_VIDEOLIST;
@@ -126,12 +130,182 @@ function cmsMock(url) {
   return JSON.stringify({ error: 'unknown ac' });
 }
 
+// ── Real-data helpers ─────────────────────────────────────────────────────────
+
+async function callList(runner, location, startIndex = 0, limit = 20) {
+  const r = parseJsonResult(
+    await runner.callMethod('listEntry', { location, startIndex, limit }),
+    'listEntry',
+  );
+  return r;
+}
+
+async function callSearch(runner, query) {
+  const r = parseJsonResult(
+    await runner.callMethod('search', { scopeLocation: '', query }),
+    'search',
+  );
+  return Array.isArray(r) ? r : (r?.items ?? []);
+}
+
+// ── Real-data test suite ──────────────────────────────────────────────────────
+
+async function probeSite(runner, siteItem) {
+  const result = { id: siteItem.id, title: siteItem.title, type: siteItem.type };
+  try {
+    const l1 = await callList(runner, siteItem.id, 0, 5);
+    result.listEntry_site = l1;
+    const firstFolder = (l1?.items ?? []).find((i) => i.type === 'Folder');
+    if (firstFolder) {
+      const l2 = await callList(runner, firstFolder.id, 0, 5);
+      result.listEntry_cat = l2;
+      const firstPlayable = (l2?.items ?? []).find((i) => i.type === 'Playable');
+      if (firstPlayable) {
+        result.getDetail = parseJsonResult(
+          await runner.callMethod('getDetail', { itemRef: firstPlayable.id }),
+          'getDetail',
+        );
+        result.getPlaybackSpec = parseJsonResult(
+          await runner.callMethod('getPlaybackSpec', { itemRef: firstPlayable.id, startMs: 0 }),
+          'getPlaybackSpec',
+        );
+      }
+    }
+  } catch (e) {
+    result.error = e.message;
+  }
+  return result;
+}
+
+async function runRealSiteChecks(out, runner, ffprobe) {
+  out.beginCategory('CatVod Real Sites', ['listEntry', 'search', 'getDetail', 'getPlaybackSpec']);
+
+  const dump = { timestamp: new Date().toISOString(), sites: [], search: {} };
+
+  // 1. Root contains sites
+  let rootItems = [];
+  await out.step('real root contains sites', async () => {
+    const r = await callList(runner, null, 0, 100);
+    rootItems = r?.items ?? [];
+    assert(rootItems.length > 0, 'root returned no items');
+    return `${rootItems.length} item(s)`;
+  });
+
+  // 2. Search returns provider boundary shape
+  await out.step('real search returns provider boundary shape', async () => {
+    const queries = ['Dark', '庆余年', '海贼王'];
+    let results = null;
+    for (const q of queries) {
+      try {
+        const r = await callSearch(runner, q);
+        dump.search[q] = r;
+        if (r.length > 0 && results === null) results = r;
+      } catch (e) {
+        dump.search[q] = { error: e.message };
+      }
+    }
+    if (results === null && Object.keys(dump.search).length === 0) {
+      throw new NAError('all search queries failed');
+    }
+    const flat = results ?? [];
+    assertArray(flat, 'search result');
+    return flat.length > 0 ? `${flat.length} result(s)` : 'no results (acceptable)';
+  });
+
+  // 3. Probe every root site and dump results
+  // Reset before each site to avoid Guard JAR shared-state corruption between spiders
+  await out.step('real site probe (writes dump.json)', async () => {
+    const folders = rootItems.filter((i) => i.type === 'Folder');
+    for (const item of folders) {
+      await runner.callMethod('resetSpiders', {}).catch(() => undefined);
+      const probed = await probeSite(runner, item);
+      dump.sites.push(probed);
+    }
+    await writeFile(DUMP_PATH, JSON.stringify(dump, null, 2), 'utf8');
+    const withContent = dump.sites.filter((s) => (s.listEntry_site?.items ?? []).length > 0);
+    return `probed ${folders.length} site(s), ${withContent.length} with content → ${DUMP_PATH}`;
+  });
+
+  // 4. Find first playable from dump results (non-live sites only)
+  const LIVE_PATTERN = /直播|live|iptv/i;
+  let playableItem = null;
+  let playbackUrl = null;
+  let playbackHeaders = {};
+
+  // Collect all candidate playable items across non-live sites
+  const candidates = [];
+  for (const s of dump.sites) {
+    if (LIVE_PATTERN.test(s.title ?? '')) continue;
+    for (const i of (s.listEntry_cat?.items ?? [])) {
+      if (i.type === 'Playable') candidates.push(i);
+    }
+  }
+  // Also add search results as fallback
+  for (const items of Object.values(dump.search)) {
+    if (Array.isArray(items)) for (const i of items) candidates.push(i);
+  }
+
+  await out.step('real detail returns detail shape', async () => {
+    if (candidates.length === 0) throw new NAError('no playable item found in any site or search');
+
+    await runner.callMethod('resetSpiders', {}).catch(() => undefined);
+
+    for (const candidate of candidates) {
+      const detail = parseJsonResult(
+        await runner.callMethod('getDetail', { itemRef: candidate.id }),
+        'getDetail',
+      );
+      if (detail != null && typeof detail === 'object' && typeof detail.title === 'string' && detail.title.length > 0) {
+        playableItem = candidate;
+        return `title="${detail.title}"`;
+      }
+    }
+    throw new NAError('no candidate returned a non-empty title from getDetail');
+  });
+
+  // 5. getPlaybackSpec returns a URL
+  await out.step('real playback returns playable URL', async () => {
+    if (candidates.length === 0) throw new NAError('no playable item found');
+
+    await runner.callMethod('resetSpiders', {}).catch(() => undefined);
+
+    for (const candidate of candidates) {
+      let spec;
+      try {
+        spec = parseJsonResult(
+          await runner.callMethod('getPlaybackSpec', { itemRef: candidate.id, startMs: 0 }),
+          'getPlaybackSpec',
+        );
+      } catch (_) {
+        continue;
+      }
+      if (spec == null || typeof spec !== 'object' || !spec.url) continue;
+      try { assertUrl(spec.url, 'playbackSpec.url'); } catch (_) { continue; }
+      playableItem = candidate;
+      playbackUrl = spec.url;
+      playbackHeaders = spec.headers ?? {};
+      return `url="${playbackUrl}"`;
+    }
+    throw new NAError('no candidate returned a playable URL from getPlaybackSpec');
+  });
+
+  // 6. ffprobe validates the stream
+  await out.step('real playback passes ffprobe', async () => {
+    if (!ffprobe) throw new NAError('ffprobe disabled');
+    if (!playbackUrl) throw new NAError('no playback URL from previous step');
+    await checkMediaWithFfprobe(playbackUrl, playbackHeaders, { expectVideo: true });
+    return 'streams ok';
+  });
+
+  out.endCategory();
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function runProviderChecks(out, { bundle, bundlePath }) {
-  out.beginCategory('CatVod Site Types', ['listEntry', 'search', 'getDetail', 'getPlaybackSpec']);
+export async function runProviderChecks(out, { bundle, bundlePath, runner, ffprobe }) {
+  // ── Mock qualification tests ──────────────────────────────────────────────
 
-  // ── CMS: types 0, 1, 2 ───────────────────────────────────────────────────
+  out.beginCategory('CatVod Mock Site Types', ['listEntry', 'search', 'getDetail', 'getPlaybackSpec']);
 
   for (const type of [0, 1, 2]) {
     const mocks = {
@@ -139,13 +313,13 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
       [CMS_API]: cmsMock,
     };
 
-    let runner;
+    let mockRunner;
     try {
-      runner = await createMockRunner(bundle, bundlePath, mocks);
+      mockRunner = await createMockRunner(bundle, bundlePath, mocks);
 
       await out.step(`type ${type}: listEntry(root) returns site folder`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('listEntry', { location: null, startIndex: 0, limit: 20 }),
+          await mockRunner.callMethod('listEntry', { location: null, startIndex: 0, limit: 20 }),
           'listEntry root',
         );
         assert(r.items?.length === 1, 'expected 1 site');
@@ -157,7 +331,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: listEntry(site) returns categories`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('listEntry', { location: siteRef, startIndex: 0, limit: 20 }),
+          await mockRunner.callMethod('listEntry', { location: siteRef, startIndex: 0, limit: 20 }),
           'listEntry site',
         );
         assert(r.items?.length >= 1, 'expected at least 1 category');
@@ -169,7 +343,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: listEntry(cat) returns video items`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('listEntry', { location: catRef, startIndex: 0, limit: 20 }),
+          await mockRunner.callMethod('listEntry', { location: catRef, startIndex: 0, limit: 20 }),
           'listEntry cat',
         );
         assert(r.items?.length >= 1, 'expected at least 1 item');
@@ -179,7 +353,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: search returns results`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('search', { scopeLocation: '', query: 'test' }),
+          await mockRunner.callMethod('search', { scopeLocation: '', query: 'test' }),
           'search',
         );
         assertArray(r, 'search result');
@@ -191,7 +365,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: getDetail returns valid detail`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('getDetail', { itemRef: vodRef }),
+          await mockRunner.callMethod('getDetail', { itemRef: vodRef }),
           'getDetail',
         );
         assert(typeof r.title === 'string' && r.title.length > 0, 'expected non-empty title');
@@ -202,7 +376,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: getPlaybackSpec returns URL`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('getPlaybackSpec', { itemRef: epRef, startMs: 0 }),
+          await mockRunner.callMethod('getPlaybackSpec', { itemRef: epRef, startMs: 0 }),
           'getPlaybackSpec',
         );
         assert(typeof r.url === 'string' && r.url.length > 0, 'expected non-empty url');
@@ -210,11 +384,9 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
       });
 
     } finally {
-      runner?.dispose();
+      mockRunner?.dispose();
     }
   }
-
-  // ── drpy2: types 4, 9, 10 ────────────────────────────────────────────────
 
   for (const type of [4, 9, 10]) {
     const mocks = {
@@ -222,15 +394,15 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
       [SPIDER_URL]: DRPY_SPIDER,
     };
 
-    let runner;
+    let mockRunner;
     try {
-      runner = await createMockRunner(bundle, bundlePath, mocks);
+      mockRunner = await createMockRunner(bundle, bundlePath, mocks);
 
       const siteRef = JSON.stringify({ type: 'site', key: 'test_drpy' });
 
       await out.step(`type ${type}: listEntry(site) returns categories`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('listEntry', { location: siteRef, startIndex: 0, limit: 20 }),
+          await mockRunner.callMethod('listEntry', { location: siteRef, startIndex: 0, limit: 20 }),
           'listEntry site',
         );
         assert(r.items?.length >= 1, 'expected at least 1 category');
@@ -242,7 +414,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: listEntry(cat) returns video items`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('listEntry', { location: catRef, startIndex: 0, limit: 20 }),
+          await mockRunner.callMethod('listEntry', { location: catRef, startIndex: 0, limit: 20 }),
           'listEntry cat',
         );
         assert(r.items?.length >= 1, 'expected at least 1 item');
@@ -252,7 +424,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: search returns results`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('search', { scopeLocation: '', query: 'test' }),
+          await mockRunner.callMethod('search', { scopeLocation: '', query: 'test' }),
           'search',
         );
         assertArray(r, 'search result');
@@ -264,7 +436,7 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
 
       await out.step(`type ${type}: getDetail returns valid detail`, async () => {
         const r = parseJsonResult(
-          await runner.callMethod('getDetail', { itemRef: vodRef }),
+          await mockRunner.callMethod('getDetail', { itemRef: vodRef }),
           'getDetail',
         );
         assert(typeof r.title === 'string' && r.title.length > 0, 'expected non-empty title');
@@ -272,9 +444,15 @@ export async function runProviderChecks(out, { bundle, bundlePath }) {
       });
 
     } finally {
-      runner?.dispose();
+      mockRunner?.dispose();
     }
   }
 
   out.endCategory();
+
+  // ── Real-data probes ──────────────────────────────────────────────────────
+
+  if (runner) {
+    await runRealSiteChecks(out, runner, ffprobe);
+  }
 }

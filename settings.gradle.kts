@@ -20,6 +20,7 @@ dependencyResolutionManagement {
 rootProject.name = "OpenTune"
 include(":app")
 include(":core:form")
+include(":core:form:contract")
 include(":content:contract")
 include(":content:providers:emby")
 include(":content:providers:smb")

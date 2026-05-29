@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.security.MessageDigest
 
 object EndpointConfigRepository {
 
@@ -20,11 +21,52 @@ object EndpointConfigRepository {
     private fun encodeFields(fields: Map<String, String>): String =
         json.encodeToString(stringMapSerializer, fields)
 
+    // Hash only identity fields to produce a stable endpointId.
+    // Non-identity fields (name, password) can change without creating a new endpoint.
+    private fun computeHash(fields: Map<String, String>, identityKeys: Set<String>): String {
+        val input = fields.entries
+            .filter { it.key in identityKeys }
+            .sortedBy { it.key }
+            .joinToString { "${it.key}=${it.value}" }
+        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { b -> "%02x".format(b) }
+    }
+
+    // Resolve display name: user input > suggested by provider > URL fallback.
+    private fun resolveDisplayName(userInput: Map<String, String>, suggestedFields: Map<String, String>): String {
+        // 1. User explicitly entered a name
+        userInput["name"]?.takeIf { it.isNotBlank() }?.let { return it }
+        // 2. Provider suggested a name
+        suggestedFields["name"]?.takeIf { it.isNotBlank() }?.let { return it }
+        // 3. Fallback to a URL-ish field
+        for (key in listOf("url", "host", "server", "endpoint", "config_url", "api_url", "base_url")) {
+            suggestedFields[key]?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return ""
+    }
+
+    // Merge user input with provider-suggested fields.
+    // User values always win. Provider adds derived fields (e.g. user_id, access_token).
+    private fun mergeFields(userInput: Map<String, String>, suggestedFields: Map<String, String>): Map<String, String> {
+        return buildMap {
+            putAll(suggestedFields)
+            putAll(userInput)
+        }
+    }
+
     private suspend fun buildClient(protocol: String, values: Map<String, String>, proxyId: String?): EndpointClient {
         val provider   = OpenTuneProviderRegistryHolder.get().provider(protocol)
         val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
         return provider.createClient(values, OpenTuneProviderRegistryHolder.get().platformCapabilities)
             .also { it.httpClient = httpClient }
+    }
+
+    private fun identityKeys(protocol: String): Set<String> {
+        return OpenTuneProviderRegistryHolder.get().provider(protocol)
+            .getFieldsSpec()
+            .filter { it.identity }
+            .map { it.id }
+            .toSet()
     }
 
     suspend fun loadAddDraft(protocol: String): Map<String, String> =
@@ -47,13 +89,16 @@ object EndpointConfigRepository {
         when (val result = client.test()) {
             is EndpointValidationResult.Error -> SubmitResult.Error(result.message)
             is EndpointValidationResult.Success -> {
-                val endpointId = "${protocol}_${result.hash}"
+                val mergedFields = mergeFields(values, result.fields)
+                val displayName = resolveDisplayName(values, result.fields)
+                val hash = computeHash(mergedFields, identityKeys(protocol))
+                val endpointId = "${protocol}_${hash}"
                 val now = System.currentTimeMillis()
                 val entity = EndpointEntity(
                     endpointId = endpointId,
                     protocol = protocol,
-                    displayName = result.name,
-                    fieldsJson = encodeFields(result.fields),
+                    displayName = displayName,
+                    fieldsJson = encodeFields(mergedFields),
                     proxyId = proxyId,
                     createdAtEpochMs = now,
                     updatedAtEpochMs = now,
@@ -97,14 +142,17 @@ object EndpointConfigRepository {
         when (val result = client.test()) {
             is EndpointValidationResult.Error -> SubmitResult.Error(result.message)
             is EndpointValidationResult.Success -> {
-                val newEndpointId = "${protocol}_${result.hash}"
+                val mergedFields = mergeFields(values, result.fields)
+                val displayName = resolveDisplayName(values, result.fields)
+                val hash = computeHash(mergedFields, identityKeys(protocol))
+                val newEndpointId = "${protocol}_${hash}"
                 val now = System.currentTimeMillis()
                 if (newEndpointId == endpointId) {
                     val existing = StorageBindingsHolder.get().endpointDao.getByEndpointId(endpointId)
                         ?: return@withContext SubmitResult.Error("Endpoint not found")
                     val updated = existing.copy(
-                        displayName = result.name,
-                        fieldsJson = encodeFields(result.fields),
+                        displayName = displayName,
+                        fieldsJson = encodeFields(mergedFields),
                         proxyId = proxyId,
                         updatedAtEpochMs = now,
                     )
@@ -114,8 +162,8 @@ object EndpointConfigRepository {
                     val newEntity = EndpointEntity(
                         endpointId = newEndpointId,
                         protocol = protocol,
-                        displayName = result.name,
-                        fieldsJson = encodeFields(result.fields),
+                        displayName = displayName,
+                        fieldsJson = encodeFields(mergedFields),
                         proxyId = proxyId,
                         createdAtEpochMs = now,
                         updatedAtEpochMs = now,

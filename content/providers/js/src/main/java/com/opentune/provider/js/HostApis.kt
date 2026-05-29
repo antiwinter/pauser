@@ -15,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.IDN
 import java.security.MessageDigest
 
 /**
@@ -51,8 +52,9 @@ class HostApis {
         bodyStr: String?,
         client: OkHttpClient,
     ): String {
-        val url  = args["url"]?.jsonPrimitive?.content ?: error("http.$method: missing url")
-        val hdrs = args["headers"]?.jsonObject ?: JsonObject(emptyMap())
+        val rawUrl = args["url"]?.jsonPrimitive?.content ?: error("http.$method: missing url")
+        val url    = encodeIdnUrl(rawUrl)
+        val hdrs   = args["headers"]?.jsonObject ?: JsonObject(emptyMap())
 
         val requestBuilder = Request.Builder().url(url)
         hdrs.forEach { (k, v) -> requestBuilder.header(k, v.jsonPrimitive.content) }
@@ -115,7 +117,8 @@ class HostApis {
     // ── jar ────────────────────────────────────────────────────────────────
 
     fun handleJar(name: String, argsJson: String, jarLoader: JarLoader): String? {
-        val args = json.parseToJsonElement(argsJson).jsonObject
+        val parsed = json.parseToJsonElement(argsJson)
+        val args = if (parsed is JsonNull) JsonObject(emptyMap()) else parsed.jsonObject
         return when (name) {
             "load" -> {
                 val url = args["url"]!!.jsonPrimitive.content
@@ -123,16 +126,35 @@ class HostApis {
                 jarLoader.load(url, md5)
                 "true"
             }
+            "loadAsset" -> {
+                val name = args["name"]!!.jsonPrimitive.content
+                jarLoader.loadAsset(name)
+                "true"
+            }
+            "boot" -> {
+                val url            = args["url"]!!.jsonPrimitive.content
+                val initClass      = args["initClass"]!!.jsonPrimitive.content
+                val dexNativeClass = args["dexNativeClass"]!!.jsonPrimitive.content
+                val initOriginClass = args["initOriginClass"]!!.jsonPrimitive.content
+                jarLoader.boot(url, initClass, dexNativeClass, initOriginClass)
+                "true"
+            }
             "reflect" -> {
-                val url      = args["url"]!!.jsonPrimitive.content
-                val cls      = args["cls"]!!.jsonPrimitive.content
-                val method   = args["method"]!!.jsonPrimitive.content
-                val instance = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                val rawArgs  = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
-                jarLoader.reflect(url, cls, method, instance, rawArgs)
+                val url           = args["url"]!!.jsonPrimitive.content
+                val cls           = args["cls"]!!.jsonPrimitive.content
+                val method        = args["method"]!!.jsonPrimitive.content
+                val instance      = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                val rawArgs       = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
+                val factoryCls    = args["factoryCls"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                val factoryMethod = args["factoryMethod"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                jarLoader.reflect(url, cls, method, instance, rawArgs, factoryCls, factoryMethod)
             }
             "clear" -> {
                 jarLoader.clear()
+                "true"
+            }
+            "clearInstances" -> {
+                jarLoader.clearInstances()
                 "true"
             }
             else -> throw IllegalArgumentException("Unknown jar method: $name")
@@ -140,3 +162,13 @@ class HostApis {
     }
 }
 
+private fun encodeIdnUrl(url: String): String = try {
+    // URI constructor rejects non-ASCII hostnames — use URL + regex to extract and encode the host
+    val match = Regex("^(https?://)([^/?#:]+)((?::\\d+)?(?:[/?#].*)?)$", RegexOption.IGNORE_CASE)
+        .matchEntire(url) ?: return url
+    val scheme = match.groupValues[1]
+    val host   = match.groupValues[2]
+    val rest   = match.groupValues[3]
+    val encoded = IDN.toASCII(host, IDN.ALLOW_UNASSIGNED)
+    if (encoded == host) url else "$scheme$encoded$rest"
+} catch (_: Exception) { url }

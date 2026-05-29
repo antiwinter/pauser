@@ -1,6 +1,7 @@
 import { getFieldsSpec, validateFields } from './provider.js';
-import { fetchConfig } from './config.js';
+import { fetchConfig, parseSpiderField } from './config.js';
 import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
+import { resetSpiders } from './handlers/jar.js';
 import type { CatVodState } from './instance.js';
 import type {
   ProviderFieldSpec,
@@ -63,4 +64,9 @@ let state: CatVodState | null = null;
   async onPlaybackReady(): Promise<void> {},
   async onProgressTick(): Promise<void> {},
   async onStop():         Promise<void> {},
+
+  async resetSpiders(): Promise<void> {
+    const jar = state ? parseSpiderField(state.config.spider) : undefined;
+    await resetSpiders(jar?.url, jar?.md5);
+  },
 };

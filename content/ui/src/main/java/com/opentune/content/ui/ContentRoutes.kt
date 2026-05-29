@@ -15,8 +15,8 @@ import com.opentune.content.ui.catalog.SearchRoute
 import com.opentune.content.ui.catalog.SettingsScreen
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
-import com.opentune.content.contract.FormFieldKind
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.core.form.contract.FormFieldKind
 import com.opentune.content.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute
@@ -59,6 +59,9 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
                 qrClientRef[0]?.pollQr(token) ?: QrResult.Error("no client")
             } else null,
             onDone = { nav.popBackStack() },
+            onDelete = if (!isAdd) {
+                { EndpointConfigRepository.removeEndpoint(endpointId) }
+            } else null,
         )
     }
     composable(

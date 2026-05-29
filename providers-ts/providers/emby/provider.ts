@@ -10,9 +10,10 @@ import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
 
 export function getFieldsSpec(): ProviderFieldSpec[] {
   return [
-    { id: 'base_url',  labelKey: 'emby.field.base_url',  kind: 'singleLine', required: true,  order: 0 },
-    { id: 'username',  labelKey: 'emby.field.username',  kind: 'singleLine', required: true,  order: 1 },
+    { id: 'base_url',  labelKey: 'emby.field.base_url',  kind: 'singleLine', required: true,  identity: true,  order: 0 },
+    { id: 'username',  labelKey: 'emby.field.username',  kind: 'singleLine', required: true,  identity: true,  order: 1 },
     { id: 'password',  labelKey: 'emby.field.password',  kind: 'password',   required: false, sensitive: true, order: 2 },
+    { id: 'name',      labelKey: 'fld_endpoint_name',    kind: 'singleLine', required: false, order: 100 },
   ];
 }
 
@@ -32,8 +33,6 @@ export async function validateFields(values: Record<string, string>): Promise<Va
     const api = new EmbyApi(baseUrl, token, userId);
     const info = await api.getSystemInfo();
 
-    const hashInput = `${baseUrl}${userId}`;
-    const hash = await host.crypto.sha256({ input: hashInput });
     const name = info.ServerName ?? baseUrl;
 
     const fields: Record<string, string> = {
@@ -41,9 +40,10 @@ export async function validateFields(values: Record<string, string>): Promise<Va
       user_id:      userId,
       access_token: token,
       server_id:    info.Id ?? '',
+      name,
     };
 
-    return { success: true, hash, name, fields };
+    return { success: true, fields };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, error: msg };

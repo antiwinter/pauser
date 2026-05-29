@@ -59,13 +59,12 @@ class EmbyProviderInstance(
         runCatching {
             val info = repo.systemInfo()
             EndpointValidationResult.Success(
-                hash = EmbyProvider.sha256("${fields.baseUrl}${fields.userId}"),
-                name = info.serverName ?: fields.baseUrl,
                 fields = mapOf(
                     "base_url" to fields.baseUrl,
                     "user_id" to fields.userId,
                     "access_token" to fields.accessToken,
                     "server_id" to (fields.serverId ?: ""),
+                    "name" to (info.serverName ?: fields.baseUrl),
                 ),
             )
         }.getOrElse { EndpointValidationResult.Error(it.message ?: "Emby connection failed") }

@@ -33,14 +33,19 @@ export interface HostAPI {
   };
   jar: {
     load(args: { url: string; md5?: string }): Promise<void>;
+    loadAsset(args: { name: string }): Promise<void>;
+    boot(args: { url: string; initClass: string; dexNativeClass: string; initOriginClass: string }): Promise<void>;
     reflect(args: {
       url: string;
       cls: string;
       method: string;
       instance?: string;
       args?: unknown[];
+      factoryCls?: string;
+      factoryMethod?: string;
     }): Promise<string>;
     clear(args?: null): Promise<void>;
+    clearInstances(args?: null): Promise<void>;
   };
 }
 
@@ -69,10 +74,11 @@ export interface ProviderFieldSpec {
   sensitive?: boolean;
   order?: number;
   placeholderKey?: string;
+  identity?: boolean;
 }
 
 export type ValidationResult =
-  | { success: true; hash: string; name: string; fields: Record<string, string> }
+  | { success: true; fields: Record<string, string> }
   | { success: false; error: string };
 
 export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other' | 'Digipak' | 'Image';

@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -70,8 +71,18 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     )
                     return@post
                 }
-                val result = runCatching { provider.validateFields(body.fields) }.getOrElse {
-                    Log.e(LOG_TAG, "validateFields failed", it)
+                val client = runCatching {
+                    provider.createClient(body.fields, ctx.platformCapabilities())
+                }.getOrElse {
+                    call.respondText(
+                        json.encodeToString(AddServerResponse(error = it.message ?: "failed to create client")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.BadRequest,
+                    )
+                    return@post
+                }
+                val result = runCatching { client.test() }.getOrElse {
+                    Log.e(LOG_TAG, "client.test failed", it)
                     com.opentune.content.contract.EndpointValidationResult.Error(it.message ?: "validation failed")
                 }
                 when (result) {
@@ -83,12 +94,18 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                         )
                     }
                     is com.opentune.content.contract.EndpointValidationResult.Success -> {
-                        val endpointId = "${body.protocol}_${result.hash}"
+                        val identityKeys = provider.getFieldsSpec()
+                            .filter { it.identity }
+                            .map { it.id }
+                            .toSet()
+                        val hash = computeEndpointHash(result.fields, identityKeys)
+                        val endpointId = "${body.protocol}_${hash}"
+                        val displayName = result.fields["name"] ?: body.fields["url"] ?: body.fields["host"] ?: body.fields["base_url"] ?: body.protocol
                         val now = System.currentTimeMillis()
                         val entity = EndpointEntity(
                             endpointId = endpointId,
                             protocol = body.protocol,
-                            displayName = result.name,
+                            displayName = displayName,
                             fieldsJson = Json.encodeToString(result.fields),
                             createdAtEpochMs = now,
                             updatedAtEpochMs = now,
@@ -97,14 +114,19 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                             Log.w(LOG_TAG, "insert failed (may already exist): ${it.message}")
                         }
                         ctx.registerClient(endpointId, entity)
-                        Log.i(LOG_TAG, "added server $endpointId (${result.name})")
+                        Log.i(LOG_TAG, "added server $endpointId ($displayName)")
                         call.respondText(
-                            json.encodeToString(AddServerResponse(endpointId = endpointId, displayName = result.name)),
+                            json.encodeToString(AddServerResponse(endpointId = endpointId, displayName = displayName)),
                             ContentType.Application.Json,
                             HttpStatusCode.Created,
                         )
                     }
                 }
+            }
+            delete("/{endpointId}") {
+                val endpointId = call.parameters["endpointId"] ?: return@delete call.respond400("missing endpointId")
+                ctx.endpointDao.deleteByEndpointId(endpointId)
+                call.respondText("{}", ContentType.Application.Json)
             }
         }
 
@@ -226,6 +248,24 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 
         // --- Debug routes for media state ---
         route("/debug") {
+            // JAR bridge — proxies host.jar.* calls from the Node test harness via adb forward
+            post("/jar") {
+                val body = runCatching { json.decodeFromString<JarRequest>(call.receiveText()) }.getOrNull()
+                if (body == null) {
+                    call.respond400("invalid request body"); return@post
+                }
+                val result = runCatching { ctx.jarBridge.dispatch(body.name, body.args) }.getOrElse {
+                    Log.e(LOG_TAG, "jar.${body.name} error", it)
+                    call.respondText(
+                        json.encodeToString(JarResponse(error = it.message ?: "jar error")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.InternalServerError,
+                    )
+                    return@post
+                }
+                call.respondText(json.encodeToString(JarResponse(result = result)), ContentType.Application.Json)
+            }
+
             route("/subtitle-prefs") {
                 get {
                     val prefs = ctx.appConfigStore.loadSubtitlePrefs()
@@ -244,8 +284,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 }
             }
 
-            route("/media-state") {
-                get {
+            route("/media-state") {                get {
                     val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
                     val endpointId = call.request.queryParameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                     val all = ctx.entryStateStore.observeForEndpoint(protocol, endpointId).first()
@@ -298,6 +337,15 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 }
 
 // --- helpers ---
+
+private fun computeEndpointHash(fields: Map<String, String>, identityKeys: Set<String>): String {
+    val input = fields.entries
+        .filter { it.key in identityKeys }
+        .sortedBy { it.key }
+        .joinToString { "${it.key}=${it.value}" }
+    val digest = java.security.MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    return digest.joinToString("") { b -> "%02x".format(b) }
+}
 
 private suspend fun io.ktor.server.application.ApplicationCall.respond400(msg: String) {
     respondText(json.encodeToString(ErrorResponse(msg)), ContentType.Application.Json, HttpStatusCode.BadRequest)

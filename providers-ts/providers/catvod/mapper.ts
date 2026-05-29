@@ -1,10 +1,13 @@
 import type { EntryInfo, EntryDetail, ExternalUrl } from '../../utils/types.js';
 
 export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
+  const vodId = String(item.vod_id);
+  // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
+  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Playable';
   return {
-    id: JSON.stringify({ type: 'vod', key: siteKey, id: String(item.vod_id) }),
-    title: item.vod_name ?? String(item.vod_id),
-    type: 'Playable',
+    id: JSON.stringify({ type: 'vod', key: siteKey, id: vodId }),
+    title: item.vod_name ?? vodId,
+    type,
     cover: item.vod_pic ?? null,
     overview: item.vod_blurb ?? item.vod_content ?? null,
     communityRating: item.vod_score ? parseFloat(item.vod_score) : null,

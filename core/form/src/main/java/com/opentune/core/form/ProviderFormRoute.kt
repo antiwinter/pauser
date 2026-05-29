@@ -32,8 +32,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.opentune.content.contract.FormFieldKind
-import com.opentune.content.contract.FormFieldSpec
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.content.contract.QrResult
 import com.opentune.content.contract.QrStatus
 import com.opentune.storage.ProxyEntity
@@ -69,6 +69,7 @@ fun ProviderFormRoute(
     onGetQr: (suspend (proxyId: String?) -> QrResult.QrReady?)? = null,
     onPollQr: (suspend (token: String) -> QrResult)? = null,
     onDone: () -> Unit,
+    onDelete: (suspend () -> Unit)? = null,
 ) {
     val sortedFields    = remember(fields) { fields.sortedBy { it.order } }
     val nonQrFields     = remember(sortedFields) { sortedFields.filter { it.kind != FormFieldKind.QrCode && it.kind != FormFieldKind.ProxySelector } }
@@ -218,6 +219,22 @@ fun ProviderFormRoute(
                 }
             }
             Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.form_action_cancel)) }
+            if (onDelete != null) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            isLoading = true
+                            try {
+                                withContext(Dispatchers.IO) { onDelete() }
+                                onDone()
+                            } finally {
+                                isLoading = false
+                            }
+                        }
+                    },
+                    enabled = !isLoading,
+                ) { Text(stringResource(R.string.form_action_delete)) }
+            }
         }
 
         Column(

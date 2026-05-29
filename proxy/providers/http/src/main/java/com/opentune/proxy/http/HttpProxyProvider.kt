@@ -1,7 +1,7 @@
 package com.opentune.proxy.http
 
-import com.opentune.content.contract.FormFieldKind
-import com.opentune.content.contract.FormFieldSpec
+import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.proxy.contract.ProxyProvider
 import com.opentune.proxy.contract.ProxyValidationResult
 import kotlinx.coroutines.Dispatchers

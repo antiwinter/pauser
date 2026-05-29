@@ -1,4 +1,4 @@
-package com.opentune.content.contract
+package com.opentune.core.form.contract
 
 enum class FormFieldKind {
     Text,
@@ -17,4 +17,5 @@ data class FormFieldSpec(
     val order: Int = 0,
     val placeholderKey: String? = null,
     val defaultValue: String? = null,
+    val identity: Boolean = false,
 )

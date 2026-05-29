@@ -12,6 +12,7 @@ import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.PlaybackSpec
 import com.opentune.content.contract.StreamInfo
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.OkHttpClient
 
 /**
  * Live provider instance backed by a dedicated QuickJS context.
@@ -49,7 +51,45 @@ class JsProviderInstance(
     private var initialized = false
     private val initMutex = Mutex()
 
+    // ── Validation ─────────────────────────────────────────────────────────
+
+    override suspend fun test(): EndpointValidationResult {
+        val argsJson = buildJsonObject {
+            put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
+        }.toString()
+        return try {
+            val resultJson = withEngine(httpClient) { engine ->
+                engine.callMethod("validateFields", argsJson)
+            } ?: return EndpointValidationResult.Error("Validation returned null")
+
+            val obj = json.parseToJsonElement(resultJson).jsonObject
+            val success = obj["success"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+            if (success) {
+                val fieldsEl = obj["fields"] ?: return EndpointValidationResult.Error("Missing fields in validation response")
+                val fieldsObj = fieldsEl.jsonObject
+                val fields = fieldsObj.mapValues { (_, v) -> v.jsonPrimitive.content }
+                EndpointValidationResult.Success(fields = fields)
+            } else {
+                EndpointValidationResult.Error(obj["error"]?.jsonPrimitive?.content ?: "Validation failed")
+            }
+        } catch (e: Exception) {
+            EndpointValidationResult.Error(e.message ?: "JS validation error")
+        }
+    }
+
     // ── Lifecycle ──────────────────────────────────────────────────────────
+
+    private suspend fun <T> withEngine(httpClient: OkHttpClient, block: suspend (QuickJsEngine) -> T): T {
+        val engine = QuickJsEngine(hostApis, httpClient)
+        return try {
+            engine.init()
+            engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
+            engine.evalBundle(jsBundle)
+            block(engine)
+        } finally {
+            engine.close()
+        }
+    }
 
     private suspend fun ensureReady() {
         if (initialized) return

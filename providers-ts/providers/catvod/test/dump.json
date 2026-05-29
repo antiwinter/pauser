@@ -1,0 +1,812 @@
+{
+  "timestamp": "2026-05-27T09:17:33.312Z",
+  "sites": [
+    {
+      "id": "{\"type\":\"site\",\"key\":\"点我切源\"}",
+      "title": "嘟嘟盘容量，到【太太太硬了】领取",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"点我切源\",\"tid\":\"hot_gaia\"}",
+            "title": "热播电影",
+            "type": "Folder",
+            "cover": null
+          },
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"点我切源\",\"tid\":\"tv_hot\"}",
+            "title": "热播剧集",
+            "type": "Folder",
+            "cover": null
+          },
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"点我切源\",\"tid\":\"show_hot\"}",
+            "title": "热播综艺",
+            "type": "Folder",
+            "cover": null
+          },
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"点我切源\",\"tid\":\"movie\"}",
+            "title": "电影筛选",
+            "type": "Folder",
+            "cover": null
+          },
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"点我切源\",\"tid\":\"tv\"}",
+            "title": "电视筛选",
+            "type": "Folder",
+            "cover": null
+          }
+        ],
+        "totalCount": 7
+      },
+      "listEntry_cat": {
+        "items": [
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###木乃伊###https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2930019594.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "木乃伊",
+            "type": "Folder",
+            "cover": "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2930019594.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###黑煞女2###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2929630818.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "黑煞女2",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2929630818.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###女士优先###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2932533733.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "女士优先",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2932533733.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###我，许可###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2932103692.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "我，许可",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2932103692.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"-1001\"}",
+            "title": "臻彩",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://img.xxooo.cf/portrait/webp/20260518_151236_1430.webp",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###爱情抓马###https://img2.doubanio.com/view/photo/s_ratio_poster/public/p2929524191.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "爱情抓马",
+            "type": "Folder",
+            "cover": "https://img2.doubanio.com/view/photo/s_ratio_poster/public/p2929524191.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###惊蛰无声###https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2929759786.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "惊蛰无声",
+            "type": "Folder",
+            "cover": "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2929759786.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###蜂蜜的针###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2930744969.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "蜂蜜的针",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2930744969.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###杀的就是你###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2928787017.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "杀的就是你",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2928787017.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###惩罚者：最后一击###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2932377929.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "惩罚者：最后一击",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2932377929.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###蒙特利尔，我的美人###https://img2.doubanio.com/view/photo/s_ratio_poster/public/p2926397741.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "蒙特利尔，我的美人",
+            "type": "Folder",
+            "cover": "https://img2.doubanio.com/view/photo/s_ratio_poster/public/p2926397741.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###长夜将尽###https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2931205054.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "长夜将尽",
+            "type": "Folder",
+            "cover": "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2931205054.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###幸运有八只触手###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931434593.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "幸运有八只触手",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931434593.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###挽救计划###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931370692.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "挽救计划",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931370692.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###与王生活的男人###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2928835899.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "与王生活的男人",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2928835899.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###家弑服务###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2932673659.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "家弑服务",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2932673659.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###平场之月###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2923847559.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "平场之月",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2923847559.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###万事顺利###https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2927082318.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "万事顺利",
+            "type": "Folder",
+            "cover": "https://img1.doubanio.com/view/photo/s_ratio_poster/public/p2927082318.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###抖擞###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931629972.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "抖擞",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2931629972.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"点我切源\",\"id\":\"msearch:###准备好了没2：我来了###https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2929654337.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36\"}",
+            "title": "准备好了没2：我来了",
+            "type": "Folder",
+            "cover": "https://img3.doubanio.com/view/photo/s_ratio_poster/public/p2929654337.jpg@Referer=https://api.douban.com/@User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          }
+        ],
+        "totalCount": 0
+      },
+      "getDetail": {
+        "title": "-1001",
+        "overview": null,
+        "logo": null,
+        "backdrop": [],
+        "isMedia": true,
+        "rating": null,
+        "bitrate": null,
+        "externalUrls": [],
+        "year": null,
+        "providerIds": {},
+        "streams": [],
+        "etag": null
+      },
+      "error": "No episodes found"
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"MDrive\"}",
+      "title": "🗂我的云盘┃我配置",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [
+          {
+            "id": "{\"type\":\"cat\",\"key\":\"MDrive\",\"tid\":\"peizhi\"}",
+            "title": "云盘配置",
+            "type": "Folder",
+            "cover": null
+          }
+        ],
+        "totalCount": 1
+      },
+      "listEntry_cat": {
+        "items": [
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"0000\"}",
+            "title": "登入自己网盘",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2026/03/01/117e54d7f3ba91b973ab1274748c2f57.md.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"3333\"}",
+            "title": "清除优汐Cookie",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/07/5d3d43e560084456b1ebc5af8a32ffb6.png",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"2222\"}",
+            "title": "清除夸父Cookie",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/06/df3fb4d7009383d3a95cef6698c89200.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"bddd\"}",
+            "title": "清除百度Cookie",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2026/04/07/a842d9000384ac0bbf45f55deb344a9e.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"1111\"}",
+            "title": "清除阿狸token",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/06/31d8ff073e44d6693fbbcfbe69d0a703.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"4444\"}",
+            "title": "自定网盘排序",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/06/336a2501e2345ced15d2cdf81cd6ef8a.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"5555\"}",
+            "title": "原画智能线路排序",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/11/8d6c9f03893a5e85ef6f34866a1b9a28.jpg",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          },
+          {
+            "id": "{\"type\":\"vod\",\"key\":\"MDrive\",\"id\":\"6666\"}",
+            "title": "手动推送网盘授权",
+            "type": "Playable",
+            "cover": "https://img07.sogoucdn.com/v2/thumb/retype_exclude_gif/ext/auto/q/95/crop/xy/ai/t/0/?appid=122&url=https://s1.imagehub.cc/images/2024/11/06/b77054b37631cbb9ca110bd52e23554e.png",
+            "overview": null,
+            "communityRating": null,
+            "genres": null
+          }
+        ],
+        "totalCount": 1
+      },
+      "getDetail": {
+        "title": "0000",
+        "overview": null,
+        "logo": null,
+        "backdrop": [],
+        "isMedia": true,
+        "rating": null,
+        "bitrate": null,
+        "externalUrls": [],
+        "year": null,
+        "providerIds": {},
+        "streams": [],
+        "etag": null
+      },
+      "error": "No episodes found"
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"玩偶\"}",
+      "title": "👽玩偶哥哥┃4K弹幕",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"YGP\"}",
+      "title": "🚀叨观荐影┃预告片",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"MTV1\"}",
+      "title": "🎙️易听音乐┃带歌词",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"seed\"}",
+      "title": "💡聚剧剧┃四盘",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"ZPan\"}",
+      "title": "🎈聚盘搜┃四盘",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"光影\"}",
+      "title": "🌞光影┃不卡",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"立播\"}",
+      "title": "🌟立播┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"厂长\"}",
+      "title": "📔厂长┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"文采\"}",
+      "title": "💮文采┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"原创\"}",
+      "title": "☀原创┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"比特\"}",
+      "title": "🍄比特┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"糯米\"}",
+      "title": "🍓糯米┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"奶酪\"}",
+      "title": "🧀奶酪┃秒播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"热播\"}",
+      "title": "📺热播┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"剧圈\"}",
+      "title": "🐻剧圈┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"视界\"}",
+      "title": "🍙视界┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"花花\"}",
+      "title": "🥝花花┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"播客\"}",
+      "title": "🦊播客┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"爱影\"}",
+      "title": "👀爱影┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"猫猫\"}",
+      "title": "🐟猫猫┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"奥特\"}",
+      "title": "🏝奥特┃多线",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"荐片\"}",
+      "title": "🐭荐片┃P2P",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"新6V\"}",
+      "title": "🧲新6V┃磁力",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"咕咕\"}",
+      "title": "🦉咕咕┃动漫",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"Dm84\"}",
+      "title": "🚌巴士┃动漫",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"Anime1\"}",
+      "title": "🐾日本┃动漫",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"超全\"}",
+      "title": "⚽吃瓜┃看球",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"MTV\"}",
+      "title": "🎶明星┃MV",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"有声小说\"}",
+      "title": "🎧有声┃小说",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"Aid\"}",
+      "title": "🚑急救┃教学",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"虎牙js\"}",
+      "title": "🐯虎牙┃直播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"斗鱼js\"}",
+      "title": "🐟斗鱼┃直播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"抠搜\"}",
+      "title": "🍄抠抠┃搜搜",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"UC\"}",
+      "title": "🌈优汐┃搜搜",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"米搜\"}",
+      "title": "🦋米搜┃夸嘟",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"YpanSo\"}",
+      "title": "🐟盘她┃夸父",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"BpanSo\"}",
+      "title": "🐞盘他┃嘟嘟",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"push_agent\"}",
+      "title": "🛴手机┃推送",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"Bili\"}",
+      "title": "🅱哔哔合集┃弹幕",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"Biliych\"}",
+      "title": "🅱哔哔演唱会┃弹幕",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"dr_兔小贝\"}",
+      "title": "📚儿童┃启蒙",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"少儿教育\"}",
+      "title": "📚少儿┃教育",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"小学课堂\"}",
+      "title": "📚小学┃课堂",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"初中课堂\"}",
+      "title": "📚初中┃课堂",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"高中教育\"}",
+      "title": "📚高中┃课堂",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"site\",\"key\":\"cc\"}",
+      "title": "请勿信视频中任何广告",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [],
+        "totalCount": 0
+      }
+    },
+    {
+      "id": "{\"type\":\"live\",\"name\":\"__all__\",\"url\":\"\"}",
+      "title": "直播",
+      "type": "Folder",
+      "listEntry_site": {
+        "items": [
+          {
+            "id": "{\"type\":\"live\",\"name\":\"更新日期: 2026-5-27 12:02:26\",\"url\":\"http://hlsztemgsplive.miguvideo.com:8080/migu/kailu/cctv1hd265/51/20191230/01.m3u8?msisdn=4f89b0f1d885527a227fd4a636419cfe&mdspid=&spid=699004&netType=4&sid=2201057821&pid=2028597139&timestamp=20260527114303&Channel_ID=0116_2600031500-99000-200300140100004&ProgramID=608807420&ParentNodeID=-99&assertID=2201057821&client_ip=36.134.84.239&SecurityKey=20260527114303&promotionId=&mvid=2201057821&mcid=500020&playurlVersion=WX-A1-9.5.1.2-RELEASE&userid=&jmhm=&videocodec=h265&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&mtv_session=efd9248f81ab4cb7ebddcc1dd9db050a&sv=10004&ct=android&playUrlSsn=4f89b0f1d885527a227fd4a636419cfe1779853380601&prlId=4f89b0f1d885527a227fd4a636419cfe1779853380695&jid=4f89b0f1d885527a227fd4a636419cfe1779853380058V&is_advertise=0&sjid=subsession_1779853412779&HlsSubType=1&HlsProfileId=1&nphaid=0&encrypt=ae7ecd1faee0fc0726607cf050f99fe6\"}",
+            "title": "更新日期: 2026-5-27 12:02:26",
+            "type": "Playable",
+            "cover": null
+          },
+          {
+            "id": "{\"type\":\"live\",\"name\":\"CCTV1综合\",\"url\":\"http://hlsztemgsplive.miguvideo.com:8080/migu/kailu/cctv1hd265/51/20191230/01.m3u8?msisdn=4f89b0f1d885527a227fd4a636419cfe&mdspid=&spid=699004&netType=4&sid=2201057821&pid=2028597139&timestamp=20260527114303&Channel_ID=0116_2600031500-99000-200300140100004&ProgramID=608807420&ParentNodeID=-99&assertID=2201057821&client_ip=36.134.84.239&SecurityKey=20260527114303&promotionId=&mvid=2201057821&mcid=500020&playurlVersion=WX-A1-9.5.1.2-RELEASE&userid=&jmhm=&videocodec=h265&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&mtv_session=efd9248f81ab4cb7ebddcc1dd9db050a&sv=10004&ct=android&playUrlSsn=4f89b0f1d885527a227fd4a636419cfe1779853380601&prlId=4f89b0f1d885527a227fd4a636419cfe1779853380695&jid=4f89b0f1d885527a227fd4a636419cfe1779853380058V&is_advertise=0&sjid=subsession_1779853412779&HlsSubType=1&HlsProfileId=1&nphaid=0&encrypt=ae7ecd1faee0fc0726607cf050f99fe6\"}",
+            "title": "CCTV1综合",
+            "type": "Playable",
+            "cover": "http://wapx.cmvideo.cn:8080/publish/poms/image/2201/057/821/202204010054_1626677671392_H32_1080.webp"
+          },
+          {
+            "id": "{\"type\":\"live\",\"name\":\"CCTV1综合\",\"url\":\"http://hlsztemgsplive.miguvideo.com:8080/wd_r2/cctv/cctv1hd/1200/index.m3u8?msisdn=f863b466d46e2ff46401579155d4a125&mdspid=&spid=699004&netType=4&sid=2201057821&pid=2028597139&timestamp=20260527113307&Channel_ID=0116_2600037000-99000-200300220106590&ProgramID=608807420&ParentNodeID=-99&assertID=2201057821&client_ip=113.6.228.188&SecurityKey=20260527113307&promotionId=&mvid=2201057821&mcid=500020&playurlVersion=WX-A1-9.5.1.2-RELEASE&userid=1834153345&jmhm=f863b466d46e2ff46401579155d4a125&videocodec=h264&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&encrypt=f22b339cdb7e72aa419d732efd6a0744\"}",
+            "title": "CCTV1综合",
+            "type": "Playable",
+            "cover": "http://wapx.cmvideo.cn:8080/publish/poms/image/2201/057/821/202204010054_1626677671392_H32_1080.webp"
+          },
+          {
+            "id": "{\"type\":\"live\",\"name\":\"CCTV1综合\",\"url\":\"http://hlsztemgsplive.miguvideo.com:8080/wd_r2/cctv/cctv1hd/1200/index.m3u8?msisdn=f863b466d46e2ff46401579155d4a125&mdspid=&spid=699004&netType=4&sid=2201057821&pid=2028597139&timestamp=20260527113235&Channel_ID=0116_2600037000-99000-200300220106589&ProgramID=608807420&ParentNodeID=-99&assertID=2201057821&client_ip=113.6.228.187&SecurityKey=20260527113235&promotionId=&mvid=2201057821&mcid=500020&playurlVersion=WX-A1-9.5.1.2-RELEASE&userid=1834153345&jmhm=f863b466d46e2ff46401579155d4a125&videocodec=h264&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&encrypt=1c236d43923d05d99d17b4f63471662b\"}",
+            "title": "CCTV1综合",
+            "type": "Playable",
+            "cover": "http://wapx.cmvideo.cn:8080/publish/poms/image/2201/057/821/202204010054_1626677671392_H32_1080.webp"
+          },
+          {
+            "id": "{\"type\":\"live\",\"name\":\"CCTV1综合\",\"url\":\"http://play.kankanlive.com/live/1698234869325962.m3u8\"}",
+            "title": "CCTV1综合",
+            "type": "Playable",
+            "cover": "http://wapx.cmvideo.cn:8080/publish/poms/image/2201/057/821/202204010054_1626677671392_H32_1080.webp"
+          }
+        ],
+        "totalCount": 4071
+      }
+    }
+  ],
+  "search": {
+    "Dark": [],
+    "庆余年": [],
+    "海贼王": []
+  }
+}
