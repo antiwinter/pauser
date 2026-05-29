@@ -62,4 +62,5 @@ abstract class EndpointClient {
 
     open suspend fun getQr(): QrResult.QrReady? = null
     open suspend fun pollQr(token: String): QrResult = QrResult.Error("not supported")
+    open suspend fun getSprite(itemRef: String, ts: Long): String? = null
 }

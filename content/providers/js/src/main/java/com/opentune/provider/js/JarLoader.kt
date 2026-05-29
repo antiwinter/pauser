@@ -162,7 +162,9 @@ class JarLoader(private val httpClient: OkHttpClient) {
         factoryMethod: String? = null,
     ): String {
         val urlKeyVal = urlKey(url)
-        val primaryLoader   = loaders[urlKeyVal] ?: error("JAR not loaded: $url")
+        val primaryLoader   = loaders[urlKeyVal]
+            ?: loaders[url]  // asset keys like "asset:foo.jar" are not hashed
+            ?: error("JAR not loaded: $url")
         val secondaryLoader = loaders["secondary:$urlKeyVal"]
         val instance = instanceHandle?.let { h -> instances[h] }
 

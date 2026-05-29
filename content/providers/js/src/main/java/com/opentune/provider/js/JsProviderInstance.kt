@@ -246,6 +246,18 @@ class JsProviderInstance(
         return parsePlaybackSpec(json.parseToJsonElement(resultJson).jsonObject)
     }
 
+    override suspend fun getSprite(itemRef: String, ts: Long): String? {
+        ensureReady()
+        val args = buildJsonObject {
+            put("itemRef", itemRef)
+            put("ts", ts)
+        }
+        val resultJson = engine.callMethod("getSprite", args.toString()) ?: return null
+        val el = json.parseToJsonElement(resultJson)
+        return el.jsonPrimitive.takeUnless { it.isString && el.jsonPrimitive.content == "null" }
+            ?.jsonPrimitive?.content
+    }
+
     // ── Parsers ────────────────────────────────────────────────────────────
 
     private fun parseEntryType(raw: String?): EntryType = when (raw) {
