@@ -91,7 +91,6 @@ dependencies {
     implementation(project(":content:providers:js"))
     implementation(project(":proxy:providers:http"))
     implementation(project(":storage"))
-    implementation(project(":content:providers:emby"))
     implementation(project(":content:providers:smb"))
 
     implementation(libs.androidx.core.ktx)

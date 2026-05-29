@@ -1,6 +1,7 @@
 package com.opentune.content.contract
 
 import com.opentune.core.form.contract.FormFieldSpec
+import com.opentune.core.form.contract.QrResult
 
 // --- Endpoint-level validation result (extends core with domain fields) ---
 

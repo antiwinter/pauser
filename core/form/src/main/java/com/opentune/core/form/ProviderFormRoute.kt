@@ -34,8 +34,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.opentune.core.form.contract.FormFieldKind
 import com.opentune.core.form.contract.FormFieldSpec
-import com.opentune.content.contract.QrResult
-import com.opentune.content.contract.QrStatus
+import com.opentune.core.form.contract.QrResult
+import com.opentune.core.form.contract.QrStatus
 import com.opentune.storage.ProxyEntity
 import com.opentune.storage.StorageBindingsHolder
 import kotlinx.coroutines.Dispatchers

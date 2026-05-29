@@ -16,7 +16,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import com.opentune.content.contract.QrStatus
+import com.opentune.core.form.contract.QrStatus
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
