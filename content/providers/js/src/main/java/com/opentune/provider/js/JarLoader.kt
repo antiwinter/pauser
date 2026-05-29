@@ -36,7 +36,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         if (loaders.containsKey(key)) return
         synchronized(loadLocks.getOrPut(key) { Any() }) {
             if (loaders.containsKey(key)) return
-            loadJarFile(key, downloadAndVerify(url, md5), shimLoader())
+            loadJarFile(key, downloadAndVerify(url, md5), null)
         }
     }
 
@@ -52,13 +52,22 @@ class JarLoader(private val httpClient: OkHttpClient) {
             ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
             dest.setReadOnly()
             loadJarFile(key, dest, null)
+
+            // Inject shim into the app classloader's parent chain so that any
+            // DexClassLoader created by native code (e.g. DexNative.getLoader()) also
+            // resolves shim classes via normal delegation — without this, native-created
+            // loaders can't find com.github.catvod.crawler.Spider and the app crashes.
+            try {
+                val shimLoader = loaders[key]!!
+                val appLoader  = ctx.classLoader
+                val parentField = ClassLoader::class.java.getDeclaredField("parent")
+                    .also { it.isAccessible = true }
+                val originalParent = parentField.get(appLoader)
+                parentField.set(shimLoader, originalParent)
+                parentField.set(appLoader, shimLoader)
+            } catch (_: Throwable) {}
         }
     }
-
-    // Returns the first asset-loaded classloader as parent for URL-loaded JARs, so
-    // runtime JARs can resolve classes defined in asset shims.
-    private fun shimLoader(): ClassLoader? =
-        loaders.entries.firstOrNull { it.key.startsWith("asset:") }?.value
 
     private fun loadJarFile(key: String, jar: File, parent: ClassLoader?) {
         val ctx    = ContextHolder.get()
@@ -70,6 +79,8 @@ class JarLoader(private val httpClient: OkHttpClient) {
             jar.absolutePath,
             dexOut.absolutePath,
             soOut.absolutePath,
+            // Always use the full app classloader as parent so that app-bundled libraries
+            // (okhttp3, gson, etc.) are visible to spider JARs and any loaders they create.
             parent ?: ctx.classLoader,
         )
     }
@@ -109,7 +120,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         // Step 2: force dexNativeClass <clinit> — UnsatisfiedLinkError means wrong arch, let it propagate
         try { primary.loadClass(dexNativeClass) } catch (e: UnsatisfiedLinkError) { throw e } catch (_: Throwable) {}
 
-        // Step 3: initClass.init(Context)
+        // Step 3: initClass.init(Context) — this is where config.db DexClassLoader is created internally
         val initMethod = initCls.methods.firstOrNull { m ->
             m.name == "init" && (m.parameterCount == 0 ||
                 (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
@@ -123,16 +134,18 @@ class JarLoader(private val httpClient: OkHttpClient) {
             } catch (_: Throwable) {}
         }
 
-        // Steps 4 & 5: patch secondary loader and call initOriginClass.init(Context)
+        val parentField = ClassLoader::class.java.getDeclaredField("parent")
+            .also { it.isAccessible = true }
+
+        // Steps 4 & 5: get config.db loader, point its parent to primary (shim-jar) so gson is
+        // visible via delegation, then call initOriginClass.init(Context) on it.
         val loaderMethod = initCls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
             ?: return
         loaderMethod.isAccessible = true
         val secondaryLoader = loaderMethod.invoke(null) as? ClassLoader ?: return
 
         try {
-            ClassLoader::class.java.getDeclaredField("parent")
-                .also { it.isAccessible = true }
-                .set(secondaryLoader, primary)
+            parentField.set(secondaryLoader, primary)
         } catch (_: Throwable) {}
 
         try {
