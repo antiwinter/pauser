@@ -151,8 +151,6 @@ class JarLoader(private val httpClient: OkHttpClient) {
      * Reflective method invocation.
      *
      * newInstance: direct constructor call.
-     * The Guard subclass internally calls Init.getSpider(shortName) which
-     * loads the actual implementation from secondary loader via the native .so.
      */
     fun reflect(
         url: String,
