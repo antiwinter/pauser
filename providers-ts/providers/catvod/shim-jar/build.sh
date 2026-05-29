@@ -14,7 +14,19 @@ GSON_VERSION="2.13.1"
 GSON_JAR="$BUILD/gson-${GSON_VERSION}.jar"
 GSON_URL="https://repo1.maven.org/maven2/com/google/code/gson/gson/${GSON_VERSION}/gson-${GSON_VERSION}.jar"
 
+OUT="$DIST/catvod-shim.jar"
+
 mkdir -p "$BUILD/classes" "$DIST"
+
+# Rebuild only if sources are newer than output
+if [ -f "$OUT" ]; then
+  NEWEST_SRC=$(find "$SRC" -name "*.java" -exec stat -f "%m" {} + | sort -rn | head -1)
+  OUT_MTIME=$(stat -f "%m" "$OUT")
+  if [ "$NEWEST_SRC" -le "$OUT_MTIME" ]; then
+    echo "[shim] catvod-shim.jar is up to date"
+    exit 0
+  fi
+fi
 
 if [ ! -f "$GSON_JAR" ]; then
   echo "[shim] downloading gson ${GSON_VERSION}..."
@@ -38,7 +50,7 @@ javac -source 8 -target 8 \
   $(find "$BUILD/classes" -name "*.class")
 
 # Repack classes.dex into a JAR so DexClassLoader can load it
-rm -f "$DIST/catvod-shim.jar"
-(cd "$BUILD" && jar cf "$DIST/catvod-shim.jar" classes.dex)
+rm -f "$OUT"
+(cd "$BUILD" && jar cf "$OUT" classes.dex)
 
-echo "[shim] built $DIST/catvod-shim.jar"
+echo "[shim] built $OUT"
