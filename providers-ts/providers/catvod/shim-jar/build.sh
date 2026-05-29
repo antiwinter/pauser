@@ -16,7 +16,6 @@ GSON_URL="https://repo1.maven.org/maven2/com/google/code/gson/gson/${GSON_VERSIO
 
 mkdir -p "$BUILD/classes" "$DIST"
 
-# Fetch gson if not cached
 if [ ! -f "$GSON_JAR" ]; then
   echo "[shim] downloading gson ${GSON_VERSION}..."
   curl -fsSL -o "$GSON_JAR" "$GSON_URL"
@@ -29,7 +28,7 @@ javac -source 8 -target 8 \
   -d "$BUILD/classes" \
   $(find "$SRC" -name "*.java")
 
-# Dex — include gson so it's available to the spider's config.db loader via parent delegation
+# Dex — gson only; kotlin/okhttp/okio are in the app and reachable via shim's parent (ctx.classLoader)
 "$D8" \
   --release \
   --lib "$ANDROID_JAR" \

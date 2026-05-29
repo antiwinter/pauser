@@ -22,7 +22,6 @@ export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void>
 const CATVOD_INIT         = 'com.github.catvod.spider.Init';
 const CATVOD_DEX_NATIVE   = 'com.github.catvod.spider.DexNative';
 const CATVOD_INIT_ORIGIN  = 'com.github.catvod.spider.InitOrigin';
-const CATVOD_GET_SPIDER   = 'getSpider';
 const CATVOD_SHIM_ASSET   = 'catvod-shim.jar';
 
 // ── JAR bootstrap ─────────────────────────────────────────────────────────────
@@ -50,11 +49,14 @@ async function getSpider(
   if (cached) return cached;
 
   const cls = spiderClass(api);
-  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [], factoryCls: CATVOD_INIT, factoryMethod: CATVOD_GET_SPIDER });
-  // Guard spiders (class name ends in "Guard") get their config from the encrypted JAR's
-  // internal state set up by Init.init(Context) during load(). Calling spider.init() on them
-  // corrupts their internal state via a failed getSite() call. Skip init for Guard spiders.
-  if (!cls.endsWith('Guard')) {
+  // FongMi approach: direct newInstance() — BaseSpiderGuard.<init> internally calls
+  // Init.getSpider(shortName) to populate the wrapped spider field from config.db.
+  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
+  if (cls.endsWith('Guard')) {
+    // FongMi line 182: sp.homeContent(false) — preloads spider internal state
+    // (cookies, sessions) that categoryContent/detailContent depend on.
+    await host.jar.reflect({ url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false] }).catch(() => undefined);
+  } else {
     await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
   }
   spiderHandles.set(siteKey, handle);
