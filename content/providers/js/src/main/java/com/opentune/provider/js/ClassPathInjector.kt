@@ -5,11 +5,11 @@ import dalvik.system.BaseDexClassLoader
 import java.io.File
 
 /**
- * Injects shim dex elements into the app's PathClassLoader at runtime.
+ * Injects bootstrap dex elements into the app's PathClassLoader at runtime.
  *
- * After injection, app's classloader directly resolves shim classes (Spider,
- * SpiderDebug, gson) without parent chain shenanigans. Spider JAR's parent
- * is simply ctx.classLoader — everything is visible naturally.
+ * After injection, app's classloader directly resolves bootstrap classes
+ * without parent chain shenanigans. The loaded JAR's parent is simply
+ * ctx.classLoader — everything is visible naturally.
  *
  * Uses DexPathList element injection — the same technique Tinker hotfix uses.
  */
@@ -18,35 +18,35 @@ object ClassPathInjector {
     @Volatile private var injected = false
 
     /**
-     * Merges shim JAR's dex elements into the app classloader.
+     * Merges bootstrap JAR's dex elements into the app classloader.
      * Idempotent — safe to call multiple times.
      */
-    fun inject(ctx: Context, shimJar: File) {
+    fun inject(ctx: Context, bootstrapJar: File) {
         if (injected) return
         synchronized(this) {
             if (injected) return
             runCatching {
                 val appLoader = ctx.classLoader
 
-                // Get shim's DexElements via a temporary DexClassLoader
-                val tmpDir = File(ctx.codeCacheDir, "dex/_shim").also { it.mkdirs() }
-                val tmpSoDir = File(ctx.cacheDir, "so/_shim").also { it.mkdirs() }
-                val shimLoader = dalvik.system.DexClassLoader(
-                    shimJar.absolutePath, tmpDir.absolutePath, tmpSoDir.absolutePath, appLoader
+                // Get bootstrap's DexElements via a temporary DexClassLoader
+                val tmpDir = File(ctx.codeCacheDir, "dex/_bootstrap").also { it.mkdirs() }
+                val tmpSoDir = File(ctx.cacheDir, "so/_bootstrap").also { it.mkdirs() }
+                val tmpLoader = dalvik.system.DexClassLoader(
+                    bootstrapJar.absolutePath, tmpDir.absolutePath, tmpSoDir.absolutePath, appLoader
                 )
                 // pathList is on BaseDexClassLoader, not DexClassLoader
-                val shimPathListField = BaseDexClassLoader::class.java
+                val tmpPathListField = BaseDexClassLoader::class.java
                     .getDeclaredField("pathList")
                     .also { it.isAccessible = true }
-                val shimPathList = shimPathListField.get(shimLoader)
+                val tmpPathList = tmpPathListField.get(tmpLoader)
 
-                val dexElementsField = shimPathList.javaClass
+                val dexElementsField = tmpPathList.javaClass
                     .getDeclaredField("dexElements")
                     .also { it.isAccessible = true }
-                val shimElements = dexElementsField.get(shimPathList) as? Array<*>
+                val bootstrapElements = dexElementsField.get(tmpPathList) as? Array<*>
                     ?: return@synchronized
 
-                // Merge: shim elements + existing app elements
+                // Merge: bootstrap elements + existing app elements
                 val appPathList = BaseDexClassLoader::class.java
                     .getDeclaredField("pathList")
                     .also { it.isAccessible = true }
@@ -58,11 +58,11 @@ object ClassPathInjector {
                     ?: return@synchronized
 
                 val merged = java.lang.reflect.Array.newInstance(
-                    shimElements.javaClass.componentType,
-                    shimElements.size + appElements.size
+                    bootstrapElements.javaClass.componentType,
+                    bootstrapElements.size + appElements.size
                 )
-                System.arraycopy(shimElements, 0, merged, 0, shimElements.size)
-                System.arraycopy(appElements, 0, merged, shimElements.size, appElements.size)
+                System.arraycopy(bootstrapElements, 0, merged, 0, bootstrapElements.size)
+                System.arraycopy(appElements, 0, merged, bootstrapElements.size, appElements.size)
                 appElementsField.set(appPathList, merged)
 
                 injected = true

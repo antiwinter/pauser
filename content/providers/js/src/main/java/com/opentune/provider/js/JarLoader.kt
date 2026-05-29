@@ -20,13 +20,13 @@ import java.util.zip.ZipFile
 /**
  * Downloads and caches Android JARs, then reflectively invokes methods on their classes.
  *
- * Shim injection model:
- *  1. TS calls loadAsset(shim) → shim dex is injected into the app classloader.
- *     After injection, Spider, SpiderDebug, gson etc. are resolvable via ctx.classLoader.
- *  2. TS calls load(spider.jar) → DexClassLoader with ctx.classLoader as parent.
- *     The parent chain is: spider.jar → app(shim+kotlin+okhttp) → boot
- *  3. TS calls boot() → Init.init() creates config.db; we patch its parent → ctx.classLoader.
- *     Chain: config.db → app(shim+kotlin+okhttp) → boot
+ * Bootstrap injection model:
+ *  1. loadAsset() → bootstrap dex is injected into the app classloader.
+ *     After injection, bootstrap classes are resolvable via ctx.classLoader.
+ *  2. load() → DexClassLoader with ctx.classLoader as parent.
+ *     The parent chain is: loaded.jar → app(bootstrap+kotlin+okhttp) → boot
+ *  3. boot() → Init.init() creates secondary loader; we patch its parent → ctx.classLoader.
+ *     Chain: secondary → app(bootstrap+kotlin+okhttp) → boot
  */
 class JarLoader(private val httpClient: OkHttpClient) {
 
@@ -59,8 +59,8 @@ class JarLoader(private val httpClient: OkHttpClient) {
             ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
             dest.setReadOnly()
 
-            // Inject shim dex elements into the app classloader.
-            // After injection, Spider/SpiderDebug/gson are resolvable via ctx.classLoader.
+            // Inject bootstrap dex elements into the app classloader.
+            // After injection, bootstrap classes are resolvable via ctx.classLoader.
             ClassPathInjector.inject(ctx, dest)
         }
     }
@@ -71,7 +71,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         val dexOut = File(ctx.codeCacheDir, "dex/$key/$gen").also { it.mkdirs() }
         val soOut  = File(ctx.cacheDir, "so/$key").also { it.mkdirs() }
         extractNativeLibs(jar, soOut)
-        // Parent = app classloader, which now contains shim classes via injection.
+        // Parent = app classloader, which now contains bootstrap classes via injection.
         loaders[key] = DexClassLoader(
             jar.absolutePath,
             dexOut.absolutePath,
@@ -84,10 +84,10 @@ class JarLoader(private val httpClient: OkHttpClient) {
      * Boot sequence:
      *  1. Force-load DexNative class → triggers <clinit> which extracts & loads native .so
      *  2. Call Init.init(Context) → sets Application ref, calls DexNative.getLoader()
-     *     which creates config.db DexClassLoader + spawns decryption thread
-     *  3. Poll Init.loader() until config.db DexClassLoader is ready
-     *  4. Patch config.db loader's parent → ctx.classLoader (app with shim injected)
-     *  5. Call InitOrigin.init(Context) on config.db loader
+     *     which creates secondary DexClassLoader + spawns background thread
+     *  3. Poll Init.loader() until secondary DexClassLoader is ready
+     *  4. Patch secondary loader's parent → ctx.classLoader (app with bootstrap injected)
+     *  5. Call secondary init(Context)
      */
     fun boot(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
         val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
@@ -100,7 +100,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
             primary.loadClass(dexNativeClass)
         } catch (e: UnsatisfiedLinkError) { throw e } catch (_: Throwable) {}
 
-        // Step 2: Init.init(Context) — sets Application ref, creates config.db loader
+        // Step 2: Init.init(Context) — sets Application ref, creates secondary loader
         val initMethod = initCls.methods.firstOrNull { m ->
             m.name == "init" && (m.parameterCount == 0 ||
                 (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
@@ -114,7 +114,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
             } catch (_: Throwable) {}
         }
 
-        // Step 3: poll Init.loader() until config.db DexClassLoader is ready
+        // Step 3: poll Init.loader() until secondary DexClassLoader is ready
         val loaderMethod = initCls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
         if (loaderMethod == null) return
         loaderMethod.isAccessible = true
@@ -129,16 +129,15 @@ class JarLoader(private val httpClient: OkHttpClient) {
         }
         if (secondaryLoader == null) return
 
-        // Step 4: patch config.db loader's parent → ctx.classLoader
-        // The app classloader now contains shim classes (Spider, SpiderDebug, gson)
-        // via ClassPathInjector injection.
+        // Step 4: patch secondary loader's parent → ctx.classLoader
+        // The app classloader now contains bootstrap classes via ClassPathInjector injection.
         val parentField = ClassLoader::class.java.getDeclaredField("parent")
             .also { it.isAccessible = true }
         try { parentField.set(secondaryLoader, ctx.classLoader) } catch (_: Throwable) {}
 
         loaders["secondary:${urlKey(url)}"] = secondaryLoader
 
-        // Step 5: InitOrigin.init(Context) on config.db loader
+        // Step 5: InitOrigin.init(Context) on secondary loader
         try {
             val originCls = secondaryLoader.loadClass(initOriginClass)
             originCls.methods.firstOrNull { m ->
@@ -151,9 +150,9 @@ class JarLoader(private val httpClient: OkHttpClient) {
     /**
      * Reflective method invocation.
      *
-     * newInstance: direct constructor call (FongMi approach).
-     * The BaseSpiderGuard.<init> internally calls Init.getSpider(shortName) which
-     * loads the actual Spider from config.db via the native .so.
+     * newInstance: direct constructor call.
+     * The Guard subclass internally calls Init.getSpider(shortName) which
+     * loads the actual implementation from secondary loader via the native .so.
      */
     fun reflect(
         url: String,
@@ -238,7 +237,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         loadGen.incrementAndGet()
     }
 
-    /** Clears only spider instances, keeping loaded JARs. Re-init runs on next reflect call. */
+    /** Clears only jar instances, keeping loaded JARs. Re-init runs on next reflect call. */
     fun clearInstances() {
         instances.clear()
     }
