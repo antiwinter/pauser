@@ -8,7 +8,12 @@ BUILD="$SCRIPT_DIR/build"
 DIST="$ROOT/dist"
 
 ANDROID_JAR="${ANDROID_HOME:-$HOME/Android/Sdk}/platforms/android-35/android.jar"
-D8="${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/37.0.0/d8"
+# Use d8.bat on Windows, d8 on Unix
+if [[ "$(uname -s)" == *"NT"* ]] || [[ "$(uname -o)" == *"Msys"* ]]; then
+  D8="${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/37.0.0/d8.bat"
+else
+  D8="${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/37.0.0/d8"
+fi
 
 GSON_VERSION="2.13.1"
 GSON_JAR="$BUILD/gson-${GSON_VERSION}.jar"
@@ -22,9 +27,14 @@ if [ ! -f "$GSON_JAR" ]; then
 fi
 
 # Compile
-javac -source 8 -target 8 \
-  -bootclasspath "$ANDROID_JAR" \
-  -classpath "$ANDROID_JAR:$GSON_JAR" \
+# -Xbootclasspath/a: appends android.jar to the bootstrap classpath (works on javac 17+)
+# -source 8/-target 8 for Android compatibility; d8 converts to dex
+JAVAC="javac"
+if [ ! "$(command -v javac 2>/dev/null)" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+  JAVAC="$JAVA_HOME/bin/javac"
+fi
+"$JAVAC" -source 8 -target 8 -Xbootclasspath/a:"$ANDROID_JAR" \
+  -classpath "$GSON_JAR" \
   -d "$BUILD/classes" \
   $(find "$SRC" -name "*.java")
 

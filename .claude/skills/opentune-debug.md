@@ -5,7 +5,36 @@ description: Debug OpenTune on a connected Android TV device via the embedded HT
 
 ## Setup
 
+### Prerequisites
+
+- **Android Studio** installed (provides SDK, build tools, and JDK via JBR)
+- **JDK** installed (Temurin recommended). On Windows with Chocolatey: `choco install temurin`
+- **Android SDK** platform 35 and build-tools 37.0.0 installed
+- **quickjs_ng** submodule initialized: `git submodule update --init` or clone manually into `content/providers/js/src/main/jni/quickjs_ng`
+
 ### Build & Deploy
+
+#### Windows
+
+```sh
+# Set PATH to JDK (adjust path to match your installation)
+export PATH="/c/Program Files/Eclipse Adoptium/jdk-21.0.8.9-hotspot/bin:$PATH"
+
+# 1. Build TypeScript providers (bundled JS runs inside the app)
+cd providers-ts && npm run build && cd ..
+
+# 2. Build and install debug APK on the target device
+./gradlew :app:assembleDebug
+adb -s 192.168.17.56:5555 install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 3. Forward debug API port
+adb -s 192.168.17.56:5555 forward tcp:7920 tcp:7920
+
+# 4. Launch the app
+adb -s 192.168.17.56:5555 shell monkey -p com.opentune.app -c android.intent.category.LEANBACK_LAUNCHER -c android.intent.category.LAUNCHER 1
+```
+
+#### Linux/Mac
 
 ```sh
 # 1. Build TypeScript providers (bundled JS runs inside the app)
@@ -17,9 +46,15 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 # 3. Forward debug API port
 adb forward tcp:7920 tcp:7920
+
+# 4. Launch the app
+adb shell monkey -p com.opentune.app -c android.intent.category.LEANBACK_LAUNCHER -c android.intent.category.LAUNCHER 1
 ```
 
 After forwarding, all commands below work against `http://localhost:7920`.
+
+### Windows Build Notes
+- JDK must be on PATH before running `npm run build`
 
 ## Commands
 
