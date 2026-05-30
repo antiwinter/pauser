@@ -1,1 +1,5 @@
-tdlib/
+tdlib/td
+tdlib/build
+tdlib/openssl
+*.so
+
