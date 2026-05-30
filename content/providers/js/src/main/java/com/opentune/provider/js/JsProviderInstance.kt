@@ -100,7 +100,7 @@ class JsProviderInstance(
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
 
-            /* init({ credentials, capabilities, deviceName, deviceId, clientVersion }) */
+            /* init({ credentials, capabilities, proxyConfig }) */
             val initArgs = buildJsonObject {
                 put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
                 put("capabilities", buildJsonObject {
@@ -115,6 +115,7 @@ class JsProviderInstance(
                     ))
                     put("maxPixels", capabilities.maxPixels)
                 })
+                proxyConfig?.let { put("proxyConfig", it) }
             }
             engine.callMethod("init", initArgs.toString())
             initialized = true

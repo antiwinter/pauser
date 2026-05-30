@@ -8,7 +8,7 @@ import {
 } from '../validators.js';
 import { NAError } from '../reporter.js';
 
-const VALID_FIELD_KINDS = new Set(['text', 'singleLine', 'password', 'QrCode']);
+const VALID_FIELD_KINDS = new Set(['text', 'singleLine', 'password', 'QrCode', 'ProxySelector']);
 
 /**
  * Category: Config
@@ -75,7 +75,7 @@ function validateFieldSpec(field, path) {
   assertObject(field, path);
   assertNonEmptyString(field.id, `${path}.id`);
   assertNonEmptyString(field.labelKey, `${path}.labelKey`);
-  assert(VALID_FIELD_KINDS.has(field.kind), `${path}.kind must be text|singleLine|password, got "${field.kind}"`);
+  assert(VALID_FIELD_KINDS.has(field.kind), `${path}.kind must be one of: text, singleLine, password, QrCode, ProxySelector; got "${field.kind}"`);
   if (field.required != null) assertType(field.required, 'boolean', `${path}.required`);
   if (field.sensitive != null) assertType(field.sensitive, 'boolean', `${path}.sensitive`);
   if (field.order != null) assertType(field.order, 'number', `${path}.order`);

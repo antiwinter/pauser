@@ -183,6 +183,8 @@ export interface OpenTuneProviderBridge {
   init(args: {
     credentials: Record<string, string>;
     capabilities: PlatformCapabilities;
+    /** Raw proxy config JSON string, or absent. */
+    proxyConfig?: string;
   }): Promise<void>;
 
   listEntry(args: {

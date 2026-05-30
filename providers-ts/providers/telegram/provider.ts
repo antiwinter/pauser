@@ -11,6 +11,12 @@ export async function getFieldsSpec(): Promise<ProviderFieldSpec[]> {
       kind: 'QrCode',
       required: false,
     },
+    {
+      id: 'proxy',
+      labelKey: 'form_proxy_section_title',
+      kind: 'ProxySelector',
+      required: false,
+    },
   ];
 }
 

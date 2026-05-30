@@ -37,6 +37,7 @@ interface OpenTuneProviderLoader {
 abstract class EndpointClient {
     open var imageLoader: coil3.ImageLoader? = null
     open var httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient()
+    open var proxyConfig: String? = null
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
     abstract suspend fun listEntry(
         location: String?,

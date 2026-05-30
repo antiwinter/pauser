@@ -84,6 +84,7 @@ class EndpointClientRegistry(
         }.getOrNull() ?: return null
 
         client.httpClient = httpClient
+        client.proxyConfig = entity.proxyId?.let { proxyDao.getById(it)?.fieldsJson }
         client.imageLoader = ImageLoader.Builder(appContext)
             .diskCache(sharedDiskCache)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = httpClient)) }
