@@ -64,7 +64,7 @@ declare global {
 
 // ── Provider contracts ────────────────────────────────────────────────────────
 
-export type ProviderFieldKind = 'text' | 'singleLine' | 'password';
+export type ProviderFieldKind = 'text' | 'singleLine' | 'password' | 'proxySelector';
 
 export interface ProviderFieldSpec {
   id: string;

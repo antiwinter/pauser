@@ -81,9 +81,10 @@ class JsProvider private constructor(
                     val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
                     val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
                     val kind = when (obj["kind"]?.jsonPrimitive?.content) {
-                        "password"   -> FormFieldKind.Password
-                        "singleLine" -> FormFieldKind.SingleLineText
-                        else         -> FormFieldKind.Text
+                        "password"      -> FormFieldKind.Password
+                        "singleLine"    -> FormFieldKind.SingleLineText
+                        "proxySelector" -> FormFieldKind.ProxySelector
+                        else            -> FormFieldKind.Text
                     }
                     FormFieldSpec(
                         id             = id,

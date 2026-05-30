@@ -13,6 +13,7 @@ export function getFieldsSpec(): ProviderFieldSpec[] {
     { id: 'base_url',  labelKey: 'emby.field.base_url',  kind: 'singleLine', required: true,  identity: true,  order: 0 },
     { id: 'username',  labelKey: 'emby.field.username',  kind: 'singleLine', required: true,  identity: true,  order: 1 },
     { id: 'password',  labelKey: 'emby.field.password',  kind: 'password',   required: false, sensitive: true, order: 2 },
+    { id: 'proxy',     labelKey: '',                     kind: 'proxySelector', order: 999999 },
     { id: 'name',      labelKey: 'fld_endpoint_name',    kind: 'singleLine', required: false, order: 100 },
   ];
 }

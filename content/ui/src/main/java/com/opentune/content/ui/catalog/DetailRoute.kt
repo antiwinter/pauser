@@ -14,6 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.ImageLoader
@@ -135,8 +138,13 @@ fun DetailRoute(
         }
     }
 
+    val loader = imageLoader
     when {
         error != null -> Text("Error: $error")
+        loading || loader == null -> Box(
+            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+            contentAlignment = androidx.compose.ui.Alignment.Center,
+        ) { CircularProgressIndicator() }
         else -> DetailScreen(
             initialInfo = initialInfo,
             detail = detail,
@@ -144,7 +152,7 @@ fun DetailRoute(
             isFavorite = isFavorite,
             resumeMs = resumeMs,
             titleLang = titleLang,
-            imageLoader = imageLoader!!,
+            imageLoader = loader,
             seasons = seasons,
             selectedSeasonIndex = selectedSeasonIndex,
             episodes = episodes,
