@@ -6,7 +6,6 @@ ROOT="$SCRIPT_DIR/../../.."
 SRC="$SCRIPT_DIR/src"
 BUILD="$SCRIPT_DIR/build"
 DIST="$ROOT/dist"
-ASSETS="$ROOT/../app/src/main/assets"
 LIBS="$SCRIPT_DIR/libs"
 
 ANDROID_JAR="${ANDROID_HOME:-$HOME/Android/Sdk}/platforms/android-35/android.jar"
@@ -14,7 +13,7 @@ D8="${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/37.0.0/d8"
 
 OUT="$DIST/telegram-shim.jar"
 
-mkdir -p "$BUILD/classes" "$DIST" "$ASSETS"
+mkdir -p "$BUILD/classes" "$DIST"
 
 # ── Check .so availability ───────────────────────────────────────────────────
 SO_FILES=()
@@ -78,16 +77,12 @@ for entry in "${SO_FILES[@]}"; do
   so_path="${entry%%:*}"
   abi="${entry##*:}"
   # Bundle as lib/$abi/libtdjson.so (standard Android native lib path in JAR)
-  JAR_ARGS="$JAR_ARGS -C $LIBS lib/$abi/libtdjson.so"
-  # Create temp symlink for jar to find it
   mkdir -p "$BUILD/lib/$abi"
   cp "$so_path" "$BUILD/lib/$abi/libtdjson.so"
+  JAR_ARGS="$JAR_ARGS -C $BUILD lib/$abi/libtdjson.so"
 done
 
 (cd "$BUILD" && jar $JAR_ARGS)
-
-# Copy to assets
-cp "$OUT" "$ASSETS/telegram-shim.jar"
 
 echo "[shim] built $OUT ($(ls -lh "$OUT" | awk '{print $5}'))"
 if [ ${#SO_FILES[@]} -gt 0 ]; then
