@@ -15,9 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,30 +60,54 @@ internal fun PlaybackControllerBar(
             .background(Color(0xCC000000))
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        // Three-segment progress bar: [blue played][gray buffered][dark gray unbuffered]
+        // Two rounded pill bars with a gap between them.
+        // Bar 1 (blue, played): 0 → playedX - halfGap. Hidden when nothing played.
+        // Bar 2 (dark gray base + gray buffered overlay): playedX + halfGap → end.
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(4.dp)
-                .padding(bottom = 6.dp),
+                .padding(bottom = 6.dp)
+                .height(4.dp),
         ) {
-            val w = size.width
-            val h = size.height
-            val playedX = w * playedFraction
-            val bufferedX = w * bufferedFraction
-            // unbuffered
-            drawRect(color = Color(0xFF404040), size = Size(w, h))
-            // buffered (played → buffered)
-            if (bufferedX > playedX) {
-                drawRect(
-                    color = Color(0xFF808080),
-                    topLeft = Offset(playedX, 0f),
-                    size = Size(bufferedX - playedX, h),
-                )
+            val barH = size.height
+            val r = CornerRadius(barH / 2)
+            val gapPx = 4.dp.toPx()
+            val halfGap = gapPx / 2f
+            val totalW = size.width
+            val playedX = totalW * playedFraction
+            val bufferedX = totalW * bufferedFraction
+
+            // Bar 2: dark gray base from (playedX + halfGap) to end
+            val bar2Left = if (playedFraction > 0f) (playedX + halfGap).coerceAtMost(totalW) else 0f
+            val bar2Width = (totalW - bar2Left).coerceAtLeast(0f)
+            if (bar2Width > 0f) {
+                val bar2Path = Path().apply {
+                    addRoundRect(RoundRect(bar2Left, 0f, totalW, barH, r))
+                }
+                // dark gray base
+                drawPath(bar2Path, Color(0xFF404040))
+                // gray buffered overlay, clipped to bar 2 shape
+                val bufferedInBar2 = (bufferedX - bar2Left).coerceIn(0f, bar2Width)
+                if (bufferedInBar2 > 0f) {
+                    clipPath(bar2Path) {
+                        drawRect(
+                            color = Color(0xFF808080),
+                            topLeft = Offset(bar2Left, 0f),
+                            size = Size(bufferedInBar2, barH),
+                        )
+                    }
+                }
             }
-            // played (0 → played)
-            if (playedX > 0f) {
-                drawRect(color = Color(0xFF2979FF), size = Size(playedX, h))
+
+            // Bar 1: blue played, 0 → (playedX - halfGap). Hidden when playedFraction == 0.
+            val bar1Width = (playedX - halfGap).coerceAtLeast(0f)
+            if (playedFraction > 0f && bar1Width > 0f) {
+                drawRoundRect(
+                    color = Color(0xFF2979FF),
+                    topLeft = Offset(0f, 0f),
+                    size = Size(bar1Width, barH),
+                    cornerRadius = r,
+                )
             }
         }
 
