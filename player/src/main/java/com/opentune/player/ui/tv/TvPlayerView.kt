@@ -111,6 +111,14 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_PAGE_DOWN,
                 -> openMenuCallback?.invoke()
 
+                // Emulator maps host Page Down to KEYCODE_UNKNOWN with scan code 109
+                KeyEvent.KEYCODE_UNKNOWN -> if (event.scanCode == 109) openMenuCallback?.invoke()
+
+                // UP / DOWN → show controller bar (volume/brightness handled by system)
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                -> onTransportKey?.invoke()
+
                 // LEFT / RIGHT → seek ±15s; show controller bar
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     val pos = p?.currentPosition?.minus(SEEK_MS)?.coerceAtLeast(0L) ?: 0L
@@ -176,6 +184,8 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
             KeyEvent.KEYCODE_BACK,
             KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER,

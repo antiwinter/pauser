@@ -1,8 +1,8 @@
 package com.opentune.player.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,11 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -55,28 +56,31 @@ internal fun PlaybackControllerBar(
             .background(Color(0xCC000000))
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        // Stacked progress bars: buffered (dim) under played (accent)
-        Box(
+        // Three-segment progress bar: [blue played][gray buffered][dark gray unbuffered]
+        Canvas(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(4.dp)
                 .padding(bottom = 6.dp),
         ) {
-            LinearProgressIndicator(
-                progress = { bufferedFraction },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-                color = Color(0xFF808080),
-                trackColor = Color(0xFF404040),
-            )
-            LinearProgressIndicator(
-                progress = { playedFraction },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-                color = Color(0xFF2979FF),
-                trackColor = Color.Transparent,
-            )
+            val w = size.width
+            val h = size.height
+            val playedX = w * playedFraction
+            val bufferedX = w * bufferedFraction
+            // unbuffered
+            drawRect(color = Color(0xFF404040), size = Size(w, h))
+            // buffered (played → buffered)
+            if (bufferedX > playedX) {
+                drawRect(
+                    color = Color(0xFF808080),
+                    topLeft = Offset(playedX, 0f),
+                    size = Size(bufferedX - playedX, h),
+                )
+            }
+            // played (0 → played)
+            if (playedX > 0f) {
+                drawRect(color = Color(0xFF2979FF), size = Size(playedX, h))
+            }
         }
 
         Row(

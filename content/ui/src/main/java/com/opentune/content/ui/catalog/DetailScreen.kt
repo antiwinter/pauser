@@ -137,23 +137,12 @@ fun DetailScreen(
                 // Logo or title
                 val logoModel = artImageModel(detail?.logo)
                 if (logoModel != null) {
-                    Box(
+                    AsyncImage(
+                        model = logoModel,
+                        contentDescription = displayTitle,
                         modifier = Modifier.height(80.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AsyncImage(
-                            model = "file:///android_asset/art/logo.png",
-                            contentDescription = null,
-                            modifier = Modifier.height(80.dp),
-                            contentScale = ContentScale.Fit,
-                        )
-                        AsyncImage(
-                            model = logoModel,
-                            contentDescription = displayTitle,
-                            modifier = Modifier.height(80.dp),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
+                        contentScale = ContentScale.Fit,
+                    )
                 } else {
                     Text(
                         text = displayTitle,

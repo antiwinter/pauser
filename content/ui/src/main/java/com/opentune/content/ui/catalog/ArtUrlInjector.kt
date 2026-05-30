@@ -32,7 +32,6 @@ object ArtUrlInjector {
         val providesArt = OpenTuneProviderRegistryHolder.get().provider(protocol).providesArt
         if (providesArt) return detail
         return detail.copy(
-            logo = if (detail.logo == null) "file:///android_asset/art/logo.png" else detail.logo,
             backdrop = if (detail.backdrop.isEmpty()) listOf("file:///android_asset/art/backdrop.png") else detail.backdrop,
         )
     }
