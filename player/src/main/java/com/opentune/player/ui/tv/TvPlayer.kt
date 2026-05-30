@@ -111,6 +111,7 @@ fun TvPlayer(
         when {
             menu.isOpen -> menu.back()
             engine.subtitleCtrl.isAdjustActive -> engine.subtitleCtrl.confirmAdjust()
+            controllerVisible -> controllerVisible = false
             else -> scope.launch { engine.release(); onExit() }
         }
     }
@@ -124,7 +125,12 @@ fun TvPlayer(
             player = exo,
             modifier = Modifier.fillMaxSize(),
             onOpenMenu = { menu.open() },
-            onBack = { scope.launch { engine.release(); onExit() } },
+            onBack = {
+                when {
+                    controllerVisible -> controllerVisible = false
+                    else -> scope.launch { engine.release(); onExit() }
+                }
+            },
             onTransportKey = { controllerVisible = true },
             onKey = { event ->
                 when {
