@@ -78,6 +78,7 @@ export async function search(
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
   const result = await api.getItems({
     parentId: scopeLocation || null,
+    includeItemTypes: 'Series,Folder',
     recursive: true,
     searchTerm: q,
     startIndex: 0,

@@ -254,6 +254,8 @@ class JsProviderInstance(
         "Season" -> EntryType.Season
         "Episode" -> EntryType.Episode
         "Playable" -> EntryType.Playable
+        "Digipak" -> EntryType.Digipak
+        "Image" -> EntryType.Image
         else -> EntryType.Other
     }
 

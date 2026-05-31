@@ -95,9 +95,14 @@ fun PadPlayer(
                 position = position,
                 buffered = exo.bufferedPosition,
                 duration = exo.duration.coerceAtLeast(0L),
-                isPlaying = exo.isPlaying,
+                // Use playWhenReady, not isPlaying. isPlaying is false while buffering,
+                // which would make the icon show "Play" and toggle the wrong direction.
+                // playWhenReady reflects the user's intent regardless of buffering state:
+                // true = user wants to play (auto-resumes when buffer refills),
+                // false = user paused (stays paused even after buffer refills).
+                isPlaying = exo.playWhenReady,
                 onPlayPause = {
-                    if (exo.isPlaying) exo.pause() else exo.play()
+                    if (exo.playWhenReady) exo.pause() else exo.play()
                     controllerVisible = true
                 },
             )

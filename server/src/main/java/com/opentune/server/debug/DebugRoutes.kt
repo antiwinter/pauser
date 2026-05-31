@@ -239,6 +239,11 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     val r = body.itemRef ?: return@post call.respond400("missing itemRef")
                     NavCommand.Image(p, s, r)
                 }
+                "search" -> {
+                    val p = body.provider ?: return@post call.respond400("missing provider")
+                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    NavCommand.Search(p, s, body.itemRef ?: "")
+                }
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }
             NavigationBridge.commands.trySend(cmd)

@@ -21,12 +21,12 @@ export function toListItem(
 
   const type = item.Type ?? '';
   let entryType: EntryType;
-  if (type === 'Series')            entryType = 'Series';
-  else if (type === 'Season')       entryType = 'Season';
-  else if (type === 'Episode')      entryType = 'Episode';
-  else if (type === 'Folder')       entryType = 'Digipak';
+  if (type === 'Series')              entryType = 'Series';
+  else if (type === 'Season')         entryType = 'Season';
+  else if (type === 'Episode')        entryType = 'Episode';
+  else if (type === 'Folder')         entryType = 'Digipak';
   else if (CONTAINER_TYPES.has(type)) entryType = 'Folder';
-  else                              entryType = 'Playable';
+  else                                entryType = 'Playable';
 
   const primaryTag = item.ImageTags?.['Primary'];
   const cover = primaryTag

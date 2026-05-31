@@ -27,6 +27,7 @@ fun OpenTuneNavHost() {
                 is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.endpointId, cmd.itemRef))
                 is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, cmd.startMs))
                 is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))
+                is NavCommand.Search -> nav.navigate(Routes.search(cmd.provider, cmd.endpointId, cmd.scopeLocation))
             }
         }
     }
