@@ -10,7 +10,7 @@ import androidx.media3.ui.PlayerView
 @UnstableApi
 internal fun configurePlayerViewDefaults(view: PlayerView) {
     view.useController = false
-    view.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+    view.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
 }
 
 /** Apply subtitle scale, style, padding and vertical position to [view]'s SubtitleView. */

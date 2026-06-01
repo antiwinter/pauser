@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.opentune.player.R
@@ -68,13 +71,46 @@ fun TvPlayer(
     val exo = engine.exo
 
     var controllerVisible by remember { mutableStateOf(false) }
-    var position by remember { mutableLongStateOf(0L) }
+    var position by remember { mutableLongStateOf(exo.currentPosition) }
+    var isPaused by remember { mutableStateOf(false) }
+    var isBuffering by remember { mutableStateOf(false) }
 
-    // Poll position every 500ms for the controller bar display.
+    // One-way sync: local play/pause intent → ExoPlayer.
+    LaunchedEffect(exo) {
+        exo.playWhenReady = !isPaused
+    }
+
+    // Event-driven position updates: seek, loop, buffering transitions fire instantly.
+    DisposableEffect(exo) {
+        val listener = object : Player.Listener {
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                position = newPosition.positionMs
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                position = exo.currentPosition
+                isBuffering = state == Player.STATE_BUFFERING
+                if (isBuffering) controllerVisible = true
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                position = exo.currentPosition
+            }
+        }
+        exo.addListener(listener)
+        onDispose { exo.removeListener(listener) }
+    }
+
+    // Fast tick for smooth progress bar animation during steady playback.
+    // Not gating any action feedback — just drives the visual tick.
     LaunchedEffect(exo) {
         while (true) {
             position = exo.currentPosition
-            delay(500)
+            delay(1_000)
         }
     }
 
@@ -176,7 +212,7 @@ fun TvPlayer(
         )
 
         AnimatedVisibility(
-            visible = controllerVisible,
+            visible = controllerVisible || isBuffering,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -185,16 +221,27 @@ fun TvPlayer(
                 position = position,
                 buffered = exo.bufferedPosition,
                 duration = exo.duration.coerceAtLeast(0L),
-                // Use playWhenReady, not isPlaying. isPlaying is false while buffering,
-                // which would make the icon show "Play" and toggle the wrong direction.
-                // playWhenReady reflects the user's intent regardless of buffering state:
-                // true = user wants to play (auto-resumes when buffer refills),
-                // false = user paused (stays paused even after buffer refills).
-                isPlaying = exo.playWhenReady,
+                // Use local isPaused (one-way synced to exo.playWhenReady) so the icon
+                // responds instantly without waiting for position polling or buffering state.
+                isPlaying = !isPaused,
                 onPlayPause = {
-                    if (exo.playWhenReady) exo.pause() else exo.play()
+                    isPaused = !isPaused
                     controllerVisible = true
                 },
+            )
+        }
+
+        // Centered spinner — visible during buffering, regardless of controller bar visibility.
+        AnimatedVisibility(
+            visible = isBuffering,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 4.dp,
+                color = Color.White,
             )
         }
 
