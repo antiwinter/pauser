@@ -84,6 +84,7 @@ class JsProvider private constructor(
                         "password"      -> FormFieldKind.Password
                         "singleLine"    -> FormFieldKind.SingleLineText
                         "proxySelector" -> FormFieldKind.ProxySelector
+                        "qrCode"        -> FormFieldKind.QrCode
                         else            -> FormFieldKind.Text
                     }
                     FormFieldSpec(

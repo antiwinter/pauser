@@ -14,6 +14,7 @@ import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.content.contract.PlatformCapabilities
+import com.opentune.core.form.contract.QrResult
 import com.opentune.content.contract.PlaybackSpec
 import com.opentune.content.contract.StreamInfo
 import com.opentune.content.contract.SubtitleTrack
@@ -74,6 +75,53 @@ class JsProviderInstance(
             }
         } catch (e: Exception) {
             EndpointValidationResult.Error(e.message ?: "JS validation error")
+        }
+    }
+
+    // ── QR flow ────────────────────────────────────────────────────────────
+
+    override suspend fun getQr(): QrResult.QrReady? {
+        return try {
+            val resultJson = withEngine(httpClient) { engine ->
+                engine.callMethod("getQr", "{}")
+            } ?: return null
+            val obj = json.parseToJsonElement(resultJson).jsonObject
+            val token  = obj["token"]?.jsonPrimitive?.content ?: return null
+            val qrData = obj["qrData"]?.jsonPrimitive?.content ?: return null
+            QrResult.QrReady(token = token, qrData = qrData)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // pollQr: if the token is a JSON object, treat it as pre-computed Confirmed fields
+    // (used by providers like benchmark that encode results directly in the token).
+    // Otherwise delegate to JS.
+    override suspend fun pollQr(token: String): QrResult {
+        return try {
+            val tokenEl = runCatching { json.parseToJsonElement(token) }.getOrNull()
+            if (tokenEl is JsonObject) {
+                return QrResult.Confirmed(tokenEl.mapValues { (_, v) -> v.jsonPrimitive.content })
+            }
+            val args = buildJsonObject { put("token", token) }.toString()
+            val resultJson = withEngine(httpClient) { engine ->
+                engine.callMethod("pollQr", args)
+            } ?: return QrResult.Error("null response")
+            val obj = json.parseToJsonElement(resultJson).jsonObject
+            when (obj["status"]?.jsonPrimitive?.content) {
+                "confirmed" -> {
+                    val fields = obj["fields"]?.jsonObject
+                        ?.mapValues { (_, v) -> v.jsonPrimitive.content }
+                        ?: emptyMap()
+                    QrResult.Confirmed(fields)
+                }
+                "scanning"  -> QrResult.Scanning
+                "scanned"   -> QrResult.Scanned
+                "expired"   -> QrResult.Expired
+                else        -> QrResult.Error(obj["error"]?.jsonPrimitive?.content ?: "unknown status")
+            }
+        } catch (e: Exception) {
+            QrResult.Error(e.message ?: "pollQr error")
         }
     }
 

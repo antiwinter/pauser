@@ -3,6 +3,7 @@ package com.opentune.server.debug
 import android.util.Log
 import com.opentune.server.AppContext
 import com.opentune.content.contract.SearchQuery
+import com.opentune.core.form.contract.QrResult
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
@@ -206,6 +207,22 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     headers = spec.headers,
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
+            }
+
+            get("/{endpointId}/qr") {
+                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
+                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
+                val ready = runCatching { instance.getQr() }.getOrElse {
+                    Log.e(LOG_TAG, "getQr error", it); return@get call.respond500(it.message)
+                } ?: return@get call.respond404("provider does not support QR")
+                val poll = runCatching { instance.pollQr(ready.token) }.getOrElse {
+                    Log.e(LOG_TAG, "pollQr error", it); return@get call.respond500(it.message)
+                }
+                val fields = (poll as? QrResult.Confirmed)?.fields ?: emptyMap()
+                call.respondText(
+                    json.encodeToString(fields),
+                    ContentType.Application.Json,
+                )
             }
         }
 
