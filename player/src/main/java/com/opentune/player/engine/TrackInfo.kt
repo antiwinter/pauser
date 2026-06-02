@@ -43,7 +43,9 @@ internal fun rememberTrackInfo(
                 var vm: String? = null
                 var am: String? = null
                 for (group in tracks.groups) {
+                    if (!group.isSelected) continue
                     for (i in 0 until group.length) {
+                        if (!group.isTrackSelected(i)) continue
                         val fmt = group.getTrackFormat(i)
                         when (group.type) {
                             C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType

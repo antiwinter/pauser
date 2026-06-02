@@ -20,9 +20,10 @@ object OpenTuneExoPlayer {
         context: Context,
         preBufferMs: Int = AppPrefsStore.DEFAULT_PRE_BUFFER_MS,
     ): PlayerWithMeter {
+        val minBufferMs = preBufferMs - 10_000
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                minBufferMs,
                 preBufferMs,
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
