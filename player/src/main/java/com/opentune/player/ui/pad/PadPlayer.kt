@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,17 +58,13 @@ fun PadPlayer(
     val scope = rememberCoroutineScope()
     val exo = engine.exo
 
-    var controllerVisible by remember { mutableStateOf(false) }
+    /** 0 = hidden, >0 = visible. Incrementing resets the auto-hide timer. */
+    var controllerState by remember { mutableStateOf(0) }
     var position by remember { mutableLongStateOf(exo.currentPosition) }
     var isPaused by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
 
-    // One-way sync: local play/pause intent → ExoPlayer.
-    LaunchedEffect(exo) {
-        exo.playWhenReady = !isPaused
-    }
-
-    // Event-driven position updates: seek, loop, buffering transitions fire instantly.
+    // Event-driven state updates from ExoPlayer.
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
             override fun onPositionDiscontinuity(
@@ -81,11 +78,14 @@ fun PadPlayer(
             override fun onPlaybackStateChanged(state: Int) {
                 position = exo.currentPosition
                 isBuffering = state == Player.STATE_BUFFERING
-                if (isBuffering) controllerVisible = true
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 position = exo.currentPosition
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                isPaused = !playWhenReady
             }
         }
         exo.addListener(listener)
@@ -102,10 +102,10 @@ fun PadPlayer(
     }
 
     // Auto-hide after 3s on Pad.
-    LaunchedEffect(controllerVisible) {
-        if (controllerVisible) {
+    LaunchedEffect(controllerState) {
+        if (controllerState != 0) {
             delay(PAD_CONTROLLER_AUTO_HIDE_MS)
-            controllerVisible = false
+            controllerState = 0
         }
     }
 
@@ -115,7 +115,7 @@ fun PadPlayer(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGestures { controllerVisible = !controllerVisible }
+                detectTapGestures { controllerState = if (controllerState != 0) 0 else 1 }
             },
     ) {
         PadPlayerView(
@@ -125,7 +125,7 @@ fun PadPlayer(
         )
 
         AnimatedVisibility(
-            visible = controllerVisible || isBuffering,
+            visible = controllerState != 0 || isBuffering,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -137,7 +137,7 @@ fun PadPlayer(
                 isPlaying = !isPaused,
                 onPlayPause = {
                     isPaused = !isPaused
-                    controllerVisible = true
+                    controllerState++
                 },
             )
         }

@@ -57,9 +57,11 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
     var onBack: (() -> Unit)? = null
 
     /**
-     * Notify the Compose layer that a transport key was pressed so it can show the controller bar.
+     * Called when a transport key is pressed so the Compose layer can show/refresh the controller bar.
+     * [isResume] is true when CENTER/ENTER triggered a play (hidden→playing); the caller may
+     * choose to skip showing the bar in that case.
      */
-    var onTransportKey: (() -> Unit)? = null
+    var onTransportKey: ((isResume: Boolean) -> Unit)? = null
 
     /**
      * When non-null, all key events are forwarded here first. Return true to consume the event;
@@ -117,24 +119,25 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 // UP / DOWN → show controller bar (volume/brightness handled by system)
                 KeyEvent.KEYCODE_DPAD_UP,
                 KeyEvent.KEYCODE_DPAD_DOWN,
-                -> onTransportKey?.invoke()
+                -> onTransportKey?.invoke(false)
 
                 // LEFT / RIGHT → seek ±15s; show controller bar
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     val pos = p?.currentPosition?.minus(SEEK_MS)?.coerceAtLeast(0L) ?: 0L
                     p?.seekTo(pos)
                     Log.d(LOG_TAG, "seek -${SEEK_MS}ms → ${p?.currentPosition}")
-                    onTransportKey?.invoke()
+                    onTransportKey?.invoke(false)
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     val dur = p?.duration ?: C.TIME_UNSET
                     val to = (p?.currentPosition ?: 0L) + SEEK_MS
                     p?.seekTo(if (dur > 0) to.coerceAtMost(dur) else to)
                     Log.d(LOG_TAG, "seek +${SEEK_MS}ms → ${p?.currentPosition}")
-                    onTransportKey?.invoke()
+                    onTransportKey?.invoke(false)
                 }
 
-                // CENTER / ENTER / SPACE → play/pause toggle; show controller bar on pause
+                // CENTER / ENTER / SPACE → play/pause toggle
+                // isResume=true when resuming so the caller can skip showing the bar if it's hidden.
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -145,7 +148,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                         val wasPlayWhenReady = p.playWhenReady
                         if (wasPlayWhenReady) p.pause() else p.play()
                         Log.d(LOG_TAG, "toggle play/pause playWhenReady=$wasPlayWhenReady")
-                        if (wasPlayWhenReady) onTransportKey?.invoke()
+                        onTransportKey?.invoke(!wasPlayWhenReady)
                     }
                 }
 
@@ -161,7 +164,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 -> {
                     p?.pause()
                     Log.d(LOG_TAG, "media pause/stop")
-                    onTransportKey?.invoke()
+                    onTransportKey?.invoke(false)
                 }
             }
         }
@@ -214,7 +217,7 @@ internal fun TvPlayerView(
     onPlayerViewBound: (PlayerView) -> Unit = {},
     onOpenMenu: () -> Unit = {},
     onBack: () -> Unit = {},
-    onTransportKey: () -> Unit = {},
+    onTransportKey: (isResume: Boolean) -> Unit = {},
     onKey: ((KeyEvent) -> Boolean)? = null,
     subtitleTranslationYPx: Float = 0f,
     subtitleSizeScale: Float = 1f,

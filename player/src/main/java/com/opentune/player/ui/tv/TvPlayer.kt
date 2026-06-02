@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -70,17 +71,13 @@ fun TvPlayer(
     val scope = rememberCoroutineScope()
     val exo = engine.exo
 
-    var controllerVisible by remember { mutableStateOf(false) }
+    /** 0 = hidden, >0 = visible. Incrementing resets the auto-hide timer. */
+    var controllerState by remember { mutableStateOf(0) }
     var position by remember { mutableLongStateOf(exo.currentPosition) }
     var isPaused by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
 
-    // One-way sync: local play/pause intent → ExoPlayer.
-    LaunchedEffect(exo) {
-        exo.playWhenReady = !isPaused
-    }
-
-    // Event-driven position updates: seek, loop, buffering transitions fire instantly.
+    // Event-driven state updates from ExoPlayer.
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
             override fun onPositionDiscontinuity(
@@ -94,11 +91,14 @@ fun TvPlayer(
             override fun onPlaybackStateChanged(state: Int) {
                 position = exo.currentPosition
                 isBuffering = state == Player.STATE_BUFFERING
-                if (isBuffering) controllerVisible = true
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 position = exo.currentPosition
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                isPaused = !playWhenReady
             }
         }
         exo.addListener(listener)
@@ -115,10 +115,10 @@ fun TvPlayer(
     }
 
     // Auto-hide after 5s on TV when controller is shown.
-    LaunchedEffect(controllerVisible) {
-        if (controllerVisible) {
+    LaunchedEffect(controllerState) {
+        if (controllerState != 0) {
             delay(TV_CONTROLLER_AUTO_HIDE_MS)
-            controllerVisible = false
+            controllerState = 0
         }
     }
 
@@ -141,13 +141,13 @@ fun TvPlayer(
     )
 
     // Keep InfoOsd in sync with controller visibility.
-    if (controllerVisible) infoOsd.show() else infoOsd.hide()
+    if (controllerState != 0) infoOsd.show() else infoOsd.hide()
 
     BackHandler {
         when {
             menu.isOpen -> menu.back()
             engine.subtitleCtrl.isAdjustActive -> engine.subtitleCtrl.confirmAdjust()
-            controllerVisible -> controllerVisible = false
+            controllerState != 0 -> controllerState = 0
             else -> scope.launch { engine.release(); onExit() }
         }
     }
@@ -163,11 +163,14 @@ fun TvPlayer(
             onOpenMenu = { menu.open() },
             onBack = {
                 when {
-                    controllerVisible -> controllerVisible = false
+                    controllerState != 0 -> controllerState = 0
                     else -> scope.launch { engine.release(); onExit() }
                 }
             },
-            onTransportKey = { controllerVisible = true },
+            onTransportKey = { isResume ->
+                // Rule 2: resume (pause→play) only refreshes the timer if the bar is already visible.
+                if (!isResume || controllerState != 0) controllerState++
+            },
             onKey = { event ->
                 when {
                     menu.isOpen -> {
@@ -212,7 +215,7 @@ fun TvPlayer(
         )
 
         AnimatedVisibility(
-            visible = controllerVisible || isBuffering,
+            visible = controllerState != 0 || isBuffering,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -221,12 +224,10 @@ fun TvPlayer(
                 position = position,
                 buffered = exo.bufferedPosition,
                 duration = exo.duration.coerceAtLeast(0L),
-                // Use local isPaused (one-way synced to exo.playWhenReady) so the icon
-                // responds instantly without waiting for position polling or buffering state.
                 isPlaying = !isPaused,
                 onPlayPause = {
                     isPaused = !isPaused
-                    controllerVisible = true
+                    controllerState++
                 },
             )
         }
