@@ -20,7 +20,6 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import com.opentune.player.controller.AudioController
 import com.opentune.player.controller.SpeedController
 import com.opentune.player.controller.SubtitleController
@@ -131,14 +130,8 @@ internal fun rememberPlaybackEngine(
         .collectAsState(initial = AppPrefsStore.DEFAULT_PRE_BUFFER_MS)
 
     // preBufferMs is a key so the player is recreated if the setting changes.
-    // fallbackSelector is null when DECODER_FALLBACK_ENABLED = false.
-    val fallbackSelector = rememberFallbackCodecSelector(instanceKey, preBufferMs)
     val playerWithMeter = remember(instanceKey, preBufferMs) {
-        OpenTuneExoPlayer.createForBundledSources(
-            context,
-            preBufferMs,
-            fallbackSelector?.selector ?: MediaCodecSelector.DEFAULT,
-        )
+        OpenTuneExoPlayer.createForBundledSources(context, preBufferMs)
     }
     val exo = playerWithMeter.player
     val bandwidthMeter = playerWithMeter.bandwidthMeter
@@ -304,11 +297,10 @@ internal fun rememberPlaybackEngine(
         }
     }
 
-    // --- Decoder retry (no-op when DECODER_FALLBACK_ENABLED = false) ---
-    FallbackEffect(
+    // --- Track-level fallback: video fail → audio-only, audio fail → video-only ---
+    TrackFallbackEffect(
         exo = exo,
         instanceKey = instanceKey,
-        selector = fallbackSelector,
         specState = specState,
         trackInfoState = trackInfo,
         mainHandler = mainHandler,
