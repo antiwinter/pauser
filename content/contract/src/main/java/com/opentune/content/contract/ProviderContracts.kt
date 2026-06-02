@@ -25,7 +25,7 @@ interface OpenTuneProvider {
     val providesArt: Boolean
 
     fun getFieldsSpec(): List<FormFieldSpec>
-    fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient
+    fun createClient(values: Map<String, String>): EndpointClient
 }
 
 interface OpenTuneProviderLoader {

@@ -24,7 +24,6 @@ object OpenTuneProviderRegistryHolder {
 }
 
 interface OpenTuneProviderAccess {
-    val platformCapabilities: PlatformCapabilities
     fun provider(protocol: String): OpenTuneProvider
     fun allProviders(): List<OpenTuneProvider>
 }

@@ -165,11 +165,28 @@ export interface PlaybackSpec {
   hooksState: HooksState;
 }
 
+export interface ProfileLevel {
+  profile: string;
+  level: number;
+}
+
+export interface VideoCodecInfo {
+  codec: string;    // "h264", "hevc", "vp9", "av1"
+  mime: string;     // "video/avc", "video/hevc"
+  maxWidth: number;
+  maxHeight: number;
+  profileLevels: ProfileLevel[];
+}
+
+export interface AudioCodecInfo {
+  codec: string;    // "aac", "ac3", "eac3", ...
+  mime: string;
+}
+
 export interface PlatformCapabilities {
-  videoMime: string[];
-  audioMime: string[];
+  videoCodecs: VideoCodecInfo[];
+  audioCodecs: AudioCodecInfo[];
   subtitleFormats: string[];
-  maxPixels: number;
 }
 
 // ── Bridge protocol ───────────────────────────────────────────────────────────

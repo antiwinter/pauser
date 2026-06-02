@@ -73,7 +73,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     return@post
                 }
                 val client = runCatching {
-                    provider.createClient(body.fields, ctx.platformCapabilities())
+                    provider.createClient(body.fields)
                 }.getOrElse {
                     call.respondText(
                         json.encodeToString(AddServerResponse(error = it.message ?: "failed to create client")),

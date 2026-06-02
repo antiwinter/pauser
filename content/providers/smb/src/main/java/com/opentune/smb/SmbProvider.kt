@@ -1,6 +1,5 @@
 package com.opentune.smb
 
-import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.EndpointClient
 import com.opentune.core.form.contract.FormFieldKind
@@ -54,7 +53,7 @@ class SmbProvider : OpenTuneProvider {
         FormFieldSpec(id = "name", labelKey = "fld_endpoint_name", kind = FormFieldKind.SingleLineText, required = false, order = 100),
     )
 
-    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
+    override fun createClient(values: Map<String, String>): EndpointClient {
         val fields = SmbServerFieldsJson(
             host = values["host"] ?: error("Missing host"),
             shareName = values["share_name"] ?: error("Missing share_name"),

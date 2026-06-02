@@ -33,6 +33,7 @@ kotlin {
 
 dependencies {
     api(project(":content:contract"))
+    implementation(project(":player"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.coil.core)

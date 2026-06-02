@@ -15,9 +15,26 @@ object PlatformInfoHolder {
     fun get(): PlatformInfo = _info ?: error("PlatformInfo not initialized")
 }
 
+data class ProfileLevel(
+    val profile: String,
+    val level: Int,
+)
+
+data class VideoCodecInfo(
+    val codec: String,
+    val mime: String,
+    val maxWidth: Int,
+    val maxHeight: Int,
+    val profileLevels: List<ProfileLevel>,
+)
+
+data class AudioCodecInfo(
+    val codec: String,
+    val mime: String,
+)
+
 data class PlatformCapabilities(
-    val videoMime: List<String>,
-    val audioMime: List<String>,
-    val maxPixels: Int = 1920 * 1080,
+    val videoCodecs: List<VideoCodecInfo>,
+    val audioCodecs: List<AudioCodecInfo>,
     val subtitleFormats: List<String> = listOf("srt", "ass", "ssa", "vtt"),
 )

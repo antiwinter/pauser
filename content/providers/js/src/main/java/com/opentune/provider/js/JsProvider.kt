@@ -1,6 +1,5 @@
 package com.opentune.provider.js
 
-import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.OpenTuneProvider
 import com.opentune.content.contract.EndpointClient
 import com.opentune.core.form.contract.FormFieldKind
@@ -39,12 +38,13 @@ class JsProvider private constructor(
 
     // ── Instance creation ──────────────────────────────────────────────────
 
-    override fun createClient(values: Map<String, String>, capabilities: PlatformCapabilities): EndpointClient {
+    override fun createClient(values: Map<String, String>): EndpointClient {
+        val capabilities = com.opentune.player.engine.DeviceCodecDetector.detect()
         return JsProviderInstance(
             protocol = protocol,
-            jsBundle     = jsBundle,
-            hostApis     = hostApis,
-            values       = values,
+            jsBundle = jsBundle,
+            hostApis = hostApis,
+            values = values,
             capabilities = capabilities,
         )
     }

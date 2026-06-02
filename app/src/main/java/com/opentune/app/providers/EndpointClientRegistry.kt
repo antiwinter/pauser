@@ -80,7 +80,7 @@ class EndpointClientRegistry(
         val httpClient: OkHttpClient = buildHttpClient(entity.proxyId)
 
         val client = runCatching {
-            provider.createClient(values, providerRegistry.platformCapabilities)
+            provider.createClient(values)
         }.getOrNull() ?: return null
 
         client.httpClient = httpClient

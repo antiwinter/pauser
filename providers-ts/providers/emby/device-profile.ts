@@ -13,60 +13,30 @@ import type {
   ResponseProfile,
 } from './dto.js';
 
-function mimeToVideoCodec(mime: string): string | null {
-  switch (mime) {
-    case 'video/avc':  return 'h264';
-    case 'video/hevc': return 'hevc';
-    case 'video/vp9':  return 'vp9';
-    case 'video/av01': return 'av1';
-    default:           return null;
-  }
-}
-
-function mimeToAudioCodec(mime: string): string | null {
-  switch (mime) {
-    case 'audio/mp4a-latm': return 'aac';
-    case 'audio/ac3':       return 'ac3';
-    case 'audio/eac3':      return 'eac3';
-    case 'audio/mpeg':      return 'mp3';
-    case 'audio/opus':      return 'opus';
-    case 'audio/flac':      return 'flac';
-    default:                return null;
-  }
-}
-
 export function buildDeviceProfile(caps: PlatformCapabilities, deviceName: string): DeviceProfile {
-  const videoCodecs = [...new Set(caps.videoMime.map(mimeToVideoCodec).filter(Boolean) as string[])];
-  const audioCodecs = [...new Set(caps.audioMime.map(mimeToAudioCodec).filter(Boolean) as string[])];
+  const videoCodecs = caps.videoCodecs.map((vc) => vc.codec);
+  const audioCodecs = caps.audioCodecs.map((ac) => ac.codec);
 
   const v = videoCodecs.length > 0 ? videoCodecs.join(',') : 'h264';
   const a = audioCodecs.length > 0 ? audioCodecs.join(',') : 'aac';
 
   const codecProfiles: CodecProfile[] = [];
 
-  const maxPx = caps.maxPixels ?? (1920 * 1080);
-  const w = Math.max(1, Math.floor(Math.sqrt(maxPx) / 8) * 8);
-  const h = Math.max(1, Math.floor(maxPx / w / 8) * 8);
+  for (const vc of caps.videoCodecs) {
+    const conditions: ProfileCondition[] = [
+      { Condition: 'LessThanEqual', Property: 'Width', Value: String(vc.maxWidth), IsRequired: false },
+      { Condition: 'LessThanEqual', Property: 'Height', Value: String(vc.maxHeight), IsRequired: false },
+    ];
 
-  if (videoCodecs.includes('hevc')) {
+    if (vc.profileLevels.length > 0) {
+      const maxLevel = Math.max(...vc.profileLevels.map((pl) => pl.level));
+      conditions.push({ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: String(maxLevel), IsRequired: false });
+    }
+
     codecProfiles.push({
       Type: 'Video',
-      Codec: 'hevc',
-      Conditions: [
-        { Condition: 'LessThanEqual', Property: 'Width',  Value: String(w), IsRequired: false },
-        { Condition: 'LessThanEqual', Property: 'Height', Value: String(h), IsRequired: false },
-      ],
-    });
-  }
-  if (videoCodecs.includes('h264')) {
-    codecProfiles.push({
-      Type: 'Video',
-      Codec: 'h264',
-      Conditions: [
-        { Condition: 'LessThanEqual', Property: 'Width',   Value: String(w), IsRequired: false },
-        { Condition: 'LessThanEqual', Property: 'Height',  Value: String(h), IsRequired: false },
-        { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '52', IsRequired: false },
-      ],
+      Codec: vc.codec,
+      Conditions: conditions,
     });
   }
 

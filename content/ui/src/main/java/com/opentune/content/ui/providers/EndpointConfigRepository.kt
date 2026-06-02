@@ -57,7 +57,7 @@ object EndpointConfigRepository {
     private suspend fun buildClient(protocol: String, values: Map<String, String>, proxyId: String?): EndpointClient {
         val provider   = OpenTuneProviderRegistryHolder.get().provider(protocol)
         val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
-        return provider.createClient(values, OpenTuneProviderRegistryHolder.get().platformCapabilities)
+        return provider.createClient(values)
             .also { it.httpClient = httpClient }
     }
 

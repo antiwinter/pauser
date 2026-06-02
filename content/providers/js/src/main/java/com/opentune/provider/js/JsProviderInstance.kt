@@ -152,16 +152,35 @@ class JsProviderInstance(
             val initArgs = buildJsonObject {
                 put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
                 put("capabilities", buildJsonObject {
-                    put("videoMime", kotlinx.serialization.json.JsonArray(
-                        capabilities.videoMime.map { JsonPrimitive(it) },
+                    put("videoCodecs", kotlinx.serialization.json.JsonArray(
+                        capabilities.videoCodecs.map { vc ->
+                            buildJsonObject {
+                                put("codec", JsonPrimitive(vc.codec))
+                                put("mime", JsonPrimitive(vc.mime))
+                                put("maxWidth", JsonPrimitive(vc.maxWidth))
+                                put("maxHeight", JsonPrimitive(vc.maxHeight))
+                                put("profileLevels", kotlinx.serialization.json.JsonArray(
+                                    vc.profileLevels.map { pl ->
+                                        buildJsonObject {
+                                            put("profile", JsonPrimitive(pl.profile))
+                                            put("level", JsonPrimitive(pl.level))
+                                        }
+                                    },
+                                ))
+                            }
+                        },
                     ))
-                    put("audioMime", kotlinx.serialization.json.JsonArray(
-                        capabilities.audioMime.map { JsonPrimitive(it) },
+                    put("audioCodecs", kotlinx.serialization.json.JsonArray(
+                        capabilities.audioCodecs.map { ac ->
+                            buildJsonObject {
+                                put("codec", JsonPrimitive(ac.codec))
+                                put("mime", JsonPrimitive(ac.mime))
+                            }
+                        },
                     ))
                     put("subtitleFormats", kotlinx.serialization.json.JsonArray(
                         capabilities.subtitleFormats.map { JsonPrimitive(it) },
                     ))
-                    put("maxPixels", capabilities.maxPixels)
                 })
             }
             engine.callMethod("init", initArgs.toString())

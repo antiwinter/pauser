@@ -50,7 +50,7 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
                 else       EndpointConfigRepository.submitEdit(protocol, endpointId, values, proxyId)
             },
             onGetQr = if (hasQr) { proxyId ->
-                val client = provider.createClient(emptyMap(), OpenTuneProviderRegistryHolder.get().platformCapabilities)
+                val client = provider.createClient(emptyMap())
                 client.httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
                 qrClientRef[0] = client
                 client.getQr()

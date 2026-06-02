@@ -17,16 +17,6 @@ class OpenTuneProviderRegistry : OpenTuneProviderAccess {
 
     val providersFlow: StateFlow<List<OpenTuneProvider>> = _providersFlow.asStateFlow()
 
-    @Volatile override var platformCapabilities: PlatformCapabilities = PlatformCapabilities(
-        videoMime = listOf("video/avc"),
-        audioMime = listOf("audio/mp4a-latm"),
-    )
-        private set
-
-    fun setCapabilities(capabilities: PlatformCapabilities) {
-        this.platformCapabilities = capabilities
-    }
-
     fun register(provider: OpenTuneProvider) {
         providersById[provider.protocol] = provider
         _providersFlow.update { it + provider }

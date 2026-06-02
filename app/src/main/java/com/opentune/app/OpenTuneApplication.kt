@@ -1,7 +1,6 @@
 package com.opentune.app
 
 import android.app.Application
-import android.media.MediaCodecList
 import androidx.room.Room
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -13,7 +12,6 @@ import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
 import com.opentune.storage.EndpointEntity
-import com.opentune.content.contract.PlatformCapabilities
 import com.opentune.content.contract.PlatformInfoHolder
 import com.opentune.content.contract.StreamRegistrarHolder
 import com.opentune.content.contract.EndpointClientRegistryHolder
@@ -104,7 +102,6 @@ class OpenTuneApplication : Application() {
             appContext = object : AppContext {
                 override fun getProviders() = providerRegistry.providersFlow.value
                 override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
-                override fun platformCapabilities() = providerRegistry.platformCapabilities
                 override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
                 override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
                 override val endpointDao get() = storageBindings.endpointDao
@@ -115,7 +112,6 @@ class OpenTuneApplication : Application() {
         )
         StreamRegistrarHolder.set(openTuneServer)
         appScope.launch(Dispatchers.IO) { openTuneServer.start() }
-        appScope.launch(Dispatchers.IO) { providerRegistry.setCapabilities(buildPlatformCapabilities()) }
         appScope.launch { providerRegistry.discoverAsync() }
     }
 
@@ -128,34 +124,4 @@ class OpenTuneApplication : Application() {
                     .build()
             }
             .build()
-
-    private fun buildPlatformCapabilities(): PlatformCapabilities {
-        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        val videoMimes = mutableListOf<String>()
-        val audioMimes = mutableListOf<String>()
-        var maxPixels = 0
-        for (info in list.codecInfos) {
-            if (info.isEncoder) continue
-            for (mime in info.supportedTypes) {
-                val caps = info.getCapabilitiesForType(mime)
-                if (mime.startsWith("video/")) {
-                    videoMimes += mime
-                    val vc = caps.videoCapabilities
-                    if (vc != null) {
-                        val w = vc.supportedWidths.upper
-                        val h = vc.supportedHeights.upper
-                        if (w * h > maxPixels) maxPixels = w * h
-                    }
-                } else if (mime.startsWith("audio/")) {
-                    audioMimes += mime
-                }
-            }
-        }
-        return PlatformCapabilities(
-            videoMime = videoMimes.distinct(),
-            audioMime = audioMimes.distinct(),
-            maxPixels = maxPixels.coerceAtLeast(1920 * 1080),
-            subtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
-        )
-    }
 }
