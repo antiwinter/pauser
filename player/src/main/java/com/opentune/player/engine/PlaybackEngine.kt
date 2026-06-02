@@ -134,7 +134,6 @@ internal fun rememberPlaybackEngine(
         OpenTuneExoPlayer.createForBundledSources(context, preBufferMs)
     }
     val exo = playerWithMeter.player
-    val bandwidthMeter = playerWithMeter.bandwidthMeter
     val released = remember(instanceKey, preBufferMs) { AtomicBoolean(false) }
 
     val stores = remember { PlayerStores(entryStateStore, appConfigStore) }
@@ -272,17 +271,13 @@ internal fun rememberPlaybackEngine(
         hooks.onPlaybackReady(pos, rate)
     }
 
-    // --- Progress tick loop + bandwidth meter ---
-    // DefaultBandwidthMeter only receives transfer events from ExoPlayer's DataSource layer.
-    // SMB uses SmbJ directly (not ExoPlayer's DataSource), so getBitrateEstimate() always
-    // returns -1 for SMB sources — the mbps field in InfoOsd will not be displayed for SMB.
+    // --- Progress tick loop ---
     LaunchedEffect(exo, instanceKey, spec.hooks) {
         val progressIntervalMs = spec.hooks.progressIntervalMs()
         val interval = progressIntervalMs.takeIf { it > 0L } ?: 10_000L
         while (isActive) {
             delay(interval)
             if (released.get()) break
-            bandwidthMbps.floatValue = bandwidthMeter.getBitrateEstimate() / 1_000_000f
             val pos = exo.currentPosition
             val isPaused = !exo.playWhenReady
             hooksState.value.onProgressTick(pos, exo.playbackParameters.speed, isPaused)
@@ -294,6 +289,15 @@ internal fun rememberPlaybackEngine(
                     }
                 }
             }
+        }
+    }
+
+    // --- Bandwidth update (1s interval) — read 5s rolling average from BandwidthTracker ---
+    LaunchedEffect(instanceKey) {
+        while (isActive) {
+            delay(1_000)
+            if (released.get()) break
+            bandwidthMbps.floatValue = BandwidthTracker.mbps
         }
     }
 

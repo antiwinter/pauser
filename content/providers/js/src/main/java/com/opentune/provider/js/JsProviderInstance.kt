@@ -415,6 +415,7 @@ class JsProviderInstance(
             mimeType = mimeType,
             title = title,
             durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
+            bitrate = obj["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             hooks = hooks,
             subtitleTracks = subtitles,
             httpClient = httpClient,

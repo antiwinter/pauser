@@ -23,6 +23,7 @@ data class PlaybackSpec(
     val mimeType: String? = null,
     val title: String,
     val durationMs: Long?,
+    val bitrate: Int?,
     val hooks: OpenTunePlaybackHooks,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val httpClient: okhttp3.OkHttpClient,

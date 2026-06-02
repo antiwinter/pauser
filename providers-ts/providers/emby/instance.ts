@@ -226,12 +226,17 @@ export async function getPlaybackSpec(
     deviceProfile,
   };
 
+  const durationMs = item.RunTimeTicks != null
+    ? Math.floor(item.RunTimeTicks / 10_000)
+    : null;
+
   return {
     url,
     headers,
     mimeType,
     title,
-    durationMs: null,
+    durationMs,
+    bitrate: source.Bitrate ?? null,
     subtitleTracks,
     hooksState,
   };

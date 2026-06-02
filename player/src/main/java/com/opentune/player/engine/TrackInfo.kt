@@ -1,6 +1,7 @@
 package com.opentune.player.engine
 
 import android.os.Handler
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -24,6 +25,9 @@ internal data class TrackInfo(
 // MIME types come from onTracksChanged. Decoder names come from AnalyticsListener callbacks
 // which fire when a decoder is initialized — this covers both the normal path and fallback
 // retries (each retry re-initializes the decoder, firing again).
+//
+// Tracks that exist but are disabled (e.g., no decoder available) are still tracked so the
+// OSD can show them with a "failed" indicator.
 @UnstableApi
 @Composable
 internal fun rememberTrackInfo(
@@ -39,25 +43,27 @@ internal fun rememberTrackInfo(
                 var vm: String? = null
                 var am: String? = null
                 for (group in tracks.groups) {
-                    if (!group.isSelected) continue
                     for (i in 0 until group.length) {
-                        if (!group.isTrackSelected(i)) continue
                         val fmt = group.getTrackFormat(i)
                         when (group.type) {
-                            // Only update when a track is actively selected; preserve last-known
-                            // value when the track is disabled so the OSD can still show it.
                             C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
                             C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
                         }
-                        break
+                        break // first track in group
                     }
                 }
                 mainHandler.post {
                     val current = state.value
-                    state.value = current.copy(
+                    val updated = current.copy(
                         videoMime = vm ?: current.videoMime,
                         audioMime = am ?: current.audioMime,
                     )
+                    Log.d(
+                        "TrackInfo",
+                        "onTracksChanged videoMime=$vm audioMime=$am " +
+                            "stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
+                    )
+                    state.value = updated
                 }
             }
         }

@@ -18,11 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 
 internal class InfoOsd(
     private val spec: PlaybackSpec,
+    private val durationMs: Long,
     private val videoMime: String?,
     private val videoDecoderName: String?,
     private val audioMime: String?,
@@ -48,24 +50,30 @@ internal class InfoOsd(
                     .fillMaxWidth()
                     .background(Color(0xCC000000))
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = spec.title, color = Color.White, fontSize = 14.sp)
-                Text(text = formatDuration(spec.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                videoMime?.let { mime ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(text = spec.title, color = Color.White, fontSize = 14.sp)
+                    if (durationMs > 0) {
+                        Text(text = formatDuration(durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                    }
                     Text(
-                        text = if (videoDecoderName != null) "$mime $videoDecoderName" else mime,
-                        color = Color.White,
+                        text = trackLabel(videoMime, videoDecoderName),
+                        color = if (isTrackFailed(videoMime, videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
-                }
-                audioMime?.let { mime ->
                     Text(
-                        text = if (audioDecoderName != null) "$mime $audioDecoderName" else mime,
-                        color = Color.White,
+                        text = trackLabel(audioMime, audioDecoderName),
+                        color = if (isTrackFailed(audioMime, audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
+                    spec.bitrate?.takeIf { it > 0 }?.let { br ->
+                        Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                    }
                 }
                 if (mbps > 0f) {
                     Text(
@@ -79,8 +87,19 @@ internal class InfoOsd(
     }
 }
 
-private fun formatDuration(ms: Long?): String {
-    if (ms == null || ms <= 0) return "?"
+/** Returns codec name, "failed" if track exists but no decoder, or "" if no track. */
+private fun trackLabel(mime: String?, decoderName: String?): String {
+    if (mime == null) return ""
+    val codec = mime.replace(Regex("^(?:video|audio)/"), "")
+    return if (decoderName == null) "$codec (failed)" else codec
+}
+
+/** True when MIME is known but decoder never initialized. */
+private fun isTrackFailed(mime: String?, decoderName: String?): Boolean {
+    return mime != null && decoderName == null
+}
+
+private fun formatDuration(ms: Long): String {
     val totalSec = ms / 1000
     val h = totalSec / 3600
     val m = (totalSec % 3600) / 60
@@ -96,6 +115,7 @@ private fun formatDuration(ms: Long?): String {
 internal fun rememberInfoOsd(
     instanceKey: EntryStateKey,
     spec: PlaybackSpec,
+    exo: ExoPlayer,
     videoMime: String?,
     videoDecoderName: String?,
     audioMime: String?,
@@ -104,15 +124,16 @@ internal fun rememberInfoOsd(
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
 
-    return remember(instanceKey, spec, videoMime, videoDecoderName, audioMime, audioDecoderName) {
+    return remember(instanceKey, spec, exo, videoMime, videoDecoderName, audioMime, audioDecoderName) {
         InfoOsd(
             spec = spec,
+            durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
-            mbpsState = mbpsState,
             videoDecoderName = videoDecoderName,
             audioMime = audioMime,
             audioDecoderName = audioDecoderName,
             showState = showState,
+            mbpsState = mbpsState,
         )
     }
 }

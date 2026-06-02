@@ -133,6 +133,7 @@ fun TvPlayer(
     val infoOsd = rememberInfoOsd(
         instanceKey = storageCtx.entryStateKey,
         spec = spec,
+        exo = exo,
         videoMime = trackInfo.videoMime,
         videoDecoderName = trackInfo.videoDecoderName,
         audioMime = trackInfo.audioMime,

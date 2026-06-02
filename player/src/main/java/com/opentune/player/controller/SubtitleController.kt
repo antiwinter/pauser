@@ -28,6 +28,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.R
+import com.opentune.player.engine.BandwidthTracker
 import com.opentune.player.engine.PlayerStores
 import com.opentune.player.engine.toMediaSource
 import com.opentune.player.PlaybackSpec
@@ -84,6 +85,7 @@ internal fun prepareWithSidecar(
         .build()
     val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
         spec.httpClient.newBuilder()
+            .addInterceptor(BandwidthTracker.interceptor)
             .apply {
                 if (spec.headers.isNotEmpty()) addInterceptor { chain ->
                     val req = chain.request().newBuilder().apply {

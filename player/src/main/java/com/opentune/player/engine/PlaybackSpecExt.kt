@@ -19,6 +19,7 @@ internal fun PlaybackSpec.toMediaSource(context: android.content.Context): Media
     }
     val okHttp = httpClient
         .newBuilder()
+        .addInterceptor(BandwidthTracker.interceptor)
         .apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)

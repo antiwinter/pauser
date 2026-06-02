@@ -173,6 +173,7 @@ class SmbProviderInstance(
                 mimeType = null,
                 title = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
                 durationMs = null,
+                bitrate = null,
                 hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
                 httpClient = httpClient,

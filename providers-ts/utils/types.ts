@@ -161,6 +161,7 @@ export interface PlaybackSpec {
   mimeType: string | null;
   title: string;
   durationMs: number | null;
+  bitrate: number | null;
   subtitleTracks: SubtitleTrack[];
   hooksState: HooksState;
 }
