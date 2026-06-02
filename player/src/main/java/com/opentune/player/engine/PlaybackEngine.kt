@@ -31,7 +31,7 @@ import com.opentune.player.controller.rememberSubtitleController
 import com.opentune.player.controller.resolveSubtitlePreference
 import com.opentune.player.controller.subtitleMimeType
 import com.opentune.player.LocalPlaybackStorageContext
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore

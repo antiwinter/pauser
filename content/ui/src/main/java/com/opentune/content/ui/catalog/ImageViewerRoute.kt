@@ -20,7 +20,7 @@ fun ImageViewerRoute(
 ) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     DisposableEffect(itemRefDecoded) {
-        var spec: com.opentune.content.contract.PlaybackSpec? = null
+        var spec: com.opentune.player.PlaybackSpec? = null
         val job = MainScope().launch {
             val instance = withContext(Dispatchers.IO) { EndpointClientRegistryHolder.get().getOrCreate(endpointId) }
             spec = withContext(Dispatchers.IO) { instance?.getPlaybackSpec(itemRefDecoded, 0) }

@@ -22,7 +22,7 @@ import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.OpenTunePlayer
 import com.opentune.player.PlaybackStorageContext
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.Dispatchers

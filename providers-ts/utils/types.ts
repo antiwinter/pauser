@@ -183,7 +183,10 @@ export interface AudioCodecInfo {
   mime: string;
 }
 
-export interface PlatformCapabilities {
+export interface PlatformInfo {
+  deviceName: string;
+  deviceId: string;
+  clientVersion: string;
   videoCodecs: VideoCodecInfo[];
   audioCodecs: AudioCodecInfo[];
   subtitleFormats: string[];
@@ -199,7 +202,7 @@ export interface OpenTuneProviderBridge {
 
   init(args: {
     credentials: Record<string, string>;
-    capabilities: PlatformCapabilities;
+    deviceInfo: PlatformInfo;
   }): Promise<void>;
 
   listEntry(args: {

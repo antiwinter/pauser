@@ -6,7 +6,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import okhttp3.OkHttpClient
 
 @UnstableApi

@@ -30,8 +30,8 @@ import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.R
 import com.opentune.player.engine.PlayerStores
 import com.opentune.player.engine.toMediaSource
-import com.opentune.content.contract.PlaybackSpec
-import com.opentune.content.contract.SubtitleTrack
+import com.opentune.player.PlaybackSpec
+import com.opentune.player.SubtitleTrack
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.CoroutineScope

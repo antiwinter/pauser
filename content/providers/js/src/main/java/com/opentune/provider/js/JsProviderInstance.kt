@@ -7,17 +7,17 @@ import com.opentune.content.contract.EntryTag
 import com.opentune.content.contract.EntryType
 import com.opentune.content.contract.EntryUserData
 import com.opentune.content.contract.ExternalUrl
-import com.opentune.content.contract.OpenTunePlaybackHooks
+import com.opentune.player.OpenTunePlaybackHooks
 import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
-import com.opentune.content.contract.PlatformCapabilities
+import com.opentune.player.PlatformInfoData
 import com.opentune.core.form.contract.QrResult
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import com.opentune.content.contract.StreamInfo
-import com.opentune.content.contract.SubtitleTrack
+import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -42,7 +42,7 @@ class JsProviderInstance(
     private val jsBundle: String,
     private val hostApis: HostApis,
     private val values: Map<String, String>,
-    private val capabilities: PlatformCapabilities,
+    private val deviceInfo: PlatformInfoData,
 ) : EndpointClient() {
 
 
@@ -148,12 +148,14 @@ class JsProviderInstance(
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
 
-            /* init({ credentials, capabilities, deviceName, deviceId, clientVersion }) */
             val initArgs = buildJsonObject {
                 put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
-                put("capabilities", buildJsonObject {
+                put("deviceInfo", buildJsonObject {
+                    put("deviceName", JsonPrimitive(deviceInfo.deviceName))
+                    put("deviceId", JsonPrimitive(deviceInfo.deviceId))
+                    put("clientVersion", JsonPrimitive(deviceInfo.clientVersion))
                     put("videoCodecs", kotlinx.serialization.json.JsonArray(
-                        capabilities.videoCodecs.map { vc ->
+                        deviceInfo.videoCodecs.map { vc ->
                             buildJsonObject {
                                 put("codec", JsonPrimitive(vc.codec))
                                 put("mime", JsonPrimitive(vc.mime))
@@ -171,7 +173,7 @@ class JsProviderInstance(
                         },
                     ))
                     put("audioCodecs", kotlinx.serialization.json.JsonArray(
-                        capabilities.audioCodecs.map { ac ->
+                        deviceInfo.audioCodecs.map { ac ->
                             buildJsonObject {
                                 put("codec", JsonPrimitive(ac.codec))
                                 put("mime", JsonPrimitive(ac.mime))
@@ -179,7 +181,7 @@ class JsProviderInstance(
                         },
                     ))
                     put("subtitleFormats", kotlinx.serialization.json.JsonArray(
-                        capabilities.subtitleFormats.map { JsonPrimitive(it) },
+                        deviceInfo.subtitleFormats.map { JsonPrimitive(it) },
                     ))
                 })
             }

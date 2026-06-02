@@ -98,22 +98,6 @@ class HostApis {
         }
     }
 
-    // ── platform ─────────────────────────────────────────────────────────────
-
-    fun handlePlatform(name: String, @Suppress("UNUSED_PARAMETER") argsJson: String): String? {
-        return when (name) {
-            "getPlatformInfo" -> {
-                val info = com.opentune.content.contract.PlatformInfoHolder.get()
-                buildJsonObject {
-                    put("deviceName", info.deviceName)
-                    put("deviceId", info.deviceId)
-                    put("clientVersion", info.clientVersion)
-                }.toString()
-            }
-            else -> throw IllegalArgumentException("Unknown platform method: $name")
-        }
-    }
-
     // ── jar ────────────────────────────────────────────────────────────────
 
     fun handleJar(name: String, argsJson: String, jarLoader: JarLoader): String? {

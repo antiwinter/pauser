@@ -1,6 +1,5 @@
 package com.opentune.proxy.contract
 
-import com.opentune.content.contract.PlatformInfo
 import com.opentune.core.form.contract.FormFieldSpec
 import okhttp3.OkHttpClient
 
@@ -18,5 +17,4 @@ interface ProxyProvider {
     fun getFieldsSpec(): List<FormFieldSpec>
     suspend fun validateFields(values: Map<String, String>): ProxyValidationResult
     fun createClient(values: Map<String, String>): OkHttpClient
-    fun bootstrap(info: PlatformInfo) {}
 }

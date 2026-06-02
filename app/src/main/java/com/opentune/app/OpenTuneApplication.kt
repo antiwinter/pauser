@@ -12,7 +12,7 @@ import com.opentune.app.providers.EndpointClientRegistry
 import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
 import com.opentune.storage.EndpointEntity
-import com.opentune.content.contract.PlatformInfoHolder
+
 import com.opentune.content.contract.StreamRegistrarHolder
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
@@ -81,11 +81,9 @@ class OpenTuneApplication : Application() {
             appConfigStore = AppPrefs(applicationContext),
             proxyDao = database.proxyDao(),
         )
-        val platformInfo = AndroidPlatformInfo(this)
-        PlatformInfoHolder.set(platformInfo)
+
         providerRegistry = OpenTuneProviderRegistry()
         proxyProviderRegistry = ProxyProviderRegistry.discover()
-        proxyProviderRegistry.allProxies().forEach { it.bootstrap(platformInfo) }
         endpointClientRegistry = EndpointClientRegistry(
             endpointDao = storageBindings.endpointDao,
             providerRegistry = providerRegistry,

@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.ui.pad.PadPlayer
 import com.opentune.player.ui.tv.TvPlayer
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 
 @UnstableApi
 @Composable

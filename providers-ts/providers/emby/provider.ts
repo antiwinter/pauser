@@ -5,7 +5,7 @@
 import { EmbyApi } from './api.js';
 import { normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { ProviderFieldSpec, ValidationResult, PlatformCapabilities } from '../../utils/types.js';
+import type { ProviderFieldSpec, ValidationResult, PlatformInfo } from '../../utils/types.js';
 import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
 
 export function getFieldsSpec(): ProviderFieldSpec[] {
@@ -53,7 +53,7 @@ export async function validateFields(values: Record<string, string>): Promise<Va
 
 export function makeInstanceState(
   values: Record<string, string>,
-  capabilities: PlatformCapabilities,
+  deviceInfo: PlatformInfo,
   deviceName: string,
 ): EmbyInstanceState {
   const credentials: EmbyCredentials = {
@@ -66,6 +66,6 @@ export function makeInstanceState(
   if (!credentials.userId)      throw new Error('Missing user_id');
   if (!credentials.accessToken) throw new Error('Missing access_token');
 
-  const profile = buildDeviceProfile(capabilities, deviceName);
-  return { credentials, deviceProfile: profile, capabilities };
+  const profile = buildDeviceProfile(deviceInfo, deviceName);
+  return { credentials, deviceProfile: profile, capabilities: deviceInfo };
 }

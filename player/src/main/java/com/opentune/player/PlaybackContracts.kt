@@ -1,4 +1,4 @@
-package com.opentune.content.contract
+package com.opentune.player
 
 interface OpenTunePlaybackHooks {
     fun progressIntervalMs(): Long
@@ -7,6 +7,15 @@ interface OpenTunePlaybackHooks {
     suspend fun onStop(positionMs: Long)
     fun onDispose() {}
 }
+
+data class SubtitleTrack(
+    val trackId: String,
+    val label: String,
+    val language: String?,
+    val isDefault: Boolean,
+    val isForced: Boolean,
+    val externalRef: String?,
+)
 
 data class PlaybackSpec(
     val url: String,

@@ -15,10 +15,10 @@ import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import com.opentune.content.contract.ProviderStream
 import com.opentune.content.contract.StreamRegistrarHolder
-import com.opentune.content.contract.SubtitleTrack
+import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

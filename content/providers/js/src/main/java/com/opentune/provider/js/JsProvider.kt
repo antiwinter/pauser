@@ -39,13 +39,13 @@ class JsProvider private constructor(
     // ── Instance creation ──────────────────────────────────────────────────
 
     override fun createClient(values: Map<String, String>): EndpointClient {
-        val capabilities = com.opentune.player.engine.DeviceCodecDetector.detect()
+        val deviceInfo = com.opentune.player.PlatformInfo.detect(ContextHolder.get())
         return JsProviderInstance(
             protocol = protocol,
             jsBundle = jsBundle,
             hostApis = hostApis,
             values = values,
-            capabilities = capabilities,
+            deviceInfo = deviceInfo,
         )
     }
 
@@ -115,10 +115,9 @@ class JsProvider private constructor(
     });
   }
   globalThis.host = {
-    http:     ns('http'),
-    crypto:   ns('crypto'),
-    platform: ns('platform'),
-    jar:      ns('jar'),
+    http:   ns('http'),
+    crypto: ns('crypto'),
+    jar:    ns('jar'),
   };
 })();
 """

@@ -1,6 +1,6 @@
 package com.opentune.smb
 
-import com.opentune.content.contract.OpenTunePlaybackHooks
+import com.opentune.player.OpenTunePlaybackHooks
 import com.opentune.content.contract.StreamRegistrarHolder
 
 /**

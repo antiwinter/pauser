@@ -211,11 +211,10 @@ class QuickJsEngine(
 
     private suspend fun dispatchHost(ns: String, name: String, argsJson: String): String? =
         when (ns) {
-            "http"     -> hostApis.handleHttp(name, argsJson, httpClient)
-            "crypto"   -> hostApis.handleCrypto(name, argsJson)
-            "platform" -> hostApis.handlePlatform(name, argsJson)
-            "jar"      -> hostApis.handleJar(name, argsJson, jarLoader)
-            else       -> throw IllegalArgumentException("Unknown host namespace: $ns")
+            "http"   -> hostApis.handleHttp(name, argsJson, httpClient)
+            "crypto" -> hostApis.handleCrypto(name, argsJson)
+            "jar"    -> hostApis.handleJar(name, argsJson, jarLoader)
+            else     -> throw IllegalArgumentException("Unknown host namespace: $ns")
         }
 
     // ── JNI callbacks and sync host functions ──────────────────────────────

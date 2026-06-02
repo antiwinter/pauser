@@ -13,7 +13,7 @@ import type {
   EntryList,
   PlaybackSpec,
   SubtitleTrack,
-  PlatformCapabilities,
+  PlatformInfo,
 } from '../../utils/types.js';
 
 const CONTAINER_TYPES = new Set([
@@ -34,7 +34,7 @@ export interface EmbyCredentials {
 export interface EmbyInstanceState {
   credentials: EmbyCredentials;
   deviceProfile: DeviceProfile;
-  capabilities: PlatformCapabilities;
+  capabilities: PlatformInfo;
 }
 
 export async function listEntry(

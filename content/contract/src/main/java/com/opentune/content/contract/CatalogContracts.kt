@@ -76,15 +76,6 @@ data class EntryDetail(
     val etag: String?,
 )
 
-data class SubtitleTrack(
-    val trackId: String,
-    val label: String,
-    val language: String?,
-    val isDefault: Boolean,
-    val isForced: Boolean,
-    val externalRef: String?,
-)
-
 @Serializable
 enum class SortOrder { Ascending, Descending }
 

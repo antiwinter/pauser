@@ -2,7 +2,7 @@
  * device-profile.ts — Builds the Emby DeviceProfile from codec capabilities.
  * Mirrors EmbyProvider.buildDeviceProfile() in Kotlin.
  */
-import type { PlatformCapabilities } from '../../utils/types.js';
+import type { PlatformInfo } from '../../utils/types.js';
 import type {
   DeviceProfile,
   DirectPlayProfile,
@@ -13,16 +13,16 @@ import type {
   ResponseProfile,
 } from './dto.js';
 
-export function buildDeviceProfile(caps: PlatformCapabilities, deviceName: string): DeviceProfile {
-  const videoCodecs = caps.videoCodecs.map((vc) => vc.codec);
-  const audioCodecs = caps.audioCodecs.map((ac) => ac.codec);
+export function buildDeviceProfile(info: PlatformInfo, deviceName: string): DeviceProfile {
+  const videoCodecs = info.videoCodecs.map((vc) => vc.codec);
+  const audioCodecs = info.audioCodecs.map((ac) => ac.codec);
 
   const v = videoCodecs.length > 0 ? videoCodecs.join(',') : 'h264';
   const a = audioCodecs.length > 0 ? audioCodecs.join(',') : 'aac';
 
   const codecProfiles: CodecProfile[] = [];
 
-  for (const vc of caps.videoCodecs) {
+  for (const vc of info.videoCodecs) {
     const conditions: ProfileCondition[] = [
       { Condition: 'LessThanEqual', Property: 'Width', Value: String(vc.maxWidth), IsRequired: false },
       { Condition: 'LessThanEqual', Property: 'Height', Value: String(vc.maxHeight), IsRequired: false },
@@ -40,7 +40,7 @@ export function buildDeviceProfile(caps: PlatformCapabilities, deviceName: strin
     });
   }
 
-  const subtitleProfiles: SubtitleProfile[] = caps.subtitleFormats.map((fmt) => ({
+  const subtitleProfiles: SubtitleProfile[] = info.subtitleFormats.map((fmt) => ({
     Format: fmt,
     Method: 'Embed',
   }));

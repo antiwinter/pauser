@@ -8,7 +8,7 @@ kotlin {
 }
 
 dependencies {
-    api(project(":content:contract"))
+    api(project(":core:form:contract"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.okhttp)
 }

@@ -16,7 +16,7 @@ import type {
   EntryInfo,
   EntryDetail,
   PlaybackSpec,
-  PlatformCapabilities,
+  PlatformInfo,
 } from '../../utils/types.js';
 
 let state: EmbyInstanceState | null = null;
@@ -39,16 +39,15 @@ let state: EmbyInstanceState | null = null;
 
   async init(args: {
     credentials: Record<string, string>;
-    capabilities: PlatformCapabilities;
+    deviceInfo: PlatformInfo;
   }): Promise<void> {
-    const info = await host.platform.getPlatformInfo();
     setDeviceAuth({
       clientName: 'OpenTune',
-      deviceName: info.deviceName,
-      deviceId: info.deviceId,
-      clientVersion: info.clientVersion,
+      deviceName: args.deviceInfo.deviceName,
+      deviceId: args.deviceInfo.deviceId,
+      clientVersion: args.deviceInfo.clientVersion,
     });
-    state = makeInstanceState(args.credentials, args.capabilities, info.deviceName);
+    state = makeInstanceState(args.credentials, args.deviceInfo, args.deviceInfo.deviceName);
   },
 
   // ── Instance methods ──────────────────────────────────────────────────

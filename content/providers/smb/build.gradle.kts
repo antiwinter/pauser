@@ -15,6 +15,7 @@ android {
 
 dependencies {
     api(project(":content:contract"))
+    implementation(project(":player"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

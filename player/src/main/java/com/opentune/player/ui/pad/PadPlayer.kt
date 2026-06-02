@@ -28,7 +28,7 @@ import androidx.compose.ui.graphics.Color
 import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
-import com.opentune.content.contract.PlaybackSpec
+import com.opentune.player.PlaybackSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

@@ -1,38 +1,40 @@
-package com.opentune.player.engine
+package com.opentune.player
 
+import android.content.Context
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.os.Build
-import androidx.media3.common.util.UnstableApi
-import com.opentune.content.contract.AudioCodecInfo
-import com.opentune.content.contract.PlatformCapabilities
-import com.opentune.content.contract.ProfileLevel
-import com.opentune.content.contract.VideoCodecInfo
+import android.provider.Settings
 
 /**
- * Lazy-cached device codec capabilities probe.
+ * Lazy-cached device info probe.
  * Reports standard profile levels (e.g., 52 for 5.2, 41 for 4.1) — Android's
  * raw bit-flag constants are mapped at the source so callers get clean values.
  */
-@UnstableApi
-object DeviceCodecDetector {
+object PlatformInfo {
 
-    @Volatile private var cache: PlatformCapabilities? = null
+    @Volatile private var cache: PlatformInfoData? = null
 
-    @Synchronized
-    fun detect(): PlatformCapabilities {
+    fun detect(context: Context): PlatformInfoData {
         cache?.let { return it }
-        val result = doDetect()
-        cache = result
-        return result
+        return synchronized(this) {
+            cache?.let { return it }
+            val result = doDetect(context.applicationContext)
+            cache = result
+            result
+        }
     }
 
-    private fun doDetect(): PlatformCapabilities {
-        val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            MediaCodecList(MediaCodecList.REGULAR_CODECS)
-        } else {
-            throw IllegalStateException("DeviceCodecDetector requires API 21+")
-        }
+    private fun doDetect(context: Context): PlatformInfoData {
+        val deviceName = Build.MODEL.ifBlank { "Android" }
+        val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            ?.takeIf { it.isNotBlank() } ?: java.util.UUID.randomUUID().toString()
+        val clientVersion = runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
+        }.getOrDefault("0")
+
+        val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
 
         val videoMimes = mutableSetOf<String>()
         val audioMimes = mutableSetOf<String>()
@@ -92,7 +94,11 @@ object DeviceCodecDetector {
             AudioCodecInfo(codec = codec, mime = mime)
         }
 
-        return PlatformCapabilities(
+        return PlatformInfoData(
+            deviceName = deviceName,
+            deviceId = deviceId,
+            clientVersion = clientVersion,
+            cacheDir = context.cacheDir,
             videoCodecs = videoCodecs,
             audioCodecs = audioCodecs,
             subtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
@@ -181,7 +187,6 @@ object DeviceCodecDetector {
     )
 
     private fun androidLevelToStandard(mime: String, rawLevel: Int): Int {
-        // Already in standard range, pass through.
         if (rawLevel in 1..99) return rawLevel
         val map = when (mime) {
             "video/avc"  -> H264_LEVELS
@@ -193,3 +198,31 @@ object DeviceCodecDetector {
         return map[rawLevel.toLong()] ?: rawLevel
     }
 }
+
+data class ProfileLevel(
+    val profile: String,
+    val level: Int,
+)
+
+data class VideoCodecInfo(
+    val codec: String,
+    val mime: String,
+    val maxWidth: Int,
+    val maxHeight: Int,
+    val profileLevels: List<ProfileLevel>,
+)
+
+data class AudioCodecInfo(
+    val codec: String,
+    val mime: String,
+)
+
+data class PlatformInfoData(
+    val deviceName: String,
+    val deviceId: String,
+    val clientVersion: String,
+    val cacheDir: java.io.File,
+    val videoCodecs: List<VideoCodecInfo>,
+    val audioCodecs: List<AudioCodecInfo>,
+    val subtitleFormats: List<String> = listOf("srt", "ass", "ssa", "vtt"),
+)

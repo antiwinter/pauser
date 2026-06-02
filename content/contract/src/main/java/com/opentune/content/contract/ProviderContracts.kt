@@ -1,5 +1,6 @@
 package com.opentune.content.contract
 
+import com.opentune.player.PlaybackSpec
 import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.core.form.contract.QrResult
 
