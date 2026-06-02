@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.os.Build
 import android.provider.Settings
+import kotlinx.serialization.Serializable
 
 /**
  * Lazy-cached device info probe.
@@ -98,7 +99,6 @@ object PlatformInfo {
             deviceName = deviceName,
             deviceId = deviceId,
             clientVersion = clientVersion,
-            cacheDir = context.cacheDir,
             videoCodecs = videoCodecs,
             audioCodecs = audioCodecs,
             subtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
@@ -199,11 +199,13 @@ object PlatformInfo {
     }
 }
 
+@Serializable
 data class ProfileLevel(
     val profile: String,
     val level: Int,
 )
 
+@Serializable
 data class VideoCodecInfo(
     val codec: String,
     val mime: String,
@@ -212,16 +214,17 @@ data class VideoCodecInfo(
     val profileLevels: List<ProfileLevel>,
 )
 
+@Serializable
 data class AudioCodecInfo(
     val codec: String,
     val mime: String,
 )
 
+@Serializable
 data class PlatformInfoData(
     val deviceName: String,
     val deviceId: String,
     val clientVersion: String,
-    val cacheDir: java.io.File,
     val videoCodecs: List<VideoCodecInfo>,
     val audioCodecs: List<AudioCodecInfo>,
     val subtitleFormats: List<String> = listOf("srt", "ass", "ssa", "vtt"),

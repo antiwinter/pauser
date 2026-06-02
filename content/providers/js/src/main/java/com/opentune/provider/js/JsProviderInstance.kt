@@ -20,6 +20,8 @@ import com.opentune.content.contract.StreamInfo
 import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -148,44 +150,11 @@ class JsProviderInstance(
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
 
-            val initArgs = buildJsonObject {
-                put("credentials", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
-                put("deviceInfo", buildJsonObject {
-                    put("deviceName", JsonPrimitive(deviceInfo.deviceName))
-                    put("deviceId", JsonPrimitive(deviceInfo.deviceId))
-                    put("clientVersion", JsonPrimitive(deviceInfo.clientVersion))
-                    put("videoCodecs", kotlinx.serialization.json.JsonArray(
-                        deviceInfo.videoCodecs.map { vc ->
-                            buildJsonObject {
-                                put("codec", JsonPrimitive(vc.codec))
-                                put("mime", JsonPrimitive(vc.mime))
-                                put("maxWidth", JsonPrimitive(vc.maxWidth))
-                                put("maxHeight", JsonPrimitive(vc.maxHeight))
-                                put("profileLevels", kotlinx.serialization.json.JsonArray(
-                                    vc.profileLevels.map { pl ->
-                                        buildJsonObject {
-                                            put("profile", JsonPrimitive(pl.profile))
-                                            put("level", JsonPrimitive(pl.level))
-                                        }
-                                    },
-                                ))
-                            }
-                        },
-                    ))
-                    put("audioCodecs", kotlinx.serialization.json.JsonArray(
-                        deviceInfo.audioCodecs.map { ac ->
-                            buildJsonObject {
-                                put("codec", JsonPrimitive(ac.codec))
-                                put("mime", JsonPrimitive(ac.mime))
-                            }
-                        },
-                    ))
-                    put("subtitleFormats", kotlinx.serialization.json.JsonArray(
-                        deviceInfo.subtitleFormats.map { JsonPrimitive(it) },
-                    ))
-                })
-            }
-            engine.callMethod("init", initArgs.toString())
+            val deviceInfoJson = Json.encodeToString(
+                com.opentune.player.PlatformInfoData.serializer(), deviceInfo,
+            )
+            val initArgs = """{"credentials":${Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)},"deviceInfo":$deviceInfoJson}"""
+            engine.callMethod("init", initArgs)
             initialized = true
         }
     }
