@@ -1,18 +1,15 @@
-import type { EntryList } from '../../../utils/types.js';
-import type { LiveEntry } from '../config.js';
+import type { M3UChannel, IptvChannelListResult } from './types.js';
+import type { LiveEntry } from './config.js';
 
-export async function fetchLiveChannels(live: LiveEntry): Promise<EntryList> {
+/**
+ * IPTV M3U helper — fetches and parses M3U channel lists
+ * Not a spider/handler, just a utility for live TV channels
+ */
+export async function fetchLiveChannels(live: LiveEntry): Promise<IptvChannelListResult> {
   const resp = await host.http.get({ url: live.url });
-  const items: EntryList['items'] = parseM3U(resp.body).map((ch) => ({
-    id:    JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
-    title: ch.name,
-    type:  'Playable' as const,
-    cover: ch.logo ?? null,
-  }));
-  return { items, totalCount: items.length };
+  const channels = parseM3U(resp.body);
+  return { channels };
 }
-
-interface M3UChannel { name: string; url: string; logo?: string }
 
 function parseM3U(content: string): M3UChannel[] {
   const lines = content.split('\n');

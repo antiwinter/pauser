@@ -1,7 +1,10 @@
-import type { EntryList, EntryDetail, PlaybackSpec } from '../../../utils/types.js';
-import type { CatVodItem, CatVodDetail } from '../mapper.js';
-import { vodItemToEntry, vodDetailToEntryDetail, parseEpisodes } from '../mapper.js';
-import { encodeRef } from '../ref.js';
+import type {
+  CatVodSpider,
+  CatVodHomeResult,
+  CatVodCategoryResult,
+  CatVodDetail,
+  CatVodPlayResult,
+} from '../types.js';
 
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
@@ -39,7 +42,7 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
 
 // ── Spider instance lifecycle ─────────────────────────────────────────────────
 
-async function getSpider(
+async function loadSpider(
   jarUrl: string,
   api: string,
   ext: string,
@@ -65,92 +68,77 @@ async function getSpider(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function jarHome(
+/**
+ * Creates a JAR spider — type 3 (csp_*)
+ * These are Java classes loaded from a remote JAR file
+ */
+function createJarSpider(
   jarUrl: string,
   md5: string | undefined,
   api: string,
   ext: string,
   siteKey: string,
-): Promise<EntryList> {
-  await ensureJar(jarUrl, md5);
-  const handle = await getSpider(jarUrl, api, ext, siteKey);
-  const cls    = spiderClass(api);
-  const raw    = await host.jar.reflect({
-    url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false],
-  });
-  const data = JSON.parse(raw);
-  return {
-    items: ((data.class ?? []) as Array<{ type_id: string | number; type_name?: string }>).map((c) => ({
-      id:    encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
-      title: c.type_name ?? String(c.type_id),
-      type:  'Folder' as const,
-      cover: null,
-    })),
-    totalCount: (data.class ?? []).length,
+): CatVodSpider {
+  // Cache the spider handle loading promise
+  let handlePromise: Promise<string> | null = null;
+
+  const getHandle = async (): Promise<string> => {
+    // Ensure JAR is loaded first
+    await ensureJar(jarUrl, md5);
+    if (!handlePromise) {
+      handlePromise = loadSpider(jarUrl, api, ext, siteKey);
+    }
+    return handlePromise;
   };
-}
 
-export async function jarCategory(
-  jarUrl: string,
-  api: string,
-  ext: string,
-  siteKey: string,
-  tid: string,
-  pg: number,
-): Promise<EntryList> {
-  const handle = await getSpider(jarUrl, api, ext, siteKey);
-  const cls    = spiderClass(api);
-  const raw    = await host.jar.reflect({
-    url: jarUrl, cls, method: 'categoryContent',
-    instance: handle, args: [tid, String(pg), false, {}],
-  });
-  const data = JSON.parse(raw);
+  const cls = spiderClass(api);
+
   return {
-    items:      ((data.list ?? []) as CatVodItem[]).map((item) => vodItemToEntry(item, siteKey)),
-    totalCount: data.total ?? 0,
-  };
-}
+    async home(): Promise<CatVodHomeResult> {
+      const handle = await getHandle();
+      const raw = await host.jar.reflect({
+        url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false],
+      });
+      const data = JSON.parse(raw);
+      return { class: data.class ?? [] };
+    },
 
-export async function jarDetail(
-  jarUrl: string,
-  api: string,
-  ext: string,
-  siteKey: string,
-  id: string,
-): Promise<CatVodDetail> {
-  const handle = await getSpider(jarUrl, api, ext, siteKey);
-  const cls    = spiderClass(api);
-  const raw    = await host.jar.reflect({
-    url: jarUrl, cls, method: 'detailContent',
-    instance: handle, args: [[id]],
-  });
-  const data = raw && raw !== 'null' ? JSON.parse(raw) : {};
-  return data.list?.[0] ?? { vod_id: id, vod_name: id };
-}
+    async category(tid: string, pg: number): Promise<CatVodCategoryResult> {
+      const handle = await getHandle();
+      const raw = await host.jar.reflect({
+        url: jarUrl, cls, method: 'categoryContent',
+        instance: handle, args: [tid, String(pg), false, {}],
+      });
+      const data = JSON.parse(raw);
+      return {
+        list: data.list ?? [],
+        total: data.total ?? 0,
+      };
+    },
 
-export async function jarPlay(
-  jarUrl: string,
-  api: string,
-  ext: string,
-  siteKey: string,
-  flag: string,
-  epUrl: string,
-): Promise<PlaybackSpec> {
-  const handle = await getSpider(jarUrl, api, ext, siteKey);
-  const cls    = spiderClass(api);
-  const raw    = await host.jar.reflect({
-    url: jarUrl, cls, method: 'playerContent',
-    instance: handle, args: [flag, epUrl, []],
-  });
-  const data = JSON.parse(raw);
-  return {
-    url:            data.url ?? null,
-    headers:        data.header ?? {},
-    mimeType:       data.type ?? null,
-    title:          '',
-    durationMs:     null,
-    subtitleTracks: [],
-    hooksState:     {},
+    async detail(id: string): Promise<CatVodDetail> {
+      const handle = await getHandle();
+      const raw = await host.jar.reflect({
+        url: jarUrl, cls, method: 'detailContent',
+        instance: handle, args: [[id]],
+      });
+      const data = raw && raw !== 'null' ? JSON.parse(raw) : {};
+      return data.list?.[0] ?? { vod_id: id, vod_name: id };
+    },
+
+    async play(flag: string, epUrl: string): Promise<CatVodPlayResult> {
+      const handle = await getHandle();
+      const raw = await host.jar.reflect({
+        url: jarUrl, cls, method: 'playerContent',
+        instance: handle, args: [flag, epUrl, []],
+      });
+      const data = JSON.parse(raw);
+      return {
+        url: data.url,
+        header: data.header,
+        type: data.type,
+      };
+    },
   };
 }
 
@@ -159,3 +147,10 @@ export async function jarPlay(
 function spiderClass(api: string): string {
   return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
+
+export default {
+  name: 'jar',
+  type: [3],
+  createSpider: (jarUrl: string, md5: string | undefined, api: string, ext: string, siteKey: string) =>
+    createJarSpider(jarUrl, md5, api, ext, siteKey),
+};

@@ -1,16 +1,67 @@
 import type { EntryList, EntryInfo, EntryDetail, PlaybackSpec } from '../../utils/types.js';
 import type { CatVodConfig, SiteEntry } from './config.js';
+import type { CatVodSpider } from './types.js';
 import { parseSpiderField, siteExt } from './config.js';
 import { decodeRef, encodeRef } from './ref.js';
-import { parseEpisodes, vodItemToEntry } from './mapper.js';
-import { cmsHome, cmsCategory, cmsDetail, cmsSearch, buildDetail } from './handlers/cms.js';
-import { jarHome, jarCategory, jarDetail, jarPlay, ensureJar } from './handlers/jar.js';
-import { fetchLiveChannels } from './handlers/iptv.js';
-import { drpyHome, drpyCategory, drpyDetail, drpyPlay, drpySearch } from './handlers/drpy.js';
+import {
+  parseEpisodes,
+  vodDetailToEntryDetail,
+  categoryListToFolders,
+  vodListToEntries,
+  liveChannelsToEntries,
+  playResultToSpec,
+} from './mapper.js';
+import cmsHandler from './handlers/cms.js';
+import jarHandler from './handlers/jar.js';
+import drpyHandler from './handlers/drpy.js';
+import { ensureJar } from './handlers/jar.js';
+import { fetchLiveChannels } from './iptv.js';
 
 export interface CatVodState {
   config: CatVodConfig;
   unsupportedSites?: Set<string>;
+  spiders?: Map<string, CatVodSpider>;  // Cache spider instances per siteKey
+}
+
+// ── Spider Handler Registry ──────────────────────────────────────────────────
+
+const SPIDER_HANDLERS = [cmsHandler, jarHandler, drpyHandler];
+
+// ── Spider Instance Management ───────────────────────────────────────────────
+
+/**
+ * Get or create a spider instance for a site
+ * Caches instances to preserve state (especially for drpy/jar)
+ */
+function getSpider(site: SiteEntry, state: CatVodState): CatVodSpider {
+  if (!state.spiders) {
+    state.spiders = new Map();
+  }
+
+  const cached = state.spiders.get(site.key);
+  if (cached) return cached;
+
+  // Find handler that supports this site type
+  const handler = SPIDER_HANDLERS.find(h => h.type.includes(site.type));
+  if (!handler) {
+    throw new Error(`No handler found for site type ${site.type}`);
+  }
+
+  let spider: CatVodSpider;
+
+  if (handler.name === 'cms') {
+    spider = handler.createSpider(site.api);
+  } else if (handler.name === 'jar') {
+    const jar = requireJar(state);
+    spider = handler.createSpider(jar.url, jar.md5, site.api, siteExt(site), site.key);
+  } else if (handler.name === 'drpy') {
+    spider = handler.createSpider(site.api, siteExt(site), site.key);
+  } else {
+    throw new Error(`Unknown handler: ${handler.name}`);
+  }
+
+  state.spiders.set(site.key, spider);
+  return spider;
 }
 
 // ── listEntry ─────────────────────────────────────────────────────────────────
@@ -30,26 +81,32 @@ export async function listEntry(
 
   if (ref.type === 'site') {
     const site = requireSite(state, ref.key);
-    const all  = await dispatchHome(site, state);
+    const spider = getSpider(site, state);
+    const result = await spider.home();
+    const all = categoryListToFolders(result.class ?? [], site.key);
     return { items: all.items.slice(startIndex, startIndex + limit), totalCount: all.totalCount };
   }
 
   if (ref.type === 'cat') {
     const site = requireSite(state, ref.key);
-    const pg   = startIndex === 0 ? 1 : Math.floor(startIndex / limit) + 1;
-    return dispatchCategory(site, state, ref.tid, pg);
+    const spider = getSpider(site, state);
+    const pg = startIndex === 0 ? 1 : Math.floor(startIndex / limit) + 1;
+    const result = await spider.category(ref.tid, pg);
+    const entryList = vodListToEntries(result.list ?? [], site.key, result.total);
+    return entryList;
   }
 
   if (ref.type === 'vod') {
     // Episode list for multi-episode items
     const site = requireSite(state, ref.key);
-    const raw  = await dispatchDetail(site, state, ref.id);
-    const eps  = parseEpisodes(raw);
+    const spider = getSpider(site, state);
+    const detail = await spider.detail(ref.id);
+    const eps = parseEpisodes(detail);
     const items = eps.map((ep) => ({
       id:    encodeRef({ type: 'ep', key: ref.key, id: ref.id, flag: ep.flag, epUrl: ep.url }),
-      title: eps.length > 1 ? ep.name : raw.vod_name ?? ep.name,
+      title: eps.length > 1 ? ep.name : detail.vod_name ?? ep.name,
       type:  'Playable' as const,
-      cover: raw.vod_pic ?? null,
+      cover: detail.vod_pic ?? null,
     }));
     return { items: items.slice(startIndex, startIndex + limit), totalCount: items.length };
   }
@@ -57,7 +114,8 @@ export async function listEntry(
   if (ref.type === 'live-source') {
     const live = state.config.lives?.[ref.index];
     if (!live) return { items: [], totalCount: 0 };
-    const all = await fetchLiveChannels(live);
+    const result = await fetchLiveChannels(live);
+    const all = liveChannelsToEntries(result.channels);
     return { items: all.items.slice(startIndex, startIndex + limit), totalCount: all.totalCount };
   }
 
@@ -76,15 +134,15 @@ export async function search(
   const results: EntryInfo[] = [];
   for (const site of state.config.sites) {
     if (!site.searchable && site.searchable !== undefined) continue;
-    if (site.type !== 0 && site.type !== 1 && site.type !== 2 && !isDrpy(site)) continue;
+    // Check if site type is supported by any handler
+    const handler = SPIDER_HANDLERS.find(h => h.type.includes(site.type));
+    if (!handler) continue;
     try {
-      if (isDrpy(site)) {
-        const r = await drpySearch(site.api, siteExt(site), site.key, query, 1);
-        results.push(...r.items);
-      } else {
-        const r = await cmsSearch(site.api, site.key, query, 1);
-        results.push(...r.items);
-      }
+      const spider = getSpider(site, state);
+      if (!spider.search) continue;  // Skip if search not supported
+      const result = await spider.search(query, 1);
+      const entryList = vodListToEntries(result.list ?? [], site.key, result.total);
+      results.push(...entryList.items);
     } catch (_) {}
   }
   return results;
@@ -100,8 +158,9 @@ export async function getDetail(
 
   if (ref.type === 'vod') {
     const site = requireSite(state, ref.key);
-    const raw  = await dispatchDetail(site, state, ref.id);
-    return buildDetail(raw);
+    const spider = getSpider(site, state);
+    const detail = await spider.detail(ref.id);
+    return vodDetailToEntryDetail(detail);
   }
 
   if (ref.type === 'live-source') {
@@ -136,16 +195,20 @@ export async function getPlaybackSpec(
   // Direct episode ref → already has the URL
   if (ref.type === 'ep') {
     const site = requireSite(state, ref.key);
-    return applyHosts(await dispatchPlay(site, state, ref.flag, ref.epUrl), state.config.hosts);
+    const spider = getSpider(site, state);
+    const result = await spider.play(ref.flag, ref.epUrl);
+    return applyHosts(playResultToSpec(result, ref.epUrl), state.config.hosts);
   }
 
   // Vod ref with single episode → resolve inline
   if (ref.type === 'vod') {
     const site = requireSite(state, ref.key);
-    const raw  = await dispatchDetail(site, state, ref.id);
-    const eps  = parseEpisodes(raw);
+    const spider = getSpider(site, state);
+    const detail = await spider.detail(ref.id);
+    const eps = parseEpisodes(detail);
     if (eps.length === 0) throw new Error('No episodes found');
-    return applyHosts(await dispatchPlay(site, state, eps[0].flag, eps[0].url), state.config.hosts);
+    const result = await spider.play(eps[0].flag, eps[0].url);
+    return applyHosts(playResultToSpec(result, eps[0].url), state.config.hosts);
   }
 
   // Live channel → direct URL
@@ -172,16 +235,22 @@ async function initJar(state: CatVodState) {
     await ensureJar(jar.url, jar.md5);
   } catch {
     // jar.load failed — all jar sites are unsupported
-    state.unsupportedSites = new Set(state.config.sites.filter(isJar).map(s => s.key));
+    const jarHandler = SPIDER_HANDLERS.find(h => h.name === 'jar');
+    if (jarHandler) {
+      state.unsupportedSites = new Set(
+        state.config.sites.filter(s => jarHandler.type.includes(s.type)).map(s => s.key)
+      );
+    }
   }
 }
 
 async function listRoot(state: CatVodState): Promise<EntryList> {
   await initJar(state);
   const failed = state.unsupportedSites!;
+  const jarHandler = SPIDER_HANDLERS.find(h => h.name === 'jar');
 
   const items: EntryList['items'] = state.config.sites
-    .filter(site => !isJar(site) || !failed.has(site.key))
+    .filter(site => !jarHandler || !jarHandler.type.includes(site.type) || !failed.has(site.key))
     .map((site) => ({
       id:    encodeRef({ type: 'site', key: site.key }),
       title: site.name,
@@ -215,60 +284,6 @@ function requireSite(state: CatVodState, key: string): SiteEntry {
   const site = state.config.sites.find((s) => s.key === key);
   if (!site) throw new Error(`Site not found: ${key}`);
   return site;
-}
-
-async function dispatchHome(site: SiteEntry, state: CatVodState): Promise<EntryList> {
-  if (isCms(site)) return cmsHome(site.api, site.key);
-  if (isJar(site)) {
-    const jar = requireJar(state);
-    return await jarHome(jar.url, jar.md5, site.api, siteExt(site), site.key);
-  }
-  if (isDrpy(site)) return drpyHome(site.api, siteExt(site), site.key);
-  throw new Error(`Site type ${site.type} not supported yet`);
-}
-
-async function dispatchCategory(site: SiteEntry, state: CatVodState, tid: string, pg: number): Promise<EntryList> {
-  if (isCms(site)) return cmsCategory(site.api, site.key, tid, pg);
-  if (isJar(site)) {
-    const jar = requireJar(state);
-    return await jarCategory(jar.url, site.api, siteExt(site), site.key, tid, pg);
-  }
-  if (isDrpy(site)) return drpyCategory(site.api, siteExt(site), site.key, tid, pg);
-  throw new Error(`Site type ${site.type} not supported yet`);
-}
-
-async function dispatchDetail(site: SiteEntry, state: CatVodState, id: string) {
-  if (isCms(site)) return cmsDetail(site.api, id);
-  if (isJar(site)) {
-    const jar = requireJar(state);
-    return await jarDetail(jar.url, site.api, siteExt(site), site.key, id);
-  }
-  if (isDrpy(site)) return drpyDetail(site.api, siteExt(site), site.key, id);
-  throw new Error(`Site type ${site.type} not supported yet`);
-}
-
-async function dispatchPlay(site: SiteEntry, state: CatVodState, flag: string, epUrl: string): Promise<PlaybackSpec> {
-  if (isCms(site)) {
-    return { url: epUrl, headers: {}, mimeType: null, title: '', durationMs: null, subtitleTracks: [], hooksState: {} };
-  }
-  if (isJar(site)) {
-    const jar = requireJar(state);
-    return await jarPlay(jar.url, site.api, siteExt(site), site.key, flag, epUrl);
-  }
-  if (isDrpy(site)) return drpyPlay(site.api, siteExt(site), site.key, flag, epUrl);
-  throw new Error(`Site type ${site.type} not supported yet`);
-}
-
-function isCms(site: SiteEntry): boolean {
-  return site.type === 0 || site.type === 1 || site.type === 2;
-}
-
-function isJar(site: SiteEntry): boolean {
-  return site.type === 3;
-}
-
-function isDrpy(site: SiteEntry): boolean {
-  return site.type === 4 || site.type === 9 || site.type === 10;
 }
 
 function requireJar(state: CatVodState): { url: string; md5?: string } {

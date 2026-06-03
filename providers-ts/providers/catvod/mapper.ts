@@ -1,4 +1,77 @@
-import type { EntryInfo, EntryDetail, ExternalUrl } from '../../utils/types.js';
+import type { EntryInfo, EntryDetail, EntryList, PlaybackSpec, ExternalUrl } from '../../utils/types.js';
+import type { CatVodItem, CatVodDetail, CatVodCategory, M3UChannel } from './types.js';
+
+// ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
+// Centralized mapping layer — all handlers return CatVod types, these functions
+// convert them to OpenTune types
+
+/**
+ * Convert CatVod category list (home screen) to OpenTune folder entries
+ */
+export function categoryListToFolders(
+  categories: CatVodCategory[],
+  siteKey: string,
+): EntryList {
+  return {
+    items: categories.map((c) => ({
+      id: JSON.stringify({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
+      title: c.type_name ?? String(c.type_id),
+      type: 'Folder' as const,
+      cover: null,
+    })),
+    totalCount: categories.length,
+  };
+}
+
+/**
+ * Convert CatVod item list to OpenTune entries
+ */
+export function vodListToEntries(
+  items: CatVodItem[],
+  siteKey: string,
+  totalCount?: number,
+): EntryList {
+  return {
+    items: items.map((item) => vodItemToEntry(item, siteKey)),
+    totalCount: totalCount ?? items.length,
+  };
+}
+
+/**
+ * Convert IPTV M3U channels to OpenTune entries
+ */
+export function liveChannelsToEntries(channels: M3UChannel[]): EntryList {
+  return {
+    items: channels.map((ch) => ({
+      id: JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
+      title: ch.name,
+      type: 'Playable' as const,
+      cover: ch.logo ?? null,
+    })),
+    totalCount: channels.length,
+  };
+}
+
+/**
+ * Convert CatVod play result to OpenTune playback spec
+ */
+export function playResultToSpec(
+  result: { url?: string; header?: Record<string, string>; type?: string },
+  title: string = '',
+): PlaybackSpec {
+  return {
+    url: result.url ?? null,
+    headers: result.header ?? {},
+    mimeType: result.type ?? null,
+    title,
+    durationMs: null,
+    subtitleTracks: [],
+    hooksState: {},
+  };
+}
+
+// ── Legacy Item-Level Converters ─────────────────────────────────────────────
+// These are still used by the list converters above
 
 export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
   const vodId = String(item.vod_id);
@@ -74,24 +147,6 @@ export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
     }
   }
   return episodes;
-}
-
-// ── DTO types ─────────────────────────────────────────────────────────────────
-
-export interface CatVodItem {
-  vod_id: string | number;
-  vod_name?: string;
-  vod_pic?: string;
-  vod_blurb?: string;
-  vod_content?: string;
-  vod_score?: string;
-  vod_year?: string;
-  type_name?: string;
-}
-
-export interface CatVodDetail extends CatVodItem {
-  vod_play_from?: string;
-  vod_play_url?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

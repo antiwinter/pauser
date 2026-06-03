@@ -1,7 +1,10 @@
-import type { EntryList, PlaybackSpec } from '../../../utils/types.js';
-import type { CatVodItem, CatVodDetail } from '../mapper.js';
-import { vodItemToEntry } from '../mapper.js';
-import { encodeRef } from '../ref.js';
+import type {
+  CatVodSpider,
+  CatVodHomeResult,
+  CatVodCategoryResult,
+  CatVodDetail,
+  CatVodPlayResult,
+} from '../types.js';
 
 // ── Globals expected by drpy2 spiders ────────────────────────────────────────
 // Set once at module init — before any spider code is eval'd.
@@ -59,7 +62,7 @@ const spiders = new Map<string, SpiderObject>();
 
 // ── Spider lifecycle ──────────────────────────────────────────────────────────
 
-async function getSpider(api: string, ext: string, siteKey: string): Promise<SpiderObject> {
+async function loadSpider(api: string, ext: string, siteKey: string): Promise<SpiderObject> {
   const cached = spiders.get(siteKey);
   if (cached) return cached;
 
@@ -97,81 +100,70 @@ async function spiderCall<T>(spider: SpiderObject, method: keyof SpiderObject, .
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function drpyHome(api: string, ext: string, siteKey: string): Promise<EntryList> {
-  const spider = await getSpider(api, ext, siteKey);
-  const data = await spiderCall<{ class?: Array<{ type_id: string | number; type_name?: string }> }>(
-    spider, 'home', false,
-  );
+/**
+ * Creates a drpy2/drpy3 JS spider — types 4/9/10
+ * These are JavaScript files that are eval'd and implement the Spider interface
+ */
+function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpider {
+  // Cache the loaded spider promise to avoid concurrent loads
+  let spiderPromise: Promise<SpiderObject> | null = null;
+
+  const getSpider = async (): Promise<SpiderObject> => {
+    if (!spiderPromise) {
+      spiderPromise = loadSpider(api, ext, siteKey);
+    }
+    return spiderPromise;
+  };
+
   return {
-    items: (data.class ?? []).map((c) => ({
-      id:    encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
-      title: c.type_name ?? String(c.type_id),
-      type:  'Folder' as const,
-      cover: null,
-    })),
-    totalCount: (data.class ?? []).length,
+    async home(): Promise<CatVodHomeResult> {
+      const spider = await getSpider();
+      const data = await spiderCall<{ class?: Array<{ type_id: string | number; type_name?: string }> }>(
+        spider, 'home', false,
+      );
+      return { class: data.class ?? [] };
+    },
+
+    async category(tid: string, pg: number): Promise<CatVodCategoryResult> {
+      const spider = await getSpider();
+      const data = await spiderCall<CatVodCategoryResult>(
+        spider, 'category', tid, String(pg), false, {},
+      );
+      return {
+        list: data.list ?? [],
+        total: data.total ?? data.pagecount ?? 0,
+      };
+    },
+
+    async detail(id: string): Promise<CatVodDetail> {
+      const spider = await getSpider();
+      const data = await spiderCall<{ list?: CatVodDetail[] }>(spider, 'detail', id);
+      return data.list?.[0] ?? ({ vod_id: id } as CatVodDetail);
+    },
+
+    async play(flag: string, epUrl: string): Promise<CatVodPlayResult> {
+      const spider = await getSpider();
+      const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, []);
+      return {
+        url: data.url,
+        header: data.header,
+        type: data.type,
+      };
+    },
+
+    async search(query: string, pg: number): Promise<CatVodCategoryResult> {
+      const spider = await getSpider();
+      const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, false, String(pg));
+      return {
+        list: data.list ?? [],
+        total: data.list?.length ?? 0,
+      };
+    },
   };
 }
 
-export async function drpyCategory(
-  api: string,
-  ext: string,
-  siteKey: string,
-  tid: string,
-  pg: number,
-): Promise<EntryList> {
-  const spider = await getSpider(api, ext, siteKey);
-  const data = await spiderCall<{ list?: CatVodItem[]; pagecount?: number; total?: number }>(
-    spider, 'category', tid, String(pg), false, {},
-  );
-  return {
-    items:      (data.list ?? []).map((item) => vodItemToEntry(item, siteKey)),
-    totalCount: data.pagecount ?? data.total ?? 0,
-  };
-}
-
-export async function drpyDetail(
-  api: string,
-  ext: string,
-  siteKey: string,
-  id: string,
-): Promise<CatVodDetail> {
-  const spider = await getSpider(api, ext, siteKey);
-  const data = await spiderCall<{ list?: CatVodDetail[] }>(spider, 'detail', id);
-  return data.list?.[0] ?? ({ vod_id: id } as CatVodDetail);
-}
-
-export async function drpyPlay(
-  api: string,
-  ext: string,
-  siteKey: string,
-  flag: string,
-  epUrl: string,
-): Promise<PlaybackSpec> {
-  const spider = await getSpider(api, ext, siteKey);
-  const data = await spiderCall<{ url?: string; header?: Record<string, string>; type?: string }>(
-    spider, 'play', flag, epUrl, [],
-  );
-  return {
-    url:            data.url ?? null,
-    headers:        data.header ?? {},
-    mimeType:       data.type ?? null,
-    title:          '',
-    durationMs:     null,
-    subtitleTracks: [],
-    hooksState:     {},
-  };
-}
-
-export async function drpySearch(
-  api: string,
-  ext: string,
-  siteKey: string,
-  key: string,
-  pg: number,
-): Promise<EntryList> {
-  const spider = await getSpider(api, ext, siteKey);
-  const data = await spiderCall<{ list?: CatVodItem[] }>(spider, 'search', key, false, String(pg));
-  const items = (data.list ?? []).map((item) => vodItemToEntry(item, siteKey));
-  return { items, totalCount: items.length };
-}
+export default {
+  name: 'drpy',
+  type: [4, 9, 10],
+  createSpider: (api: string, ext: string, siteKey: string) => createDrpySpider(api, ext, siteKey),
+};
