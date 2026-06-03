@@ -5,6 +5,8 @@ import type {
   CatVodDetail,
   CatVodPlayResult,
 } from '../types.js';
+import type { SiteEntry } from '../config.js';
+import { siteExt } from '../config.js';
 
 // ── Globals expected by drpy2 spiders ────────────────────────────────────────
 // Set once at module init — before any spider code is eval'd.
@@ -165,5 +167,6 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
 export default {
   name: 'drpy',
   type: [4, 9, 10],
-  createSpider: (api: string, ext: string, siteKey: string) => createDrpySpider(api, ext, siteKey),
+  createSpider: (site: SiteEntry) =>
+    createDrpySpider(site.api, siteExt(site), site.key),
 };

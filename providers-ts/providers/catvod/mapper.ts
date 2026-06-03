@@ -63,6 +63,7 @@ export function playResultToSpec(
     url: result.url ?? null,
     headers: result.header ?? {},
     mimeType: result.type ?? null,
+    bitrate: null,
     title,
     durationMs: null,
     subtitleTracks: [],

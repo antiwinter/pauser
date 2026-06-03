@@ -1,7 +1,6 @@
 import type { EntryList, EntryInfo, EntryDetail, PlaybackSpec } from '../../utils/types.js';
 import type { CatVodConfig, SiteEntry } from './config.js';
 import type { CatVodSpider } from './types.js';
-import { parseSpiderField, siteExt } from './config.js';
 import { decodeRef, encodeRef } from './ref.js';
 import {
   parseEpisodes,
@@ -14,8 +13,22 @@ import {
 import cmsHandler from './handlers/cms.js';
 import jarHandler from './handlers/jar.js';
 import drpyHandler from './handlers/drpy.js';
-import { ensureJar } from './handlers/jar.js';
 import { fetchLiveChannels } from './iptv.js';
+
+// ── Handler interface ─────────────────────────────────────────────────────────
+
+interface BaseSpiderHandler {
+  name: string;
+  type: number[];
+  createSpider: (site: SiteEntry) => CatVodSpider;
+}
+
+interface SpiderHandlerWithInit extends BaseSpiderHandler {
+  init: (state: CatVodState) => Promise<void>;
+  canHandle: (site: SiteEntry, state: CatVodState) => boolean;
+}
+
+type SpiderHandler = BaseSpiderHandler | SpiderHandlerWithInit;
 
 export interface CatVodState {
   config: CatVodConfig;
@@ -25,7 +38,7 @@ export interface CatVodState {
 
 // ── Spider Handler Registry ──────────────────────────────────────────────────
 
-const SPIDER_HANDLERS = [cmsHandler, jarHandler, drpyHandler];
+const SPIDER_HANDLERS: SpiderHandler[] = [cmsHandler, jarHandler, drpyHandler];
 
 // ── Spider Instance Management ───────────────────────────────────────────────
 
@@ -41,25 +54,16 @@ function getSpider(site: SiteEntry, state: CatVodState): CatVodSpider {
   const cached = state.spiders.get(site.key);
   if (cached) return cached;
 
-  // Find handler that supports this site type
-  const handler = SPIDER_HANDLERS.find(h => h.type.includes(site.type));
+  // Find handler that supports this site type and can handle it
+  const handler = SPIDER_HANDLERS.find(h =>
+    h.type.includes(site.type) &&
+    (!('canHandle' in h) || (h as SpiderHandlerWithInit).canHandle(site, state))
+  );
   if (!handler) {
-    throw new Error(`No handler found for site type ${site.type}`);
+    throw new Error(`No available handler for site type ${site.type}`);
   }
 
-  let spider: CatVodSpider;
-
-  if (handler.name === 'cms') {
-    spider = handler.createSpider(site.api);
-  } else if (handler.name === 'jar') {
-    const jar = requireJar(state);
-    spider = handler.createSpider(jar.url, jar.md5, site.api, siteExt(site), site.key);
-  } else if (handler.name === 'drpy') {
-    spider = handler.createSpider(site.api, siteExt(site), site.key);
-  } else {
-    throw new Error(`Unknown handler: ${handler.name}`);
-  }
-
+  const spider = handler.createSpider(site);
   state.spiders.set(site.key, spider);
   return spider;
 }
@@ -122,6 +126,8 @@ export async function listEntry(
   if (ref.type === 'live') {
     return { items: [], totalCount: 0 };
   }
+
+  throw new Error(`listEntry: unsupported ref type ${(ref as { type: string }).type}`);
 }
 
 // ── search ────────────────────────────────────────────────────────────────────
@@ -134,8 +140,11 @@ export async function search(
   const results: EntryInfo[] = [];
   for (const site of state.config.sites) {
     if (!site.searchable && site.searchable !== undefined) continue;
-    // Check if site type is supported by any handler
-    const handler = SPIDER_HANDLERS.find(h => h.type.includes(site.type));
+    // Check if site type is supported and handler can handle it
+    const handler = SPIDER_HANDLERS.find(h =>
+      h.type.includes(site.type) &&
+      (!('canHandle' in h) || (h as SpiderHandlerWithInit).canHandle(site, state))
+    );
     if (!handler) continue;
     try {
       const spider = getSpider(site, state);
@@ -214,7 +223,7 @@ export async function getPlaybackSpec(
   // Live channel → direct URL
   if (ref.type === 'live') {
     return applyHosts({
-      url: ref.url, headers: {}, mimeType: null,
+      url: ref.url, headers: {}, mimeType: null, bitrate: null,
       title: ref.name, durationMs: null, subtitleTracks: [], hooksState: {},
     }, state.config.hosts);
   }
@@ -224,44 +233,43 @@ export async function getPlaybackSpec(
 
 // ── Dispatch helpers ──────────────────────────────────────────────────────────
 
-async function initJar(state: CatVodState) {
-  if (state.unsupportedSites) return;
-
-  state.unsupportedSites = new Set();
-  const jar = parseSpiderField(state.config.spider);
-  if (!jar) return;
-
-  try {
-    await ensureJar(jar.url, jar.md5);
-  } catch {
-    // jar.load failed — all jar sites are unsupported
-    const jarHandler = SPIDER_HANDLERS.find(h => h.name === 'jar');
-    if (jarHandler) {
-      state.unsupportedSites = new Set(
-        state.config.sites.filter(s => jarHandler.type.includes(s.type)).map(s => s.key)
-      );
+async function initHandlers(state: CatVodState): Promise<void> {
+  for (const handler of SPIDER_HANDLERS) {
+    if ('init' in handler) {
+      await (handler as SpiderHandlerWithInit).init(state).catch(() => {}); // Allow init to fail silently
     }
   }
 }
 
 async function listRoot(state: CatVodState): Promise<EntryList> {
-  await initJar(state);
-  const failed = state.unsupportedSites!;
-  const jarHandler = SPIDER_HANDLERS.find(h => h.name === 'jar');
+  await initHandlers(state);
 
-  const items: EntryList['items'] = state.config.sites
-    .filter(site => !jarHandler || !jarHandler.type.includes(site.type) || !failed.has(site.key))
-    .map((site) => ({
-      id:    encodeRef({ type: 'site', key: site.key }),
-      title: site.name,
-      type:  'Folder' as const,
-      cover: null,
-    }));
+  const available: SiteEntry[] = [];
+  const unavailable: SiteEntry[] = [];
 
-  if (failed.size > 0) {
+  for (const site of state.config.sites) {
+    const handler = SPIDER_HANDLERS.find(h =>
+      h.type.includes(site.type) &&
+      (!('canHandle' in h) || (h as SpiderHandlerWithInit).canHandle(site, state))
+    );
+    if (handler) {
+      available.push(site);
+    } else {
+      unavailable.push(site);
+    }
+  }
+
+  const items: EntryList['items'] = available.map(site => ({
+    id:    encodeRef({ type: 'site', key: site.key }),
+    title: site.name,
+    type:  'Folder' as const,
+    cover: null,
+  }));
+
+  if (unavailable.length > 0) {
     items.push({
-      id:    encodeRef({ type: 'unsupported', count: failed.size }),
-      title: `${failed.size} site${failed.size > 1 ? 's' : ''} unsupported`,
+      id:    encodeRef({ type: 'unsupported', count: unavailable.length }),
+      title: `${unavailable.length} site${unavailable.length > 1 ? 's' : ''} unsupported`,
       type:  'Folder' as const,
       cover: null,
     });
@@ -286,22 +294,20 @@ function requireSite(state: CatVodState, key: string): SiteEntry {
   return site;
 }
 
-function requireJar(state: CatVodState): { url: string; md5?: string } {
-  const jar = parseSpiderField(state.config.spider);
-  if (!jar) throw new Error('Site requires a JAR spider but config.spider is not set');
-  return jar;
-}
-
 function applyHosts(spec: PlaybackSpec, hosts: string[] | undefined): PlaybackSpec {
   if (!hosts?.length || !spec.url) return spec;
   const map = new Map(hosts.map((h) => h.split('=') as [string, string]));
   const remap = (url: string) => {
     try {
-      const u = new URL(url);
-      const to = map.get(u.hostname);
+      // URL constructor may not be available in QuickJS
+      type URLConstructor = { new(url: string): { hostname: string; toString(): string } };
+      const URLCtor = (globalThis as { URL?: URLConstructor }).URL;
+      if (!URLCtor) return url;
+      const parsed = new URLCtor(url);
+      const to = map.get(parsed.hostname);
       if (!to) return url;
-      u.hostname = to;
-      return u.toString();
+      parsed.hostname = to;
+      return parsed.toString();
     } catch { return url; }
   };
   return {

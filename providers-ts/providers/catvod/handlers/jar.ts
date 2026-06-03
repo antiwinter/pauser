@@ -5,6 +5,9 @@ import type {
   CatVodDetail,
   CatVodPlayResult,
 } from '../types.js';
+import type { SiteEntry } from '../config.js';
+import { parseSpiderField, siteExt } from '../config.js';
+import type { CatVodState } from '../instance.js';
 
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
@@ -148,9 +151,42 @@ function spiderClass(api: string): string {
   return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
 
+import { parseSpiderField, siteExt } from '../config.js';
+import type { SiteEntry } from '../config.js';
+import type { CatVodState } from '../instance.js';
+
+let jarInitialized = false;
+let jarFailed = false;
+let jarConfig: { url: string; md5?: string } | null = null;
+
+async function init(state: { config: { spider?: string } }): Promise<void> {
+  if (jarInitialized) return;
+  jarInitialized = true;
+
+  jarConfig = parseSpiderField(state.config.spider);
+  if (!jarConfig) {
+    jarFailed = true;
+    return;
+  }
+
+  try {
+    await ensureJar(jarConfig.url, jarConfig.md5);
+  } catch {
+    jarFailed = true;
+  }
+}
+
+function canHandle(): boolean {
+  return !jarFailed;
+}
+
 export default {
   name: 'jar',
   type: [3],
-  createSpider: (jarUrl: string, md5: string | undefined, api: string, ext: string, siteKey: string) =>
-    createJarSpider(jarUrl, md5, api, ext, siteKey),
+  init,
+  canHandle,
+  createSpider: (site: SiteEntry) => {
+    if (!jarConfig) throw new Error('JAR handler not initialized');
+    return createJarSpider(jarConfig.url, jarConfig.md5, site.api, siteExt(site), site.key);
+  },
 };

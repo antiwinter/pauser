@@ -5,6 +5,7 @@ import type {
   CatVodDetail,
   CatVodPlayResult,
 } from '../types.js';
+import type { SiteEntry } from '../config.js';
 
 /**
  * Creates a CMS spider (苹果CMS / MacCMS) — types 0/1/2
@@ -54,5 +55,5 @@ function createCmsSpider(api: string): CatVodSpider {
 export default {
   name: 'cms',
   type: [0, 1, 2],
-  createSpider: (api: string) => createCmsSpider(api),
+  createSpider: (site: SiteEntry) => createCmsSpider(site.api),
 };
