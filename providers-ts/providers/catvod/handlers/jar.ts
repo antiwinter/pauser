@@ -7,8 +7,6 @@ import type {
 } from '../types.js';
 import type { SiteEntry } from '../config.js';
 import { parseSpiderField, siteExt } from '../config.js';
-import type { CatVodState } from '../instance.js';
-
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
 
@@ -151,13 +149,9 @@ function spiderClass(api: string): string {
   return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
 
-import { parseSpiderField, siteExt } from '../config.js';
-import type { SiteEntry } from '../config.js';
-import type { CatVodState } from '../instance.js';
-
+let jarConfig: { url: string; md5?: string } | null = null;
 let jarInitialized = false;
 let jarFailed = false;
-let jarConfig: { url: string; md5?: string } | null = null;
 
 async function init(state: { config: { spider?: string } }): Promise<void> {
   if (jarInitialized) return;

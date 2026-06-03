@@ -15,14 +15,16 @@ const _g = globalThis as Record<string, unknown>;
 const _dispatchSync = _g['__hostDispatchSync'] as
   (ns: string, name: string, argsJson: string) => { status: number; body: string; headers: Record<string, string> };
 
-const _localStore: Record<string, Record<string, unknown>> = {};
-_g['local'] = {
-  get:    (k: string, f: string) => { const s = _localStore[k]; return s?.[f] !== undefined ? s[f] : null; },
-  set:    (k: string, f: string, v: unknown) => { (_localStore[k] ??= {})[f] = v; },
-  delete: (k: string, f: string) => { if (_localStore[k]) delete _localStore[k][f]; },
-};
-_g['setTimeout']   = (fn: () => void) => { Promise.resolve().then(fn); return 0; };
-_g['clearTimeout'] = () => {};
+// Per-spider local storage — flat namespace keyed by "siteKey:field" to avoid cross-site leakage
+const _localStore: Record<string, unknown> = {};
+function _initLocal(siteKey: string): void {
+  const ns = `${siteKey}:`;
+  (_g as Record<string, unknown>)['local'] = {
+    get:    (k: string) => _localStore[ns + k] !== undefined ? _localStore[ns + k] : null,
+    set:    (k: string, v: unknown) => { _localStore[ns + k] = v; },
+    delete: (k: string) => { delete _localStore[ns + k]; },
+  };
+}
 _g['_http'] = (url: string, opts: Record<string, unknown> = {}) => {
   const method = String(opts['method'] || 'GET').toLowerCase() === 'post' ? 'post' : 'get';
   const result = _dispatchSync('http', method, JSON.stringify({
@@ -67,6 +69,9 @@ const spiders = new Map<string, SpiderObject>();
 async function loadSpider(api: string, ext: string, siteKey: string): Promise<SpiderObject> {
   const cached = spiders.get(siteKey);
   if (cached) return cached;
+
+  // Set up per-site namespace for `local` before eval
+  _initLocal(siteKey);
 
   // Fetch the spider script and strip ES module syntax so it runs as a classic script
   const code = (await host.http.get({ url: api })).body
@@ -162,6 +167,12 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
       };
     },
   };
+}
+
+export function resetSpiders(): void {
+  spiders.clear();
+  // Clear per-site local store entries
+  for (const k of Object.keys(_localStore)) delete _localStore[k];
 }
 
 export default {

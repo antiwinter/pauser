@@ -53,6 +53,13 @@ export function siteExt(site: SiteEntry): string {
 
 export function parseSpiderField(spider?: string): { url: string; md5?: string } | null {
   if (!spider) return null;
-  const [url, md5] = spider.split(';md5;');
+  // Support: "url;md5;hash", "url;md5=hash", "url?md5=hash"
+  let url = spider;
+  let md5: string | undefined;
+  const sepMatch = spider.match(/^(.*?)[;?]md5[=;](.+)$/i);
+  if (sepMatch) {
+    url = sepMatch[1];
+    md5 = sepMatch[2];
+  }
   return { url, md5 };
 }

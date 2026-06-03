@@ -1,7 +1,8 @@
 import { getFieldsSpec, validateFields } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
 import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
-import { resetSpiders } from './handlers/jar.js';
+import { resetSpiders as resetJarSpiders } from './handlers/jar.js';
+import { resetSpiders as resetDrpySpiders } from './handlers/drpy.js';
 import type { CatVodState } from './instance.js';
 import type {
   ProviderFieldSpec,
@@ -67,6 +68,7 @@ let state: CatVodState | null = null;
 
   async resetSpiders(): Promise<void> {
     const jar = state ? parseSpiderField(state.config.spider) : undefined;
-    await resetSpiders(jar?.url, jar?.md5);
+    await resetJarSpiders(jar?.url, jar?.md5);
+    resetDrpySpiders();
   },
 };

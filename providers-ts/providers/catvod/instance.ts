@@ -39,11 +39,20 @@ export interface CatVodState {
   config: CatVodConfig;
   unsupportedSites?: Set<string>;
   spiders?: Map<string, CatVodSpider>; // Cache spider instances per siteKey
+  _siteMap?: Map<string, SiteEntry>;   // O(1) site lookup by key
 }
 
 // ── Spider Handler Registry ──────────────────────────────────────────────────
 
 const SPIDER_HANDLERS: SpiderHandler[] = [cmsHandler, jarHandler, drpyHandler];
+
+// Index by site type for O(1) handler resolution
+const HANDLER_BY_TYPE = new Map<number, SpiderHandler>();
+for (const h of SPIDER_HANDLERS) {
+  for (const t of h.type) {
+    if (!HANDLER_BY_TYPE.has(t)) HANDLER_BY_TYPE.set(t, h);
+  }
+}
 
 // ── Spider Instance Management ───────────────────────────────────────────────
 
@@ -59,13 +68,7 @@ function getSpider(site: SiteEntry, state: CatVodState): CatVodSpider {
   const cached = state.spiders.get(site.key);
   if (cached) return cached;
 
-  // Find handler that supports this site type and can handle it
-  const handler = SPIDER_HANDLERS.find(
-    (h) =>
-      h.type.includes(site.type) &&
-      (!("canHandle" in h) ||
-        (h as SpiderHandlerWithInit).canHandle(site, state)),
-  );
+  const handler = HANDLER_BY_TYPE.get(site.type);
   if (!handler) {
     throw new Error(`No available handler for site type ${site.type}`);
   }
@@ -154,14 +157,8 @@ export async function search(
 ): Promise<EntryInfo[]> {
   const results: EntryInfo[] = [];
   for (const site of state.config.sites) {
-    if (!site.searchable && site.searchable !== undefined) continue;
-    // Check if site type is supported and handler can handle it
-    const handler = SPIDER_HANDLERS.find(
-      (h) =>
-        h.type.includes(site.type) &&
-        (!("canHandle" in h) ||
-          (h as SpiderHandlerWithInit).canHandle(site, state)),
-    );
+    if (site.searchable === 0) continue;
+    const handler = HANDLER_BY_TYPE.get(site.type);
     if (!handler) continue;
     try {
       const spider = getSpider(site, state);
@@ -211,7 +208,7 @@ export async function getPlaybackSpec(
   // Direct episode ref → already has the URL
   if (ref.type === "ep") {
     const result = await spider.play(ref.flag, ref.epUrl);
-    return applyHosts(playResultToSpec(result, ref.epUrl), state.config.hosts);
+    return playResultToSpec(result, ref.epUrl);
   }
 
   // Vod ref with single episode → resolve inline
@@ -220,18 +217,15 @@ export async function getPlaybackSpec(
     const eps = parseEpisodes(detail);
     if (eps.length === 0) throw new Error("No episodes found");
     const result = await spider.play(eps[0].flag, eps[0].url);
-    return applyHosts(playResultToSpec(result, eps[0].url), state.config.hosts);
+    return playResultToSpec(result, eps[0].url);
   }
 
   // Live channel → direct URL
   if (ref.type === "live") {
-    return applyHosts(
-      {
-        url: ref.url,
-        title: ref.name,
-      } as PlaybackSpec,
-      state.config.hosts,
-    );
+    return {
+      url: ref.url,
+      title: ref.name,
+    } as PlaybackSpec;
   }
 
   throw new Error(
@@ -256,13 +250,8 @@ async function listRoot(state: CatVodState): Promise<EntryList> {
   const unavailable: SiteEntry[] = [];
 
   for (const site of state.config.sites) {
-    const handler = SPIDER_HANDLERS.find(
-      (h) =>
-        h.type.includes(site.type) &&
-        (!("canHandle" in h) ||
-          (h as SpiderHandlerWithInit).canHandle(site, state)),
-    );
-    if (handler) {
+    const handler = HANDLER_BY_TYPE.get(site.type);
+    if (handler && (!("canHandle" in handler) || (handler as SpiderHandlerWithInit).canHandle(site, state))) {
       available.push(site);
     } else {
       unavailable.push(site);
@@ -298,40 +287,16 @@ async function listRoot(state: CatVodState): Promise<EntryList> {
   return { items, totalCount: items.length };
 }
 
+function getSiteMap(state: CatVodState): Map<string, SiteEntry> {
+  if (!state._siteMap) {
+    state._siteMap = new Map(state.config.sites.map((s) => [s.key, s]));
+  }
+  return state._siteMap;
+}
+
 function requireSite(state: CatVodState, key: string): SiteEntry {
-  const site = state.config.sites.find((s) => s.key === key);
+  const site = getSiteMap(state).get(key);
   if (!site) throw new Error(`Site not found: ${key}`);
   return site;
 }
 
-function applyHosts(
-  spec: PlaybackSpec,
-  hosts: string[] | undefined,
-): PlaybackSpec {
-  if (!hosts?.length || !spec.url) return spec;
-  const map = new Map(hosts.map((h) => h.split("=") as [string, string]));
-  const remap = (url: string) => {
-    try {
-      // URL constructor may not be available in QuickJS
-      type URLConstructor = {
-        new (url: string): { hostname: string; toString(): string };
-      };
-      const URLCtor = (globalThis as { URL?: URLConstructor }).URL;
-      if (!URLCtor) return url;
-      const parsed = new URLCtor(url);
-      const to = map.get(parsed.hostname);
-      if (!to) return url;
-      parsed.hostname = to;
-      return parsed.toString();
-    } catch {
-      return url;
-    }
-  };
-  return {
-    ...spec,
-    url: remap(spec.url),
-    headers: Object.fromEntries(
-      Object.entries(spec.headers).map(([k, v]) => [k, remap(v)]),
-    ),
-  };
-}
