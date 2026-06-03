@@ -91,10 +91,13 @@ internal class InfoOsd(
 private fun trackLabel(mime: String?, decoderName: String?): String {
     if (mime == null) return ""
     val codec = mime.replace(Regex("^(?:video|audio)/"), "")
-    return if (decoderName == null) "$codec (failed)" else codec
+    // "passthrough" is a placeholder for offloaded/passthrough audio (no Android decoder)
+    return if (decoderName == null || decoderName == "passthrough") {
+        if (decoderName == "passthrough") codec else "$codec (failed)"
+    } else codec
 }
 
-/** True when MIME is known but decoder never initialized. */
+/** True when MIME is known but decoder never initialized (excludes passthrough). */
 private fun isTrackFailed(mime: String?, decoderName: String?): Boolean {
     return mime != null && decoderName == null
 }

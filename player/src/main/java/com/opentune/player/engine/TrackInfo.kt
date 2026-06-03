@@ -86,7 +86,22 @@ internal fun rememberTrackInfo(
                 initializedTimestampMs: Long,
                 initializationDurationMs: Long,
             ) {
+                Log.d("TrackInfo", "onAudioDecoderInitialized decoderName=$decoderName")
                 state.value = state.value.copy(audioDecoderName = decoderName)
+            }
+
+            // For passthrough audio (e.g., EAC3 via HDMI), no decoder is initialized.
+            // Use onAudioEnabled to set a placeholder name so passthrough doesn't show as "failed".
+            override fun onAudioEnabled(eventTime: AnalyticsListener.EventTime, decoderCounters: androidx.media3.exoplayer.DecoderCounters) {
+                mainHandler.post {
+                    val current = state.value
+                    Log.d("TrackInfo", "onAudioEnabled audioMime=${current.audioMime} audioDecoderName=${current.audioDecoderName}")
+                    // Set placeholder immediately - onTracksChanged fires right after and sets audioMime
+                    if (current.audioDecoderName == null) {
+                        Log.d("TrackInfo", "Setting passthrough placeholder")
+                        state.value = current.copy(audioDecoderName = "passthrough")
+                    }
+                }
             }
         }
 
