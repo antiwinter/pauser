@@ -4,8 +4,9 @@
  */
 import { EmbyApi, BROWSE_FIELDS, DETAIL_FIELDS } from './api.js';
 import { toListItem } from './mapper.js';
-import { imageUrl, resolvePlaybackUrl, playMethod } from './urls.js';
+import { imageUrl, resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { fmtToMime } from '../../utils/mimes.js';
+import { buildDeviceProfile } from './device-profile.js';
 import type { DeviceProfile } from './dto.js';
 import type {
   EntryDetail,
@@ -14,6 +15,7 @@ import type {
   PlaybackSpec,
   SubtitleTrack,
   PlatformInfo,
+  ValidationResult,
 } from '../../utils/types.js';
 
 const CONTAINER_TYPES = new Set([
@@ -32,9 +34,65 @@ export interface EmbyCredentials {
 }
 
 export interface EmbyInstanceState {
-  credentials: EmbyCredentials;
+  rawCredentials: Record<string, string>;  // raw form values — used by test()
+  credentials?: EmbyCredentials;           // populated by test()
   deviceProfile: DeviceProfile;
   capabilities: PlatformInfo;
+}
+
+// ── test() ───────────────────────────────────────────────────────────────────
+
+export async function test(
+  state: EmbyInstanceState,
+  deviceInfo: PlatformInfo,
+  deviceName: string,
+): Promise<ValidationResult> {
+  try {
+    const raw = state.rawCredentials;
+    const baseUrl  = normalizeBaseUrl(raw['base_url'] ?? '');
+    const username = (raw['username'] ?? '').trim();
+    const password = raw['password'] ?? '';
+
+    const unauthApi = new EmbyApi(baseUrl, '', '');
+    const auth = await unauthApi.authenticateByName({ Username: username, Pw: password });
+    const token  = auth.AccessToken;
+    const userId = auth.User?.Id;
+    if (!token)  throw new Error('No access token returned');
+    if (!userId) throw new Error('No user id returned');
+
+    const api = new EmbyApi(baseUrl, token, userId);
+    const info = await api.getSystemInfo();
+
+    const name = info.ServerName ?? baseUrl;
+
+    // Populate enriched credentials for subsequent calls
+    state.credentials = {
+      baseUrl,
+      userId,
+      accessToken: token,
+      serverId: info.Id ?? '',
+    };
+    state.deviceProfile = buildDeviceProfile(state.capabilities, deviceName);
+
+    return {
+      success: true,
+      fields: {
+        base_url:     baseUrl,
+        user_id:      userId,
+        access_token: token,
+        server_id:    info.Id ?? '',
+        name,
+      },
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, error: msg };
+  }
+}
+
+function requireState(state: EmbyInstanceState): EmbyInstanceState & { credentials: EmbyCredentials } {
+  if (!state.credentials) throw new Error('Emby not authenticated — call test() first');
+  return state as EmbyInstanceState & { credentials: EmbyCredentials };
 }
 
 export async function listEntry(
@@ -43,7 +101,7 @@ export async function listEntry(
   startIndex: number,
   limit: number,
 ): Promise<EntryList> {
-  const { credentials } = state;
+  const { credentials } = requireState(state);
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
   if (location === null) {
@@ -74,7 +132,7 @@ export async function search(
 ): Promise<EntryInfo[]> {
   const q = query.trim();
   if (!q) return [];
-  const { credentials } = state;
+  const { credentials } = requireState(state);
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
   const result = await api.getItems({
     parentId: scopeLocation || null,
@@ -92,7 +150,7 @@ export async function getDetail(
   state: EmbyInstanceState,
   itemRef: string,
 ): Promise<EntryDetail> {
-  const { credentials } = state;
+  const { credentials } = requireState(state);
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
   const item = await api.getItem(itemRef, DETAIL_FIELDS);
   const id = item.Id ?? itemRef;
@@ -150,7 +208,7 @@ export async function getPlaybackSpec(
   itemRef: string,
   startMs: number,
 ): Promise<PlaybackSpec> {
-  const { credentials, deviceProfile, capabilities } = state;
+  const s = requireState(state); const credentials = s.credentials; const deviceProfile = s.deviceProfile; const capabilities = s.capabilities;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
   const startTicks = startMs > 0 ? startMs * 10_000 : undefined;

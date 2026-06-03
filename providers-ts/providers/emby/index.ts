@@ -4,8 +4,8 @@
  * One engine = one endpoint client. Module-level `state` holds the single
  * configured instance; no instanceId map needed.
  */
-import { getFieldsSpec, validateFields, makeInstanceState } from './provider.js';
-import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
+import { getFieldsSpec, makeInstanceState } from './provider.js';
+import { listEntry, search, getDetail, getPlaybackSpec, test } from './instance.js';
 import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksState } from './hooks.js';
 import type { EmbyInstanceState } from './instance.js';
@@ -31,8 +31,8 @@ let state: EmbyInstanceState | null = null;
     return getFieldsSpec();
   },
 
-  async validateFields(args: { values: Record<string, string> }): Promise<ValidationResult> {
-    return validateFields(args.values);
+  async test(): Promise<ValidationResult> {
+    return test(state!, state!.capabilities, state!.capabilities.deviceName);
   },
 
   // ── Instance init (called once per engine, replaces createInstance) ───

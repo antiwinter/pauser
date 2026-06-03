@@ -1,12 +1,9 @@
 /**
- * provider.ts — Emby stateless factory (getFieldsSpec, validateFields).
+ * provider.ts — Emby stateless factory (getFieldsSpec, makeInstanceState).
  * Mirrors EmbyProvider.kt.
  */
-import { EmbyApi } from './api.js';
-import { normalizeBaseUrl } from './urls.js';
-import { buildDeviceProfile } from './device-profile.js';
-import type { ProviderFieldSpec, ValidationResult, PlatformInfo } from '../../utils/types.js';
-import type { EmbyCredentials, EmbyInstanceState } from './instance.js';
+import type { ProviderFieldSpec, PlatformInfo } from '../../utils/types.js';
+import type { EmbyInstanceState } from './instance.js';
 
 export function getFieldsSpec(): ProviderFieldSpec[] {
   return [
@@ -18,54 +15,14 @@ export function getFieldsSpec(): ProviderFieldSpec[] {
   ];
 }
 
-export async function validateFields(values: Record<string, string>): Promise<ValidationResult> {
-  try {
-    const baseUrl  = normalizeBaseUrl(values['base_url'] ?? '');
-    const username = (values['username'] ?? '').trim();
-    const password = values['password'] ?? '';
-
-    const unauthApi = new EmbyApi(baseUrl, '', '');
-    const auth = await unauthApi.authenticateByName({ Username: username, Pw: password });
-    const token  = auth.AccessToken;
-    const userId = auth.User?.Id;
-    if (!token)  throw new Error('No access token returned');
-    if (!userId) throw new Error('No user id returned');
-
-    const api = new EmbyApi(baseUrl, token, userId);
-    const info = await api.getSystemInfo();
-
-    const name = info.ServerName ?? baseUrl;
-
-    const fields: Record<string, string> = {
-      base_url:     baseUrl,
-      user_id:      userId,
-      access_token: token,
-      server_id:    info.Id ?? '',
-      name,
-    };
-
-    return { success: true, fields };
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { success: false, error: msg };
-  }
-}
-
 export function makeInstanceState(
   values: Record<string, string>,
   deviceInfo: PlatformInfo,
   deviceName: string,
 ): EmbyInstanceState {
-  const credentials: EmbyCredentials = {
-    baseUrl:     values['base_url']     ?? '',
-    userId:      values['user_id']      ?? '',
-    accessToken: values['access_token'] ?? '',
-    serverId:    values['server_id']    ?? null,
+  return {
+    rawCredentials: { ...values },
+    deviceProfile: {},
+    capabilities: deviceInfo,
   };
-  if (!credentials.baseUrl)     throw new Error('Missing base_url');
-  if (!credentials.userId)      throw new Error('Missing user_id');
-  if (!credentials.accessToken) throw new Error('Missing access_token');
-
-  const profile = buildDeviceProfile(deviceInfo, deviceName);
-  return { credentials, deviceProfile: profile, capabilities: deviceInfo };
 }

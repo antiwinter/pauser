@@ -3,6 +3,7 @@ import type {
   EntryInfo,
   EntryDetail,
   PlaybackSpec,
+  ValidationResult,
 } from "../../utils/types.js";
 import type { CatVodConfig, SiteEntry } from "./config.js";
 import type { CatVodSpider } from "./types.js";
@@ -36,10 +37,24 @@ interface SpiderHandlerWithInit extends BaseSpiderHandler {
 type SpiderHandler = BaseSpiderHandler | SpiderHandlerWithInit;
 
 export interface CatVodState {
-  config: CatVodConfig;
+  rawCredentials: Record<string, string>;  // raw form values — available for test()
+  config: CatVodConfig;                    // always populated by init()
   unsupportedSites?: Set<string>;
-  spiders?: Map<string, CatVodSpider>; // Cache spider instances per siteKey
-  _siteMap?: Map<string, SiteEntry>;   // O(1) site lookup by key
+  spiders?: Map<string, CatVodSpider>;     // Cache spider instances per siteKey
+  _siteMap?: Map<string, SiteEntry>;       // O(1) site lookup by key
+}
+
+// ── test() ───────────────────────────────────────────────────────────────────
+
+export async function test(state: CatVodState): Promise<ValidationResult> {
+  const cfg = state.config;
+  return {
+    success: true,
+    fields: {
+      config_url: state.rawCredentials['config_url'] ?? '',
+      name: `CatVod (${cfg.sites.length} sources)`,
+    },
+  };
 }
 
 // ── Spider Handler Registry ──────────────────────────────────────────────────

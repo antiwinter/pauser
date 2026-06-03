@@ -11,7 +11,7 @@ import { runBench } from './bench.js';
     ];
   },
 
-  async validateFields(_args: { values: Record<string, string> }): Promise<ValidationResult> {
+  async test(): Promise<ValidationResult> {
     return { success: true, fields: {} };
   },
 

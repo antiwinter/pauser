@@ -1,6 +1,6 @@
-import { getFieldsSpec, validateFields } from './provider.js';
+import { getFieldsSpec } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
-import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
+import { test, listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
 import { resetSpiders as resetJarSpiders } from './handlers/jar.js';
 import { resetSpiders as resetDrpySpiders } from './handlers/drpy.js';
 import type { CatVodState } from './instance.js';
@@ -24,8 +24,8 @@ let state: CatVodState | null = null;
     return getFieldsSpec();
   },
 
-  async validateFields(args: { values: Record<string, string> }): Promise<ValidationResult> {
-    return validateFields(args.values);
+  async test(): Promise<ValidationResult> {
+    return test(state!);
   },
 
   async init(args: {
@@ -33,7 +33,7 @@ let state: CatVodState | null = null;
     capabilities: PlatformCapabilities;
   }): Promise<void> {
     const config = await fetchConfig(args.credentials['config_url'] ?? '');
-    state = { config };
+    state = { rawCredentials: args.credentials, config };
   },
 
   async listEntry(args: {
@@ -67,7 +67,7 @@ let state: CatVodState | null = null;
   async onStop():         Promise<void> {},
 
   async resetSpiders(): Promise<void> {
-    const jar = state ? parseSpiderField(state.config.spider) : undefined;
+    const jar = state ? parseSpiderField(state.config?.spider) : undefined;
     await resetJarSpiders(jar?.url, jar?.md5);
     resetDrpySpiders();
   },

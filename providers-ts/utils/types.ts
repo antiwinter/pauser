@@ -199,7 +199,7 @@ export interface PlatformInfo {
 export interface OpenTuneProviderBridge {
   providesArt: boolean;
   getFieldsSpec(): Promise<ProviderFieldSpec[]>;
-  validateFields(args: { values: Record<string, string> }): Promise<ValidationResult>;
+  test(): Promise<ValidationResult>;
 
   init(args: {
     credentials: Record<string, string>;
