@@ -27,8 +27,10 @@ internal class InfoOsd(
     private val durationMs: Long,
     private val videoMime: String?,
     private val videoDecoderName: String?,
+    private val videoFailed: Boolean,
     private val audioMime: String?,
     private val audioDecoderName: String?,
+    private val audioFailed: Boolean,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -62,13 +64,13 @@ internal class InfoOsd(
                         Text(text = formatDuration(durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                     }
                     Text(
-                        text = trackLabel(videoMime, videoDecoderName),
-                        color = if (isTrackFailed(videoMime, videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                        text = trackLabel(videoMime, videoDecoderName, videoFailed),
+                        color = if (videoFailed) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
                     Text(
-                        text = trackLabel(audioMime, audioDecoderName),
-                        color = if (isTrackFailed(audioMime, audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                        text = trackLabel(audioMime, audioDecoderName, audioFailed),
+                        color = if (audioFailed) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
                     spec.bitrate?.takeIf { it > 0 }?.let { br ->
@@ -87,19 +89,24 @@ internal class InfoOsd(
     }
 }
 
-/** Returns codec name, "failed" if track exists but no decoder, or "" if no track. */
-private fun trackLabel(mime: String?, decoderName: String?): String {
-    if (mime == null) return ""
-    val codec = mime.replace(Regex("^(?:video|audio)/"), "")
-    // "passthrough" is a placeholder for offloaded/passthrough audio (no Android decoder)
-    return if (decoderName == null || decoderName == "passthrough") {
-        if (decoderName == "passthrough") codec else "$codec (failed)"
-    } else codec
+/** Extracts decoder prefix (e.g., "c2", "OMX") from full decoder name. */
+private fun simplifyDecoderName(decoderName: String): String {
+    return when {
+        decoderName.startsWith("c2.") -> "c2"
+        decoderName.startsWith("OMX.") -> "OMX"
+        else -> decoderName.substringBefore('.').takeIf { it.isNotEmpty() } ?: decoderName
+    }
 }
 
-/** True when MIME is known but decoder never initialized (excludes passthrough). */
-private fun isTrackFailed(mime: String?, decoderName: String?): Boolean {
-    return mime != null && decoderName == null
+/** Returns format, format[decoder], or format[failed] based on state. */
+private fun trackLabel(mime: String?, decoderName: String?, failed: Boolean): String {
+    if (mime == null) return ""
+    val codec = mime.replace(Regex("^(?:video|audio)/"), "")
+    return when {
+        failed -> "$codec[failed]"
+        decoderName != null -> "$codec[${simplifyDecoderName(decoderName)}]"
+        else -> codec
+    }
 }
 
 private fun formatDuration(ms: Long): String {
@@ -121,20 +128,24 @@ internal fun rememberInfoOsd(
     exo: ExoPlayer,
     videoMime: String?,
     videoDecoderName: String?,
+    videoFailed: Boolean,
     audioMime: String?,
     audioDecoderName: String?,
+    audioFailed: Boolean,
     mbpsState: MutableFloatState,
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
 
-    return remember(instanceKey, spec, exo, videoMime, videoDecoderName, audioMime, audioDecoderName) {
+    return remember(instanceKey, spec, exo, videoMime, videoDecoderName, videoFailed, audioMime, audioDecoderName, audioFailed) {
         InfoOsd(
             spec = spec,
             durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
             videoDecoderName = videoDecoderName,
+            videoFailed = videoFailed,
             audioMime = audioMime,
             audioDecoderName = audioDecoderName,
+            audioFailed = audioFailed,
             showState = showState,
             mbpsState = mbpsState,
         )

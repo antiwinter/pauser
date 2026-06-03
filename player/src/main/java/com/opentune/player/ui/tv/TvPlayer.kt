@@ -136,8 +136,10 @@ fun TvPlayer(
         exo = exo,
         videoMime = trackInfo.videoMime,
         videoDecoderName = trackInfo.videoDecoderName,
+        videoFailed = trackInfo.videoFailed,
         audioMime = trackInfo.audioMime,
         audioDecoderName = trackInfo.audioDecoderName,
+        audioFailed = trackInfo.audioFailed,
         mbpsState = engine.bandwidthMbps,
     )
 

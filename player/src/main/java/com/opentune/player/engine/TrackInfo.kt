@@ -18,8 +18,10 @@ import com.opentune.storage.EntryStateKey
 internal data class TrackInfo(
     val videoMime: String? = null,
     val videoDecoderName: String? = null,
+    val videoFailed: Boolean = false,
     val audioMime: String? = null,
     val audioDecoderName: String? = null,
+    val audioFailed: Boolean = false,
 )
 
 // MIME types come from onTracksChanged. Decoder names come from AnalyticsListener callbacks
@@ -68,6 +70,22 @@ internal fun rememberTrackInfo(
                     state.value = updated
                 }
             }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                mainHandler.post {
+                    val current = state.value
+                    when {
+                        error.causeChainContains("MediaCodecVideoRenderer") -> {
+                            Log.w("TrackInfo", "Video decode failed")
+                            state.value = current.copy(videoFailed = true)
+                        }
+                        error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") -> {
+                            Log.w("TrackInfo", "Audio decode failed")
+                            state.value = current.copy(audioFailed = true)
+                        }
+                    }
+                }
+            }
         }
 
         val analyticsListener = object : AnalyticsListener {
@@ -88,20 +106,6 @@ internal fun rememberTrackInfo(
             ) {
                 Log.d("TrackInfo", "onAudioDecoderInitialized decoderName=$decoderName")
                 state.value = state.value.copy(audioDecoderName = decoderName)
-            }
-
-            // For passthrough audio (e.g., EAC3 via HDMI), no decoder is initialized.
-            // Use onAudioEnabled to set a placeholder name so passthrough doesn't show as "failed".
-            override fun onAudioEnabled(eventTime: AnalyticsListener.EventTime, decoderCounters: androidx.media3.exoplayer.DecoderCounters) {
-                mainHandler.post {
-                    val current = state.value
-                    Log.d("TrackInfo", "onAudioEnabled audioMime=${current.audioMime} audioDecoderName=${current.audioDecoderName}")
-                    // Set placeholder immediately - onTracksChanged fires right after and sets audioMime
-                    if (current.audioDecoderName == null) {
-                        Log.d("TrackInfo", "Setting passthrough placeholder")
-                        state.value = current.copy(audioDecoderName = "passthrough")
-                    }
-                }
             }
         }
 
