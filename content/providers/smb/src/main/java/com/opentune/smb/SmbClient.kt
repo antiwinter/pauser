@@ -26,7 +26,7 @@ import java.util.EnumSet
 
 private const val SMB_LOG = "OpenTunePlayer"
 
-class SmbProviderInstance(
+class SmbClient(
     private val fields: SmbServerFieldsJson,
 ) : EndpointClient() {
 
@@ -143,7 +143,7 @@ class SmbProviderInstance(
         return withContext(Dispatchers.IO) {
             val pathWin = itemRef.replace('/', '\\')
             val registrar = StreamRegistrarHolder.get()
-            val videoUrl = registrar.registerStream(this@SmbProviderInstance, pathWin)
+            val videoUrl = registrar.registerStream(this@SmbClient, pathWin)
             Log.d(SMB_LOG, "[smb] registered video stream url=$videoUrl")
 
             // Scan for sidecar subtitles using a short-lived session.
@@ -153,7 +153,7 @@ class SmbProviderInstance(
                     val rawSubtitles = findSidecarSubtitles(session.share, itemRef)
                     rawSubtitles.mapNotNull { track ->
                         val smbPath = track.externalRef?.replace('/', '\\') ?: return@mapNotNull null
-                        val url = registrar.registerStream(this@SmbProviderInstance, smbPath)
+                        val url = registrar.registerStream(this@SmbClient, smbPath)
                         Log.d(SMB_LOG, "[smb] registered subtitle stream url=$url")
                         track.copy(externalRef = url)
                     }

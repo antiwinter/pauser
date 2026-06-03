@@ -1,9 +1,9 @@
 /**
- * provider.ts — Emby stateless factory (getFieldsSpec, makeInstanceState).
+ * provider.ts — Emby stateless factory (getFieldsSpec, makeClientState).
  * Mirrors EmbyProvider.kt.
  */
 import type { ProviderFieldSpec, PlatformInfo } from '../../utils/types.js';
-import type { EmbyInstanceState } from './instance.js';
+import type { EmbyClientState } from './client.js';
 
 export function getFieldsSpec(): ProviderFieldSpec[] {
   return [
@@ -15,11 +15,11 @@ export function getFieldsSpec(): ProviderFieldSpec[] {
   ];
 }
 
-export function makeInstanceState(
+export function makeClientState(
   values: Record<string, string>,
   deviceInfo: PlatformInfo,
   deviceName: string,
-): EmbyInstanceState {
+): EmbyClientState {
   return {
     rawCredentials: { ...values },
     deviceProfile: {},

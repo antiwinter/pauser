@@ -2,13 +2,13 @@
  * index.ts — Rollup IIFE entry point for the Emby provider.
  *
  * One engine = one endpoint client. Module-level `state` holds the single
- * configured instance; no instanceId map needed.
+ * configured client; no clientId map needed.
  */
-import { getFieldsSpec, makeInstanceState } from './provider.js';
-import { listEntry, search, getDetail, getPlaybackSpec, test } from './instance.js';
+import { getFieldsSpec, makeClientState } from './provider.js';
+import { listEntry, search, getDetail, getPlaybackSpec, test } from './client.js';
 import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksState } from './hooks.js';
-import type { EmbyInstanceState } from './instance.js';
+import type { EmbyClientState } from './client.js';
 import type {
   ProviderFieldSpec,
   ValidationResult,
@@ -19,7 +19,7 @@ import type {
   PlatformInfo,
 } from '../../utils/types.js';
 
-let state: EmbyInstanceState | null = null;
+let state: EmbyClientState | null = null;
 
 (globalThis as unknown as Record<string, unknown>).opentuneProvider = {
 
@@ -35,7 +35,7 @@ let state: EmbyInstanceState | null = null;
     return test(state!, state!.capabilities, state!.capabilities.deviceName);
   },
 
-  // ── Instance init (called once per engine, replaces createInstance) ───
+  // ── Client init (called once per engine, replaces createClient) ───
 
   async init(args: {
     credentials: Record<string, string>;
@@ -47,10 +47,10 @@ let state: EmbyInstanceState | null = null;
       deviceId: args.deviceInfo.deviceId,
       clientVersion: args.deviceInfo.clientVersion,
     });
-    state = makeInstanceState(args.credentials, args.deviceInfo, args.deviceInfo.deviceName);
+    state = makeClientState(args.credentials, args.deviceInfo, args.deviceInfo.deviceName);
   },
 
-  // ── Instance methods ──────────────────────────────────────────────────
+  // ── Client methods ──────────────────────────────────────────────────
 
   async listEntry(args: {
     location: string | null;

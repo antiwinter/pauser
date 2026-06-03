@@ -30,13 +30,13 @@ interface BaseSpiderHandler {
 }
 
 interface SpiderHandlerWithInit extends BaseSpiderHandler {
-  init: (state: CatVodState) => Promise<void>;
-  canHandle: (site: SiteEntry, state: CatVodState) => boolean;
+  init: (state: CatVodClientState) => Promise<void>;
+  canHandle: (site: SiteEntry, state: CatVodClientState) => boolean;
 }
 
 type SpiderHandler = BaseSpiderHandler | SpiderHandlerWithInit;
 
-export interface CatVodState {
+export interface CatVodClientState {
   rawCredentials: Record<string, string>;  // raw form values — available for test()
   config: CatVodConfig;                    // always populated by init()
   unsupportedSites?: Set<string>;
@@ -46,7 +46,7 @@ export interface CatVodState {
 
 // ── test() ───────────────────────────────────────────────────────────────────
 
-export async function test(state: CatVodState): Promise<ValidationResult> {
+export async function test(state: CatVodClientState): Promise<ValidationResult> {
   const cfg = state.config;
   return {
     success: true,
@@ -75,7 +75,7 @@ for (const h of SPIDER_HANDLERS) {
  * Get or create a spider instance for a site
  * Caches instances to preserve state (especially for drpy/jar)
  */
-function getSpider(site: SiteEntry, state: CatVodState): CatVodSpider {
+function getSpider(site: SiteEntry, state: CatVodClientState): CatVodSpider {
   if (!state.spiders) {
     state.spiders = new Map();
   }
@@ -96,7 +96,7 @@ function getSpider(site: SiteEntry, state: CatVodState): CatVodSpider {
 // ── listEntry ─────────────────────────────────────────────────────────────────
 
 export async function listEntry(
-  state: CatVodState,
+  state: CatVodClientState,
   location: string | null,
   startIndex: number,
   limit: number,
@@ -166,7 +166,7 @@ export async function listEntry(
 // ── search ────────────────────────────────────────────────────────────────────
 
 export async function search(
-  state: CatVodState,
+  state: CatVodClientState,
   _scopeLocation: string,
   query: string,
 ): Promise<EntryInfo[]> {
@@ -193,7 +193,7 @@ export async function search(
 // ── getDetail ─────────────────────────────────────────────────────────────────
 
 export async function getDetail(
-  state: CatVodState,
+  state: CatVodClientState,
   itemRef: string,
 ): Promise<EntryDetail> {
   const ref = decodeRef(itemRef);
@@ -212,7 +212,7 @@ export async function getDetail(
 // ── getPlaybackSpec ───────────────────────────────────────────────────────────
 
 export async function getPlaybackSpec(
-  state: CatVodState,
+  state: CatVodClientState,
   itemRef: string,
   _startMs: number,
 ): Promise<PlaybackSpec> {
@@ -250,7 +250,7 @@ export async function getPlaybackSpec(
 
 // ── Dispatch helpers ──────────────────────────────────────────────────────────
 
-async function initHandlers(state: CatVodState): Promise<void> {
+async function initHandlers(state: CatVodClientState): Promise<void> {
   for (const handler of SPIDER_HANDLERS) {
     if ("init" in handler) {
       await (handler as SpiderHandlerWithInit).init(state).catch(() => {}); // Allow init to fail silently
@@ -258,7 +258,7 @@ async function initHandlers(state: CatVodState): Promise<void> {
   }
 }
 
-async function listRoot(state: CatVodState): Promise<EntryList> {
+async function listRoot(state: CatVodClientState): Promise<EntryList> {
   await initHandlers(state);
 
   const available: SiteEntry[] = [];
@@ -302,14 +302,14 @@ async function listRoot(state: CatVodState): Promise<EntryList> {
   return { items, totalCount: items.length };
 }
 
-function getSiteMap(state: CatVodState): Map<string, SiteEntry> {
+function getSiteMap(state: CatVodClientState): Map<string, SiteEntry> {
   if (!state._siteMap) {
     state._siteMap = new Map(state.config.sites.map((s) => [s.key, s]));
   }
   return state._siteMap;
 }
 
-function requireSite(state: CatVodState, key: string): SiteEntry {
+function requireSite(state: CatVodClientState, key: string): SiteEntry {
   const site = getSiteMap(state).get(key);
   if (!site) throw new Error(`Site not found: ${key}`);
   return site;

@@ -61,6 +61,6 @@ class SmbProvider : OpenTuneProvider {
             password = values["password"] ?: error("Missing password"),
             domain = values["domain"],
         )
-        return SmbProviderInstance(fields = fields)
+        return SmbClient(fields = fields)
     }
 }

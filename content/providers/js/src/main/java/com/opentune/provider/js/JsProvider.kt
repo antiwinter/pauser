@@ -36,11 +36,11 @@ class JsProvider private constructor(
 
     override fun getFieldsSpec(): List<FormFieldSpec> = cachedFieldsSpec
 
-    // ── Instance creation ──────────────────────────────────────────────────
+    // ── Client creation ──────────────────────────────────────────────────
 
     override fun createClient(values: Map<String, String>): EndpointClient {
         val deviceInfo = com.opentune.player.PlatformInfo.detect(ContextHolder.get())
-        return JsProviderInstance(
+        return JsClient(
             protocol = protocol,
             jsBundle = jsBundle,
             hostApis = hostApis,

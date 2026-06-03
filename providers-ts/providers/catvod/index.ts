@@ -1,9 +1,9 @@
 import { getFieldsSpec } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
-import { test, listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
+import { test, listEntry, search, getDetail, getPlaybackSpec } from './client.js';
 import { resetSpiders as resetJarSpiders } from './handlers/jar.js';
 import { resetSpiders as resetDrpySpiders } from './handlers/drpy.js';
-import type { CatVodState } from './instance.js';
+import type { CatVodClientState } from './client.js';
 import type {
   ProviderFieldSpec,
   ValidationResult,
@@ -14,7 +14,7 @@ import type {
   PlatformCapabilities,
 } from '../../utils/types.js';
 
-let state: CatVodState | null = null;
+let state: CatVodClientState | null = null;
 
 (globalThis as unknown as Record<string, unknown>).opentuneProvider = {
 

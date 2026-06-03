@@ -1,5 +1,5 @@
 /**
- * instance.ts — Emby provider instance implementation.
+ * client.ts — Emby provider client implementation.
  * Mirrors EmbyProviderInstance.kt.
  */
 import { EmbyApi, BROWSE_FIELDS, DETAIL_FIELDS } from './api.js';
@@ -33,7 +33,7 @@ export interface EmbyCredentials {
   serverId?: string | null;
 }
 
-export interface EmbyInstanceState {
+export interface EmbyClientState {
   rawCredentials: Record<string, string>;  // raw form values — used by test()
   credentials?: EmbyCredentials;           // populated by test()
   deviceProfile: DeviceProfile;
@@ -43,7 +43,7 @@ export interface EmbyInstanceState {
 // ── test() ───────────────────────────────────────────────────────────────────
 
 export async function test(
-  state: EmbyInstanceState,
+  state: EmbyClientState,
   deviceInfo: PlatformInfo,
   deviceName: string,
 ): Promise<ValidationResult> {
@@ -90,13 +90,13 @@ export async function test(
   }
 }
 
-function requireState(state: EmbyInstanceState): EmbyInstanceState & { credentials: EmbyCredentials } {
+function requireState(state: EmbyClientState): EmbyClientState & { credentials: EmbyCredentials } {
   if (!state.credentials) throw new Error('Emby not authenticated — call test() first');
-  return state as EmbyInstanceState & { credentials: EmbyCredentials };
+  return state as EmbyClientState & { credentials: EmbyCredentials };
 }
 
 export async function listEntry(
-  state: EmbyInstanceState,
+  state: EmbyClientState,
   location: string | null,
   startIndex: number,
   limit: number,
@@ -126,7 +126,7 @@ export async function listEntry(
 }
 
 export async function search(
-  state: EmbyInstanceState,
+  state: EmbyClientState,
   scopeLocation: string,
   query: string,
 ): Promise<EntryInfo[]> {
@@ -147,7 +147,7 @@ export async function search(
 }
 
 export async function getDetail(
-  state: EmbyInstanceState,
+  state: EmbyClientState,
   itemRef: string,
 ): Promise<EntryDetail> {
   const { credentials } = requireState(state);
@@ -204,7 +204,7 @@ const BITMAP_CODECS = new Set([
 ]);
 
 export async function getPlaybackSpec(
-  state: EmbyInstanceState,
+  state: EmbyClientState,
   itemRef: string,
   startMs: number,
 ): Promise<PlaybackSpec> {

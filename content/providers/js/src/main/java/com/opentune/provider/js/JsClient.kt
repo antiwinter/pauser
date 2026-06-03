@@ -34,12 +34,12 @@ import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
 /**
- * Live provider instance backed by a dedicated QuickJS context.
+ * Live endpoint client backed by a dedicated QuickJS context.
  *
- * One context per server instance — contexts are not shared between instances
- * so JS state (instance credentials) is fully isolated.
+ * One context per server — contexts are not shared between clients
+ * so JS state (client credentials) is fully isolated.
  */
-class JsProviderInstance(
+class JsClient(
     private val protocol: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
@@ -424,7 +424,7 @@ class JsProviderInstance(
 }
 
 /**
- * Delegates playback hook calls back into the JS provider instance.
+ * Delegates playback hook calls back into the JS client.
  */
 private class JsPlaybackHooks(
     private val engine: QuickJsEngine,
