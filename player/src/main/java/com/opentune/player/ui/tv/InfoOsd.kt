@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableFloatState
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -26,12 +25,10 @@ internal class InfoOsd(
     private val spec: PlaybackSpec,
     private val durationMs: Long,
     private val videoMime: String?,
-    private val videoDecoderName: String?,
-    private val videoFailed: Boolean,
+    private val videoDecoderStatus: String,
     private val audioMime: String?,
-    private val audioDecoderName: String?,
-    private val audioFailed: Boolean,
-    private val showState: MutableState<Boolean>,
+    private val audioDecoderStatus: String,
+    private val showState: androidx.compose.runtime.MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
     val isVisible: Boolean get() = showState.value
@@ -64,13 +61,13 @@ internal class InfoOsd(
                         Text(text = formatDuration(durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                     }
                     Text(
-                        text = trackLabel(videoMime, videoDecoderName, videoFailed),
-                        color = if (videoFailed) Color(0xFFFF6B6B) else Color.White,
+                        text = trackLabel(videoMime, videoDecoderStatus),
+                        color = if (videoDecoderStatus.isNotEmpty()) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
                     Text(
-                        text = trackLabel(audioMime, audioDecoderName, audioFailed),
-                        color = if (audioFailed) Color(0xFFFF6B6B) else Color.White,
+                        text = trackLabel(audioMime, audioDecoderStatus),
+                        color = if (audioDecoderStatus.isNotEmpty()) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
                     spec.bitrate?.takeIf { it > 0 }?.let { br ->
@@ -89,22 +86,14 @@ internal class InfoOsd(
     }
 }
 
-/** Extracts decoder prefix (e.g., "c2", "OMX") from full decoder name. */
-private fun simplifyDecoderName(decoderName: String): String {
-    return when {
-        decoderName.startsWith("c2.") -> "c2"
-        decoderName.startsWith("OMX.") -> "OMX"
-        else -> decoderName.substringBefore('.').takeIf { it.isNotEmpty() } ?: decoderName
-    }
-}
-
-/** Returns format, format[decoder], or format[failed] based on state. */
-private fun trackLabel(mime: String?, decoderName: String?, failed: Boolean): String {
+/** Returns format, format[c2], format[n/a], or format[err]. */
+private fun trackLabel(mime: String?, decoderStatus: String): String {
     if (mime == null) return ""
     val codec = mime.replace(Regex("^(?:video|audio)/"), "")
     return when {
-        failed -> "$codec[failed]"
-        decoderName != null -> "$codec[${simplifyDecoderName(decoderName)}]"
+        decoderStatus == "n/a" -> "$codec[n/a]"
+        decoderStatus == "err" -> "$codec[err]"
+        decoderStatus.isNotEmpty() -> "$codec[$decoderStatus]"
         else -> codec
     }
 }
@@ -127,25 +116,21 @@ internal fun rememberInfoOsd(
     spec: PlaybackSpec,
     exo: ExoPlayer,
     videoMime: String?,
-    videoDecoderName: String?,
-    videoFailed: Boolean,
+    videoDecoderStatus: String,
     audioMime: String?,
-    audioDecoderName: String?,
-    audioFailed: Boolean,
+    audioDecoderStatus: String,
     mbpsState: MutableFloatState,
 ): InfoOsd {
     val showState = remember(instanceKey) { mutableStateOf(false) }
 
-    return remember(instanceKey, spec, exo, videoMime, videoDecoderName, videoFailed, audioMime, audioDecoderName, audioFailed) {
+    return remember(instanceKey, spec, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus) {
         InfoOsd(
             spec = spec,
             durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
-            videoDecoderName = videoDecoderName,
-            videoFailed = videoFailed,
+            videoDecoderStatus = videoDecoderStatus,
             audioMime = audioMime,
-            audioDecoderName = audioDecoderName,
-            audioFailed = audioFailed,
+            audioDecoderStatus = audioDecoderStatus,
             showState = showState,
             mbpsState = mbpsState,
         )
