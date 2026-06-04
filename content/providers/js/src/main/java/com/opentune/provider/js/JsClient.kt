@@ -57,13 +57,10 @@ class JsClient(
     // ── Validation ─────────────────────────────────────────────────────────
 
     override suspend fun test(): EndpointValidationResult {
-        val argsJson = buildJsonObject {
-            put("values", buildJsonObject { values.forEach { (k, v) -> put(k, v) } })
-        }.toString()
         return try {
-            val resultJson = withEngine(httpClient) { engine ->
-                engine.callMethod("validateFields", argsJson)
-            } ?: return EndpointValidationResult.Error("Validation returned null")
+            ensureReady()
+            val resultJson = engine.callMethod("test", "{}")
+                ?: return EndpointValidationResult.Error("Validation returned null")
 
             val obj = json.parseToJsonElement(resultJson).jsonObject
             val success = obj["success"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
