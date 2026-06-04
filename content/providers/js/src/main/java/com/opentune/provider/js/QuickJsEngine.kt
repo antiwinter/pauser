@@ -214,6 +214,7 @@ class QuickJsEngine(
             "http"   -> hostApis.handleHttp(name, argsJson, httpClient)
             "crypto" -> hostApis.handleCrypto(name, argsJson)
             "jar"    -> hostApis.handleJar(name, argsJson, jarLoader)
+            "fs"     -> hostApis.handleFs(name, argsJson)
             else     -> throw IllegalArgumentException("Unknown host namespace: $ns")
         }
 

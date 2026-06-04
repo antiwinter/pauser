@@ -54,11 +54,39 @@ function baseHeaders(accessToken?: string | null): Record<string, string> {
   return hdrs;
 }
 
+// ── Temp dump helper: saves parsed JSON responses to cache/emby_dump/ ────────
+
+function dumpUrl(url: string): string {
+  try {
+    // Strip scheme, then take everything after host:port
+    const withoutScheme = url.replace(/^https?:\/\//, '');
+    const slashIdx = withoutScheme.indexOf('/');
+    if (slashIdx < 0) return 'unknown';
+    const pathAndQuery = withoutScheme.slice(slashIdx + 1);
+    return pathAndQuery.replace(/\//g, '-').replace(/\?/, '--').replace(/&/g, '-') || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function dumpResponse(method: 'get' | 'post', url: string, body: string): Promise<void> {
+  try {
+    const slug = dumpUrl(url);
+    const path = `emby_dump/${method}-${slug}.json`;
+    const parsed = JSON.parse(body);
+    await host.fs.write({
+      path,
+      content: JSON.stringify(parsed, null, 2),
+    });
+  } catch { /* ignore dump failures */ }
+}
+
 async function httpGet<T>(url: string, accessToken?: string | null): Promise<T> {
   const resp = await host.http.get({ url, headers: baseHeaders(accessToken) });
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`HTTP ${resp.status} GET ${url}: ${resp.body.slice(0, 200)}`);
   }
+  await dumpResponse('get', url, resp.body);
   return JSON.parse(resp.body) as T;
 }
 
@@ -73,6 +101,7 @@ async function httpPost<T>(url: string, body: unknown, accessToken?: string | nu
     throw new Error(`HTTP ${resp.status} POST ${url}: ${resp.body.slice(0, 200)}`);
   }
   if (!resp.body || resp.body.trim() === '') return undefined as unknown as T;
+  await dumpResponse('post', url, resp.body);
   return JSON.parse(resp.body) as T;
 }
 

@@ -25,6 +25,9 @@ export interface HostAPI {
     get(args: HttpRequestArgs): Promise<HttpResponse>;
     post(args: HttpRequestArgs): Promise<HttpResponse>;
   };
+  fs: {
+    write(args: { path: string; content: string }): Promise<string>;
+  };
   crypto: {
     sha256(args: { input: string }): Promise<string>;
   };

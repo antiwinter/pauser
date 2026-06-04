@@ -15,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.net.IDN
 import java.security.MessageDigest
 
@@ -78,6 +79,24 @@ class HostApis {
                 put("body", respBody)
                 put("headers", respHeaders)
             }.toString()
+        }
+    }
+
+    // ── fs ─────────────────────────────────────────────────────────────────
+
+    fun handleFs(name: String, argsJson: String): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        return when (name) {
+            "write" -> {
+                val path = args["path"]?.jsonPrimitive?.content ?: error("fs.write: missing path")
+                val content = args["content"]?.jsonPrimitive?.content ?: error("fs.write: missing content")
+                val ctx = ContextHolder.get()
+                val file = File(ctx.cacheDir, path)
+                file.parentFile?.mkdirs()
+                file.writeText(content, Charsets.UTF_8)
+                JsonPrimitive(file.absolutePath).toString()
+            }
+            else -> throw IllegalArgumentException("Unknown fs method: $name")
         }
     }
 
