@@ -1,5 +1,6 @@
 import type { EntryInfo, EntryDetail, EntryList, PlaybackSpec, ExternalUrl, SubtitleTrack } from '../../utils/types.js';
-import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, M3UChannel, CatVodPlayResult } from './types.js';
+import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult } from './spider/types.js';
+import type { M3UChannel } from './iptv.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
@@ -59,7 +60,6 @@ export function playResultToSpec(
   result: CatVodPlayResult,
   title: string = '',
 ): PlaybackSpec {
-  const resolvedUrl = result.play_url ?? result.url ?? null;
   const subtitleTracks: SubtitleTrack[] = (result.subs ?? []).map((sub: CatVodSub, i: number) => ({
     trackId: `catvod-sub-${i}`,
     label: sub.name ?? '',
@@ -69,7 +69,7 @@ export function playResultToSpec(
     externalRef: sub.url,
   }));
   return {
-    url: resolvedUrl,
+    url: result.play_url ?? result.url ?? null,
     headers: result.header ?? {},
     mimeType: result.type ?? null,
     bitrate: null,

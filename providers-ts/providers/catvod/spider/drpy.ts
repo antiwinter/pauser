@@ -5,7 +5,7 @@ import type {
   CatVodDetailResult,
   CatVodPlayResult,
   CatVodFilterExtend,
-} from '../types.js';
+} from './types.js';
 import type { SiteEntry } from '../config.js';
 import { siteExt } from '../config.js';
 

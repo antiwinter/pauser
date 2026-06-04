@@ -1,5 +1,17 @@
-import type { M3UChannel, IptvChannelListResult } from './types.js';
 import type { LiveEntry } from './config.js';
+
+// ── IPTV-specific Types ──────────────────────────────────────────────────────
+// IPTV is not VOD, but we model it similarly for consistency
+
+export interface M3UChannel {
+  name: string;
+  url: string;
+  logo?: string;
+}
+
+export interface IptvChannelListResult {
+  channels: M3UChannel[];
+}
 
 /**
  * IPTV M3U helper — fetches and parses M3U channel lists

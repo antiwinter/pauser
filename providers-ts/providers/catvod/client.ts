@@ -6,7 +6,7 @@ import type {
   ValidationResult,
 } from "../../utils/types.js";
 import type { CatVodConfig, SiteEntry } from "./config.js";
-import type { CatVodSpider } from "./types.js";
+import type { CatVodSpider } from "./spider/types.js";
 import { decodeRef, encodeRef } from "./ref.js";
 import {
   parseEpisodes,
@@ -16,9 +16,9 @@ import {
   liveChannelsToEntries,
   playResultToSpec,
 } from "./mapper.js";
-import cmsHandler from "./handlers/cms.js";
-import jarHandler from "./handlers/jar.js";
-import drpyHandler from "./handlers/drpy.js";
+import cmsHandler from "./spider/cms.js";
+import jarHandler from "./spider/jar.js";
+import drpyHandler from "./spider/drpy.js";
 import { fetchLiveChannels } from "./iptv.js";
 
 // ── Handler interface ─────────────────────────────────────────────────────────

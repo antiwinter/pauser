@@ -5,7 +5,7 @@ import type {
   CatVodDetailResult,
   CatVodPlayResult,
   CatVodFilterExtend,
-} from '../types.js';
+} from './types.js';
 import type { SiteEntry } from '../config.js';
 import { parseSpiderField, siteExt } from '../config.js';
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
