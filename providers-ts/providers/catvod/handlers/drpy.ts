@@ -12,7 +12,8 @@ import { siteExt } from '../config.js';
 // ── Globals expected by drpy2 spiders ────────────────────────────────────────
 // Set once at module init — before any spider code is eval'd.
 
-const _g = globalThis as Record<string, unknown>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _g = globalThis as Record<string, any>;
 const _dispatchSync = _g['__hostDispatchSync'] as
   (ns: string, name: string, argsJson: string) => { status: number; body: string; headers: Record<string, string> };
 
@@ -45,7 +46,7 @@ _g['http'] = (url: string, opts: Record<string, unknown> = {}) => {
   return new Promise((resolve) =>
     _g['_http'](url, Object.assign({ complete: (res: unknown) => resolve(res) }, opts)),
   ).catch((err: Error) => {
-    console.error(err.name, err.message, err.stack);
+    _g.console?.error?.(err.name, err.message, err.stack);
     return { ok: false, status: 500, url };
   });
 };

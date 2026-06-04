@@ -4,6 +4,7 @@
  */
 import type { ProviderFieldSpec, PlatformInfo } from '../../utils/types.js';
 import type { EmbyClientState } from './client.js';
+import { buildDeviceProfile } from './device-profile.js';
 
 export function getFieldsSpec(): ProviderFieldSpec[] {
   return [
@@ -22,7 +23,7 @@ export function makeClientState(
 ): EmbyClientState {
   return {
     rawCredentials: { ...values },
-    deviceProfile: {},
+    deviceProfile: buildDeviceProfile(deviceInfo, deviceName),
     capabilities: deviceInfo,
   };
 }

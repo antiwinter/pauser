@@ -11,8 +11,10 @@ import type {
   EntryInfo,
   EntryDetail,
   PlaybackSpec,
-  PlatformCapabilities,
 } from '../../utils/types.js';
+
+/** Opaque capability flags provided by the host at init time */
+type PlatformCapabilities = Record<string, unknown>;
 
 let state: CatVodClientState | null = null;
 

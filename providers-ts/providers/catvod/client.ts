@@ -103,12 +103,11 @@ export async function listEntry(
 ): Promise<EntryList> {
   if (location === null) return await listRoot(state);
   const ref = decodeRef(location);
-
-  const site = requireSite(state, ref.key);
-  const spider = getSpider(site, state);
   const pg = startIndex === 0 ? 1 : Math.floor(startIndex / limit) + 1;
 
   if (ref.type === "site") {
+    const site = requireSite(state, ref.key);
+    const spider = getSpider(site, state);
     const result = await spider.home();
     const all = categoryListToFolders(result.class ?? [], site.key);
     return {
@@ -118,6 +117,8 @@ export async function listEntry(
   }
 
   if (ref.type === "cat") {
+    const site = requireSite(state, ref.key);
+    const spider = getSpider(site, state);
     const result = await spider.category(ref.tid, pg);
     const entryList = vodListToEntries(
       result.list ?? [],
@@ -128,6 +129,8 @@ export async function listEntry(
   }
 
   if (ref.type === "vod") {
+    const site = requireSite(state, ref.key);
+    const spider = getSpider(site, state);
     // Episode list for multi-episode items
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
@@ -221,17 +224,19 @@ export async function getPlaybackSpec(
   _startMs: number,
 ): Promise<PlaybackSpec> {
   const ref = decodeRef(itemRef);
-  const site = requireSite(state, ref.key);
-  const spider = getSpider(site, state);
 
   // Direct episode ref → already has the URL
   if (ref.type === "ep") {
+    const site = requireSite(state, ref.key);
+    const spider = getSpider(site, state);
     const result = await spider.play(ref.flag, ref.epUrl);
     return playResultToSpec(result, ref.epUrl);
   }
 
   // Vod ref with single episode → resolve inline
   if (ref.type === "vod") {
+    const site = requireSite(state, ref.key);
+    const spider = getSpider(site, state);
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) throw new Error("No episodes found");

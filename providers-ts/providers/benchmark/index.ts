@@ -1,4 +1,4 @@
-import type { ProviderFieldSpec, ValidationResult, EntryList, EntryDetail, PlaybackSpec, PlatformCapabilities } from '../../utils/types.js';
+import type { ProviderFieldSpec, ValidationResult, EntryList, EntryDetail, PlaybackSpec } from '../../utils/types.js';
 import { runBench } from './bench.js';
 
 (globalThis as unknown as Record<string, unknown>).opentuneProvider = {
@@ -27,7 +27,7 @@ import { runBench } from './bench.js';
     return { status: 'scanning' };
   },
 
-  async init(_args: { credentials: Record<string, string>; capabilities: PlatformCapabilities }): Promise<void> {},
+  async init(_args: { credentials: Record<string, string>; capabilities: Record<string, unknown> }): Promise<void> {},
 
   async listEntry(_args: { location: string | null; startIndex: number; limit: number }): Promise<EntryList> {
     return { items: [], totalCount: 0 };
