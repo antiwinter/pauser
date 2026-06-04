@@ -2,8 +2,9 @@ import type {
   CatVodSpider,
   CatVodHomeResult,
   CatVodCategoryResult,
-  CatVodDetail,
+  CatVodDetailResult,
   CatVodPlayResult,
+  CatVodFilterExtend,
 } from '../types.js';
 import type { SiteEntry } from '../config.js';
 import { siteExt } from '../config.js';
@@ -123,47 +124,63 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
   };
 
   return {
-    async home(): Promise<CatVodHomeResult> {
+    async home(filter?: boolean): Promise<CatVodHomeResult> {
       const spider = await getSpider();
-      const data = await spiderCall<{ class?: Array<{ type_id: string | number; type_name?: string }> }>(
-        spider, 'home', false,
+      const data = await spiderCall<CatVodHomeResult>(
+        spider, 'home', filter ?? false,
       );
-      return { class: data.class ?? [] };
+      return { class: data.class ?? [], filters: data.filters };
     },
 
-    async category(tid: string, pg: number): Promise<CatVodCategoryResult> {
+    async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
       const spider = await getSpider();
       const data = await spiderCall<CatVodCategoryResult>(
-        spider, 'category', tid, String(pg), false, {},
+        spider, 'category', tid, String(pg), filter ?? false, extend ?? {},
       );
       return {
         list: data.list ?? [],
         total: data.total ?? data.pagecount ?? 0,
+        pagecount: data.pagecount,
+        filters: data.filters,
+        msg: data.msg,
       };
     },
 
-    async detail(id: string): Promise<CatVodDetail> {
+    async detail(ids: string[]): Promise<CatVodDetailResult> {
       const spider = await getSpider();
-      const data = await spiderCall<{ list?: CatVodDetail[] }>(spider, 'detail', id);
-      return data.list?.[0] ?? ({ vod_id: id } as CatVodDetail);
+      const data = await spiderCall<CatVodDetailResult>(spider, 'detail', ids.join(','));
+      return { list: data.list ?? [] };
     },
 
-    async play(flag: string, epUrl: string): Promise<CatVodPlayResult> {
+    async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
       const spider = await getSpider();
-      const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, []);
+      const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, vipFlags ?? []);
       return {
         url: data.url,
+        play_url: data.play_url,
         header: data.header,
         type: data.type,
+        parse: data.parse,
+        jx: data.jx,
+        subs: data.subs,
+        danmaku: data.danmaku,
+        drm: data.drm,
+        flag: data.flag,
+        format: data.format,
+        desc: data.desc,
+        artwork: data.artwork,
+        click: data.click,
+        position: data.position,
       };
     },
 
-    async search(query: string, pg: number): Promise<CatVodCategoryResult> {
+    async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
       const spider = await getSpider();
-      const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, false, String(pg));
+      const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, quick ?? false, String(pg));
       return {
         list: data.list ?? [],
         total: data.list?.length ?? 0,
+        msg: data.msg,
       };
     },
   };

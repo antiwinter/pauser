@@ -129,7 +129,9 @@ export async function listEntry(
 
   if (ref.type === "vod") {
     // Episode list for multi-episode items
-    const detail = await spider.detail(ref.id);
+    const detailResult = await spider.detail([ref.id]);
+    const detail = detailResult.list?.[0];
+    if (!detail) return { items: [], totalCount: 0 };
     const eps = parseEpisodes(detail);
     const items = eps.map((ep) => ({
       id: encodeRef({
@@ -201,7 +203,9 @@ export async function getDetail(
   if (ref.type === "vod") {
     const site = requireSite(state, ref.key);
     const spider = getSpider(site, state);
-    const detail = await spider.detail(ref.id);
+    const detailResult = await spider.detail([ref.id]);
+    const detail = detailResult.list?.[0];
+    if (!detail) return {} as EntryDetail;
     return vodDetailToEntryDetail(detail);
   }
 
@@ -228,7 +232,9 @@ export async function getPlaybackSpec(
 
   // Vod ref with single episode → resolve inline
   if (ref.type === "vod") {
-    const detail = await spider.detail(ref.id);
+    const detailResult = await spider.detail([ref.id]);
+    const detail = detailResult.list?.[0];
+    if (!detail) throw new Error("No episodes found");
     const eps = parseEpisodes(detail);
     if (eps.length === 0) throw new Error("No episodes found");
     const result = await spider.play(eps[0].flag, eps[0].url);

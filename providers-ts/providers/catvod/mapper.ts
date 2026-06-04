@@ -1,5 +1,5 @@
-import type { EntryInfo, EntryDetail, EntryList, PlaybackSpec, ExternalUrl } from '../../utils/types.js';
-import type { CatVodItem, CatVodDetail, CatVodCategory, M3UChannel } from './types.js';
+import type { EntryInfo, EntryDetail, EntryList, PlaybackSpec, ExternalUrl, SubtitleTrack } from '../../utils/types.js';
+import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, M3UChannel, CatVodPlayResult } from './types.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
@@ -56,17 +56,26 @@ export function liveChannelsToEntries(channels: M3UChannel[]): EntryList {
  * Convert CatVod play result to OpenTune playback spec
  */
 export function playResultToSpec(
-  result: { url?: string; header?: Record<string, string>; type?: string },
+  result: CatVodPlayResult,
   title: string = '',
 ): PlaybackSpec {
+  const resolvedUrl = result.play_url ?? result.url ?? null;
+  const subtitleTracks: SubtitleTrack[] = (result.subs ?? []).map((sub: CatVodSub, i: number) => ({
+    trackId: `catvod-sub-${i}`,
+    label: sub.name ?? '',
+    language: sub.lang ?? null,
+    isDefault: i === 0,
+    isForced: false,
+    externalRef: sub.url,
+  }));
   return {
-    url: result.url ?? null,
+    url: resolvedUrl,
     headers: result.header ?? {},
     mimeType: result.type ?? null,
     bitrate: null,
     title,
     durationMs: null,
-    subtitleTracks: [],
+    subtitleTracks,
     hooksState: {},
   };
 }

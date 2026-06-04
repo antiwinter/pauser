@@ -2,8 +2,9 @@ import type {
   CatVodSpider,
   CatVodHomeResult,
   CatVodCategoryResult,
-  CatVodDetail,
+  CatVodDetailResult,
   CatVodPlayResult,
+  CatVodFilterExtend,
 } from '../types.js';
 import type { SiteEntry } from '../config.js';
 import { parseSpiderField, siteExt } from '../config.js';
@@ -95,49 +96,78 @@ function createJarSpider(
   const cls = spiderClass(api);
 
   return {
-    async home(): Promise<CatVodHomeResult> {
+    async home(filter?: boolean): Promise<CatVodHomeResult> {
       const handle = await getHandle();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false],
+        url: jarUrl, cls, method: 'homeContent', instance: handle, args: [filter ?? false],
       });
       const data = JSON.parse(raw);
-      return { class: data.class ?? [] };
+      return { class: data.class ?? [], filters: data.filters };
     },
 
-    async category(tid: string, pg: number): Promise<CatVodCategoryResult> {
+    async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
       const handle = await getHandle();
       const raw = await host.jar.reflect({
         url: jarUrl, cls, method: 'categoryContent',
-        instance: handle, args: [tid, String(pg), false, {}],
+        instance: handle, args: [tid, String(pg), filter ?? false, extend ?? {}],
       });
       const data = JSON.parse(raw);
       return {
         list: data.list ?? [],
         total: data.total ?? 0,
+        pagecount: data.pagecount,
+        filters: data.filters,
+        msg: data.msg,
       };
     },
 
-    async detail(id: string): Promise<CatVodDetail> {
+    async detail(ids: string[]): Promise<CatVodDetailResult> {
       const handle = await getHandle();
       const raw = await host.jar.reflect({
         url: jarUrl, cls, method: 'detailContent',
-        instance: handle, args: [[id]],
+        instance: handle, args: [ids],
       });
       const data = raw && raw !== 'null' ? JSON.parse(raw) : {};
-      return data.list?.[0] ?? { vod_id: id, vod_name: id };
+      return { list: data.list ?? [] };
     },
 
-    async play(flag: string, epUrl: string): Promise<CatVodPlayResult> {
+    async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
       const handle = await getHandle();
       const raw = await host.jar.reflect({
         url: jarUrl, cls, method: 'playerContent',
-        instance: handle, args: [flag, epUrl, []],
+        instance: handle, args: [flag, epUrl, vipFlags ?? []],
       });
       const data = JSON.parse(raw);
       return {
         url: data.url,
+        play_url: data.play_url,
         header: data.header,
         type: data.type,
+        parse: data.parse,
+        jx: data.jx,
+        subs: data.subs,
+        danmaku: data.danmaku,
+        drm: data.drm,
+        flag: data.flag,
+        format: data.format,
+        desc: data.desc,
+        artwork: data.artwork,
+        click: data.click,
+        position: data.position,
+      };
+    },
+
+    async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
+      const handle = await getHandle();
+      const raw = await host.jar.reflect({
+        url: jarUrl, cls, method: 'searchContent',
+        instance: handle, args: [query, quick ?? false, String(pg)],
+      });
+      const data = JSON.parse(raw);
+      return {
+        list: data.list ?? [],
+        total: data.list?.length ?? 0,
+        msg: data.msg,
       };
     },
   };
