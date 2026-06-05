@@ -19,6 +19,7 @@ Thumbs.db
 1
 test/.env
 files/
+dump/
 node_modules/
 providers-ts/dist/
 providers-ts/providers/*/.env
