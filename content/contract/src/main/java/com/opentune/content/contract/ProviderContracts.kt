@@ -43,8 +43,7 @@ abstract class EndpointClient {
         location: String?,
         startIndex: Int,
         limit: Int,
-        sortBy: SortField? = null,
-        sortOrder: SortOrder = SortOrder.Ascending,
+        options: QueryOptions = QueryOptions(),
     ): EntryList
     abstract suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
     abstract suspend fun getDetail(itemRef: String): EntryDetail

@@ -114,6 +114,7 @@ export interface BaseItemDto {
   MediaStreams?: MediaStream[] | null;
   ChildCount?: number | null;
   OfficialRating?: string | null;
+  CollectionType?: string | null;
 }
 
 export interface QueryResultBaseItemDto {

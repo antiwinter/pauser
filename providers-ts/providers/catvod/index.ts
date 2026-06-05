@@ -11,6 +11,7 @@ import type {
   EntryInfo,
   EntryDetail,
   PlaybackSpec,
+  QueryOptions,
 } from '../../utils/types.js';
 
 /** Opaque capability flags provided by the host at init time */
@@ -42,6 +43,7 @@ let state: CatVodClientState | null = null;
     location: string | null;
     startIndex: number;
     limit: number;
+    options?: QueryOptions;
   }): Promise<EntryList> {
     return listEntry(state!, args.location, args.startIndex, args.limit);
   },

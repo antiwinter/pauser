@@ -17,6 +17,7 @@ import type {
   EntryDetail,
   PlaybackSpec,
   PlatformInfo,
+  QueryOptions,
 } from '../../utils/types.js';
 
 let state: EmbyClientState | null = null;
@@ -65,8 +66,9 @@ let state: EmbyClientState | null = null;
     location: string | null;
     startIndex: number;
     limit: number;
+    options?: QueryOptions;
   }): Promise<EntryList> {
-    return listEntry(state!, args.location, args.startIndex, args.limit);
+    return listEntry(state!, args.location, args.startIndex, args.limit, args.options);
   },
 
   async search(args: {

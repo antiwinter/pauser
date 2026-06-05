@@ -158,6 +158,7 @@ export class EmbyApi {
     recursive?: boolean;
     searchTerm?: string | null;
     sortBy?: string;
+    sortOrder?: string;
     startIndex?: number | null;
     limit?: number | null;
     fields?: string | null;
@@ -169,6 +170,7 @@ export class EmbyApi {
         Recursive: opts.recursive,
         SearchTerm: opts.searchTerm,
         SortBy: opts.sortBy ?? 'SortName',
+        SortOrder: opts.sortOrder,
         StartIndex: opts.startIndex,
         Limit: opts.limit,
         Fields: opts.fields,

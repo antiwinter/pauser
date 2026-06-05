@@ -100,6 +100,7 @@ export async function listEntry(
   location: string | null,
   startIndex: number,
   limit: number,
+  options?: import('../../utils/types.js').QueryOptions,
 ): Promise<EntryList> {
   const { credentials } = requireState(state);
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
@@ -113,10 +114,13 @@ export async function listEntry(
   } else {
     const result = await api.getItems({
       parentId: location,
-      recursive: false,
+      recursive: options?.recursive ?? false,
       startIndex,
       limit,
       fields: BROWSE_FIELDS,
+      sortBy: options?.sortBy ?? undefined,
+      sortOrder: options?.sortOrder ?? undefined,
+      includeItemTypes: options?.filterByType ?? undefined,
     });
     return {
       items: result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],

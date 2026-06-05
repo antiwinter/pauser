@@ -106,6 +106,14 @@ export interface EntryInfo {
   indexNumber?: number | null;
   overview?: string | null;
   childCount?: number | null;
+  collectionType?: string | null;
+}
+
+export interface QueryOptions {
+  sortBy?: string | null;
+  sortOrder?: 'Ascending' | 'Descending';
+  recursive?: boolean;
+  filterByType?: string | null;
 }
 
 export interface EntryList {

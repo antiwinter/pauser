@@ -8,6 +8,7 @@ import com.opentune.content.contract.EntryType
 import com.opentune.content.contract.EntryUserData
 import com.opentune.content.contract.ExternalUrl
 import com.opentune.player.OpenTunePlaybackHooks
+import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
@@ -162,16 +163,17 @@ class JsClient(
         location: String?,
         startIndex: Int,
         limit: Int,
-        sortBy: SortField?,
-        sortOrder: SortOrder,
+        options: QueryOptions,
     ): EntryList {
         ensureReady()
         val args = buildJsonObject {
             if (location != null) put("location", location) else put("location", JsonNull)
             put("startIndex", startIndex)
             put("limit", limit)
-            sortBy?.let { put("sortBy", it.name) }
-            put("sortOrder", sortOrder.name)
+            options.sortBy?.let { put("sortBy", it.name) }
+            put("sortOrder", options.sortOrder.name)
+            put("recursive", options.recursive)
+            options.filterByType?.let { put("filterByType", it) }
         }
         val resultJson = engine.callMethod("listEntry", args.toString())
             ?: return EntryList(emptyList(), 0)
@@ -320,6 +322,7 @@ class JsClient(
             studios = obj["studios"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
             etag = obj["etag"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            collectionType = obj["collectionType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
         )
     }
 

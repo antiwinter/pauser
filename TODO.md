@@ -27,6 +27,7 @@
 - [ ] filter
 - [x] detail screen entering rules
 - [ ] right most alphabet quick jump
+- [ ] recent
 
 ## js providers
 - [x] remove sidecar meta

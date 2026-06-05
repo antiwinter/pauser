@@ -18,6 +18,7 @@ import com.opentune.content.ui.Routes
 import com.opentune.content.ui.toJson
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.contract.QueryOptions
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,6 +57,23 @@ fun BrowseRoute(
         }
     }
 
+    // Resolved query options for this location — set once we know the folder's collectionType.
+    var queryOptions by remember(locationDecoded) { mutableStateOf(QueryOptions()) }
+
+    // When we have a client and a non-root location, peek at the folder metadata to determine
+    // collectionType so we can build the right QueryOptions before loading pages.
+    LaunchedEffect(state, locationDecoded) {
+        val s = state
+        if (s !is BrowseState.Ready || locationDecoded.isEmpty()) return@LaunchedEffect
+        val folderInfo = runCatching {
+            withContext(Dispatchers.IO) { s.client.getEntries(listOf(locationDecoded)) }
+        }.getOrNull()?.items?.firstOrNull() ?: return@LaunchedEffect
+        queryOptions = when (folderInfo.collectionType?.lowercase()) {
+            "movies" -> QueryOptions(recursive = true, filterByType = "Movie")
+            else -> QueryOptions()
+        }
+    }
+
     when (val s = state) {
         is BrowseState.Loading -> Text("Loading…")
         is BrowseState.Error -> Text("Error: ${s.message}")
@@ -65,7 +83,7 @@ fun BrowseRoute(
             imageLoader = s.client.imageLoader!!,
             loadPage = { startIndex, limit ->
                 withContext(Dispatchers.IO) {
-                    s.client.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit)
+                    s.client.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit, queryOptions)
                 }.let { result ->
                     result.copy(items = ArtUrlInjector.apply(result.items, protocol, endpointId))
                 }

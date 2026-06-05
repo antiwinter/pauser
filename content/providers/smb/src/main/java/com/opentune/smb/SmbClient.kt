@@ -11,6 +11,7 @@ import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.EntryType
 import com.opentune.content.contract.SearchQuery
+import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
@@ -61,18 +62,17 @@ class SmbClient(
         location: String?,
         startIndex: Int,
         limit: Int,
-        sortBy: SortField?,
-        sortOrder: SortOrder,
+        options: QueryOptions,
     ): EntryList {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share
                 val all = share.listDirectory(location ?: "")
-                val sorted = when (sortBy) {
+                val sorted = when (options.sortBy) {
                     SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.name }
                     else -> all.sortedBy { it.name }
-                }.let { if (sortOrder == SortOrder.Descending) it.reversed() else it }
+                }.let { if (options.sortOrder == SortOrder.Descending) it.reversed() else it }
                 val slice = sorted.drop(startIndex).take(limit)
                 EntryList(items = slice.map { mapEntry(it) }, totalCount = all.size)
             } finally {

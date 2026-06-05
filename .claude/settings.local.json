@@ -18,7 +18,9 @@
       "WebFetch(domain:core.telegram.org)",
       "WebFetch(domain:abase.pro)",
       "WebFetch(domain:security.stackexchange.com)",
-      "WebFetch(domain:exoplayer.dev)"
+      "WebFetch(domain:exoplayer.dev)",
+      "Bash(cd *)",
+      "Bash(npx rollup *)"
     ],
     "additionalDirectories": [
       "/Users/warits/src/fongmi",

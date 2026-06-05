@@ -39,6 +39,7 @@ data class EntryInfo(
     val parentId: String? = null,
     val seriesId: String? = null,
     val seasonNumber: Int? = null,
+    val collectionType: String? = null,
 )
 
 data class EntryList(
@@ -74,6 +75,13 @@ data class EntryDetail(
     val providerIds: Map<String, String>,
     val streams: List<StreamInfo>,
     val etag: String?,
+)
+
+data class QueryOptions(
+    val sortBy: SortField? = null,
+    val sortOrder: SortOrder = SortOrder.Descending,
+    val recursive: Boolean = false,
+    val filterByType: String? = null,
 )
 
 @Serializable

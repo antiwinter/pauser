@@ -2,6 +2,12 @@
 
 When adding or changing TV screens for a **content source**, follow these rules so navigation and code stay easy to grep.
 
+## Plans
+
+Store implementation plans under **`<project-root>/.claude/plans/`** (not `~/.claude/plans/`). When writing a plan, always use the project-local path so it stays in the repo alongside the code it describes.
+
+---
+
 ## Draft development (no migrations, no legacy shims)
 
 OpenTune is still **draft / pre-release**. Do **not**:

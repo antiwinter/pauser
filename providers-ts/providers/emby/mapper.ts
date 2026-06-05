@@ -54,5 +54,6 @@ export function toListItem(
     indexNumber:     item.IndexNumber ?? null,
     overview:        item.Overview ?? null,
     childCount:      item.ChildCount ?? null,
+    collectionType:  item.CollectionType?.toLowerCase() ?? null,
   };
 }
