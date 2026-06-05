@@ -149,4 +149,9 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
             onExit = { nav.popBackStack() },
         )
     }
+    composable(Routes.AUDIO_UNSUPPORTED) {
+        com.opentune.content.ui.catalog.AudioUnsupportedScreen(
+            onBack = { nav.popBackStack() },
+        )
+    }
 }

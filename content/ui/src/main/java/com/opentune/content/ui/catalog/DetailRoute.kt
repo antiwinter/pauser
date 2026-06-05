@@ -23,9 +23,8 @@ import coil3.ImageLoader
 import com.opentune.content.ui.Routes
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.TitleLang
-import com.opentune.content.contract.EntryDetail
+import com.opentune.storage.decodeSeriesProgress
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.EntryType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,7 +48,7 @@ fun DetailRoute(
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    var detail by remember { mutableStateOf<EntryDetail?>(null) }
+    var entryInfo by remember { mutableStateOf<EntryInfo?>(initialInfo) }
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(true) }
@@ -67,7 +66,7 @@ fun DetailRoute(
     val digipakChildren = remember { mutableStateListOf<EntryInfo>() }
     var singleChild by remember { mutableStateOf<EntryInfo?>(null) }
 
-    // Load detail + children
+    // Load entry info + children
     LaunchedEffect(protocol, endpointId, itemRefDecoded) {
         loading = true
         error = null
@@ -85,20 +84,40 @@ fun DetailRoute(
                 StorageBindingsHolder.get().entryStateStore.get(stateKey)
             }
             isFavorite = entryState?.isFavorite ?: false
-            resumeMs = entryState?.positionMs ?: 0L
-            val d = withContext(Dispatchers.IO) { client.getDetail(itemRefDecoded) }
-            detail = ArtUrlInjector.applyDetail(d, protocol)
+
+            // Resolve resume: for series, the positionMs may be packed (season, episode)
+            val rawPosition = entryState?.positionMs ?: 0L
+            val info = initialInfo ?: run {
+                val result = withContext(Dispatchers.IO) {
+                    client.listEntry(itemRefDecoded, 0, 1)
+                }
+                result.items.firstOrNull()
+            }
+
+            // For series, resolve which season/episode the user was on
+            val resolvedResumeMs = if (info?.type == "Series" && entryState != null) {
+                val (season, episode) = decodeSeriesProgress(rawPosition)
+                if (season > 0) {
+                    selectedSeasonIndex = maxOf(0, season - 1)
+                }
+                rawPosition
+            } else {
+                rawPosition
+            }
+            resumeMs = resolvedResumeMs
+
+            entryInfo = info?.let { ArtUrlInjector.applyInfo(it, protocol) }
 
             // Fetch children based on type
-            when (initialInfo?.type) {
-                EntryType.Series -> {
+            when (entryInfo?.type) {
+                "Series" -> {
                     val result = withContext(Dispatchers.IO) {
                         client.listEntry(itemRefDecoded, 0, 500)
                     }
                     seasons = ArtUrlInjector.apply(result.items, protocol, endpointId)
                 }
-                EntryType.Digipak -> {
-                    val childCount = initialInfo.childCount ?: 0
+                "Digipak" -> {
+                    val childCount = entryInfo?.childCount ?: 0
                     val result = withContext(Dispatchers.IO) {
                         client.listEntry(itemRefDecoded, 0, maxOf(childCount, 1))
                     }
@@ -141,33 +160,19 @@ fun DetailRoute(
     val loader = imageLoader
     when {
         error != null -> Text("Error: $error")
-        loading || loader == null -> Box(
+        loading || loader == null || entryInfo == null -> Box(
             modifier = androidx.compose.ui.Modifier.fillMaxSize(),
             contentAlignment = androidx.compose.ui.Alignment.Center,
         ) { CircularProgressIndicator() }
-        else -> DetailScreen(
-            initialInfo = initialInfo,
-            detail = detail,
-            loading = loading,
-            isFavorite = isFavorite,
-            resumeMs = resumeMs,
-            titleLang = titleLang,
-            imageLoader = loader,
-            seasons = seasons,
-            selectedSeasonIndex = selectedSeasonIndex,
-            episodes = episodes,
-            totalEpisodes = totalEpisodes,
-            episodePage = episodePage,
-            children = digipakChildren.toList(),
-            singleChild = singleChild,
-            onBack = { nav.popBackStack() },
-            onPlayFromStart = {
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, 0L))
-            },
-            onResume = {
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, resumeMs))
-            },
-            onToggleFavorite = {
+        else -> {
+            val info = entryInfo!!
+            val playFromStart = {
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, 0L, info))
+            }
+            val resumePlay = {
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, resumeMs, info))
+            }
+            val toggleFav = {
                 scope.launch {
                     val newVal = !isFavorite
                     isFavorite = newVal
@@ -180,22 +185,72 @@ fun DetailRoute(
                         isFavorite = !newVal
                     }
                 }
-            },
-            onSelectSeason = { index -> selectedSeasonIndex = index; episodePage = 0 },
-            onSelectEpisode = { episode ->
+                Unit
+            }
+            val selectSeason = { index: Int -> selectedSeasonIndex = index; episodePage = 0 }
+            val selectEpisode = { episode: EntryInfo ->
                 val startMs = episode.userData?.positionMs ?: 0L
                 nav.navigate(Routes.player(protocol, endpointId, episode.id, startMs, episode))
-            },
-            onSelectPage = { page -> episodePage = page },
-            onSelectChild = { child ->
+            }
+            val selectPage = { page: Int -> episodePage = page }
+            val selectChild = { child: EntryInfo ->
                 val startMs = child.userData?.positionMs ?: 0L
                 nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
-            },
-            onPlaySingleChild = {
-                val child = singleChild ?: return@DetailScreen
-                val startMs = child.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
-            },
-        )
+            }
+            val playSingleChild: () -> Unit = run {
+                val child = singleChild
+                {
+                    if (child != null) {
+                        val startMs = child.userData?.positionMs ?: 0L
+                        nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
+                    }
+                }
+            }
+
+            when (info.type) {
+                "Movie", "Playable", "Episode", "Video" -> MovieOverviewScreen(
+                    entryInfo = info,
+                    titleLang = titleLang,
+                    resumeMs = resumeMs,
+                    isFavorite = isFavorite,
+                    onResume = resumePlay,
+                    onPlayFromStart = playFromStart,
+                    onToggleFavorite = toggleFav,
+                )
+                "Series" -> SeriesOverviewScreen(
+                    entryInfo = info,
+                    titleLang = titleLang,
+                    resumeMs = resumeMs,
+                    isFavorite = isFavorite,
+                    seasons = seasons ?: emptyList(),
+                    selectedSeasonIndex = selectedSeasonIndex,
+                    episodes = episodes,
+                    totalEpisodes = totalEpisodes,
+                    episodePage = episodePage,
+                    imageLoader = loader,
+                    onResume = resumePlay,
+                    onPlayFromStart = playFromStart,
+                    onToggleFavorite = toggleFav,
+                    onSelectSeason = selectSeason,
+                    onSelectEpisode = selectEpisode,
+                    onSelectPage = selectPage,
+                )
+                "Digipak" -> DigipakOverviewScreen(
+                    entryInfo = info,
+                    titleLang = titleLang,
+                    resumeMs = resumeMs,
+                    isFavorite = isFavorite,
+                    children = digipakChildren.toList(),
+                    singleChild = singleChild,
+                    imageLoader = loader,
+                    onResume = resumePlay,
+                    onPlayFromStart = playFromStart,
+                    onToggleFavorite = toggleFav,
+                    onPlaySingleChild = playSingleChild,
+                    onSelectChild = selectChild,
+                )
+                else -> Text("Unsupported type: ${info.type}")
+            }
+        }
     }
 }

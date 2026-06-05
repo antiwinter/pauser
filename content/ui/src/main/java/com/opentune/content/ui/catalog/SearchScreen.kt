@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.content.contract.EntryType
+import com.opentune.content.contract.FilenameDetector
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.storage.TitleLang
@@ -45,6 +45,7 @@ fun SearchScreen(
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
+    onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
     var query by remember { mutableStateOf("") }
     var searching by remember { mutableStateOf(false) }
@@ -102,15 +103,17 @@ fun SearchScreen(
                     titleLang = titleLang,
                     imageLoader = imageLoader,
                     onClick = {
-                        when (item.type) {
-                            EntryType.Folder,
-                            EntryType.Season -> onOpenBrowse(item.id)
-                            EntryType.Series,
-                            EntryType.Digipak -> onOpenDetail(item)
-                            EntryType.Playable,
-                            EntryType.Episode,
-                            EntryType.Other -> onOpenPlayer(item.id, item.userData?.positionMs)
-                            EntryType.Image -> onOpenImageViewer(item.id)
+                        val resolvedType = if (item.type == "Unknown") {
+                            FilenameDetector.detectType(item.filename ?: item.title)
+                        } else {
+                            item.type
+                        }
+                        when (resolvedType) {
+                            "Folder", "Season" -> onOpenBrowse(item.id)
+                            "Movie", "Digipak", "Series" -> onOpenDetail(item)
+                            "Episode", "Video" -> onOpenPlayer(item.id, item.userData?.positionMs)
+                            "Image" -> onOpenImageViewer(item.id)
+                            "Audio" -> onOpenAudioUnsupported(item.id)
                         }
                     },
                 )

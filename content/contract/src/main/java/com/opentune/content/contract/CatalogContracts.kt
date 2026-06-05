@@ -1,18 +1,10 @@
 package com.opentune.content.contract
 
 import kotlinx.serialization.Serializable
+import com.opentune.player.MediaCodecInfo
 
-@Serializable
-enum class EntryType {
-    Folder,
-    Playable,
-    Other,
-    Series,
-    Season,
-    Episode,
-    Image,
-    Digipak,
-}
+/** Entry type is a plain string. Common values: "Folder", "Movie", "Series", "Episode", "Image", "Digipak", "Season", "Video", "Audio", "Unknown". */
+typealias EntryType = String
 
 @Serializable
 data class EntryUserData(
@@ -40,41 +32,22 @@ data class EntryInfo(
     val seriesId: String? = null,
     val seasonNumber: Int? = null,
     val collectionType: String? = null,
+    // Detail fields (previously in EntryDetail)
+    val logo: String? = null,
+    val backdrop: List<String> = emptyList(),
+    val bitrate: Int? = null,
+    val year: Int? = null,
+    val durationMs: Long? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val officialRating: String? = null,
+    val filename: String? = null,
+    val mediaCodecs: List<MediaCodecInfo> = emptyList(),
 )
 
 data class EntryList(
     val items: List<EntryInfo>,
     val totalCount: Int,
-)
-
-data class ExternalUrl(
-    val name: String,
-    val url: String,
-)
-
-data class StreamInfo(
-    val index: Int,
-    val type: String,
-    val codec: String?,
-    val title: String?,
-    val language: String?,
-    val isDefault: Boolean,
-    val isForced: Boolean,
-)
-
-data class EntryDetail(
-    val title: String,
-    val overview: String?,
-    val logo: String?,
-    val backdrop: List<String>,
-    val isMedia: Boolean,
-    val rating: Float?,
-    val bitrate: Int?,
-    val externalUrls: List<ExternalUrl>,
-    val year: Int?,
-    val providerIds: Map<String, String>,
-    val streams: List<StreamInfo>,
-    val etag: String?,
 )
 
 data class QueryOptions(
@@ -112,7 +85,7 @@ data class SearchQuery(
     val genres: List<String>? = null,
     val countries: List<String>? = null,
     val studios: List<String>? = null,
-    val excludeTypes: Set<EntryType> = emptySet(),
+    val excludeTypes: Set<String> = emptySet(),
     val startIndex: Int = 0,
     val limit: Int = 100,
     val sortBy: SortField? = null,

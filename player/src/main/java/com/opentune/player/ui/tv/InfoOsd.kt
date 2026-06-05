@@ -57,7 +57,6 @@ internal class InfoOsd(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = spec.title, color = Color.White, fontSize = 14.sp)
                     if (durationMs > 0) {
                         Text(text = formatDuration(durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                     }
@@ -71,9 +70,6 @@ internal class InfoOsd(
                         color = if (isTrackFailed(audioMime, audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
                         fontSize = 14.sp,
                     )
-                    spec.bitrate?.takeIf { it > 0 }?.let { br ->
-                        Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                    }
                 }
                 if (mbps > 0f) {
                     Text(

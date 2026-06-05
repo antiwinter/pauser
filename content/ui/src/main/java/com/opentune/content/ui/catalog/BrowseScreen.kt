@@ -31,7 +31,7 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
-import com.opentune.content.contract.EntryType
+import com.opentune.content.contract.FilenameDetector
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,6 +57,7 @@ fun BrowseScreen(
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
+    onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var totalCount by remember { mutableStateOf(0) }
@@ -153,15 +154,17 @@ fun BrowseScreen(
                     titleLang = titleLang,
                     imageLoader = imageLoader,
                     onClick = {
-                        when (item.type) {
-                            EntryType.Folder,
-                            EntryType.Season -> onOpenBrowseLocation(item.id)
-                            EntryType.Series,
-                            EntryType.Digipak -> onOpenDetail(item)
-                            EntryType.Playable,
-                            EntryType.Episode,
-                            EntryType.Other -> onOpenPlayer(item.id, item.userData?.positionMs)
-                            EntryType.Image -> onOpenImageViewer(item.id)
+                        val resolvedType = if (item.type == "Unknown") {
+                            FilenameDetector.detectType(item.filename ?: item.title)
+                        } else {
+                            item.type
+                        }
+                        when (resolvedType) {
+                            "Folder", "Season" -> onOpenBrowseLocation(item.id)
+                            "Movie", "Digipak", "Series" -> onOpenDetail(item)
+                            "Episode", "Video" -> onOpenPlayer(item.id, item.userData?.positionMs)
+                            "Image" -> onOpenImageViewer(item.id)
+                            "Audio" -> onOpenAudioUnsupported(item.id)
                         }
                     },
                 )

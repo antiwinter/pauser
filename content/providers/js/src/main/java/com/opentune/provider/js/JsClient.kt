@@ -1,12 +1,10 @@
 package com.opentune.provider.js
 
-import com.opentune.content.contract.EntryDetail
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.EntryTag
-import com.opentune.content.contract.EntryType
 import com.opentune.content.contract.EntryUserData
-import com.opentune.content.contract.ExternalUrl
+import com.opentune.player.MediaCodecInfo
 import com.opentune.player.OpenTunePlaybackHooks
 import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SearchQuery
@@ -17,7 +15,6 @@ import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.player.PlatformInfoData
 import com.opentune.core.form.contract.QrResult
 import com.opentune.player.PlaybackSpec
-import com.opentune.content.contract.StreamInfo
 import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -262,16 +259,6 @@ class JsClient(
         runCatching { engine.callMethod("tagEntry", args.toString()) }
     }
 
-    override suspend fun getDetail(itemRef: String): EntryDetail {
-        ensureReady()
-        val args = buildJsonObject {
-            put("itemRef", itemRef)
-        }
-        val resultJson = engine.callMethod("getDetail", args.toString())
-            ?: error("getDetail returned null")
-        return parseDetailModel(json.parseToJsonElement(resultJson).jsonObject)
-    }
-
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         ensureReady()
         val args = buildJsonObject {
@@ -285,29 +272,17 @@ class JsClient(
 
     // ── Parsers ────────────────────────────────────────────────────────────
 
-    private fun parseEntryType(raw: String?): EntryType = when (raw) {
-        "Folder" -> EntryType.Folder
-        "Series" -> EntryType.Series
-        "Season" -> EntryType.Season
-        "Episode" -> EntryType.Episode
-        "Playable" -> EntryType.Playable
-        "Digipak" -> EntryType.Digipak
-        "Image" -> EntryType.Image
-        else -> EntryType.Other
-    }
-
     private fun parseListItem(obj: JsonObject): EntryInfo? {
         val id = obj["id"]?.jsonPrimitive?.content ?: return null
         val title = obj["title"]?.jsonPrimitive?.content ?: id
         val typeRaw = obj["type"]?.jsonPrimitive?.content ?: obj["kind"]?.jsonPrimitive?.content
-        val type = parseEntryType(typeRaw)
         val cover = obj["cover"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
             ?: obj["coverUrl"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
         val ud = obj["userData"]?.takeIf { it !is JsonNull }?.jsonObject
         return EntryInfo(
             id = id,
             title = title,
-            type = type,
+            type = typeRaw ?: "Unknown",
             cover = cover,
             userData = ud?.let {
                 EntryUserData(
@@ -322,57 +297,29 @@ class JsClient(
             studios = obj["studios"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
             etag = obj["etag"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            collectionType = obj["collectionType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-        )
-    }
-
-    private fun parseDetailModel(obj: JsonObject): EntryDetail {
-        val logo = obj["logo"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            ?: obj["logoUrl"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-        val backdrop = obj["backdrop"]?.jsonArray?.map { it.jsonPrimitive.content }
-            ?: obj["backdropImages"]?.jsonArray?.map { it.jsonPrimitive.content }
-            ?: emptyList()
-        val streams = (obj["streams"]?.jsonArray ?: obj["mediaStreams"]?.jsonArray)?.map { s ->
-            val so = s.jsonObject
-            StreamInfo(
-                index = so["index"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                type = so["type"]?.jsonPrimitive?.content ?: "",
-                codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-                title = so["title"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                    ?: so["displayTitle"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-                language = so["language"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-                isDefault = so["isDefault"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                isForced = so["isForced"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-            )
-        } ?: emptyList()
-        val externalUrls = obj["externalUrls"]?.jsonArray?.mapNotNull { u ->
-            val uo = u.jsonObject
-            val name = uo["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            val url = uo["url"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            ExternalUrl(name, url)
-        } ?: emptyList()
-        val providerIds = obj["providerIds"]?.takeIf { it !is JsonNull }?.jsonObject
-            ?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
-        val isMedia = obj["isMedia"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
-            ?: obj["canPlay"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
-            ?: false
-        val rating = obj["rating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toFloatOrNull()
-            ?: obj["communityRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toFloatOrNull()
-        val year = obj["year"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull()
-            ?: obj["productionYear"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull()
-        return EntryDetail(
-            title = obj["title"]?.jsonPrimitive?.content ?: "",
             overview = obj["overview"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            logo = logo,
-            backdrop = backdrop,
-            isMedia = isMedia,
-            rating = rating,
+            childCount = obj["childCount"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            collectionType = obj["collectionType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            parentId = obj["parentId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            seriesId = obj["seriesId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            seasonNumber = obj["seasonNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            logo = obj["logo"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            backdrop = obj["backdrop"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
             bitrate = obj["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            externalUrls = externalUrls,
-            year = year,
-            providerIds = providerIds,
-            streams = streams,
-            etag = obj["etag"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            year = obj["year"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
+            width = obj["width"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            height = obj["height"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            officialRating = obj["officialRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            filename = obj["filename"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
+                val so = s.jsonObject
+                val codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: return@mapNotNull null
+                MediaCodecInfo(
+                    codec = codec,
+                    bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+                )
+            } ?: emptyList(),
         )
     }
 
@@ -405,20 +352,23 @@ class JsClient(
             hooksStateJson = obj["hooksState"]?.toString() ?: "{}",
         )
 
-        val title = obj["title"]?.jsonPrimitive?.content
-            ?: obj["displayTitle"]?.jsonPrimitive?.content
-            ?: ""
+        val mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
+            val so = s.jsonObject
+            val codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: return@mapNotNull null
+            MediaCodecInfo(
+                codec = codec,
+                bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
+            )
+        } ?: emptyList()
 
         return PlaybackSpec(
             url = requireNotNull(url) { "JS provider returned null URL in getPlaybackSpec" },
             headers = headers,
             mimeType = mimeType,
-            title = title,
-            durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
-            bitrate = obj["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             hooks = hooks,
             subtitleTracks = subtitles,
             httpClient = httpClient,
+            mediaCodecs = mediaCodecs,
         )
     }
 }

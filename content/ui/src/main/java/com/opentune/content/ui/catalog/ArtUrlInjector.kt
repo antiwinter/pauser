@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog
 
-import com.opentune.content.contract.EntryDetail
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
 import com.opentune.server.SERVER_PORT
@@ -28,11 +27,11 @@ object ArtUrlInjector {
         }
     }
 
-    fun applyDetail(detail: EntryDetail, protocol: String): EntryDetail {
+    fun applyInfo(info: EntryInfo, protocol: String): EntryInfo {
         val providesArt = OpenTuneProviderRegistryHolder.get().provider(protocol).providesArt
-        if (providesArt) return detail
-        return detail.copy(
-            backdrop = if (detail.backdrop.isEmpty()) listOf("file:///android_asset/art/backdrop.png") else detail.backdrop,
+        if (providesArt) return info
+        return info.copy(
+            backdrop = if (info.backdrop.isEmpty()) listOf("file:///android_asset/art/backdrop.png") else info.backdrop,
         )
     }
 }

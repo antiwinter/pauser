@@ -84,7 +84,7 @@ export type ValidationResult =
   | { success: true; fields: Record<string, string> }
   | { success: false; error: string };
 
-export type EntryType = 'Folder' | 'Series' | 'Season' | 'Episode' | 'Playable' | 'Other' | 'Digipak' | 'Image';
+export type EntryType = string;
 
 export interface EntryUserData {
   positionMs: number;
@@ -107,6 +107,20 @@ export interface EntryInfo {
   overview?: string | null;
   childCount?: number | null;
   collectionType?: string | null;
+  // detail fields
+  parentId?: string | null;
+  seriesId?: string | null;
+  seasonNumber?: number | null;
+  logo?: string | null;
+  backdrop?: string[];
+  bitrate?: number | null;
+  year?: number | null;
+  durationMs?: number | null;
+  width?: number | null;
+  height?: number | null;
+  officialRating?: string | null;
+  filename?: string | null;
+  mediaCodecs?: MediaCodecInfo[];
 }
 
 export interface QueryOptions {
@@ -121,34 +135,10 @@ export interface EntryList {
   totalCount: number;
 }
 
-export interface ExternalUrl {
-  name: string;
-  url: string;
-}
-
-export interface StreamInfo {
-  index: number;
-  type: string;
-  codec: string | null;
-  title: string | null;
-  language: string | null;
-  isDefault: boolean;
-  isForced: boolean;
-}
-
-export interface EntryDetail {
-  title: string;
-  overview: string | null;
-  logo: string | null;
-  backdrop: string[];
-  isMedia: boolean;
-  rating: number | null;
-  bitrate: number | null;
-  externalUrls: ExternalUrl[];
-  year: number | null;
-  providerIds: Record<string, string>;
-  streams: StreamInfo[];
-  etag: string | null;
+export interface MediaCodecInfo {
+  codec: string;
+  bitDepth?: number | null;
+  profile?: string | null;
 }
 
 export interface SubtitleTrack {
@@ -170,11 +160,9 @@ export interface PlaybackSpec {
   url: string | null;
   headers: Record<string, string>;
   mimeType: string | null;
-  title: string;
-  durationMs: number | null;
-  bitrate: number | null;
   subtitleTracks: SubtitleTrack[];
   hooksState: HooksState;
+  mediaCodecs: MediaCodecInfo[];
 }
 
 export interface ProfileLevel {
@@ -227,8 +215,6 @@ export interface OpenTuneProviderBridge {
     scopeLocation: string;
     query: string;
   }): Promise<EntryInfo[]>;
-
-  getDetail(args: { itemRef: string }): Promise<EntryDetail>;
 
   getPlaybackSpec(args: {
     itemRef: string;

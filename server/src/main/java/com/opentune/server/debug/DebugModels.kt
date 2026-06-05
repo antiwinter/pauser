@@ -57,8 +57,6 @@ data class EntryListDto(
 data class PlaybackSpecDto(
     val url: String,
     val mimeType: String? = null,
-    val title: String,
-    val durationMs: Long? = null,
     val headers: Map<String, String>,
 )
 

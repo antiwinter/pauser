@@ -106,8 +106,6 @@ async function httpPost<T>(url: string, body: unknown, accessToken?: string | nu
   return JSON.parse(resp.body) as T;
 }
 
-export const BROWSE_FIELDS =
-  'ProductionYear,ChildCount,UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle,Overview,Genres,Studios,Etag';
 export const DETAIL_FIELDS =
   'Overview,ImageTags,BackdropImageTags,RunTimeTicks,UserData,MediaSources,' +
   'CommunityRating,Genres,Studios,ProductionYear,ProviderIds,ExternalUrls,' +

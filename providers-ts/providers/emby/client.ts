@@ -2,14 +2,13 @@
  * client.ts — Emby provider client implementation.
  * Mirrors EmbyProviderInstance.kt.
  */
-import { EmbyApi, BROWSE_FIELDS, DETAIL_FIELDS } from './api.js';
+import { EmbyApi, DETAIL_FIELDS } from './api.js';
 import { toListItem } from './mapper.js';
-import { imageUrl, resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
+import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { fmtToMime } from '../../utils/mimes.js';
 import { buildDeviceProfile } from './device-profile.js';
 import type { DeviceProfile } from './dto.js';
 import type {
-  EntryDetail,
   EntryInfo,
   EntryList,
   PlaybackSpec,
@@ -117,7 +116,7 @@ export async function listEntry(
       recursive: options?.recursive ?? false,
       startIndex,
       limit,
-      fields: BROWSE_FIELDS,
+      fields: DETAIL_FIELDS,
       sortBy: options?.sortBy ?? undefined,
       sortOrder: options?.sortOrder ?? undefined,
       includeItemTypes: options?.filterByType ?? undefined,
@@ -145,61 +144,9 @@ export async function search(
     searchTerm: q,
     startIndex: 0,
     limit: 100,
-    fields: BROWSE_FIELDS,
+    fields: DETAIL_FIELDS,
   });
   return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[];
-}
-
-export async function getDetail(
-  state: EmbyClientState,
-  itemRef: string,
-): Promise<EntryDetail> {
-  const { credentials } = requireState(state);
-  const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
-  const item = await api.getItem(itemRef, DETAIL_FIELDS);
-  const id = item.Id ?? itemRef;
-
-  const logoTag = item.ImageTags?.['Logo'];
-  const logo = logoTag
-    ? imageUrl({ baseUrl: credentials.baseUrl, itemId: id, imageType: 'Logo', tag: logoTag, accessToken: credentials.accessToken, maxHeight: 160 })
-    : null;
-
-  const backdrop = (item.BackdropImageTags ?? []).map((tag, index) =>
-    imageUrl({ baseUrl: credentials.baseUrl, itemId: id, imageType: 'Backdrop', tag, accessToken: credentials.accessToken, maxHeight: 1080, index })
-  );
-
-  const bitrate = item.MediaSources?.[0]?.Bitrate ?? null;
-
-  const externalUrls = (item.ExternalUrls ?? []).flatMap((u) =>
-    u.Name && u.Url ? [{ name: u.Name, url: u.Url }] : []
-  );
-
-  const streams = (item.MediaStreams ?? []).map((s) => ({
-    index: s.Index ?? 0,
-    type: s.Type ?? '',
-    codec: s.Codec ?? null,
-    title: s.DisplayTitle ?? null,
-    language: s.Language ?? null,
-    isDefault: s.IsDefault ?? false,
-    isForced: s.IsForced ?? false,
-  }));
-
-  const isMedia = !NON_PLAYABLE_TYPES.has(item.Type ?? '');
-
-  return {
-    title: item.Name ?? itemRef,
-    overview: item.Overview ?? null,
-    logo,
-    backdrop,
-    isMedia,
-    rating: item.CommunityRating ?? null,
-    bitrate,
-    externalUrls,
-    year: item.ProductionYear ?? null,
-    providerIds: item.ProviderIds ?? {},
-    streams,
-    etag: item.Etag ?? null,
-  };
 }
 
 const BITMAP_CODECS = new Set([
@@ -240,8 +187,6 @@ export async function getPlaybackSpec(
     (source.Container && source.Container.trim()) ||
     '';
   const mimeType = rawContainer ? fmtToMime(rawContainer) : null;
-  const item = await api.getItem(itemRef);
-  const title = item.Name ?? itemRef;
   const headers = { 'X-Emby-Token': credentials.accessToken };
 
   const subtitleTracks: SubtitleTrack[] = (source.MediaStreams ?? []).flatMap((stream) => {
@@ -288,18 +233,20 @@ export async function getPlaybackSpec(
     deviceProfile,
   };
 
-  const durationMs = item.RunTimeTicks != null
-    ? Math.floor(item.RunTimeTicks / 10_000)
-    : null;
+  const mediaCodecs = (source.MediaStreams ?? [])
+    .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
+    .map((s) => ({
+      codec: (s.Codec ?? '').toLowerCase(),
+      bitDepth: s.BitDepth ?? null,
+    }))
+    .filter((s) => s.codec);
 
   return {
     url,
     headers,
     mimeType,
-    title,
-    durationMs,
-    bitrate: source.Bitrate ?? null,
     subtitleTracks,
     hooksState,
+    mediaCodecs,
   };
 }

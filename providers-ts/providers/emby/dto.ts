@@ -62,6 +62,7 @@ export interface MediaStream {
   Level?: number | null;
   Profile?: string | null;
   AspectRatio?: string | null;
+  BitDepth?: number | null;
 }
 
 export interface MediaSourceInfo {
@@ -98,6 +99,9 @@ export interface BaseItemDto {
   Overview?: string | null;
   RunTimeTicks?: number | null;
   SeriesName?: string | null;
+  ParentId?: string | null;
+  SeriesId?: string | null;
+  ParentIndexNumber?: number | null;
   ImageTags?: Record<string, string> | null;
   BackdropImageTags?: string[] | null;
   UserData?: UserItemDataDto | null;

@@ -22,6 +22,7 @@ object Routes {
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
     const val IMAGE_VIEWER = "image_viewer/{provider}/{endpointId}/{itemRef}"
+    const val AUDIO_UNSUPPORTED = "audio_unsupported"
 
     fun providerEdit(protocol: String, endpointId: String? = null) =
         if (endpointId != null) "provider_edit/$protocol?endpointId=${URLEncoder.encode(endpointId, UrlCharset)}"

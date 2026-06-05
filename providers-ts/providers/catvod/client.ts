@@ -1,7 +1,6 @@
 import type {
   EntryList,
   EntryInfo,
-  EntryDetail,
   PlaybackSpec,
   ValidationResult,
 } from "../../utils/types.js";
@@ -10,7 +9,6 @@ import type { CatVodSpider } from "./spider/types.js";
 import { decodeRef, encodeRef } from "./ref.js";
 import {
   parseEpisodes,
-  vodDetailToEntryDetail,
   categoryListToFolders,
   vodListToEntries,
   liveChannelsToEntries,
@@ -195,27 +193,6 @@ export async function search(
   return results;
 }
 
-// ── getDetail ─────────────────────────────────────────────────────────────────
-
-export async function getDetail(
-  state: CatVodClientState,
-  itemRef: string,
-): Promise<EntryDetail> {
-  const ref = decodeRef(itemRef);
-
-  if (ref.type === "vod") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
-    const detailResult = await spider.detail([ref.id]);
-    const detail = detailResult.list?.[0];
-    if (!detail) return {} as EntryDetail;
-    return vodDetailToEntryDetail(detail);
-  }
-
-  // no detail
-  return {} as EntryDetail;
-}
-
 // ── getPlaybackSpec ───────────────────────────────────────────────────────────
 
 export async function getPlaybackSpec(
@@ -250,7 +227,11 @@ export async function getPlaybackSpec(
   if (ref.type === "live") {
     return {
       url: ref.url,
-      title: ref.name,
+      headers: {},
+      mimeType: null,
+      subtitleTracks: [],
+      hooksState: {},
+      mediaCodecs: [],
     } as PlaybackSpec;
   }
 

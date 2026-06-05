@@ -6,10 +6,8 @@ import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.File as SmbFile
-import com.opentune.content.contract.EntryDetail
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
-import com.opentune.content.contract.EntryType
 import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SortField
@@ -119,26 +117,6 @@ class SmbClient(
         }
     }
 
-    override suspend fun getDetail(itemRef: String): EntryDetail {
-        val path = itemRef.replace('\\', '/')
-        val name = path.substringAfterLast('/').ifEmpty { path }
-        val video = isLikelyVideoFile(name)
-        return EntryDetail(
-            title = name,
-            overview = path,
-            logo = null,
-            backdrop = emptyList(),
-            isMedia = video,
-            rating = null,
-            bitrate = null,
-            externalUrls = emptyList(),
-            year = null,
-            providerIds = emptyMap(),
-            streams = emptyList(),
-            etag = null,
-        )
-    }
-
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         return withContext(Dispatchers.IO) {
             val pathWin = itemRef.replace('/', '\\')
@@ -171,9 +149,6 @@ class SmbClient(
                 url = videoUrl,
                 headers = emptyMap(),
                 mimeType = null,
-                title = pathWin.substringAfterLast('\\').ifEmpty { pathWin },
-                durationMs = null,
-                bitrate = null,
                 hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
                 httpClient = httpClient,
@@ -218,17 +193,13 @@ class SmbClient(
     }
 
     private fun mapEntry(e: SmbListEntry): EntryInfo {
-        val kind = when {
-            e.isDirectory -> EntryType.Folder
-            isLikelyVideoFile(e.name) -> EntryType.Playable
-            isLikelyImageFile(e.name) -> EntryType.Image
-            else -> EntryType.Other
-        }
+        val kind = if (e.isDirectory) "Folder" else "Unknown"
         return EntryInfo(
             id = e.path,
             title = e.name + if (e.isDirectory) "/" else "",
             type = kind,
             cover = null,
+            filename = e.name,
         )
     }
 

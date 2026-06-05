@@ -149,32 +149,11 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 }
                 val dto = EntryListDto(
                     items = result.items.map { e ->
-                        EntryInfoDto(ref = e.id, title = e.title, type = e.type.name, cover = e.cover)
+                        EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
                     },
                     totalCount = result.totalCount,
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
-            }
-
-            get("/{endpointId}/detail") {
-                val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
-                val ref = call.request.queryParameters["ref"] ?: return@get call.respond400("missing ref")
-                val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
-                val detail = runCatching { instance.getDetail(ref) }.getOrElse {
-                    Log.e(LOG_TAG, "getDetail error", it); return@get call.respond500(it.message)
-                }
-                val map = buildMap<String, kotlinx.serialization.json.JsonElement> {
-                    put("title", kotlinx.serialization.json.JsonPrimitive(detail.title))
-                    put("overview", if (detail.overview != null) kotlinx.serialization.json.JsonPrimitive(detail.overview) else kotlinx.serialization.json.JsonNull)
-                    put("isMedia", kotlinx.serialization.json.JsonPrimitive(detail.isMedia))
-                    put("rating", if (detail.rating != null) kotlinx.serialization.json.JsonPrimitive(detail.rating) else kotlinx.serialization.json.JsonNull)
-                    put("year", if (detail.year != null) kotlinx.serialization.json.JsonPrimitive(detail.year) else kotlinx.serialization.json.JsonNull)
-                    put("backdrop", kotlinx.serialization.json.JsonArray(detail.backdrop.map { kotlinx.serialization.json.JsonPrimitive(it) }))
-                }
-                call.respondText(
-                    kotlinx.serialization.json.JsonObject(map).toString(),
-                    ContentType.Application.Json,
-                )
             }
 
             get("/{endpointId}/search") {
@@ -186,7 +165,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
                 }
                 val dtos = results.map { e ->
-                    EntryInfoDto(ref = e.id, title = e.title, type = e.type.name, cover = e.cover)
+                    EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
                 }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
@@ -202,8 +181,6 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val dto = PlaybackSpecDto(
                     url = spec.url,
                     mimeType = spec.mimeType,
-                    title = spec.title,
-                    durationMs = spec.durationMs,
                     headers = spec.headers,
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)

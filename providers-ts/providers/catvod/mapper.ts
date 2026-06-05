@@ -1,4 +1,4 @@
-import type { EntryInfo, EntryDetail, EntryList, PlaybackSpec, ExternalUrl, SubtitleTrack } from '../../utils/types.js';
+import type { EntryInfo, EntryList, PlaybackSpec, SubtitleTrack } from '../../utils/types.js';
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult } from './spider/types.js';
 import type { M3UChannel } from './iptv.js';
 
@@ -72,11 +72,9 @@ export function playResultToSpec(
     url: result.play_url ?? result.url ?? null,
     headers: result.header ?? {},
     mimeType: result.type ?? null,
-    bitrate: null,
-    title,
-    durationMs: null,
     subtitleTracks,
     hooksState: {},
+    mediaCodecs: [],
   };
 }
 
@@ -98,37 +96,27 @@ export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
   };
 }
 
-export function vodDetailToEntryDetail(item: CatVodDetail): EntryDetail {
+export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
   const sources   = splitField(item.vod_play_from);
   const urlGroups = splitField(item.vod_play_url);
 
-  const externalUrls: ExternalUrl[] = sources.flatMap((src, i) =>
+  const episodeCount = sources.flatMap((src, i) =>
     (urlGroups[i] ?? '').split('#')
       .map((ep) => ep.trim())
       .filter(Boolean)
-      .map((ep) => {
-        const dollar = ep.indexOf('$');
-        const epName = dollar >= 0 ? ep.slice(0, dollar) : ep;
-        const epUrl  = dollar >= 0 ? ep.slice(dollar + 1) : ep;
-        return { name: `${src} / ${epName}`, url: epUrl };
-      })
-  );
-
-  const totalEps = externalUrls.length;
+  ).length;
 
   return {
+    id:          item.vod_id ? String(item.vod_id) : '',
     title:       item.vod_name ?? '',
+    type:        'Playable',
+    cover:       item.vod_pic ?? null,
     overview:    item.vod_content ?? item.vod_blurb ?? null,
-    logo:        null,
+    childCount:  episodeCount,
+    communityRating: item.vod_score ? parseFloat(item.vod_score) : null,
+    genres:      item.type_name ? [item.type_name] : null,
     backdrop:    item.vod_pic ? [item.vod_pic] : [],
-    isMedia:     totalEps <= 1,
-    rating:      item.vod_score ? parseFloat(item.vod_score) : null,
-    bitrate:     null,
-    externalUrls,
     year:        item.vod_year ? parseInt(item.vod_year, 10) : null,
-    providerIds: {},
-    streams:     [],
-    etag:        null,
   };
 }
 

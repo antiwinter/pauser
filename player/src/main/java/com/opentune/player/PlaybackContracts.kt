@@ -21,10 +21,8 @@ data class PlaybackSpec(
     val url: String,
     val headers: Map<String, String> = emptyMap(),
     val mimeType: String? = null,
-    val title: String,
-    val durationMs: Long?,
-    val bitrate: Int?,
     val hooks: OpenTunePlaybackHooks,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val httpClient: okhttp3.OkHttpClient,
+    val mediaCodecs: List<MediaCodecInfo> = emptyList(),
 )
