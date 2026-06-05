@@ -48,6 +48,15 @@ let state: EmbyClientState | null = null;
       clientVersion: args.deviceInfo.clientVersion,
     });
     state = makeClientState(args.credentials, args.deviceInfo, args.deviceInfo.deviceName);
+    const c = args.credentials;
+    if (c['access_token'] && c['user_id']) {
+      state.credentials = {
+        baseUrl:     c['base_url'] ?? '',
+        userId:      c['user_id'],
+        accessToken: c['access_token'],
+        serverId:    c['server_id'] ?? '',
+      };
+    }
   },
 
   // ── Client methods ──────────────────────────────────────────────────

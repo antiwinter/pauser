@@ -63,7 +63,8 @@ function dumpUrl(url: string): string {
     const slashIdx = withoutScheme.indexOf('/');
     if (slashIdx < 0) return 'unknown';
     const pathAndQuery = withoutScheme.slice(slashIdx + 1);
-    return pathAndQuery.replace(/\//g, '-').replace(/\?/, '--').replace(/&/g, '-') || 'unknown';
+    const path = pathAndQuery.split('?')[0];
+    return path.replace(/\//g, '-') || 'unknown';
   } catch {
     return 'unknown';
   }
@@ -106,7 +107,7 @@ async function httpPost<T>(url: string, body: unknown, accessToken?: string | nu
 }
 
 export const BROWSE_FIELDS =
-  'UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle';
+  'ProductionYear,ChildCount,UserData,CommunityRating,ImageTags,BackdropImageTags,IndexNumber,OriginalTitle,Overview,Genres,Studios,Etag';
 export const DETAIL_FIELDS =
   'Overview,ImageTags,BackdropImageTags,RunTimeTicks,UserData,MediaSources,' +
   'CommunityRating,Genres,Studios,ProductionYear,ProviderIds,ExternalUrls,' +
