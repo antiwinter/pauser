@@ -19,23 +19,44 @@ When something changes, **update call sites and schema directly** and delete the
 
 ---
 
+## Module graph
+
+```
+:app ─┬─ :content:ui ── :content:contract
+      ├─ :content:providers:smb ── :content:contract
+      ├─ :content:providers:js ── :content:contract
+      ├─ :proxy:ui ── :proxy:contract
+      ├─ :proxy:providers:http ── :proxy:contract
+      ├─ :player
+      ├─ :storage
+      ├─ :server ── :content:contract
+      ├─ :core:form ── :core:form:contract
+      ├─ :image-viewer
+      └─ :gen-art
+```
+
+**No module imports `:storage`.** Providers (`:content:providers:*`) and proxies (`:proxy:providers:*`) are pure — they never touch Room or preferences.
+
+---
+
 ## Embedded HTTP server (`OpenTuneServer`)
 
-[`OpenTuneServer`](app/src/main/java/com/opentune/app/server/OpenTuneServer.kt) is started in `OpenTuneApplication.onCreate()` and runs for the app's lifetime. It is the **single mechanism** through which any provider byte resource (SMB video, SMB cover, SMB sidecar subtitle) becomes a plain `http://` URL.
+[`OpenTuneServer`](server/src/main/java/com/opentune/server/OpenTuneServer.kt) is started in `OpenTuneApplication.onCreate()` and runs for the app's lifetime. It is the **single mechanism** through which any provider byte resource (SMB video, SMB cover, SMB sidecar subtitle) becomes a plain `http://` URL.
 
-- Binds to `0.0.0.0` (all interfaces) on an ephemeral port. Both the local player and LAN clients can reach it.
-- Implements [`StreamRegistrar`](contracts/src/main/java/com/opentune/provider/StreamRegistrar.kt) and registers itself with `StreamRegistrarHolder`.
-- Token registry: `ConcurrentHashMap<token, (ProviderInstance, itemRef)>`. Each token is a random UUID hex string embedded in the URL path `/stream/<token>`.
-- Route `GET /stream/{token}`: looks up token → calls `instance.openStream(itemRef)` → streams bytes, honoring `Range` headers with `206 Partial Content`.
+- Binds to `0.0.0.0` (all interfaces) on fixed port **7920** (`SERVER_PORT`). Both the local player and LAN clients can reach it.
+- Implements [`StreamRegistrar`](content/contract/src/main/java/com/opentune/content/contract/StreamRegistrar.kt) by delegating to [`StreamProxy`](server/src/main/java/com/opentune/server/StreamProxy.kt); callers only interact with `OpenTuneServer`.
+- Token registry: `ConcurrentHashMap<token, TokenEntry>`. Each token is a random UUID hex string embedded in the URL path `/stream/<token>`. File size is cached after first query so repeated HEAD-like requests don't open extra connections.
+- Route `GET /stream/{token}`: looks up token → calls `client.openStream(itemRef)` → streams bytes, honoring `Range` headers with `206 Partial Content`. One SMB session opened per HTTP request, closed when response finishes.
 - **Auth by token entropy**: tokens are single-use opaque strings revoked explicitly by the provider.
-- All SMB URLs produced for playback and cover extraction are `http://127.0.0.1:<port>/stream/<token>` — loopback only. LAN features (future) will use the device's LAN IP.
+- All SMB URLs produced for playback and cover extraction are `http://127.0.0.1:7920/stream/<token>` — loopback only. LAN features (future) will use the device's LAN IP.
+- Debug routes (provider/catalog/navigate API) installed only when `AppContext` (debug mode) is non-null. Gen-art routes also require `AppContext`.
 
 ### `StreamRegistrar` / `StreamRegistrarHolder`
 
-Defined in [`:contracts`](contracts/src/main/java/com/opentune/provider/StreamRegistrar.kt). Providers call:
+Defined in [`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/StreamRegistrar.kt). Endpoints call:
 
 ```kotlin
-val url = StreamRegistrarHolder.get().registerStream(this, itemRef)   // returns http://127.0.0.1:port/stream/{token}
+val url = StreamRegistrarHolder.get().registerStream(this, itemRef)   // returns http://127.0.0.1:7920/stream/{token}
 StreamRegistrarHolder.get().revokeToken(url)   // call when done
 ```
 
@@ -43,7 +64,7 @@ StreamRegistrarHolder.get().revokeToken(url)   // call when done
 
 ### `ProviderStream`
 
-Defined in [`:contracts`](contracts/src/main/java/com/opentune/provider/ProviderContracts.kt). Random-access stream with explicit `close()`. Used **only** by `OpenTuneServer`'s route handler; no player or UI code calls it directly.
+Defined in [`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/ProviderContracts.kt). Random-access stream with explicit `close()`. Used **only** by `OpenTuneServer`'s route handler; no player or UI code calls it directly.
 
 ```kotlin
 interface ProviderStream {
@@ -53,47 +74,84 @@ interface ProviderStream {
 }
 ```
 
-`OpenTuneProviderInstance.openStream(itemRef): ProviderStream? = null` — overridden by SMB, default null for Emby/JS.
+`EndpointClient.openStream(itemRef: String): ProviderStream? = null` — overridden by SMB, default null for Emby/JS.
 
 ---
 
-## Providers
+## Content providers
 
-### Contracts (`:contracts`)
+### Contracts (`:content:contract`)
 
-[`:contracts`](contracts/src/main/java/com/opentune/provider/) contains:
+[`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/) contains:
 
 - **`OpenTuneProvider`** — stateless factory. Key members:
   - `val protocol: String` — stable registry key
-  - `val providesCover: Boolean` — `true` if catalog list items carry HTTP cover art directly (e.g. Emby); `false` if covers must be extracted from the media stream (e.g. SMB)
-  - `fun getFieldsSpec(): List<ServerFieldSpec>`
-  - `suspend fun validateFields(values: Map<String, String>): ValidationResult`
-  - `fun createInstance(values: Map<String, String>, capabilities: PlatformCapabilities): OpenTuneProviderInstance`
-- **`OpenTuneProviderInstance`** — live protocol handle for one configured server. Key members:
-  - `suspend fun listEntry(…): EntryList`
-  - `suspend fun search(…): List<EntryInfo>`
-  - `suspend fun getDetail(itemRef: String): EntryDetail`
-  - `suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec`
-  - `suspend fun openStream(itemRef: String): ProviderStream? = null` — opens a random-access stream; called by `OpenTuneServer` per HTTP request. Caller closes the stream. Returns `null` by default.
-- **`ProviderStream`** — random-access stream with explicit `close()`. See above.
+  - `val providesArt: Boolean` — `true` if catalog list items carry HTTP cover art directly (e.g. Emby); `false` if covers must be extracted from the media stream (e.g. SMB)
+  - `fun getFieldsSpec(): List<FormFieldSpec>`
+  - `fun createClient(values: Map<String, String>): EndpointClient`
+- **`EndpointClient`** — abstract class, the live protocol handle for one configured endpoint. Key members:
+  - `open var imageLoader: coil3.ImageLoader? = null`
+  - `open var httpClient: okhttp3.OkHttpClient = OkHttpClient()`
+  - `open suspend fun test(): EndpointValidationResult`
+  - `abstract suspend fun listEntry(location, startIndex, limit, options): EntryList`
+  - `abstract suspend fun search(scopeLocation, query): EntryList`
+  - `abstract suspend fun getDetail(itemRef): EntryDetail`
+  - `abstract suspend fun getPlaybackSpec(itemRef, startMs): PlaybackSpec`
+  - `abstract suspend fun getEntries(itemRefs): EntryList`
+  - `open suspend fun getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder): EntryList`
+  - `open suspend fun tagEntry(itemRef, tag, value): Unit`
+  - `open suspend fun openStream(itemRef): ProviderStream? = null`
+  - `open suspend fun getQr(): QrResult.QrReady?` / `open suspend fun pollQr(token): QrResult`
+- **`ProviderStream`** — random-access stream. See above.
 - **`StreamRegistrar`** / **`StreamRegistrarHolder`** — cross-module service locator for token registration. See above.
-- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `OpenTuneServer`). No `customMediaSourceFactory`.
-- **`OpenTunePlaybackHooks`**, **`ServerFieldSpec`**, **`ValidationResult`**, **`SubmitResult`**.
+- **`OpenTuneProviderRegistry`** / **`OpenTuneProviderRegistryHolder`** — protocol → `OpenTuneProvider` lookup.
+- **`EndpointClientRegistryHolder`** / **`EndpointClientAccess`** — endpointId → `EndpointClient` lifecycle (getOrCreate, registerHandle, update, remove, buildHttpClient).
+- **`CatalogContracts.kt`** — `EntryInfo`, `EntryList`, `EntryDetail`, `EntryType`, `EntryUserData`, `SearchQuery`, `QueryOptions`, `SortField`, `SortOrder`, `EntryTag`, `ExternalUrl`, `StreamInfo`, `CatalogRouteTokens`.
+- **`PlaybackMimeTypes`** — container format → MIME type mapping.
 
 ### Registry
 
-[`OpenTuneProviderRegistry`](app/src/main/java/com/opentune/app/providers/OpenTuneProviderRegistry.kt) on [`OpenTuneApplication`](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) maps `protocol` string → `OpenTuneProvider` instance. Register new backends there only.
+[`OpenTuneProviderRegistry`](content/contract/src/main/java/com/opentune/content/contract/OpenTuneProviderRegistry.kt) maps `protocol` string → `OpenTuneProvider` instance. Providers register via `OpenTuneProviderLoader` SPI (`META-INF/services/com.opentune.content.contract.OpenTuneProviderLoader`).
+
+[`EndpointClientRegistry`](app/src/main/java/com/opentune/app/providers/EndpointClientRegistry.kt) in `:app` manages the `EndpointClient` lifecycle — builds clients with shared `DiskCache`, `OkHttpClient` (optionally routed through a proxy), and per-endpoint `ImageLoader`. Set via `EndpointClientRegistryHolder`.
 
 ### Implementations
 
-| Module | Provider | `providesCover` | `openStream` |
+| Module | Provider | `providesArt` | `openStream` |
 |---|---|---|---|
-| `:providers:emby` | `EmbyProvider` / `EmbyProviderInstance` | `true` | not overridden (null) |
-| `:providers:smb` | `SmbProvider` / `SmbProviderInstance` | `false` | overridden — opens smbj `DiskShare`, wraps in `SmbProviderStream : ProviderStream` |
+| `:content:providers:smb` | `SmbProvider` / `SmbClient` | `false` | overridden — opens smbj `DiskShare`, wraps in `SmbProviderStream : ProviderStream` |
+| `:content:providers:js` | `JsProvider` / `JsClient` | varies | not overridden (null) |
 
-**Source-prefixed identifiers** (`Emby*`, `Smb*`) are confined to their respective modules. Do **not** place them under `ui/catalog`, `ui/home`, or `app/.../providers/` (only the neutral registry and [`ServerConfigRepository`](app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt) reside in `:app`).
+**Source-prefixed identifiers** (`Smb*`, `Js*`) are confined to their respective modules. Do **not** place them under `ui/catalog`, `ui/home`, or `app/.../providers/` (only the neutral registry and [`EndpointClientRegistry`](app/src/main/java/com/opentune/app/providers/EndpointClientRegistry.kt) reside in `:app`).
+
+---
+
+## Proxy providers
+
+[`:proxy:contract`](proxy/contract/src/main/java/com/opentune/proxy/contract/) contains:
+
+- **`ProxyProvider`** — factory for HTTP proxy clients:
+  - `val proxyType: String` — stable registry key
+  - `fun getFieldsSpec(): List<FormFieldSpec>`
+  - `suspend fun validateFields(values): ProxyValidationResult`
+  - `fun createClient(values): OkHttpClient` — returns a configured `OkHttpClient`
+- **`ProxyProviderRegistry`** / **`ProxyProviderRegistryHolder`** — `proxyType` → `ProxyProvider` lookup.
+
+| Module | Proxy |
+|---|---|
+| `:proxy:providers:http` | `HttpProxyProvider` — plain HTTP CONNECT proxy |
 
 Providers **never** import `:storage`.
+
+---
+
+## Playback contracts (`:player`)
+
+[`PlaybackContracts.kt`](player/src/main/java/com/opentune/player/PlaybackContracts.kt) defines:
+
+- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `OpenTuneServer`). Contains `headers`, `mimeType`, `title`, `durationMs`, `bitrate`, `hooks: OpenTunePlaybackHooks`, `subtitleTracks: List<SubtitleTrack>`, `httpClient: OkHttpClient`. No `customMediaSourceFactory`.
+- **`OpenTunePlaybackHooks`** — `onPlaybackReady`, `onProgressTick`, `onStop`, `onDispose`, `progressIntervalMs`. SMB implementation revokes stream tokens on dispose.
+- **`SubtitleTrack`** — `trackId`, `label`, `language`, `isDefault`, `isForced`, `externalRef`.
 
 ---
 
@@ -101,52 +159,52 @@ Providers **never** import `:storage`.
 
 [`:storage`](storage/src/main/java/com/opentune/storage/) owns all persistence. Key types:
 
-- **`ServerEntity`** — `@PrimaryKey val sourceId: String` (`"${providerType}_${hash}"`), `providerType`, `displayName`, `fieldsJson`, timestamps.
-- **`MediaStateEntity`** — composite PK `(sourceId, itemId)`. Field `providerType` is stored but is not part of the PK. Notable cached-asset fields:
-  - `cachedCover: String?` — tri-state: `null` = not yet attempted; `MediaStateEntity.CACHE_FAILED = "failed"` = extraction failed / never retry; any other string = SHA-256 blob key into `OssCache`.
-  - `cachedBackdrops: String?` — `null` = not tried; `""` = failed / none; otherwise space-separated SHA-256 blob keys.
-  - `cachedLogo: String?` — same tri-state as `cachedCover`.
-- **`OssCacheEntity`** — `@PrimaryKey val key: String` (SHA-256 hex of blob bytes), `sizeBytes`, `lastVisit`, `pinned`. Tracks LRU metadata for `OssCache`.
-- **`UserMediaStateStore`** / **`RoomMediaStateStore`** — CRUD for `MediaStateEntity`. Method `upsertCachedAssets(protocol, sourceId, itemId, cover, backdrops, logo)` persists all asset keys at once.
-- **`OssCache`** — content-addressed blob cache at `cacheDir/oss/<sha256key>`. Keys are SHA-256 hex of the stored bytes; identical blobs share one file. LRU eviction driven by `OssCacheDao` — no explicit per-source deletion. API: `put(bytes): String`, `getPath(key): String?`, `pin(key)`, `unpin(key)`. If a file is evicted by LRU, `getPath` returns `null` and `AssetGenerator` re-extracts transparently.
-- **`OpenTuneStorageBindings`** — exposes `serverDao`, `mediaStateStore`, `appConfigStore`, `ossCache`. Created by `OpenTuneApplication` and passed to routes via `app.storageBindings`.
+- **`EndpointEntity`** — `@PrimaryKey val endpointId: String` (`"${providerType}_${hash}"`), `protocol`, `displayName`, `fieldsJson`, `proxyId?`, timestamps.
+- **`ProxyEntity`** — `@PrimaryKey val id: String`, `proxyType`, `displayName`, `fieldsJson`, timestamps.
+- **`EntryStateEntity`** — composite PK `(endpointId, itemId)`. Field `protocol` is stored but is not part of the PK. Tracks `positionMs`, `playbackSpeed`, `isFavorite`, `title`, `type`, `selectedSubtitleTrackId`, `selectedAudioTrackId`, `updatedAtEpochMs`.
+- **`EndpointDao`** / **`ProxyDao`** — Room DAOs for CRUD.
+- **`EntryStateStore`** / **`RoomEntryStateStore`** — CRUD for `EntryStateEntity`.
+- **`AppPrefsStore`** — app-level preferences (proxy settings, etc.).
+- **`OpenTuneStorageBindings`** — exposes `endpointDao`, `entryStateStore`, `appConfigStore`, `proxyDao`. Created by `OpenTuneApplication` and passed to routes.
 
-**Database version: 9.** Uses `fallbackToDestructiveMigration`.
+**No `OssCache` / blob cache** in current storage. Cover art is served directly from provider URLs (HTTP covers) or extracted on-demand.
+
+**Database version:** check [`OpenTuneDatabase`](storage/src/main/java/com/opentune/storage/OpenTuneDatabase.kt) for current version. Uses `fallbackToDestructiveMigration`.
 
 ---
 
 ## Cover art
 
-### List covers (`providesCover = false` providers, e.g. SMB)
+### List covers (`providesArt = false` providers, e.g. SMB)
 
-Cover generation is handled by [`rememberAssetGenerator`](app/src/main/java/com/opentune/app/ui/catalog/AssetGenerator.kt), a `@Composable` hook used in `BrowseRoute` and `SearchRoute`:
+Cover generation is handled by [`rememberAssetGenerator`](content/ui/src/main/java/com/opentune/content/ui/catalog/BrowseRoute.kt), a `@Composable` hook used in `BrowseRoute` and `SearchRoute`:
 
 ```kotlin
-val assetGenerator = rememberAssetGenerator(app, providerType, sourceId, instance, items)
+val assetGenerator = rememberAssetGenerator(app, protocol, endpointId, client, items)
 ```
 
 `items` is a `SnapshotStateList<EntryInfo>` owned by the route. When a cover is resolved, `rememberAssetGenerator` writes it directly into the list (`items[idx] = items[idx].copy(cover = path)`), which drives recomposition automatically. **No parallel override map; no extra cover props on `MediaEntryComponent`.**
 
 Priority chain per item:
-1. `mediaStateStore.get(…)?.cachedCover` — fast DB lookup for the blob key
-2. `ossCache.getPath(key)` — resolve key to file path; if the file was LRU-evicted, `getPath` returns `null` and falls through to re-extraction automatically
-3. `instance.getPlaybackSpec(itemId, 0)` → `PlaybackSpec` → `MediaMetadataRetriever.setDataSource(spec.url, spec.headers)` → `.embeddedPicture` → `spec.hooks.onDispose()` in `finally`. The same contract the player uses: SMB resolves a loopback URL and `onDispose()` revokes its stream tokens; any future HTTP provider with embedded art works identically at no extra code cost. Extracted bytes are stored via `ossCache.put(bytes)` which returns the SHA-256 content key.
+1. DB lookup for cached cover
+2. `ossCache.getPath(key)` — resolve key to file path; if LRU-evicted, falls through to re-extraction
+3. `client.getPlaybackSpec(itemId, 0)` → `PlaybackSpec` → `MediaMetadataRetriever` → embedded picture → store via `ossCache.put(bytes)`
 4. On failure: write `CACHE_FAILED` sentinel to DB, never retried
 
 Extraction is bounded to **4 concurrent jobs** via `Semaphore(4)`. Items with `CACHE_FAILED` or an already-resolved cover are skipped immediately.
 
-When `provider.providesCover = true` (Emby), `rememberAssetGenerator` returns a no-op and does no work.
+When `provider.providesArt = true` (Emby), `rememberAssetGenerator` returns a no-op and does no work.
 
 ### Detail poster
 
 `DetailScreen` renders `detail.poster` (not `detail.cover`). `MediaArt.None` renders nothing. Posters are not cached on disk.
 
-### Cover clean-up on provider removal / identity change
+### Cover clean-up on endpoint removal / identity change
 
-[`ServerConfigRepository`](app/src/main/java/com/opentune/app/providers/ServerConfigRepository.kt) `removeServer` and the identity-change edit branch both execute, in order:
-1. `mediaStateStore.deleteBySource(sourceId)` — deletes all Room rows for the source (removes cached key references)
-2. `serverDao.deleteBySourceId(sourceId)` — deletes the server record
-3. `instanceRegistry.remove(sourceId)` — evicts the live instance
+[`EndpointConfigRepository`](app/src/main/java/com/opentune/app/providers/EndpointConfigRepository.kt) `removeEndpoint` and the identity-change edit branch both execute, in order:
+1. `mediaStateStore.deleteByEndpoint(endpointId)` — deletes all Room rows for the endpoint
+2. `endpointDao.delete(endpointId)` — deletes the endpoint record
+3. `instanceRegistry.remove(endpointId)` — evicts the live instance
 
 No explicit file deletion is needed — `OssCache` LRU eviction handles cleanup automatically.
 
@@ -154,7 +212,7 @@ No explicit file deletion is needed — `OssCache` LRU eviction handles cleanup 
 
 ## Shared catalog UI
 
-Routes and screens under **`app/.../ui/catalog`**:
+Routes and screens under **`content/ui/src/main/java/com/opentune/content/ui/catalog`**:
 
 | File | Role |
 |---|---|
@@ -163,6 +221,8 @@ Routes and screens under **`app/.../ui/catalog`**:
 | `MediaEntryComponent` | Renders `item.cover` directly — no cover override param |
 | `DetailRoute` / `DetailScreen` | Load `EntryDetail`, render `detail.poster` |
 | `AssetGenerator` | `rememberAssetGenerator` hook + `updateItemCover` helper; currently covers only |
+| `ArtUrlInjector` | Protocol/endpoint → art URL injection for entries |
+| `CatalogNav` | Navigation helpers; `LIBRARIES_ROOT_SEGMENT` = `CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT` |
 
 **Player shell:** [`OpenTunePlayerScreen`](player/src/main/java/com/opentune/player/OpenTunePlayerScreen.kt) in `:player` takes `PlaybackSpec` only — no SMB/Emby branching.
 
@@ -170,25 +230,42 @@ Routes and screens under **`app/.../ui/catalog`**:
 
 ## Navigation route strings
 
-Unified catalog flows (`providerType` values come from `OpenTuneProvider.protocol`):
+Unified catalog flows (`protocol` values come from `OpenTuneProvider.protocol`):
 
-- `browse/{providerType}/{sourceId}/{location}` — URL-encoded `location` (opaque to Nav)
-- `detail/{providerType}/{sourceId}/{itemRef}`
-- `player/{providerType}/{sourceId}/{itemRef}/{startMs}`
-- `search/{providerType}/{sourceId}/{scopeLocation}`
+- `browse/{protocol}/{endpointId}/{location}` — URL-encoded `location` (opaque to Nav)
+- `detail/{protocol}/{endpointId}/{itemRef}`
+- `player/{protocol}/{endpointId}/{itemRef}/{startMs}`
+- `search/{protocol}/{endpointId}/{scopeLocation}`
 
-Server configuration (neutral):
+Endpoint configuration (neutral):
 
-- `provider_add/{providerType}` — `Routes.providerAdd`
-- `provider_edit/{providerType}/{sourceId}` — `Routes.providerEdit`
+- `endpoint_add/{protocol}` — `Routes.endpointAdd`
+- `endpoint_edit/{protocol}/{endpointId}` — `Routes.endpointEdit`
 
-Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic strings. Libraries root token: `CatalogNav.LIBRARIES_ROOT_SEGMENT` = `CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT`.
+Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic strings. Libraries root token: `CatalogNav.LIBRARIES_ROOT_SEGMENT`.
 
 ---
 
 ## Server config UI
 
-[`ServerAddRoute`](app/src/main/java/com/opentune/app/ui/config/ServerAddRoute.kt) / [`ServerEditRoute`](app/src/main/java/com/opentune/app/ui/config/ServerEditRoute.kt) under `ui/config`. Driven by `provider.getFieldsSpec()`. Field labels resolve via `strings.xml` + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
+[`EndpointAddRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointAddRoute.kt) / [`EndpointEditRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointEditRoute.kt) under `ui/config`. Driven by `provider.getFieldsSpec()`. Field labels resolve via `strings.xml` + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
+
+---
+
+## Form module (`:core:form`)
+
+[`:core:form:contract`](core/form/contract/src/main/java/com/opentune/core/form/contract/) provides neutral form types:
+
+- **`FormFieldSpec`** — field definition (text, password, QR, etc.)
+- **`QrResult`** — QR code login states
+
+[`:core:form`](core/form/src/main/java/com/opentune/core/form/) provides UI:
+
+- **`ProviderFormRoute`** — generic form renderer driven by `List<FormFieldSpec>`
+- **`FormFieldsRenderer`** — composable field rendering
+- **`FormFieldLabels`** — string resource label resolver
+- **`SubmitResult`** — form submission result
+- **`QrCodeField`** — QR code scanning/display composable
 
 ---
 
@@ -196,10 +273,10 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 
 - Cover/asset generation: `"OT_AssetGenerator"`.
 - Embedded server: `"OpenTuneServer"`.
-- Player: `"OpenTunePlayer"` (from `OPEN_TUNE_PLAYER_LOG`); add provider hints in log *messages* if needed.
+- SMB player hints: `"OpenTunePlayer"` (from `SMB_LOG` in `SmbClient`).
 
 ---
 
 ## Playback hooks
 
-Implement `OpenTunePlaybackHooks` from `:contracts`. HTTP-library: `EmbyPlaybackHooks` in `:providers:emby`. File-share: `SmbPlaybackHooks` in `:providers:smb` (revokes stream tokens on dispose).
+Implement `OpenTunePlaybackHooks` from `:player`. HTTP-library: `EmbyPlaybackHooks` (in legacy `:providers:emby`). File-share: `SmbPlaybackHooks` in `:content:providers:smb` (revokes stream tokens on dispose).
