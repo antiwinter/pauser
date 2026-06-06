@@ -15,7 +15,7 @@ fun decodeEntryInfo(json: String): EntryInfo? =
 object Routes {
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
-    const val BROWSE = "browse/{provider}/{endpointId}/{infoJson}"
+    const val BROWSE = "browse/{provider}/{endpointId}/{id}"
     const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{infoJson}"
     const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{infoJson}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
@@ -28,7 +28,7 @@ object Routes {
         if (endpointId != null) "provider_edit/$protocol?endpointId=${URLEncoder.encode(endpointId, UrlCharset)}"
         else "provider_edit/$protocol"
     fun browse(protocol: String, endpointId: String, entry: EntryInfo) =
-        "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.toJson(), UrlCharset)}"
+        "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
     fun detail(protocol: String, endpointId: String, itemRefRaw: String, infoJson: String? = null) =
         "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(infoJson ?: "", UrlCharset)}"
     fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long, info: EntryInfo? = null) =

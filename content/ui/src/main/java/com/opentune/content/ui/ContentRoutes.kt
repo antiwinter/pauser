@@ -1,13 +1,16 @@
 package com.opentune.content.ui
 
 import androidx.compose.runtime.remember
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.opentune.content.ui.catalog.BrowseRoute
+import com.opentune.content.ui.catalog.BrowseViewModel
 import com.opentune.content.ui.catalog.CatalogNav
+import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.DetailRoute
 import com.opentune.content.ui.catalog.ImageViewerRoute
 import com.opentune.content.ui.catalog.PlayerRoute
@@ -21,7 +24,7 @@ import com.opentune.core.form.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute
 
-fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
+fun NavGraphBuilder.contentRoutes(nav: NavHostController, sharedVm: NavSharedViewModel) {
     composable(
         Routes.PROVIDER_EDIT,
         listOf(
@@ -69,17 +72,26 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
         listOf(
             navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("infoJson") { type = NavType.StringType },
+            navArgument("id") { type = NavType.StringType },
         ),
-    ) {
-        val infoJson = it.arguments!!.getString("infoJson")!!
-        val entryInfo = decodeEntryInfo(infoJson)
-            ?: error("Failed to decode entry info for browse route: $infoJson")
+    ) { backStackEntry ->
+        val provider = backStackEntry.arguments!!.getString("provider")!!
+        val endpointId = backStackEntry.arguments!!.getString("endpointId")!!
+        val id = backStackEntry.arguments!!.getString("id")!!
+        val entryInfo = sharedVm.get(id)
+            ?: error("No EntryInfo cached for id=$id — navigate via cacheAndBrowse()")
+
+        val browseVm: BrowseViewModel = viewModel(
+            factory = BrowseViewModel.factory(id),
+        )
+
         BrowseRoute(
             nav = nav,
-            protocol = it.arguments!!.getString("provider")!!,
-            endpointId = it.arguments!!.getString("endpointId")!!,
+            protocol = provider,
+            endpointId = endpointId,
             initialEntryInfo = entryInfo,
+            viewModel = browseVm,
+            sharedVm = sharedVm,
         )
     }
     composable(
