@@ -59,7 +59,7 @@ fun SearchRoute(
                 },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
-                onOpenBrowse = { raw -> nav.navigate(Routes.browse(protocol, endpointId, raw)) },
+                onOpenBrowse = { entry -> nav.navigate(Routes.browse(protocol, endpointId, entry)) },
                 onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
                 onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },
             )

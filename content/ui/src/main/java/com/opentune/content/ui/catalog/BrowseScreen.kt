@@ -53,7 +53,7 @@ fun BrowseScreen(
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenBrowseLocation: (String) -> Unit,
+    onOpenBrowseLocation: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
@@ -160,7 +160,7 @@ fun BrowseScreen(
                             item.type
                         }
                         when (resolvedType) {
-                            "Folder", "Season" -> onOpenBrowseLocation(item.id)
+                            "Folder", "Season" -> onOpenBrowseLocation(item)
                             "Movie", "Digipak", "Series" -> onOpenDetail(item)
                             "Episode", "Video" -> onOpenPlayer(item.id, item.userData?.positionMs)
                             "Image" -> onOpenImageViewer(item.id)

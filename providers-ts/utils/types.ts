@@ -120,7 +120,6 @@ export interface EntryInfo {
   height?: number | null;
   officialRating?: string | null;
   filename?: string | null;
-  mediaCodecs?: MediaCodecInfo[];
 }
 
 export interface QueryOptions {

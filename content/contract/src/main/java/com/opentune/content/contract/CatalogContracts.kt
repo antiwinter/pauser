@@ -1,7 +1,6 @@
 package com.opentune.content.contract
 
 import kotlinx.serialization.Serializable
-import com.opentune.player.MediaCodecInfo
 
 /** Entry type is a plain string. Common values: "Folder", "Movie", "Series", "Episode", "Image", "Digipak", "Season", "Video", "Audio", "Unknown". */
 typealias EntryType = String
@@ -42,7 +41,6 @@ data class EntryInfo(
     val height: Int? = null,
     val officialRating: String? = null,
     val filename: String? = null,
-    val mediaCodecs: List<MediaCodecInfo> = emptyList(),
 )
 
 data class EntryList(
@@ -52,7 +50,7 @@ data class EntryList(
 
 data class QueryOptions(
     val sortBy: SortField? = null,
-    val sortOrder: SortOrder = SortOrder.Descending,
+    val sortOrder: SortOrder = SortOrder.Ascending,
     val recursive: Boolean = false,
     val filterByType: String? = null,
 )

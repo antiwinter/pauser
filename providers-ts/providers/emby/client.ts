@@ -2,7 +2,7 @@
  * client.ts — Emby provider client implementation.
  * Mirrors EmbyProviderInstance.kt.
  */
-import { EmbyApi, DETAIL_FIELDS } from './api.js';
+import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { fmtToMime } from '../../utils/mimes.js';
@@ -116,7 +116,7 @@ export async function listEntry(
       recursive: options?.recursive ?? false,
       startIndex,
       limit,
-      fields: DETAIL_FIELDS,
+      fields: BROWSE_FIELDS_STR,
       sortBy: options?.sortBy ?? undefined,
       sortOrder: options?.sortOrder ?? undefined,
       includeItemTypes: options?.filterByType ?? undefined,
@@ -126,6 +126,26 @@ export async function listEntry(
       totalCount: result.TotalRecordCount,
     };
   }
+}
+
+export async function getEntries(
+  state: EmbyClientState,
+  itemRefs: string[],
+): Promise<EntryList> {
+  const { credentials } = requireState(state);
+  const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
+  const items = await Promise.all(
+    itemRefs.map(async (ref) => {
+      try {
+        const item = await api.getItem(ref, BROWSE_FIELDS_STR);
+        return toListItem(item, credentials.baseUrl, credentials.accessToken);
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const valid = items.filter(Boolean) as EntryInfo[];
+  return { items: valid, totalCount: valid.length };
 }
 
 export async function search(
@@ -144,7 +164,7 @@ export async function search(
     searchTerm: q,
     startIndex: 0,
     limit: 100,
-    fields: DETAIL_FIELDS,
+    fields: BROWSE_FIELDS_STR,
   });
   return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[];
 }

@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeRoute(
     onAddProvider: (String) -> Unit,
-    onOpenBrowse: (String, String, String) -> Unit,
+    onOpenBrowse: (String, String) -> Unit,
     onEditProvider: (String, String) -> Unit,
     onAddProxy: (String) -> Unit,
     onEditProxy: (String, String) -> Unit,
@@ -75,7 +75,7 @@ fun HomeRoute(
             providers.forEach { provider ->
                 (endpointsByType[provider.protocol] ?: emptyList()).forEach { e ->
                     Button(
-                        onClick = { onOpenBrowse(provider.protocol, e.endpointId, "") },
+                        onClick = { onOpenBrowse(provider.protocol, e.endpointId) },
                         modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, e.endpointId) },
                     ) {
                         Text(e.displayName)

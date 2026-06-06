@@ -6,7 +6,6 @@ import type {
   AuthenticationResult,
   SystemInfoDto,
   QueryResultBaseItemDto,
-  BaseItemDto,
   PlaybackInfoRequest,
   PlaybackInfoResponse,
   PlaybackStartInfo,
@@ -106,10 +105,44 @@ async function httpPost<T>(url: string, body: unknown, accessToken?: string | nu
   return JSON.parse(resp.body) as T;
 }
 
-export const DETAIL_FIELDS =
-  'Overview,ImageTags,BackdropImageTags,RunTimeTicks,UserData,MediaSources,' +
-  'CommunityRating,Genres,Studios,ProductionYear,ProviderIds,ExternalUrls,' +
-  'OriginalTitle,IndexNumber,Etag,MediaStreams';
+/**
+ * Single source of truth for fields requested in list/browse responses.
+ * The BaseItemDto type is derived from this array — if you add/remove a field here,
+ * the type updates automatically. No manual DETAIL_* constants.
+ *
+ * MediaSources and MediaStreams are deliberately excluded — they are heavy payloads
+ * only fetched in getPlaybackSpec via getPlaybackInfo().
+ */
+export const BROWSE_FIELDS = [
+  'Id',
+  'Name',
+  'Type',
+  'Overview',
+  'RunTimeTicks',
+  'UserData',
+  'OriginalTitle',
+  'CommunityRating',
+  'Genres',
+  'Studios',
+  'ProductionYear',
+  'ProviderIds',
+  'IndexNumber',
+  'Etag',
+  'ChildCount',
+  'OfficialRating',
+  'ImageTags',
+  'BackdropImageTags',
+  'ParentId',
+  'SeriesId',
+  'ParentIndexNumber',
+  'CollectionType',
+] as const;
+
+/** Type derived from BROWSE_FIELDS — single source of truth, no drift possible. */
+export type BaseItemDto = { [K in typeof BROWSE_FIELDS[number]]?: unknown };
+
+/** Comma-separated string passed to the Emby API Fields parameter. */
+export const BROWSE_FIELDS_STR = BROWSE_FIELDS.join(',');
 
 export class EmbyApi {
   constructor(

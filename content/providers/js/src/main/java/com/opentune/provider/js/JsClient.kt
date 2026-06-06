@@ -167,18 +167,20 @@ class JsClient(
             if (location != null) put("location", location) else put("location", JsonNull)
             put("startIndex", startIndex)
             put("limit", limit)
-            options.sortBy?.let { put("sortBy", it.name) }
-            put("sortOrder", options.sortOrder.name)
-            put("recursive", options.recursive)
-            options.filterByType?.let { put("filterByType", it) }
+            put("options", buildJsonObject {
+                options.sortBy?.let { put("sortBy", it.name) }
+                put("sortOrder", options.sortOrder.name)
+                put("recursive", options.recursive)
+                options.filterByType?.let { put("filterByType", it) }
+            })
         }
-        val resultJson = engine.callMethod("listEntry", args.toString())
+        val argsStr = args.toString()
+        val resultJson = engine.callMethod("listEntry", argsStr)
             ?: return EntryList(emptyList(), 0)
         val obj = json.parseToJsonElement(resultJson).jsonObject
-        return EntryList(
-            items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList(),
-            totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-        )
+        val items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList()
+        val totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        return EntryList(items = items, totalCount = totalCount)
     }
 
     override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
@@ -312,14 +314,6 @@ class JsClient(
             height = obj["height"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             officialRating = obj["officialRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             filename = obj["filename"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
-                val so = s.jsonObject
-                val codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: return@mapNotNull null
-                MediaCodecInfo(
-                    codec = codec,
-                    bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-                )
-            } ?: emptyList(),
         )
     }
 

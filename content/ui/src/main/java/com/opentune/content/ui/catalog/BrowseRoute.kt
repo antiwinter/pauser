@@ -25,76 +25,67 @@ import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "OpenTuneBrowseRoute"
 
-sealed interface BrowseState {
-    data object Loading : BrowseState
-    data class Error(val message: String) : BrowseState
-    data class Ready(val client: EndpointClient) : BrowseState
-}
-
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseRoute(
     nav: NavHostController,
     protocol: String,
     endpointId: String,
-    locationEncoded: String,
+    initialEntryInfo: EntryInfo,
 ) {
-    val locationDecoded = remember(locationEncoded) { CatalogNav.decodeSegment(locationEncoded) }
-    var state by remember { mutableStateOf<BrowseState>(BrowseState.Loading) }
+    val location = initialEntryInfo.id
+    val collectionType = initialEntryInfo.collectionType
+
     val items = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
+    var client by remember { mutableStateOf<EndpointClient?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(protocol, endpointId) {
-        state = BrowseState.Loading
-        items.clear()
-        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
-        state = if (client == null) {
+        error = null
+        val existing = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+        if (existing == null) {
             Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
-            BrowseState.Error("Endpoint not found")
+            error = "Endpoint not found"
         } else {
-            BrowseState.Ready(client)
+            client = existing
         }
     }
 
-    // Resolved query options for this location — set once we know the folder's collectionType.
-    var queryOptions by remember(locationDecoded) { mutableStateOf(QueryOptions()) }
-
-    // When we have a client and a non-root location, peek at the folder metadata to determine
-    // collectionType so we can build the right QueryOptions before loading pages.
-    LaunchedEffect(state, locationDecoded) {
-        val s = state
-        if (s !is BrowseState.Ready || locationDecoded.isEmpty()) return@LaunchedEffect
-        val folderInfo = runCatching {
-            withContext(Dispatchers.IO) { s.client.getEntries(listOf(locationDecoded)) }
-        }.getOrNull()?.items?.firstOrNull() ?: return@LaunchedEffect
-        queryOptions = when (folderInfo.collectionType?.lowercase()) {
+    // Build query options from the passed-in collectionType.
+    // When navigating from a library root, collectionType is carried in EntryInfo.
+    // When navigating from debug API without it, the backend auto-detects via getEntries.
+    val queryOptions = remember(collectionType) {
+        when (collectionType?.lowercase()) {
             "movies" -> QueryOptions(recursive = true, filterByType = "Movie")
             else -> QueryOptions()
         }
     }
 
-    when (val s = state) {
-        is BrowseState.Loading -> Text("Loading…")
-        is BrowseState.Error -> Text("Error: ${s.message}")
-        is BrowseState.Ready -> BrowseScreen(
+    val c = client
+    when {
+        error != null -> Text("Error: $error")
+        c == null -> Text("Loading…")
+        else -> BrowseScreen(
             logTag = "OT_Browse_$endpointId",
             items = items,
-            imageLoader = s.client.imageLoader!!,
+            imageLoader = c.imageLoader!!,
             loadPage = { startIndex, limit ->
                 withContext(Dispatchers.IO) {
-                    s.client.listEntry(locationDecoded.ifEmpty { null }, startIndex, limit, queryOptions)
+                    c.listEntry(location, startIndex, limit, queryOptions)
                 }.let { result ->
                     result.copy(items = ArtUrlInjector.apply(result.items, protocol, endpointId))
                 }
             },
-            subtitle = locationDecoded,
+            subtitle = initialEntryInfo.title,
             titleLang = titleLang,
             onBack = { nav.popBackStack() },
-            onSearch = { nav.navigate(Routes.search(protocol, endpointId, locationDecoded)) },
+            onSearch = { nav.navigate(Routes.search(protocol, endpointId, location)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-            onOpenBrowseLocation = { folderId ->
-                nav.navigate(Routes.browse(protocol, endpointId, folderId))
+            onOpenBrowseLocation = { folderEntry ->
+                nav.navigate(Routes.browse(protocol, endpointId, folderEntry))
             },
             onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
             onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },

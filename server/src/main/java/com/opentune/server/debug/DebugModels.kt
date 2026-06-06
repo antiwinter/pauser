@@ -45,6 +45,7 @@ data class EntryInfoDto(
     val title: String,
     val type: String,
     val cover: String? = null,
+    val collectionType: String? = null,
 )
 
 @Serializable
@@ -67,6 +68,7 @@ data class NavigateRequest(
     val endpointId: String? = null,
     val itemRef: String? = null,
     val startMs: Long = 0,
+    val collectionType: String? = null,
 )
 
 @Serializable

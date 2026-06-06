@@ -92,37 +92,15 @@ export interface MediaSourceInfo {
   DefaultSubtitleStreamIndex?: number | null;
 }
 
-export interface BaseItemDto {
-  Id?: string | null;
-  Name?: string | null;
-  Type?: string | null;
-  Overview?: string | null;
-  RunTimeTicks?: number | null;
-  SeriesName?: string | null;
-  ParentId?: string | null;
-  SeriesId?: string | null;
-  ParentIndexNumber?: number | null;
-  ImageTags?: Record<string, string> | null;
-  BackdropImageTags?: string[] | null;
-  UserData?: UserItemDataDto | null;
-  OriginalTitle?: string | null;
-  CommunityRating?: number | null;
-  Genres?: string[] | null;
-  Studios?: StudioDto[] | null;
-  ProductionYear?: number | null;
-  IndexNumber?: number | null;
-  Etag?: string | null;
-  ProviderIds?: Record<string, string> | null;
-  ExternalUrls?: ExternalUrlDto[] | null;
-  MediaSources?: MediaSourceInfo[] | null;
-  MediaStreams?: MediaStream[] | null;
-  ChildCount?: number | null;
-  OfficialRating?: string | null;
-  CollectionType?: string | null;
-}
+/**
+ * BaseItemDto is now derived from BROWSE_FIELDS in api.ts — see that file.
+ * Re-exported here so existing imports continue working.
+ */
+import type { BaseItemDto as _BaseItemDto } from './api.js';
+export type { _BaseItemDto as BaseItemDto };
 
 export interface QueryResultBaseItemDto {
-  Items: BaseItemDto[];
+  Items: _BaseItemDto[];
   TotalRecordCount: number;
 }
 

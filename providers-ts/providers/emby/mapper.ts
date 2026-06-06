@@ -1,9 +1,13 @@
 /**
  * mapper.ts — Maps Emby API DTOs to the OpenTune provider contract types.
  * Mirrors EmbyProviderInstance.toListItem() in Kotlin.
+ *
+ * All fields come from BROWSE_FIELDS (api.ts) — the single source of truth.
+ * MediaSources / MediaStreams are excluded: they are heavy payloads only
+ * fetched at playback time via getPlaybackInfo().
  */
-import type { BaseItemDto } from './dto.js';
-import type { EntryInfo, EntryType, MediaCodecInfo } from '../../utils/types.js';
+import type { BaseItemDto } from './api.js';
+import type { EntryInfo, EntryType } from '../../utils/types.js';
 import { imageUrl } from './urls.js';
 
 const CONTAINER_TYPES = new Set([
@@ -16,56 +20,40 @@ export function toListItem(
   baseUrl: string,
   accessToken: string,
 ): EntryInfo | null {
-  const id = item.Id;
+  const id = item.Id as string | undefined;
   if (!id) return null;
 
-  const type = item.Type ?? '';
+  const type = item.Type as string | undefined;
+  const typeStr = type ?? '';
   let entryType: EntryType;
-  if (type === 'Series')              entryType = 'Series';
-  else if (type === 'Season')         entryType = 'Season';
-  else if (type === 'Episode')        entryType = 'Episode';
-  else if (type === 'Folder')         entryType = 'Digipak';
-  else if (CONTAINER_TYPES.has(type)) entryType = 'Folder';
-  else                                entryType = 'Playable';
+  if (typeStr === 'Series')         entryType = 'Series';
+  else if (typeStr === 'Season')    entryType = 'Season';
+  else if (typeStr === 'Episode')   entryType = 'Episode';
+  else if (CONTAINER_TYPES.has(typeStr)) entryType = 'Folder';
+  else                               entryType = 'Playable';
 
-  const primaryTag = item.ImageTags?.['Primary'];
+  const imageTags = item.ImageTags as Record<string, string> | null | undefined;
+  const primaryTag = imageTags?.['Primary'];
   const cover = primaryTag
     ? imageUrl({ baseUrl, itemId: id, imageType: 'Primary', tag: primaryTag, accessToken })
     : null;
 
   // Logo
-  const logoTag = item.ImageTags?.['Logo'];
+  const logoTag = imageTags?.['Logo'];
   const logo = logoTag
     ? imageUrl({ baseUrl, itemId: id, imageType: 'Logo', tag: logoTag, accessToken, maxHeight: 160 })
     : null;
 
   // Backdrops
-  const backdrop = (item.BackdropImageTags ?? []).map((tag, index) =>
+  const backdropTags = item.BackdropImageTags as string[] | null | undefined;
+  const backdrop = (backdropTags ?? []).map((tag, index) =>
     imageUrl({ baseUrl, itemId: id, imageType: 'Backdrop', tag, accessToken, maxHeight: 1080, index })
   );
 
-  // Bitrate / duration / dimensions from MediaSources
-  const source = item.MediaSources?.[0];
-  const bitrate = source?.Bitrate ?? null;
-  const durationMs = item.RunTimeTicks != null ? Math.floor(item.RunTimeTicks / 10_000) : null;
-
-  const videoStream = source?.MediaStreams?.find((s) => s.Type === 'Video');
-  const width = videoStream?.Width ?? null;
-  const height = videoStream?.Height ?? null;
-
-  // Media codecs
-  const mediaCodecs: MediaCodecInfo[] = (source?.MediaStreams ?? [])
-    .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
-    .map((s) => ({
-      codec: (s.Codec ?? '').toLowerCase(),
-      bitDepth: s.BitDepth ?? null,
-    }))
-    .filter((s) => s.codec);
-
-  const ud = item.UserData;
+  const ud = item.UserData as { PlaybackPositionTicks?: number; IsFavorite?: boolean; Played?: boolean } | null | undefined;
   return {
     id,
-    title: item.Name ?? id,
+    title: (item.Name as string | undefined) ?? id,
     type: entryType,
     cover,
     userData: ud
@@ -75,27 +63,23 @@ export function toListItem(
           played:     ud.Played ?? false,
         }
       : null,
-    originalTitle:   item.OriginalTitle ?? null,
-    genres:          item.Genres ?? null,
-    communityRating: item.CommunityRating ?? null,
-    studios:         item.Studios?.map((s) => s.Name ?? '').filter(Boolean) ?? null,
-    etag:            item.Etag ?? null,
-    indexNumber:     item.IndexNumber ?? null,
-    overview:        item.Overview ?? null,
-    childCount:      item.ChildCount ?? null,
-    collectionType:  item.CollectionType?.toLowerCase() ?? null,
-    // new detail fields
-    parentId:        item.ParentId ?? null,
-    seriesId:        item.SeriesId ?? null,
-    seasonNumber:    item.ParentIndexNumber ?? null,
+    originalTitle:   item.OriginalTitle as string | null | undefined,
+    genres:          item.Genres as string[] | null | undefined,
+    communityRating: item.CommunityRating as number | null | undefined,
+    studios:         (item.Studios as Array<{ Name?: string | null }> | null | undefined)
+                       ?.map((s) => s.Name ?? '').filter(Boolean) ?? null,
+    etag:            item.Etag as string | null | undefined,
+    indexNumber:     item.IndexNumber as number | null | undefined,
+    overview:        item.Overview as string | null | undefined,
+    childCount:      item.ChildCount as number | null | undefined,
+    collectionType:  (item.CollectionType as string | null | undefined)?.toLowerCase() ?? null,
+    parentId:        item.ParentId as string | null | undefined,
+    seriesId:        item.SeriesId as string | null | undefined,
+    seasonNumber:    item.ParentIndexNumber as number | null | undefined,
     logo,
     backdrop,
-    bitrate,
-    year:            item.ProductionYear ?? null,
-    durationMs,
-    width,
-    height,
-    officialRating:  item.OfficialRating ?? null,
-    mediaCodecs,
+    year:            item.ProductionYear as number | null | undefined,
+    durationMs:      item.RunTimeTicks != null ? Math.floor((item.RunTimeTicks as number) / 10_000) : null,
+    officialRating:  item.OfficialRating as string | null | undefined,
   };
 }

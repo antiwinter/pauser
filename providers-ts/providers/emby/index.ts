@@ -5,7 +5,7 @@
  * configured client; no clientId map needed.
  */
 import { getFieldsSpec, makeClientState } from './provider.js';
-import { listEntry, search, getPlaybackSpec, test } from './client.js';
+import { listEntry, search, getPlaybackSpec, test, getEntries } from './client.js';
 import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksState } from './hooks.js';
 import type { EmbyClientState } from './client.js';
@@ -68,6 +68,12 @@ let state: EmbyClientState | null = null;
     options?: QueryOptions;
   }): Promise<EntryList> {
     return listEntry(state!, args.location, args.startIndex, args.limit, args.options);
+  },
+
+  async getEntries(args: {
+    itemRefs: string[];
+  }): Promise<EntryList> {
+    return getEntries(state!, args.itemRefs);
   },
 
   async search(args: {

@@ -69,14 +69,17 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController) {
         listOf(
             navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("location") { type = NavType.StringType },
+            navArgument("infoJson") { type = NavType.StringType },
         ),
     ) {
+        val infoJson = it.arguments!!.getString("infoJson")!!
+        val entryInfo = decodeEntryInfo(infoJson)
+            ?: error("Failed to decode entry info for browse route: $infoJson")
         BrowseRoute(
             nav = nav,
             protocol = it.arguments!!.getString("provider")!!,
             endpointId = it.arguments!!.getString("endpointId")!!,
-            locationEncoded = it.arguments!!.getString("location")!!,
+            initialEntryInfo = entryInfo,
         )
     }
     composable(

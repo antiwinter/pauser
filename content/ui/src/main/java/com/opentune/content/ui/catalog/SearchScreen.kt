@@ -41,7 +41,7 @@ fun SearchScreen(
     titleLang: TitleLang,
     imageLoader: coil3.ImageLoader,
     onBack: () -> Unit,
-    onOpenBrowse: (String) -> Unit,
+    onOpenBrowse: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (String, Long?) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
@@ -109,7 +109,7 @@ fun SearchScreen(
                             item.type
                         }
                         when (resolvedType) {
-                            "Folder", "Season" -> onOpenBrowse(item.id)
+                            "Folder", "Season" -> onOpenBrowse(item)
                             "Movie", "Digipak", "Series" -> onOpenDetail(item)
                             "Episode", "Video" -> onOpenPlayer(item.id, item.userData?.positionMs)
                             "Image" -> onOpenImageViewer(item.id)

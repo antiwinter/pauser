@@ -84,15 +84,12 @@ fun DetailBackdrop(
 fun DetailBadges(
     entryInfo: EntryInfo,
 ) {
-    val videoCodec = entryInfo.mediaCodecs
-        ?.firstOrNull { it.codec.isNotEmpty() }?.codec
     val resolution = heightToResolutionLabel(entryInfo.height)
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         entryInfo.communityRating?.let { Badge("★ ${"%.1f".format(it)}") }
         entryInfo.year?.let { Badge(it.toString()) }
         if (resolution.isNotEmpty()) Badge(resolution)
-        videoCodec?.let { Badge(it) }
         entryInfo.officialRating?.let { Badge(it) }
     }
 }
