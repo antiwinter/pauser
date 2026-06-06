@@ -15,6 +15,22 @@ const CONTAINER_TYPES = new Set([
   'Playlist', 'CollectionFolder', 'UserView',
 ]);
 
+const METADATA_TYPES = new Set([
+  'Person', 'Genre', 'Studio', 'Year', 'Tag', 'MusicGenre',
+  'MusicArtist', 'AlbumArtist', 'CollectionFolder',
+]);
+
+/** Map Emby types to OpenTune contract types.
+ * Known media types (Movie, Episode, Video, Audio, Photo, Image,
+ * Program, Trailer, MusicVideo, Book, Recording) pass through as-is.
+ * Container types → Folder. Everything else → Unknown. */
+function resolveType(typeStr: string): EntryType {
+  if (CONTAINER_TYPES.has(typeStr)) return 'Folder';
+  // Media types: Movie, Video, Audio, Image, Photo, Program, Trailer,
+  //              MusicVideo, Book, Recording, LiveTvChannel, etc.
+  return typeStr as EntryType;
+}
+
 export function toListItem(
   item: BaseItemDto,
   baseUrl: string,
@@ -25,12 +41,7 @@ export function toListItem(
 
   const type = item.Type as string | undefined;
   const typeStr = type ?? '';
-  let entryType: EntryType;
-  if (typeStr === 'Series')         entryType = 'Series';
-  else if (typeStr === 'Season')    entryType = 'Season';
-  else if (typeStr === 'Episode')   entryType = 'Episode';
-  else if (CONTAINER_TYPES.has(typeStr)) entryType = 'Folder';
-  else                               entryType = 'Playable';
+  const entryType = resolveType(typeStr);
 
   const imageTags = item.ImageTags as Record<string, string> | null | undefined;
   const primaryTag = imageTags?.['Primary'];

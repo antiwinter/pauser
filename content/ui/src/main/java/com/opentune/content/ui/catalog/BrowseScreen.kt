@@ -154,18 +154,17 @@ fun BrowseScreen(
                     titleLang = titleLang,
                     imageLoader = imageLoader,
                     onClick = {
-                        val resolvedType = if (item.type == "Unknown") {
-                            FilenameDetector.detectType(item.filename ?: item.title)
-                        } else {
-                            item.type
+                        fun resolveAction(type: String): (() -> Unit)? = when (type) {
+                            "Folder", "Season" -> { -> onOpenBrowseLocation(item) }
+                            "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
+                            "Episode", "Video" -> { -> onOpenPlayer(item.id, item.userData?.positionMs) }
+                            "Image" -> { -> onOpenImageViewer(item.id) }
+                            "Audio" -> { -> onOpenAudioUnsupported(item.id) }
+                            else -> null
                         }
-                        when (resolvedType) {
-                            "Folder", "Season" -> onOpenBrowseLocation(item)
-                            "Movie", "Digipak", "Series" -> onOpenDetail(item)
-                            "Episode", "Video" -> onOpenPlayer(item.id, item.userData?.positionMs)
-                            "Image" -> onOpenImageViewer(item.id)
-                            "Audio" -> onOpenAudioUnsupported(item.id)
-                        }
+                        (resolveAction(item.type)
+                            ?: resolveAction(FilenameDetector.detectType(item.filename ?: item.title)))
+                            ?.invoke()
                     },
                 )
             }

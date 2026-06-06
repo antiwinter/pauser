@@ -208,7 +208,7 @@ fun DetailRoute(
             }
 
             when (info.type) {
-                "Movie", "Playable", "Episode", "Video" -> MovieOverviewScreen(
+                "Movie", "Episode", "Video" -> MovieOverviewScreen(
                     entryInfo = info,
                     titleLang = titleLang,
                     resumeMs = resumeMs,

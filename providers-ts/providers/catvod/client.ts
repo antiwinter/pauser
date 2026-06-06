@@ -143,7 +143,7 @@ export async function listEntry(
         epUrl: ep.url,
       }),
       title: eps.length > 1 ? ep.name : (detail.vod_name ?? ep.name),
-      type: "Playable" as const,
+      type: "Video" as const,
       cover: detail.vod_pic ?? null,
     }));
     return {

@@ -46,7 +46,7 @@ export function liveChannelsToEntries(channels: M3UChannel[]): EntryList {
     items: channels.map((ch) => ({
       id: JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
       title: ch.name,
-      type: 'Playable' as const,
+      type: 'Video' as const,
       cover: ch.logo ?? null,
     })),
     totalCount: channels.length,
@@ -84,7 +84,7 @@ export function playResultToSpec(
 export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
   const vodId = String(item.vod_id);
   // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
-  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Playable';
+  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
   return {
     id: JSON.stringify({ type: 'vod', key: siteKey, id: vodId }),
     title: item.vod_name ?? vodId,
@@ -109,7 +109,7 @@ export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
   return {
     id:          item.vod_id ? String(item.vod_id) : '',
     title:       item.vod_name ?? '',
-    type:        'Playable',
+    type:        'Movie',
     cover:       item.vod_pic ?? null,
     overview:    item.vod_content ?? item.vod_blurb ?? null,
     childCount:  episodeCount,
