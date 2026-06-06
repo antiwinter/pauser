@@ -1,11 +1,11 @@
 package com.opentune.content.ui.catalog
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.QueryOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,9 +14,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val LOG_TAG = "BrowseViewModel"
+
 /**
  * Per-back-stack-entry ViewModel for BrowseRoute.
- * Survives navigation back/forward — data is cached until the route is popped.
+ * Data lives here until the route is popped from the back stack.
+ * Navigate back → ViewModel is still alive → no re-fetch needed.
+ *
+ * The data layer (CachingEndpointClient) handles network dedup:
+ *   - First visit: fetches from network
+ *   - Return visit: serves from cache (if stale, refreshes in background)
  */
 class BrowseViewModel(
     private val location: String,
@@ -34,7 +41,6 @@ class BrowseViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private var loaded = false
     private var client: EndpointClient? = null
     private var queryOptions: QueryOptions? = null
     private var protocol: String? = null
@@ -57,11 +63,17 @@ class BrowseViewModel(
     }
 
     fun load() {
-        if (loaded) return
+        // Only load if we don't have items yet — this is what preserves data
+        // when navigating back (ViewModel survives, items are still here).
+        if (_items.value.isNotEmpty()) {
+            Log.d(LOG_TAG, "load() skipped — items already present for location=$location")
+            return
+        }
         val c = client ?: return
         val opts = queryOptions ?: return
         val p = protocol ?: return
         val eid = endpointId ?: return
+        Log.d(LOG_TAG, "load() fetching for location=$location")
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
@@ -75,10 +87,11 @@ class BrowseViewModel(
                 onSuccess = { result ->
                     _items.value = result.items
                     _totalCount.value = result.totalCount
-                    loaded = true
+                    Log.d(LOG_TAG, "load() complete: ${result.items.size}/${result.totalCount}")
                 },
                 onFailure = { e ->
                     _error.value = e.message ?: "Unknown error"
+                    Log.e(LOG_TAG, "load() failed", e)
                 },
             )
             _loading.value = false
@@ -114,9 +127,7 @@ class BrowseViewModel(
     companion object {
         private const val PAGE_SIZE = 30
 
-        fun factory(
-            location: String,
-        ) = object : ViewModelProvider.Factory {
+        fun factory(location: String) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 BrowseViewModel(location) as T

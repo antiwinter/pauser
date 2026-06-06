@@ -5,6 +5,8 @@ import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.opentune.content.contract.OpenTuneProviderRegistry
 import com.opentune.proxy.contract.ProxyProviderRegistry
+import com.opentune.content.contract.CachingEndpointClient
+import com.opentune.content.contract.EndpointCache
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientAccess
 import com.opentune.storage.EndpointDao
@@ -31,32 +33,42 @@ class EndpointClientRegistry(
         clients[endpointId] ?: run {
             val entity = endpointDao.getByEndpointId(endpointId) ?: return@withLock null
             val client = buildClient(entity) ?: return@withLock null
-            clients[endpointId] = client
-            client
+            val wrapped = CachingEndpointClient(client, endpointId)
+            clients[endpointId] = wrapped
+            wrapped
         }
     }
 
     override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient? =
         mutex.withLock {
             val client = buildClient(entity) ?: return@withLock null
-            clients[endpointId] = client
-            client
+            val wrapped = CachingEndpointClient(client, endpointId)
+            clients[endpointId] = wrapped
+            wrapped
         }
 
     override suspend fun update(endpointId: String, entity: EndpointEntity): Unit = mutex.withLock {
+        EndpointCache.clearForEndpoint(endpointId)
         val client = buildClient(entity)
-        if (client != null) clients[endpointId] = client else clients.remove(endpointId)
+        if (client != null) {
+            val wrapped = CachingEndpointClient(client, endpointId)
+            clients[endpointId] = wrapped
+        } else {
+            clients.remove(endpointId)
+        }
     }
 
     override suspend fun remove(endpointId: String): Unit = mutex.withLock {
         clients.remove(endpointId)
+        EndpointCache.clearForEndpoint(endpointId)
     }
 
     suspend fun populateEager(entities: List<EndpointEntity>): Unit = mutex.withLock {
         for (entity in entities) {
             if (!clients.containsKey(entity.endpointId)) {
                 val client = buildClient(entity) ?: continue
-                clients[entity.endpointId] = client
+                val wrapped = CachingEndpointClient(client, entity.endpointId)
+                clients[entity.endpointId] = wrapped
             }
         }
     }

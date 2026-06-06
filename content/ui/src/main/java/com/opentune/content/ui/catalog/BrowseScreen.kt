@@ -41,15 +41,29 @@ private const val PAGE_SIZE = 30
 private const val COLUMNS = 5
 private const val OVERSCAN_ROWS = 3
 
+/**
+ * Browse screen that displays items in a paginated grid.
+ *
+ * This component is ONLY responsible for:
+ * - Displaying items provided by the caller
+ * - Triggering loadMore when the user scrolls near the end
+ *
+ * Initial load is driven externally by the caller (ViewModel).
+ * This ensures that when navigating back, the screen shows
+ * cached items without clearing/reloading.
+ */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     logTag: String,
     items: SnapshotStateList<EntryInfo>,
-    loadPage: suspend (startIndex: Int, limit: Int) -> EntryList,
+    loadMore: suspend (startIndex: Int, limit: Int) -> EntryList,
     subtitle: String,
     titleLang: TitleLang,
     imageLoader: ImageLoader,
+    totalCount: Int,
+    loading: Boolean,
+    error: String?,
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -60,10 +74,8 @@ fun BrowseScreen(
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
-    var totalCount by remember { mutableStateOf(0) }
-    var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
+    var localLoading by remember { mutableStateOf(loading) }
 
     val nearEnd by remember {
         derivedStateOf {
@@ -73,43 +85,22 @@ fun BrowseScreen(
         }
     }
 
-    fun resetAndLoad() {
-        scope.launch {
-            loading = true
-            error = null
-            items.clear()
-            totalCount = 0
+    LaunchedEffect(nearEnd, items.size, totalCount) {
+        val effectiveLoading = localLoading || loading
+        if (nearEnd && !effectiveLoading && items.size < totalCount) {
+            localLoading = true
             try {
-                val page = withContext(Dispatchers.IO) { loadPage(0, PAGE_SIZE) }
-                items.addAll(page.items)
-                totalCount = page.totalCount
-            } catch (e: Exception) {
-                Log.e(logTag, "browse load", e)
-                error = e.message
-            } finally {
-                loading = false
-            }
-        }
-    }
-
-    LaunchedEffect(loadPage) {
-        resetAndLoad()
-    }
-
-    LaunchedEffect(nearEnd) {
-        if (nearEnd && !loading && items.size < totalCount) {
-            loading = true
-            try {
-                val page = withContext(Dispatchers.IO) { loadPage(items.size, PAGE_SIZE) }
+                val page = withContext(Dispatchers.IO) { loadMore(items.size, PAGE_SIZE) }
                 items.addAll(page.items)
             } catch (e: Exception) {
                 Log.e(logTag, "load more", e)
-                error = e.message
             } finally {
-                loading = false
+                localLoading = false
             }
         }
     }
+
+    val effectiveLoading = loading || localLoading
 
     Column(
         modifier = Modifier
@@ -129,8 +120,8 @@ fun BrowseScreen(
         if (error == null) {
             Text(
                 when {
-                    loading && items.isEmpty() -> "Loading\u2026"
-                    !loading && items.isEmpty() -> "Nothing here."
+                    effectiveLoading && items.isEmpty() -> "Loading…"
+                    !effectiveLoading && items.isEmpty() -> "Nothing here."
                     totalCount > 0 && items.size < totalCount -> "Showing ${items.size} of $totalCount"
                     totalCount > 0 -> "$totalCount items"
                     else -> "${items.size} items"
@@ -168,10 +159,10 @@ fun BrowseScreen(
                     },
                 )
             }
-            if (loading && items.size < totalCount) {
+            if (effectiveLoading && items.size < totalCount) {
                 item(span = { GridItemSpan(COLUMNS) }) {
                     Text(
-                        "Loading\u2026",
+                        "Loading…",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
