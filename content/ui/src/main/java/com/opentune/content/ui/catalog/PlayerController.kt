@@ -2,8 +2,6 @@ package com.opentune.content.ui.catalog
 
 import android.app.Application
 import android.util.Log
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
@@ -50,9 +48,9 @@ class PlayerController(
     private var _lastClient: EndpointClient? = null
     private var _lastStartMs: Long = 0L
 
-    // Current resolved spec + ExoPlayer
+    // Current resolved spec + ExoPlayer (StateFlow so Compose can observe)
     private var _currentSpec: com.opentune.player.PlaybackSpec? = null
-    private var _exoPlayer: MutableState<ExoPlayer?> = mutableStateOf(null)
+    private val _exoPlayerFlow = MutableStateFlow<ExoPlayer?>(null)
     private var _startMs: Long = 0L
     private var _preparing = false
 
@@ -64,11 +62,12 @@ class PlayerController(
     private val _playbackState = MutableStateFlow<Int>(Player.STATE_IDLE)
     private val _mediaCodecs = MutableStateFlow<List<MediaCodecInfo>>(emptyList())
 
-    // State
+    // Public state
     val playbackState: StateFlow<Int> = _playbackState.asStateFlow()
     val mediaCodecs: StateFlow<List<MediaCodecInfo>> = _mediaCodecs.asStateFlow()
-    val isPrepared: Boolean get() = _exoPlayer.value != null
-    val exoPlayer: ExoPlayer? get() = _exoPlayer.value
+    val exoPlayerFlow: StateFlow<ExoPlayer?> = _exoPlayerFlow.asStateFlow()
+    val isPrepared: Boolean get() = _exoPlayerFlow.value != null
+    val exoPlayer: ExoPlayer? get() = _exoPlayerFlow.value
     val startMs: Long get() = _startMs
 
     /**
@@ -91,8 +90,8 @@ class PlayerController(
         _lastStartMs = startMs
 
         // Same item already prepared — just seek, don't re-resolve.
-        if (itemRef == _currentSpec?.url && _exoPlayer.value != null) {
-            _exoPlayer.value?.seekTo(startMs)
+        if (itemRef == _currentSpec?.url && _exoPlayerFlow.value != null) {
+            _exoPlayerFlow.value?.seekTo(startMs)
             Log.d(LOG_TAG, "setItem: same item, seekTo=$startMs")
             return
         }
@@ -128,9 +127,9 @@ class PlayerController(
             Log.d(LOG_TAG, "play: prepare in-flight, waiting")
             return
         }
-        if (_exoPlayer.value != null) {
+        if (_exoPlayerFlow.value != null) {
             // Already prepared — just start playback.
-            val exo = _exoPlayer.value!!
+            val exo = _exoPlayerFlow.value!!
             if (!exo.playWhenReady) {
                 exo.playWhenReady = true
                 Log.d(LOG_TAG, "play: playWhenReady=true (prepared)")
@@ -149,7 +148,7 @@ class PlayerController(
             _debounceJob = viewModelScope.launch {
                 try {
                     prepare(itemRef, client, start)
-                    _exoPlayer.value?.playWhenReady = true
+                    _exoPlayerFlow.value?.playWhenReady = true
                     Log.d(LOG_TAG, "play: forced prepare+play")
                 } catch (_: CancellationException) {
                 } catch (e: Exception) {
@@ -161,7 +160,7 @@ class PlayerController(
 
     /** Pause playback (playWhenReady = false). */
     fun pause() {
-        _exoPlayer.value?.let { exo ->
+        _exoPlayerFlow.value?.let { exo ->
             if (exo.playWhenReady) {
                 exo.playWhenReady = false
                 Log.d(LOG_TAG, "pause: playWhenReady=false")
@@ -171,29 +170,35 @@ class PlayerController(
 
     /** Seek to position. */
     fun seekTo(positionMs: Long) {
-        _exoPlayer.value?.seekTo(positionMs)
+        _exoPlayerFlow.value?.seekTo(positionMs)
     }
 
     /** Get current position. */
-    fun currentPosition(): Long = _exoPlayer.value?.currentPosition ?: 0L
+    fun currentPosition(): Long = _exoPlayerFlow.value?.currentPosition ?: 0L
 
     /** Get duration. */
-    fun duration(): Long = _exoPlayer.value?.duration ?: 0L
+    fun duration(): Long = _exoPlayerFlow.value?.duration ?: 0L
 
     /** Check if currently playing. */
-    fun isPlaying(): Boolean = _exoPlayer.value?.isPlaying == true
+    fun isPlaying(): Boolean = _exoPlayerFlow.value?.isPlaying == true
 
     /** Check if buffering. */
-    fun isBuffering(): Boolean = _exoPlayer.value?.playbackState == Player.STATE_BUFFERING
+    fun isBuffering(): Boolean = _exoPlayerFlow.value?.playbackState == Player.STATE_BUFFERING
 
     /** Release the player. */
     fun release() {
         _debounceJob?.cancel()
         _debounceJob = null
+        releasePlayer()
+    }
 
-        // Remove listener from current player before releasing
+    /**
+     * Dispose the current ExoPlayer instance without touching [_debounceJob].
+     * Called from [prepare] so we don't self-cancel the running coroutine.
+     */
+    private fun releasePlayer() {
         val listener = _listener
-        val exo = _exoPlayer.value
+        val exo = _exoPlayerFlow.value
         _listener = null
 
         if (exo != null) {
@@ -206,7 +211,7 @@ class PlayerController(
                 }
                 Log.d(LOG_TAG, "release: ExoPlayer released")
             }
-            _exoPlayer.value = null
+            _exoPlayerFlow.value = null
             _currentSpec = null
             _mediaCodecs.value = emptyList()
             _startMs = 0L
@@ -225,7 +230,7 @@ class PlayerController(
         Log.d(LOG_TAG, "prepare: itemRef=$itemRef startMs=$startMs")
         _preparing = true
         try {
-            release() // clean up any previous player
+            releasePlayer() // clean up any previous player without cancelling ourselves
 
             val spec = withContext(Dispatchers.IO) {
                 client.getPlaybackSpec(itemRef, startMs)
@@ -237,7 +242,6 @@ class PlayerController(
             val playerWithMeter = withContext(Dispatchers.Main) {
                 OpenTuneExoPlayer.createForBundledSources(appContext)
             }
-            _exoPlayer.value = playerWithMeter.player
 
             // Attach state listener
             val listener = object : Player.Listener {
@@ -250,12 +254,15 @@ class PlayerController(
 
             // Prepare without playing — buffers ~5 minutes of data
             withContext(Dispatchers.Main) {
-                val exo = _exoPlayer.value!!
+                val exo = playerWithMeter.player
                 exo.stop()
                 exo.setMediaSource(spec.toMediaSource(appContext))
                 exo.prepare()
                 Log.d(LOG_TAG, "prepare: ExoPlayer prepared, playWhenReady=false")
             }
+
+            // Assign to StateFlow AFTER fully prepared so Compose sees a ready player
+            _exoPlayerFlow.value = playerWithMeter.player
         } finally {
             _preparing = false
         }

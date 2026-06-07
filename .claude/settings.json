@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb *)",
+      "Bash(./gradlew *)",
+      "Bash(bash deploy.sh)",
+      "Bash(curl *)",
+      "Bash(export PATH*)",
+      "Bash(cd providers-ts*)",
+      "Bash(npm run build)",
+      "Bash(npm *)"
+    ]
+  }
+}

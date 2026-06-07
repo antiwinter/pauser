@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
+import androidx.compose.runtime.collectAsState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.contract.EndpointClient
@@ -96,13 +97,14 @@ fun BrowseRoute(
     }
 
     val c = client
-    val exoPlayer = playerController.exoPlayer
+    val exoPlayer by playerController.exoPlayerFlow.collectAsState()
 
     // Player overlay — full-screen when ExoPlayer is active
-    if (exoPlayer != null) {
+    val currentExoPlayer = exoPlayer
+    if (currentExoPlayer != null) {
         Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
             PlayerSurface(
-                exoPlayer = exoPlayer,
+                exoPlayer = currentExoPlayer,
                 startMs = playerController.startMs,
                 onBack = {
                     playerController.pause()
