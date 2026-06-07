@@ -15,7 +15,6 @@ import com.opentune.content.ui.catalog.PlayerController
 import com.opentune.content.ui.catalog.DetailRoute
 import com.opentune.content.ui.catalog.DetailViewModel
 import com.opentune.content.ui.catalog.ImageViewerRoute
-import com.opentune.content.ui.catalog.PlayerRoute
 import com.opentune.content.ui.catalog.SearchRoute
 import com.opentune.content.ui.catalog.SettingsScreen
 import com.opentune.content.contract.EndpointClient
@@ -98,6 +97,7 @@ fun NavGraphBuilder.contentRoutes(
             initialEntryInfo = entryInfo,
             viewModel = browseVm,
             sharedVm = sharedVm,
+            playerController = playerController,
         )
     }
     composable(
@@ -128,6 +128,7 @@ fun NavGraphBuilder.contentRoutes(
             initialInfo = entryInfo,
             sharedVm = sharedVm,
             viewModel = detailVm,
+            playerController = playerController,
         )
     }
     composable(
@@ -144,30 +145,6 @@ fun NavGraphBuilder.contentRoutes(
             endpointId = it.arguments!!.getString("endpointId")!!,
             scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
             sharedVm = sharedVm,
-        )
-    }
-    composable(
-        Routes.PLAYER,
-        listOf(
-            navArgument("provider") { type = NavType.StringType },
-            navArgument("endpointId") { type = NavType.StringType },
-            navArgument("itemRef") { type = NavType.StringType },
-            navArgument("startMs") { type = NavType.LongType },
-            navArgument("id") { type = NavType.StringType },
-        ),
-    ) {
-        val id = it.arguments!!.getString("id")!!
-        val entryInfo = sharedVm.get(id)
-            ?: error("No EntryInfo cached for id=$id — navigate via sharedVm.cache() before navigating to player")
-
-        PlayerRoute(
-            protocol = it.arguments!!.getString("provider")!!,
-            endpointId = it.arguments!!.getString("endpointId")!!,
-            itemRefDecoded = CatalogNav.decodeSegment(it.arguments!!.getString("itemRef")!!),
-            startMs = it.arguments!!.getLong("startMs"),
-            entryInfo = entryInfo,
-            playerController = playerController,
-            onExit = { nav.popBackStack() },
         )
     }
     composable(Routes.SETTINGS) {

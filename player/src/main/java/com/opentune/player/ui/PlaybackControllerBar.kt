@@ -42,7 +42,7 @@ private fun formatMs(ms: Long): String {
  * No touch scrubbing in Phase 2. Both progress layers are read-only indicators.
  */
 @Composable
-internal fun PlaybackControllerBar(
+fun PlaybackControllerBar(
     position: Long,
     buffered: Long,
     duration: Long,

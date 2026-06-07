@@ -6,21 +6,31 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.content.contract.EndpointClient
-import com.opentune.player.PlaybackSpec
 import com.opentune.player.engine.OpenTuneExoPlayer
 import com.opentune.player.engine.toMediaSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "PlayerController"
+private const val DEBOUNCE_MS = 800L
 
 /**
  * NavHost-scoped player controller. Owns a single ExoPlayer instance
- * shared between DetailScreen (embedded) and PlayerRoute (standalone).
+ * shared between DetailScreen (embedded) and BrowseRoute (overlay).
+ *
+ * Callers invoke [setItem] and [play] freely — debounce, same-item
+ * reuse, and prepare lifecycle are all managed internally.
  *
  * Lifecycle:
  *   - Created when the NavHost is created
@@ -34,55 +44,114 @@ class PlayerController(
 
     private val appContext = application.applicationContext
 
-    // Current playback context
-    private var _currentSpec: PlaybackSpec? = null
+    // Last item set by setItem — survives release so play() can re-prepare.
+    private var _lastItemRef: String? = null
+    private var _lastClient: EndpointClient? = null
+    private var _lastStartMs: Long = 0L
+
+    // Current resolved spec + ExoPlayer
+    private var _currentSpec: com.opentune.player.PlaybackSpec? = null
     private var _exoPlayer: MutableState<ExoPlayer?> = mutableStateOf(null)
     private var _startMs: Long = 0L
+    private var _preparing = false
+
+    // Debounce for setItem
+    private var _debounceJob: Job? = null
+
+    // Playback state tracking
+    private var _listener: Player.Listener? = null
+    private val _playbackState = MutableStateFlow<Int>(Player.STATE_IDLE)
 
     // State
+    val playbackState: StateFlow<Int> = _playbackState.asStateFlow()
     val isPrepared: Boolean get() = _exoPlayer.value != null
     val exoPlayer: ExoPlayer? get() = _exoPlayer.value
     val startMs: Long get() = _startMs
 
     /**
-     * Resolve PlaybackSpec and prepare the ExoPlayer.
-     * Sets playWhenReady = false so the player buffers but doesn't play.
+     * Set the item to play.
+     *
+     * - Cancels any pending debounce.
+     * - If the same item is already prepared → seek immediately (no re-resolve).
+     * - Otherwise → wait [DEBOUNCE_MS], then resolve PlaybackSpec and prepare ExoPlayer.
+     *
+     * Always prepares with playWhenReady=false. Callers invoke [play] when ready.
      */
-    suspend fun prepare(
+    fun setItem(
         itemRef: String,
         client: EndpointClient,
         startMs: Long = 0L,
     ) {
-        Log.d(LOG_TAG, "prepare: itemRef=$itemRef startMs=$startMs")
-        release() // clean up any previous player
+        _debounceJob?.cancel()
+        _lastItemRef = itemRef
+        _lastClient = client
+        _lastStartMs = startMs
 
-        val spec = withContext(Dispatchers.IO) {
-            client.getPlaybackSpec(itemRef, startMs)
+        // Same item already prepared — just seek, don't re-resolve.
+        if (itemRef == _currentSpec?.url && _exoPlayer.value != null) {
+            _exoPlayer.value?.seekTo(startMs)
+            Log.d(LOG_TAG, "setItem: same item, seekTo=$startMs")
+            return
         }
-        _currentSpec = spec
-        _startMs = startMs
 
-        val playerWithMeter = withContext(Dispatchers.Main) {
-            OpenTuneExoPlayer.createForBundledSources(appContext)
-        }
-        _exoPlayer.value = playerWithMeter.player
-
-        // Prepare without playing — buffers ~5 minutes of data
-        withContext(Dispatchers.Main) {
-            val exo = _exoPlayer.value!!
-            exo.stop()
-            exo.setMediaSource(spec.toMediaSource(appContext))
-            exo.prepare()
-            Log.d(LOG_TAG, "prepare: ExoPlayer prepared, playWhenReady=false")
+        _debounceJob = viewModelScope.launch {
+            delay(DEBOUNCE_MS)
+            try {
+                prepare(itemRef, client, startMs)
+            } catch (_: CancellationException) {
+                // expected when superseded
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "setItem: prepare failed", e)
+            }
         }
     }
 
-    /** Start playback (playWhenReady = true). */
+    /**
+     * Start playback.
+     *
+     * - If the player is already prepared → playWhenReady=true.
+     * - If still preparing → nothing to do, `prepare` will finish
+     *   and `PlayerSurface` will auto-play via its LaunchedEffect.
+     * - If not yet prepared (user pressed Play before debounce fired)
+     *   → cancel debounce, force immediate prepare+play.
+     *
+     * The caller simply shows the overlay; loading spinner is shown
+     * automatically while prepare completes.
+     */
     fun play() {
-        _exoPlayer.value?.let { exo ->
+        _debounceJob?.cancel()
+        if (_preparing) {
+            // prepare() is in-flight — just wait for it.
+            Log.d(LOG_TAG, "play: prepare in-flight, waiting")
+            return
+        }
+        if (_exoPlayer.value != null) {
+            // Already prepared — just start playback.
+            val exo = _exoPlayer.value!!
             if (!exo.playWhenReady) {
                 exo.playWhenReady = true
-                Log.d(LOG_TAG, "play: playWhenReady=true")
+                Log.d(LOG_TAG, "play: playWhenReady=true (prepared)")
+            }
+        } else {
+            // Not yet prepared — resolve spec immediately and start playing.
+            val itemRef = _lastItemRef ?: run {
+                Log.w(LOG_TAG, "play: no item set")
+                return
+            }
+            val client = _lastClient ?: run {
+                Log.w(LOG_TAG, "play: no client set")
+                return
+            }
+            val start = _lastStartMs
+            _debounceJob = viewModelScope.launch {
+                try {
+                    prepare(itemRef, client, start)
+                    _exoPlayer.value?.playWhenReady = true
+                    Log.d(LOG_TAG, "play: forced prepare+play")
+                } catch (_: CancellationException) {
+                } catch (e: Exception) {
+                    Log.e(LOG_TAG, "play: forced prepare failed", e)
+                }
             }
         }
     }
@@ -112,14 +181,24 @@ class PlayerController(
     fun isPlaying(): Boolean = _exoPlayer.value?.isPlaying == true
 
     /** Check if buffering. */
-    fun isBuffering(): Boolean = _exoPlayer.value?.playbackState == androidx.media3.common.Player.STATE_BUFFERING
+    fun isBuffering(): Boolean = _exoPlayer.value?.playbackState == Player.STATE_BUFFERING
 
     /** Release the player. */
     fun release() {
+        _debounceJob?.cancel()
+        _debounceJob = null
+
+        // Remove listener from current player before releasing
+        val listener = _listener
         val exo = _exoPlayer.value
+        _listener = null
+
         if (exo != null) {
             viewModelScope.launch {
                 withContext(Dispatchers.Main) {
+                    if (listener != null) {
+                        exo.removeListener(listener)
+                    }
                     exo.release()
                 }
                 Log.d(LOG_TAG, "release: ExoPlayer released")
@@ -127,6 +206,53 @@ class PlayerController(
             _exoPlayer.value = null
             _currentSpec = null
             _startMs = 0L
+        }
+    }
+
+    /**
+     * Resolve PlaybackSpec and prepare the ExoPlayer.
+     * Sets playWhenReady = false so the player buffers but doesn't play.
+     */
+    private suspend fun prepare(
+        itemRef: String,
+        client: EndpointClient,
+        startMs: Long = 0L,
+    ) {
+        Log.d(LOG_TAG, "prepare: itemRef=$itemRef startMs=$startMs")
+        _preparing = true
+        try {
+            release() // clean up any previous player
+
+            val spec = withContext(Dispatchers.IO) {
+                client.getPlaybackSpec(itemRef, startMs)
+            }
+            _currentSpec = spec
+            _startMs = startMs
+
+            val playerWithMeter = withContext(Dispatchers.Main) {
+                OpenTuneExoPlayer.createForBundledSources(appContext)
+            }
+            _exoPlayer.value = playerWithMeter.player
+
+            // Attach state listener
+            val listener = object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    _playbackState.value = state
+                }
+            }
+            playerWithMeter.player.addListener(listener)
+            _listener = listener
+
+            // Prepare without playing — buffers ~5 minutes of data
+            withContext(Dispatchers.Main) {
+                val exo = _exoPlayer.value!!
+                exo.stop()
+                exo.setMediaSource(spec.toMediaSource(appContext))
+                exo.prepare()
+                Log.d(LOG_TAG, "prepare: ExoPlayer prepared, playWhenReady=false")
+            }
+        } finally {
+            _preparing = false
         }
     }
 

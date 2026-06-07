@@ -2,12 +2,15 @@ package com.opentune.content.ui.catalog
 
 import android.util.Log
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -15,13 +18,13 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 import com.opentune.storage.decodeSeriesProgress
-import com.opentune.content.ui.Routes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,7 +41,11 @@ fun DetailRoute(
     initialInfo: EntryInfo? = null,
     sharedVm: NavSharedViewModel,
     viewModel: DetailViewModel,
+    playerController: PlayerController? = null,
 ) {
+    // Player overlay state — shown when user presses Play
+    var playerOverlayVisible by remember { mutableStateOf(false) }
+    var overlayStartMs by remember { mutableLongStateOf(0L) }
     val itemRefDecoded = remember(itemRefEncoded) { CatalogNav.decodeSegment(itemRefEncoded) }
     val scope = rememberCoroutineScope()
     val stateKey = remember(protocol, endpointId, itemRefDecoded) {
@@ -99,6 +106,17 @@ fun DetailRoute(
         viewModel.loadEntry()
     }
 
+    // Pre-buffer Movie immediately after entry is loaded
+    LaunchedEffect(vmEntryInfo?.id, vmEntryInfo?.type, playerController != null) {
+        val info = vmEntryInfo ?: return@LaunchedEffect
+        val controller = playerController ?: return@LaunchedEffect
+        if (info.type == "Movie" || info.type == "Video") {
+            Log.d(LOG_TAG, "pre-buffer Movie: ref=$itemRefDecoded startMs=$resumeMs")
+            val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+            controller.setItem(itemRefDecoded, client, resumeMs)
+        }
+    }
+
     // Load seasons when entry is a Series
     LaunchedEffect(vmEntryInfo?.type) {
         if (vmEntryInfo?.type == "Series") viewModel.loadSeasons()
@@ -114,9 +132,79 @@ fun DetailRoute(
         if (vmSeasons.isNotEmpty()) viewModel.loadEpisodes()
     }
 
+    // Pre-buffer Series episode when episodes list loads
+    LaunchedEffect(vmEpisodes, playerController != null) {
+        val episodes = vmEpisodes
+        if (episodes.isEmpty()) return@LaunchedEffect
+        val controller = playerController ?: return@LaunchedEffect
+        // Find episode with resume position
+        val currentEpisode = episodes.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
+            ?: episodes.firstOrNull()
+            ?: return@LaunchedEffect
+        val startMs = currentEpisode.userData?.positionMs ?: 0L
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        Log.d(LOG_TAG, "pre-buffer Series episode: ref=${currentEpisode.id} startMs=$startMs")
+        controller.setItem(currentEpisode.id, client, startMs)
+    }
+
+    // Pre-buffer Digipak child when children list loads
+    LaunchedEffect(vmDigipakChildren, vmSingleChild, playerController != null) {
+        val children = vmDigipakChildren
+        val singleChild = vmSingleChild
+        val controller = playerController ?: return@LaunchedEffect
+
+        val (child, startMs) = when {
+            singleChild != null -> singleChild to (singleChild.userData?.positionMs ?: 0L)
+            children.isNotEmpty() -> {
+                val c = children.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
+                    ?: children.first()
+                c to (c.userData?.positionMs ?: 0L)
+            }
+            else -> return@LaunchedEffect
+        }
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        Log.d(LOG_TAG, "pre-buffer Digipak child: ref=${child.id} startMs=$startMs")
+        controller.setItem(child.id, client, startMs)
+    }
+
+    // Release player when leaving detail screen
+    DisposableEffect(playerController) {
+        onDispose {
+            playerController?.release()
+            Log.d(LOG_TAG, "detail disposed: player released")
+        }
+    }
+
     val loader = imageLoader
     val entryInfo = vmEntryInfo
-    Log.d(LOG_TAG, "render state: error=$vmError loading=$vmLoading entryInfo=${entryInfo?.type} loader=$loader")
+    val ctrlExoPlayer = playerController?.exoPlayer
+
+    // Player overlay — full-screen when user presses Play
+    if (playerOverlayVisible) {
+        if (ctrlExoPlayer != null) {
+            Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                PlayerSurface(
+                    exoPlayer = ctrlExoPlayer,
+                    startMs = overlayStartMs,
+                    onBack = {
+                        playerController.pause()
+                        playerOverlayVisible = false
+                        Log.d(LOG_TAG, "player overlay: back → pause & hide")
+                    },
+                )
+            }
+            return
+        }
+        // Loading state — show "Loading…" until ExoPlayer is ready
+        Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            LoadingOverlay(onBack = {
+                playerOverlayVisible = false
+                Log.d(LOG_TAG, "player overlay: back during loading → hide")
+            })
+        }
+        return
+    }
+
     when {
         vmError != null -> Text("Error: ${vmError}")
         vmLoading || loader == null || entryInfo == null -> Box(
@@ -125,13 +213,26 @@ fun DetailRoute(
         ) { CircularProgressIndicator() }
         else -> {
             val info = entryInfo
+
+            // Helper: show overlay + set item in controller.
+            // The controller handles same-item reuse, debounce, and prepare lifecycle.
+            val showPlayer = { ref: String, start: Long, client: EndpointClient ->
+                overlayStartMs = start
+                playerOverlayVisible = true
+                playerController?.setItem(ref, client, start)
+            }
+
             val playFromStart = {
-                sharedVm.cache(info)
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info))
+                overlayStartMs = 0L
+                playerOverlayVisible = true
+                playerController?.play()
+                Unit
             }
             val resumePlay = {
-                sharedVm.cache(info)
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info, resumeMs))
+                overlayStartMs = resumeMs
+                playerOverlayVisible = true
+                playerController?.play()
+                Unit
             }
             val toggleFav = {
                 scope.launch {
@@ -152,13 +253,29 @@ fun DetailRoute(
             val selectEpisode = { episode: EntryInfo ->
                 val startMs = episode.userData?.positionMs ?: 0L
                 sharedVm.cache(episode)
-                nav.navigate(Routes.player(protocol, endpointId, episode.id, episode, startMs))
+                overlayStartMs = startMs
+                playerOverlayVisible = true
+                scope.launch {
+                    val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+                    if (client != null) {
+                        playerController?.setItem(episode.id, client, startMs)
+                    }
+                }
+                Unit
             }
             val selectPage = { page: Int -> viewModel.selectEpisodePage(page) }
             val selectChild = { child: EntryInfo ->
                 val startMs = child.userData?.positionMs ?: 0L
                 sharedVm.cache(child)
-                nav.navigate(Routes.player(protocol, endpointId, child.id, child, startMs))
+                overlayStartMs = startMs
+                playerOverlayVisible = true
+                scope.launch {
+                    val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+                    if (client != null) {
+                        playerController?.setItem(child.id, client, startMs)
+                    }
+                }
+                Unit
             }
             val playSingleChild: () -> Unit = run {
                 val child = vmSingleChild
@@ -166,7 +283,14 @@ fun DetailRoute(
                     if (child != null) {
                         val startMs = child.userData?.positionMs ?: 0L
                         sharedVm.cache(child)
-                        nav.navigate(Routes.player(protocol, endpointId, child.id, child, startMs))
+                        overlayStartMs = startMs
+                        playerOverlayVisible = true
+                        scope.launch {
+                            val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+                            if (client != null) {
+                                playerController?.setItem(child.id, client, startMs)
+                            }
+                        }
                     }
                 }
             }
@@ -217,4 +341,21 @@ fun DetailRoute(
             }
         }
     }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun LoadingOverlay(onBack: () -> Unit) {
+    Box(
+        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Text("Loading…")
+        }
+    }
+    androidx.activity.compose.BackHandler { onBack() }
 }

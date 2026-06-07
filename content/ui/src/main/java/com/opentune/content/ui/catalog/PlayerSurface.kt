@@ -1,9 +1,13 @@
 package com.opentune.content.ui.catalog
 
 import android.util.Log
+import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,20 +33,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.configurePlayerViewDefaults
+import com.opentune.player.ui.tv.OpenTuneTvPlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val LOG_TAG = "OT_PlayerSurface"
 
 /**
- * A composable that renders a prepared ExoPlayer on a TV surface.
- * This is a lightweight wrapper around PlayerView that accepts an
- * already-prepared ExoPlayer from PlayerController.
+ * A composable that renders a prepared ExoPlayer on a TV surface with full DPAD/OSD support.
+ * Uses [OpenTuneTvPlayerView] for key handling (play/pause, seek, menu, OSD).
  */
 @UnstableApi
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -54,9 +59,13 @@ fun PlayerSurface(
 ) {
     val scope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
+    var isPaused by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
     var position by remember { mutableLongStateOf(exoPlayer.currentPosition) }
     var hasError by remember { mutableStateOf<String?>(null) }
+
+    // OSD controller state: 0 = hidden, >0 = visible
+    var controllerState by remember { mutableIntStateOf(0) }
 
     // Sync position and state from ExoPlayer
     DisposableEffect(exoPlayer) {
@@ -64,20 +73,15 @@ fun PlayerSurface(
             override fun onPlaybackStateChanged(state: Int) {
                 position = exoPlayer.currentPosition
                 isBuffering = state == Player.STATE_BUFFERING
-                val stateLabel = when (state) {
-                    Player.STATE_IDLE -> "IDLE"
-                    Player.STATE_BUFFERING -> "BUFFERING"
-                    Player.STATE_READY -> "READY"
-                    Player.STATE_ENDED -> "ENDED"
-                    else -> "UNKNOWN($state)"
-                }
-                Log.d(LOG_TAG, "stateChanged: $stateLabel")
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 position = exoPlayer.currentPosition
                 isPlaying = playing
-                Log.d(LOG_TAG, "isPlayingChanged: $playing, position=${exoPlayer.currentPosition}")
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                isPaused = !playWhenReady
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -86,11 +90,7 @@ fun PlayerSurface(
             }
         }
         exoPlayer.addListener(listener)
-        Log.d(LOG_TAG, "attached listener to ExoPlayer")
-        onDispose {
-            exoPlayer.removeListener(listener)
-            Log.d(LOG_TAG, "detached listener from ExoPlayer")
-        }
+        onDispose { exoPlayer.removeListener(listener) }
     }
 
     // Position tick during playback
@@ -119,17 +119,24 @@ fun PlayerSurface(
         exoPlayer.playWhenReady = true
     }
 
+    // Auto-hide OSD after 5s
+    LaunchedEffect(controllerState) {
+        if (controllerState != 0) {
+            delay(5_000)
+            controllerState = 0
+        }
+    }
+
     BackHandler {
         exoPlayer.pause()
         onBack()
     }
 
     Box(modifier = modifier.background(Color.Black)) {
-        // Render the video surface using Media3 PlayerView directly
-        AndroidView<PlayerView>(
+        // Video surface with DPAD key handling
+        AndroidView<OpenTuneTvPlayerView>(
             factory = { context ->
-                PlayerView(context).apply {
-                    useController = false
+                OpenTuneTvPlayerView(context).apply {
                     player = exoPlayer
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -139,17 +146,49 @@ fun PlayerSurface(
                 }
             },
             update = { view ->
-                view.setPlayer(exoPlayer)
+                if (view.player !== exoPlayer) view.player = exoPlayer
+                view.onBack = {
+                    when {
+                        controllerState != 0 -> controllerState = 0
+                        else -> onBack()
+                    }
+                }
+                view.onTransportKey = { isResume ->
+                    // Resume only refreshes timer if bar already visible
+                    if (!isResume || controllerState != 0) controllerState++
+                }
             },
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Buffering indicator
-        if (isBuffering && !isPlaying) {
+        // OSD controller bar
+        AnimatedVisibility(
+            visible = controllerState != 0 || isBuffering,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            PlaybackControllerBar(
+                position = position,
+                buffered = exoPlayer.bufferedPosition,
+                duration = exoPlayer.duration.coerceAtLeast(0L),
+                isPlaying = !isPaused,
+                onPlayPause = {
+                    isPaused = !isPaused
+                    controllerState++
+                },
+            )
+        }
+
+        // Buffering spinner
+        AnimatedVisibility(
+            visible = isBuffering,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
             CircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(48.dp),
+                modifier = Modifier.size(48.dp),
                 strokeWidth = 4.dp,
                 color = Color.White,
             )
@@ -164,9 +203,12 @@ fun PlayerSurface(
                 contentAlignment = Alignment.Center,
             ) {
                 Column {
-                    Text("Error: $err", color = Color.White)
-                    Button(onClick = onBack, modifier = Modifier.padding(top = 16.dp)) {
-                        Text("Back")
+                    androidx.tv.material3.Text("Error: $err", color = Color.White)
+                    androidx.tv.material3.Button(
+                        onClick = onBack,
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        androidx.tv.material3.Text("Back")
                     }
                 }
             }

@@ -1,6 +1,8 @@
 package com.opentune.content.ui.catalog
 
 import android.util.Log
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +43,7 @@ fun BrowseRoute(
     initialEntryInfo: EntryInfo,
     viewModel: BrowseViewModel,
     sharedVm: NavSharedViewModel,
+    playerController: PlayerController,
 ) {
     val location = initialEntryInfo.id
     val collectionType = initialEntryInfo.collectionType
@@ -93,6 +96,24 @@ fun BrowseRoute(
     }
 
     val c = client
+    val exoPlayer = playerController.exoPlayer
+
+    // Player overlay — full-screen when ExoPlayer is active
+    if (exoPlayer != null) {
+        Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            PlayerSurface(
+                exoPlayer = exoPlayer,
+                startMs = playerController.startMs,
+                onBack = {
+                    playerController.pause()
+                    playerController.release()
+                    Log.d(LOG_TAG, "player overlay: back → pause & release")
+                },
+            )
+        }
+        return
+    }
+
     when {
         client == null -> Text("Loading…")
         else -> BrowseScreen(
@@ -122,11 +143,8 @@ fun BrowseRoute(
                 nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
             },
             onOpenPlayer = { raw, startMs ->
-                // Navigate directly — PlayerRoute will resolve EntryInfo from cache
-                // For non-series entries, we need a basic EntryInfo
-                val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
-                sharedVm.cache(entry)
-                nav.navigate(Routes.player(protocol, endpointId, raw, entry, startMs ?: 0L))
+                val clientRef = c ?: return@BrowseScreen
+                playerController.setItem(raw, clientRef, startMs ?: 0L)
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
         )
