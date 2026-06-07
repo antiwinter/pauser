@@ -98,6 +98,22 @@ class PlayerController(
     val startMs: Long get() = _startMs
 
     /**
+     * How much content is currently buffered ahead of the current position,
+     * in milliseconds. Returns 0 when nothing is prepared.
+     */
+    val bufferedDurationMs: Long
+        get() {
+            val exo = _player
+            if (_currentSpec == null) return 0L
+            val pos = exo.currentPosition
+            val buf = exo.bufferedPosition
+            return maxOf(0L, buf - pos)
+        }
+
+    /** Last item URL that was set (for debugging). */
+    val currentItemRef: String? get() = _lastItemRef
+
+    /**
      * Set the item to play.
      *
      * - First call → prepare immediately (no debounce).

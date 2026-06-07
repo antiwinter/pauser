@@ -21,7 +21,9 @@
       "WebFetch(domain:exoplayer.dev)",
       "Bash(cd *)",
       "Bash(npx rollup *)",
-      "Skill(run)"
+      "Skill(run)",
+      "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\.claude\\\\plans')",
+      "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\code\\\\opentune\\\\.claude\\\\plans')"
     ],
     "additionalDirectories": [
       "/Users/warits/src/fongmi",

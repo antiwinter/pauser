@@ -9,9 +9,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,10 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DecoderCounters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -67,7 +74,13 @@ fun PlayerSurface(
     // OSD controller state: 0 = hidden, >0 = visible
     var controllerState by remember { mutableIntStateOf(0) }
 
-    // Sync position and state from ExoPlayer
+    // InfoOsd track info (tracked via Player + Analytics listeners)
+    var videoMime by remember { mutableStateOf<String?>(null) }
+    var videoDecoderName by remember { mutableStateOf<String?>(null) }
+    var audioMime by remember { mutableStateOf<String?>(null) }
+    var audioDecoderName by remember { mutableStateOf<String?>(null) }
+
+    // Sync position and state from ExoPlayer + track codec info
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -88,9 +101,61 @@ fun PlayerSurface(
                 hasError = error.message ?: "Playback error"
                 Log.e(LOG_TAG, "onPlayerError: ${error.message}")
             }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                var vm: String? = null
+                var am: String? = null
+                for (group in tracks.groups) {
+                    if (!group.isSelected) continue
+                    for (i in 0 until group.length) {
+                        if (!group.isTrackSelected(i)) continue
+                        val fmt = group.getTrackFormat(i)
+                        when (group.type) {
+                            C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
+                            C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
+                        }
+                        break
+                    }
+                }
+                videoMime = vm ?: videoMime
+                audioMime = am ?: audioMime
+            }
+        }
+        val analyticsListener = object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                videoDecoderName = decoderName
+            }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                audioDecoderName = decoderName
+            }
+
+            // For passthrough audio (e.g., EAC3 via HDMI), no decoder is initialized.
+            override fun onAudioEnabled(
+                eventTime: AnalyticsListener.EventTime,
+                decoderCounters: DecoderCounters,
+            ) {
+                if (audioDecoderName == null) {
+                    audioDecoderName = "passthrough"
+                }
+            }
         }
         exoPlayer.addListener(listener)
-        onDispose { exoPlayer.removeListener(listener) }
+        exoPlayer.addAnalyticsListener(analyticsListener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.removeAnalyticsListener(analyticsListener)
+        }
     }
 
     // Position tick during playback
@@ -154,12 +219,22 @@ fun PlayerSurface(
                     }
                 }
                 view.onTransportKey = { isResume ->
-                    // Resume only refreshes timer if bar already visible
                     if (!isResume || controllerState != 0) controllerState++
                 }
             },
             modifier = Modifier.fillMaxSize(),
         )
+
+        // InfoOsd — codec info at top when controller is visible
+        if (controllerState != 0) {
+            InfoOsdBar(
+                videoMime = videoMime,
+                videoDecoderName = videoDecoderName,
+                audioMime = audioMime,
+                audioDecoderName = audioDecoderName,
+                durationMs = exoPlayer.duration.coerceAtLeast(0L),
+            )
+        }
 
         // OSD controller bar
         AnimatedVisibility(
@@ -214,4 +289,70 @@ fun PlayerSurface(
             }
         }
     }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun InfoOsdBar(
+    videoMime: String?,
+    videoDecoderName: String?,
+    audioMime: String?,
+    audioDecoderName: String?,
+    durationMs: Long,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xCC000000))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (durationMs > 0) {
+                    Text(
+                        text = formatDuration(durationMs),
+                        color = Color(0xFFAAAAAA),
+                        fontSize = 14.sp,
+                    )
+                }
+                Text(
+                    text = trackLabel(videoMime, videoDecoderName),
+                    color = if (isTrackFailed(videoMime, videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    fontSize = 14.sp,
+                )
+                Text(
+                    text = trackLabel(audioMime, audioDecoderName),
+                    color = if (isTrackFailed(audioMime, audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    fontSize = 14.sp,
+                )
+            }
+        }
+    }
+}
+
+private fun trackLabel(mime: String?, decoderName: String?): String {
+    if (mime == null) return ""
+    val codec = mime.replace(Regex("^(?:video|audio)/"), "")
+    return if (decoderName == null || decoderName == "passthrough") {
+        if (decoderName == "passthrough") codec else "$codec (failed)"
+    } else codec
+}
+
+private fun isTrackFailed(mime: String?, decoderName: String?): Boolean =
+    mime != null && decoderName == null
+
+private fun formatDuration(ms: Long): String {
+    val totalSec = ms / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
+    else "$m:${s.toString().padStart(2, '0')}"
 }

@@ -2,10 +2,13 @@ package com.opentune.content.ui.catalog
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -219,6 +222,13 @@ fun DetailRoute(
         nav.popBackStack()
     }
 
+    // Controller status overlay (debug)
+    val pc = playerController
+    val isPrepared = pc?.isPrepared == true
+    val itemRef = pc?.currentItemRef ?: ""
+    val bufferedMs = pc?.bufferedDurationMs ?: 0L
+
+    Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
     when {
         vmError != null -> Text("Error: ${vmError}")
         vmLoading || loader == null || entryInfo == null -> Box(
@@ -358,6 +368,18 @@ fun DetailRoute(
                 else -> Text("Unsupported type: ${info.type}")
             }
         }
+    }
+
+    // Status text overlay (debug info)
+    androidx.tv.material3.Text(
+        text = "item=${itemRef.take(40)}  prepared=$isPrepared  buffered=${bufferedMs / 1000}s",
+        modifier = androidx.compose.ui.Modifier
+            .align(androidx.compose.ui.Alignment.BottomCenter)
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        color = androidx.compose.ui.graphics.Color.White,
+        fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp),
+    )
     }
 }
 
