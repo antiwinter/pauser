@@ -147,6 +147,7 @@ fun BrowseRoute(
             onOpenPlayer = { raw, startMs ->
                 val clientRef = c ?: return@BrowseScreen
                 playerController.setItem(raw, clientRef, startMs ?: 0L)
+                playerController.play()
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
             onOpenAudioUnsupported = { nav.navigate(Routes.AUDIO_UNSUPPORTED) },

@@ -20,7 +20,8 @@
       "WebFetch(domain:security.stackexchange.com)",
       "WebFetch(domain:exoplayer.dev)",
       "Bash(cd *)",
-      "Bash(npx rollup *)"
+      "Bash(npx rollup *)",
+      "Skill(run)"
     ],
     "additionalDirectories": [
       "/Users/warits/src/fongmi",
