@@ -21,11 +21,13 @@ import androidx.tv.material3.Text
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
+import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 import com.opentune.storage.decodeSeriesProgress
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,6 +72,7 @@ fun DetailRoute(
     var imageLoader by remember { mutableStateOf<coil3.ImageLoader?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
+    var initialEpisodeIndex by remember { mutableStateOf(0) }
 
     LaunchedEffect(protocol, endpointId) {
         val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
@@ -83,8 +86,9 @@ fun DetailRoute(
         val rawPosition = entryState?.positionMs ?: 0L
         val info = initialInfo
         val resolvedResumeMs = if (info?.type == "Series" && entryState != null) {
-            val (season) = decodeSeriesProgress(rawPosition)
+            val (season, episode) = decodeSeriesProgress(rawPosition)
             if (season > 0) viewModel.selectSeason(maxOf(0, season - 1))
+            if (episode > 0) initialEpisodeIndex = episode - 1
             rawPosition
         } else {
             rawPosition
@@ -178,6 +182,8 @@ fun DetailRoute(
     val loader = imageLoader
     val entryInfo = vmEntryInfo
     val ctrlExoPlayer = playerController?.exoPlayer
+    val vmMediaCodecs by (playerController?.mediaCodecs
+        ?: MutableStateFlow(emptyList<MediaCodecInfo>())).collectAsState()
 
     // Player overlay — full-screen when user presses Play
     if (playerOverlayVisible) {
@@ -301,6 +307,7 @@ fun DetailRoute(
                     titleLang = titleLang,
                     resumeMs = resumeMs,
                     isFavorite = isFavorite,
+                    mediaCodecs = vmMediaCodecs,
                     onResume = resumePlay,
                     onPlayFromStart = playFromStart,
                     onToggleFavorite = toggleFav,
@@ -316,6 +323,8 @@ fun DetailRoute(
                     totalEpisodes = vmTotalEpisodes,
                     episodePage = vmEpisodePage,
                     imageLoader = loader,
+                    mediaCodecs = vmMediaCodecs,
+                    initialEpisodeIndex = initialEpisodeIndex,
                     onResume = resumePlay,
                     onPlayFromStart = playFromStart,
                     onToggleFavorite = toggleFav,
@@ -331,6 +340,7 @@ fun DetailRoute(
                     children = vmDigipakChildren,
                     singleChild = vmSingleChild,
                     imageLoader = loader,
+                    mediaCodecs = vmMediaCodecs,
                     onResume = resumePlay,
                     onPlayFromStart = playFromStart,
                     onToggleFavorite = toggleFav,

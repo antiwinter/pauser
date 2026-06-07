@@ -147,6 +147,7 @@ fun BrowseRoute(
                 playerController.setItem(raw, clientRef, startMs ?: 0L)
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
+            onOpenAudioUnsupported = { nav.navigate(Routes.AUDIO_UNSUPPORTED) },
         )
     }
 }

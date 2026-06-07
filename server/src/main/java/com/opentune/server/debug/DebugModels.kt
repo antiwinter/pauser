@@ -55,10 +55,17 @@ data class EntryListDto(
 )
 
 @Serializable
+data class MediaCodecInfoDto(
+    val codec: String,
+    val bitDepth: Int? = null,
+)
+
+@Serializable
 data class PlaybackSpecDto(
     val url: String,
     val mimeType: String? = null,
     val headers: Map<String, String>,
+    val mediaCodecs: List<MediaCodecInfoDto> = emptyList(),
 )
 
 @Serializable

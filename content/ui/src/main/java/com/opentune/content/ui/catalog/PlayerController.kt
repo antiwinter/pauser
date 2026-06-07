@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.content.contract.EndpointClient
+import com.opentune.player.MediaCodecInfo
 import com.opentune.player.engine.OpenTuneExoPlayer
 import com.opentune.player.engine.toMediaSource
 import kotlinx.coroutines.CancellationException
@@ -61,9 +62,11 @@ class PlayerController(
     // Playback state tracking
     private var _listener: Player.Listener? = null
     private val _playbackState = MutableStateFlow<Int>(Player.STATE_IDLE)
+    private val _mediaCodecs = MutableStateFlow<List<MediaCodecInfo>>(emptyList())
 
     // State
     val playbackState: StateFlow<Int> = _playbackState.asStateFlow()
+    val mediaCodecs: StateFlow<List<MediaCodecInfo>> = _mediaCodecs.asStateFlow()
     val isPrepared: Boolean get() = _exoPlayer.value != null
     val exoPlayer: ExoPlayer? get() = _exoPlayer.value
     val startMs: Long get() = _startMs
@@ -205,6 +208,7 @@ class PlayerController(
             }
             _exoPlayer.value = null
             _currentSpec = null
+            _mediaCodecs.value = emptyList()
             _startMs = 0L
         }
     }
@@ -227,6 +231,7 @@ class PlayerController(
                 client.getPlaybackSpec(itemRef, startMs)
             }
             _currentSpec = spec
+            _mediaCodecs.value = spec.mediaCodecs
             _startMs = startMs
 
             val playerWithMeter = withContext(Dispatchers.Main) {

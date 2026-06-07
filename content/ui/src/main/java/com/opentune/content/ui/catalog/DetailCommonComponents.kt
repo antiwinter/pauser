@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -28,6 +30,7 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
+import com.opentune.player.MediaCodecInfo
 import java.io.File
 
 fun artImageModel(src: String?): Any? = when {
@@ -83,14 +86,21 @@ fun DetailBackdrop(
 @Composable
 fun DetailBadges(
     entryInfo: EntryInfo,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
 ) {
-    val resolution = heightToResolutionLabel(entryInfo.height)
+    val resolution = widthToResolutionLabel(entryInfo.width)
+    val videoCodec = mediaCodecs.firstOrNull()
+    val audioCodecs = mediaCodecs.drop(1)
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         entryInfo.communityRating?.let { Badge("★ ${"%.1f".format(it)}") }
         entryInfo.year?.let { Badge(it.toString()) }
         if (resolution.isNotEmpty()) Badge(resolution)
+        videoCodec?.bitDepth?.let { Badge("${it}bit") }
+        videoCodec?.let { Badge(it.codec.uppercase()) }
+        audioCodecs.forEach { Badge(it.codec.uppercase()) }
         entryInfo.officialRating?.let { Badge(it) }
+        entryInfo.genres?.take(3)?.forEach { Badge(it) }
     }
 }
 
@@ -119,16 +129,16 @@ fun DetailPlayButtons(
     }
 }
 
-/** Resolution label from height: SD/HD/FHD/QHD/4K/5K/8K */
-fun heightToResolutionLabel(height: Int?): String = when {
-    height == null -> ""
-    height <= 480 -> "SD"
-    height <= 720 -> "HD"
-    height <= 1080 -> "FHD"
-    height <= 1440 -> "QHD"
-    height <= 2160 -> "4K"
-    height <= 2880 -> "5K"
-    else -> "8K"
+/** Resolution label from width: SD/HD/FHD/WQHD/4K/5K/8K */
+fun widthToResolutionLabel(width: Int?): String = when {
+    width == null -> ""
+    width >= 7680 -> "8K"
+    width >= 5120 -> "5K"
+    width >= 3840 -> "4K"
+    width >= 2560 -> "WQHD"
+    width >= 1920 -> "FHD"
+    width >= 1280 -> "HD"
+    else -> "SD"
 }
 
 /** Overview text (snippet mode) */
@@ -188,10 +198,17 @@ fun SeasonSelector(
 fun EpisodeRow(
     episodes: List<EntryInfo>,
     imageLoader: ImageLoader,
+    initialScrollIndex: Int = 0,
     onPlayEpisode: (EntryInfo) -> Unit,
 ) {
     if (episodes.isEmpty()) return
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(episodes.size, initialScrollIndex) {
+        if (episodes.isNotEmpty() && initialScrollIndex > 0) {
+            listState.scrollToItem(initialScrollIndex.coerceAtMost(episodes.lastIndex))
+        }
+    }
+    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(episodes, key = { it.id }) { episode ->
             ThumbEntryComponent(
                 item = episode,

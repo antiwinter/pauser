@@ -22,6 +22,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
+import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.TitleLang
 import kotlinx.coroutines.launch
 
@@ -32,6 +33,7 @@ fun MovieOverviewScreen(
     titleLang: TitleLang,
     resumeMs: Long,
     isFavorite: Boolean,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -50,6 +52,7 @@ fun MovieOverviewScreen(
                     titleLang = titleLang,
                     resumeMs = resumeMs,
                     isFavorite = isFavorite,
+                    mediaCodecs = mediaCodecs,
                     onResume = onResume,
                     onPlayFromStart = onPlayFromStart,
                     onToggleFavorite = onToggleFavorite,
@@ -72,6 +75,7 @@ private fun MoviePage1(
     titleLang: TitleLang,
     resumeMs: Long,
     isFavorite: Boolean,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -108,7 +112,7 @@ private fun MoviePage1(
                 )
             }
 
-            DetailBadges(entryInfo)
+            DetailBadges(entryInfo, mediaCodecs)
             DetailPlayButtons(
                 resumeMs = resumeMs,
                 isFavorite = isFavorite,

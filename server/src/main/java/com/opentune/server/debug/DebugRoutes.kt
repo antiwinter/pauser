@@ -202,6 +202,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     url = spec.url,
                     mimeType = spec.mimeType,
                     headers = spec.headers,
+                    mediaCodecs = spec.mediaCodecs.map { MediaCodecInfoDto(codec = it.codec, bitDepth = it.bitDepth) },
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
             }

@@ -23,6 +23,7 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
+import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.TitleLang
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -38,6 +39,8 @@ fun SeriesOverviewScreen(
     totalEpisodes: Int,
     episodePage: Int,
     imageLoader: ImageLoader,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    initialEpisodeIndex: Int = 0,
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -64,6 +67,8 @@ fun SeriesOverviewScreen(
                     totalEpisodes = totalEpisodes,
                     episodePage = episodePage,
                     imageLoader = imageLoader,
+                    mediaCodecs = mediaCodecs,
+                    initialEpisodeIndex = initialEpisodeIndex,
                     onResume = onResume,
                     onPlayFromStart = onPlayFromStart,
                     onToggleFavorite = onToggleFavorite,
@@ -97,6 +102,8 @@ private fun SeriesPage1(
     totalEpisodes: Int,
     episodePage: Int,
     imageLoader: ImageLoader,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    initialEpisodeIndex: Int = 0,
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -136,7 +143,7 @@ private fun SeriesPage1(
                 )
             }
 
-            DetailBadges(entryInfo)
+            DetailBadges(entryInfo, mediaCodecs)
             DetailPlayButtons(
                 resumeMs = resumeMs,
                 isFavorite = isFavorite,
@@ -158,6 +165,7 @@ private fun SeriesPage1(
             EpisodeRow(
                 episodes = episodes,
                 imageLoader = imageLoader,
+                initialScrollIndex = initialEpisodeIndex,
                 onPlayEpisode = onSelectEpisode,
             )
 

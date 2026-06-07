@@ -23,6 +23,7 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
+import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.TitleLang
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -35,6 +36,7 @@ fun DigipakOverviewScreen(
     children: List<EntryInfo>,
     singleChild: EntryInfo?,
     imageLoader: ImageLoader,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -57,6 +59,7 @@ fun DigipakOverviewScreen(
                     singleChild = singleChild,
                     children = children,
                     imageLoader = imageLoader,
+                    mediaCodecs = mediaCodecs,
                     onPlaySingleChild = onPlaySingleChild,
                     onResume = onResume,
                     onPlayFromStart = onPlayFromStart,
@@ -84,6 +87,7 @@ private fun DigipakPage1(
     singleChild: EntryInfo?,
     children: List<EntryInfo>,
     imageLoader: ImageLoader,
+    mediaCodecs: List<MediaCodecInfo> = emptyList(),
     onPlaySingleChild: () -> Unit,
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
@@ -136,7 +140,7 @@ private fun DigipakPage1(
                     }
                 }
             } else {
-                DetailBadges(entryInfo)
+                DetailBadges(entryInfo, mediaCodecs)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
