@@ -1,6 +1,7 @@
 package com.opentune.content.ui.catalog
 
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -209,6 +210,13 @@ fun DetailRoute(
             })
         }
         return
+    }
+
+    // Intercept system back: release player BEFORE navigation so BrowseRoute
+    // never sees a stale ExoPlayer.
+    BackHandler(enabled = !playerOverlayVisible) {
+        playerController?.release()
+        nav.popBackStack()
     }
 
     when {
