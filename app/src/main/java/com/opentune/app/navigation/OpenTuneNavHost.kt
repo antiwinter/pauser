@@ -57,7 +57,7 @@ fun OpenTuneNavHost() {
                 is NavCommand.Player -> {
                     val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
-                    nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, entry))
+                    nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, entry, cmd.startMs))
                 }
                 is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))
                 is NavCommand.Search -> nav.navigate(Routes.search(cmd.provider, cmd.endpointId, cmd.scopeLocation))

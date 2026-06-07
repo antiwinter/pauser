@@ -126,7 +126,7 @@ fun BrowseRoute(
                 // For non-series entries, we need a basic EntryInfo
                 val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
                 sharedVm.cache(entry)
-                nav.navigate(Routes.player(protocol, endpointId, raw, entry))
+                nav.navigate(Routes.player(protocol, endpointId, raw, entry, startMs ?: 0L))
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
         )

@@ -55,17 +55,14 @@ fun PlayerRoute(
     var initialAudioTrackId by remember { mutableStateOf<String?>(null) }
     var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
-    // Resolve spec and prepare player
+    // Resolve player and prepare
     LaunchedEffect(protocol, endpointId, itemRefDecoded, startMs) {
         error = null
         try {
             val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
                 ?: throw IllegalStateException("No provider instance for $endpointId")
 
-            val spec = withContext(Dispatchers.IO) {
-                client.getPlaybackSpec(itemRefDecoded, startMs)
-            }
-
+            // Look up saved subtitle/audio track prefs from local storage
             val store = StorageBindingsHolder.get().entryStateStore
             val episodeState = store.get(protocol, endpointId, itemRefDecoded)
             val parentState = entryInfo?.parentId?.let { store.get(protocol, endpointId, it) }
@@ -81,7 +78,7 @@ fun PlayerRoute(
 
             Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/$endpointId/$itemRefDecoded subtitle=$initialSubtitleTrackId")
 
-            // Hand off to PlayerController
+            // Hand off to PlayerController (it resolves PlaybackSpec internally)
             // TODO: pass subtitle/audio track prefs to PlayerController
             playerController.prepare(itemRefDecoded, client, startMs)
         } catch (e: Exception) {
@@ -91,6 +88,7 @@ fun PlayerRoute(
     }
 
     val exo = playerController.exoPlayer
+    Log.d(PLAYER_ROUTE_LOG, "render: exoPlayer=${if (exo != null) "non-null" else "null"} error=$error")
     when {
         error != null -> {
             Column(modifier = Modifier.fillMaxSize().padding(48.dp)) {
@@ -110,7 +108,7 @@ fun PlayerRoute(
             )
         }
         else -> {
-            Text("Loading…", modifier = Modifier.padding(48.dp))
+            Text("Loading… (PlayerRoute, no ExoPlayer)", modifier = Modifier.padding(48.dp))
         }
     }
 }

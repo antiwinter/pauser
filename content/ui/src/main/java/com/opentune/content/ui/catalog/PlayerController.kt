@@ -2,6 +2,8 @@ package com.opentune.content.ui.catalog
 
 import android.app.Application
 import android.util.Log
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -34,12 +36,12 @@ class PlayerController(
 
     // Current playback context
     private var _currentSpec: PlaybackSpec? = null
-    private var _exoPlayer: ExoPlayer? = null
+    private var _exoPlayer: MutableState<ExoPlayer?> = mutableStateOf(null)
     private var _startMs: Long = 0L
 
     // State
-    val isPrepared: Boolean get() = _exoPlayer != null
-    val exoPlayer: ExoPlayer? get() = _exoPlayer
+    val isPrepared: Boolean get() = _exoPlayer.value != null
+    val exoPlayer: ExoPlayer? get() = _exoPlayer.value
     val startMs: Long get() = _startMs
 
     /**
@@ -63,11 +65,11 @@ class PlayerController(
         val playerWithMeter = withContext(Dispatchers.Main) {
             OpenTuneExoPlayer.createForBundledSources(appContext)
         }
-        _exoPlayer = playerWithMeter.player
+        _exoPlayer.value = playerWithMeter.player
 
         // Prepare without playing — buffers ~5 minutes of data
         withContext(Dispatchers.Main) {
-            val exo = _exoPlayer!!
+            val exo = _exoPlayer.value!!
             exo.stop()
             exo.setMediaSource(spec.toMediaSource(appContext))
             exo.prepare()
@@ -77,7 +79,7 @@ class PlayerController(
 
     /** Start playback (playWhenReady = true). */
     fun play() {
-        _exoPlayer?.let { exo ->
+        _exoPlayer.value?.let { exo ->
             if (!exo.playWhenReady) {
                 exo.playWhenReady = true
                 Log.d(LOG_TAG, "play: playWhenReady=true")
@@ -87,7 +89,7 @@ class PlayerController(
 
     /** Pause playback (playWhenReady = false). */
     fun pause() {
-        _exoPlayer?.let { exo ->
+        _exoPlayer.value?.let { exo ->
             if (exo.playWhenReady) {
                 exo.playWhenReady = false
                 Log.d(LOG_TAG, "pause: playWhenReady=false")
@@ -97,24 +99,24 @@ class PlayerController(
 
     /** Seek to position. */
     fun seekTo(positionMs: Long) {
-        _exoPlayer?.seekTo(positionMs)
+        _exoPlayer.value?.seekTo(positionMs)
     }
 
     /** Get current position. */
-    fun currentPosition(): Long = _exoPlayer?.currentPosition ?: 0L
+    fun currentPosition(): Long = _exoPlayer.value?.currentPosition ?: 0L
 
     /** Get duration. */
-    fun duration(): Long = _exoPlayer?.duration ?: 0L
+    fun duration(): Long = _exoPlayer.value?.duration ?: 0L
 
     /** Check if currently playing. */
-    fun isPlaying(): Boolean = _exoPlayer?.isPlaying == true
+    fun isPlaying(): Boolean = _exoPlayer.value?.isPlaying == true
 
     /** Check if buffering. */
-    fun isBuffering(): Boolean = _exoPlayer?.playbackState == androidx.media3.common.Player.STATE_BUFFERING
+    fun isBuffering(): Boolean = _exoPlayer.value?.playbackState == androidx.media3.common.Player.STATE_BUFFERING
 
     /** Release the player. */
     fun release() {
-        val exo = _exoPlayer
+        val exo = _exoPlayer.value
         if (exo != null) {
             viewModelScope.launch {
                 withContext(Dispatchers.Main) {
@@ -122,7 +124,7 @@ class PlayerController(
                 }
                 Log.d(LOG_TAG, "release: ExoPlayer released")
             }
-            _exoPlayer = null
+            _exoPlayer.value = null
             _currentSpec = null
             _startMs = 0L
         }

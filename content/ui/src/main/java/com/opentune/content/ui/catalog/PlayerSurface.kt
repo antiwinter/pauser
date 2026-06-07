@@ -1,5 +1,6 @@
 package com.opentune.content.ui.catalog
 
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -35,6 +36,8 @@ import com.opentune.player.ui.configurePlayerViewDefaults
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private const val LOG_TAG = "OT_PlayerSurface"
+
 /**
  * A composable that renders a prepared ExoPlayer on a TV surface.
  * This is a lightweight wrapper around PlayerView that accepts an
@@ -61,19 +64,33 @@ fun PlayerSurface(
             override fun onPlaybackStateChanged(state: Int) {
                 position = exoPlayer.currentPosition
                 isBuffering = state == Player.STATE_BUFFERING
+                val stateLabel = when (state) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($state)"
+                }
+                Log.d(LOG_TAG, "stateChanged: $stateLabel")
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 position = exoPlayer.currentPosition
                 isPlaying = playing
+                Log.d(LOG_TAG, "isPlayingChanged: $playing, position=${exoPlayer.currentPosition}")
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 hasError = error.message ?: "Playback error"
+                Log.e(LOG_TAG, "onPlayerError: ${error.message}")
             }
         }
         exoPlayer.addListener(listener)
-        onDispose { exoPlayer.removeListener(listener) }
+        Log.d(LOG_TAG, "attached listener to ExoPlayer")
+        onDispose {
+            exoPlayer.removeListener(listener)
+            Log.d(LOG_TAG, "detached listener from ExoPlayer")
+        }
     }
 
     // Position tick during playback
@@ -98,6 +115,7 @@ fun PlayerSurface(
 
     // Start playback
     LaunchedEffect(exoPlayer) {
+        Log.d(LOG_TAG, "setting playWhenReady=true")
         exoPlayer.playWhenReady = true
     }
 

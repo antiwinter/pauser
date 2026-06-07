@@ -70,7 +70,7 @@ fun SearchRoute(
                 onOpenPlayer = { raw, startMs ->
                     val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
                     sharedVm.cache(entry)
-                    nav.navigate(Routes.player(protocol, endpointId, raw, entry))
+                    nav.navigate(Routes.player(protocol, endpointId, raw, entry, startMs ?: 0L))
                 },
             )
         }

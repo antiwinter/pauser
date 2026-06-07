@@ -131,7 +131,7 @@ fun DetailRoute(
             }
             val resumePlay = {
                 sharedVm.cache(info)
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info))
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info, resumeMs))
             }
             val toggleFav = {
                 scope.launch {
@@ -152,13 +152,13 @@ fun DetailRoute(
             val selectEpisode = { episode: EntryInfo ->
                 val startMs = episode.userData?.positionMs ?: 0L
                 sharedVm.cache(episode)
-                nav.navigate(Routes.player(protocol, endpointId, episode.id, episode))
+                nav.navigate(Routes.player(protocol, endpointId, episode.id, episode, startMs))
             }
             val selectPage = { page: Int -> viewModel.selectEpisodePage(page) }
             val selectChild = { child: EntryInfo ->
                 val startMs = child.userData?.positionMs ?: 0L
                 sharedVm.cache(child)
-                nav.navigate(Routes.player(protocol, endpointId, child.id, child))
+                nav.navigate(Routes.player(protocol, endpointId, child.id, child, startMs))
             }
             val playSingleChild: () -> Unit = run {
                 val child = vmSingleChild
@@ -166,7 +166,7 @@ fun DetailRoute(
                     if (child != null) {
                         val startMs = child.userData?.positionMs ?: 0L
                         sharedVm.cache(child)
-                        nav.navigate(Routes.player(protocol, endpointId, child.id, child))
+                        nav.navigate(Routes.player(protocol, endpointId, child.id, child, startMs))
                     }
                 }
             }
