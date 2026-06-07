@@ -21,6 +21,8 @@ dependencies {
     api(project(":proxy:contract"))
     implementation(project(":storage"))
     implementation(project(":player"))
+    implementation(libs.media3.ui)
+    implementation(libs.media3.exoplayer)
     implementation(project(":image-viewer"))
     implementation(project(":server"))
     implementation(platform(libs.androidx.compose.bom))

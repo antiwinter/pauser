@@ -16,8 +16,8 @@ object Routes {
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
     const val BROWSE = "browse/{provider}/{endpointId}/{id}"
-    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{infoJson}"
-    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{infoJson}"
+    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{id}"
+    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{id}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
@@ -29,10 +29,10 @@ object Routes {
         else "provider_edit/$protocol"
     fun browse(protocol: String, endpointId: String, entry: EntryInfo) =
         "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
-    fun detail(protocol: String, endpointId: String, itemRefRaw: String, infoJson: String? = null) =
-        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(infoJson ?: "", UrlCharset)}"
-    fun player(protocol: String, endpointId: String, itemRefRaw: String, startMs: Long, info: EntryInfo? = null) =
-        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs/${URLEncoder.encode(info?.toJson() ?: "", UrlCharset)}"
+    fun detail(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
+        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
+    fun player(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
+        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
     fun search(protocol: String, endpointId: String, scopeLocationRaw: String) =
         "search/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
     fun imageViewer(protocol: String, endpointId: String, itemRefRaw: String) =

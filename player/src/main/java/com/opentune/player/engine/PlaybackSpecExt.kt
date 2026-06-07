@@ -10,7 +10,7 @@ import com.opentune.player.PlaybackSpec
 import okhttp3.OkHttpClient
 
 @UnstableApi
-internal fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
+fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
     fun headersInterceptor() = okhttp3.Interceptor { chain ->
         val req = chain.request().newBuilder().apply {
             headers.forEach { (k, v) -> header(k, v) }

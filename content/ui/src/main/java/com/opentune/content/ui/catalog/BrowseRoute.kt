@@ -17,7 +17,6 @@ import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.QueryOptions
 import com.opentune.content.ui.Routes
-import com.opentune.content.ui.toJson
 import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 
@@ -118,8 +117,17 @@ fun BrowseRoute(
                 sharedVm.cache(folderEntry)
                 nav.navigate(Routes.browse(protocol, endpointId, folderEntry))
             },
-            onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
-            onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },
+            onOpenDetail = { item ->
+                sharedVm.cache(item)
+                nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
+            },
+            onOpenPlayer = { raw, startMs ->
+                // Navigate directly — PlayerRoute will resolve EntryInfo from cache
+                // For non-series entries, we need a basic EntryInfo
+                val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
+                sharedVm.cache(entry)
+                nav.navigate(Routes.player(protocol, endpointId, raw, entry))
+            },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
         )
     }

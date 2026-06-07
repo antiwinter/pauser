@@ -1,5 +1,6 @@
 package com.opentune.app.navigation
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -10,6 +11,7 @@ import com.opentune.app.ui.home.HomeRoute
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.Routes
 import com.opentune.content.ui.catalog.NavSharedViewModel
+import com.opentune.content.ui.catalog.PlayerController
 import com.opentune.content.ui.contentRoutes
 import com.opentune.proxy.ui.ProxyRoutes
 import com.opentune.proxy.ui.proxyRoutes
@@ -20,6 +22,7 @@ import com.opentune.server.debug.NavigationBridge
 fun OpenTuneNavHost() {
     val nav = rememberNavController()
     val sharedVm: NavSharedViewModel = viewModel()
+    val playerController: PlayerController = viewModel()
 
     fun cacheAndBrowse(
         provider: String,
@@ -46,8 +49,16 @@ fun OpenTuneNavHost() {
                     )
                     cacheAndBrowse(cmd.provider, cmd.endpointId, entry)
                 }
-                is NavCommand.Detail -> nav.navigate(Routes.detail(cmd.provider, cmd.endpointId, cmd.itemRef))
-                is NavCommand.Player -> nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, cmd.startMs))
+                is NavCommand.Detail -> {
+                    val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
+                    sharedVm.cache(entry)
+                    nav.navigate(Routes.detail(cmd.provider, cmd.endpointId, cmd.itemRef, entry))
+                }
+                is NavCommand.Player -> {
+                    val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
+                    sharedVm.cache(entry)
+                    nav.navigate(Routes.player(cmd.provider, cmd.endpointId, cmd.itemRef, entry))
+                }
                 is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))
                 is NavCommand.Search -> nav.navigate(Routes.search(cmd.provider, cmd.endpointId, cmd.scopeLocation))
             }
@@ -67,7 +78,7 @@ fun OpenTuneNavHost() {
                 onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
             )
         }
-        contentRoutes(nav, sharedVm)
+        contentRoutes(nav, sharedVm, playerController)
         proxyRoutes(nav)
     }
 }

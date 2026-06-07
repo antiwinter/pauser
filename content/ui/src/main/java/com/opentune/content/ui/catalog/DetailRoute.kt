@@ -1,30 +1,27 @@
 package com.opentune.content.ui.catalog
-import com.opentune.content.contract.EndpointClientRegistryHolder
-import com.opentune.storage.StorageBindingsHolder
 
 import android.util.Log
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil3.ImageLoader
-import com.opentune.content.ui.Routes
+import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.content.contract.EntryInfo
 import com.opentune.storage.EntryStateKey
+import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 import com.opentune.storage.decodeSeriesProgress
-import com.opentune.content.contract.EntryInfo
+import com.opentune.content.ui.Routes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +36,8 @@ fun DetailRoute(
     endpointId: String,
     itemRefEncoded: String,
     initialInfo: EntryInfo? = null,
+    sharedVm: NavSharedViewModel,
+    viewModel: DetailViewModel,
 ) {
     val itemRefDecoded = remember(itemRefEncoded) { CatalogNav.decodeSegment(itemRefEncoded) }
     val scope = rememberCoroutineScope()
@@ -48,129 +47,91 @@ fun DetailRoute(
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    var entryInfo by remember { mutableStateOf<EntryInfo?>(initialInfo) }
+    // Observe ViewModel state
+    val vmEntryInfo by viewModel.entryInfo.collectAsState()
+    val vmSeasons by viewModel.seasons.collectAsState()
+    val vmSelectedSeasonIndex by viewModel.selectedSeasonIndex.collectAsState()
+    val vmEpisodes by viewModel.episodes.collectAsState()
+    val vmTotalEpisodes by viewModel.totalEpisodes.collectAsState()
+    val vmEpisodePage by viewModel.episodePage.collectAsState()
+    val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
+    val vmSingleChild by viewModel.singleChild.collectAsState()
+    val vmLoading by viewModel.loading.collectAsState()
+    val vmError by viewModel.error.collectAsState()
+
+    // Resolve image loader + entry state (favorite, resume position)
+    var imageLoader by remember { mutableStateOf<coil3.ImageLoader?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
     var resumeMs by remember { mutableStateOf(0L) }
-    var loading by remember { mutableStateOf(true) }
-    var imageLoader by remember { mutableStateOf<ImageLoader?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
 
-    // Series/season state
-    var seasons by remember { mutableStateOf<List<EntryInfo>?>(null) }
-    var selectedSeasonIndex by remember { mutableIntStateOf(0) }
-    var episodes by remember { mutableStateOf<List<EntryInfo>>(emptyList()) }
-    var totalEpisodes by remember { mutableIntStateOf(0) }
-    var episodePage by remember { mutableIntStateOf(0) }
-
-    // Digipak children state
-    val digipakChildren = remember { mutableStateListOf<EntryInfo>() }
-    var singleChild by remember { mutableStateOf<EntryInfo?>(null) }
-
-    // Load entry info + children
-    LaunchedEffect(protocol, endpointId, itemRefDecoded) {
-        loading = true
-        error = null
-        seasons = null
-        selectedSeasonIndex = 0
-        episodes = emptyList()
-        episodePage = 0
-        digipakChildren.clear()
-        singleChild = null
-        try {
-            val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
-                ?: throw IllegalStateException("No provider instance for $endpointId")
-            imageLoader = client.imageLoader
-            val entryState = withContext(Dispatchers.IO) {
-                StorageBindingsHolder.get().entryStateStore.get(stateKey)
-            }
-            isFavorite = entryState?.isFavorite ?: false
-
-            // Resolve resume: for series, the positionMs may be packed (season, episode)
-            val rawPosition = entryState?.positionMs ?: 0L
-            val info = initialInfo ?: run {
-                val result = withContext(Dispatchers.IO) {
-                    client.listEntry(itemRefDecoded, 0, 1)
-                }
-                result.items.firstOrNull()
-            }
-
-            // For series, resolve which season/episode the user was on
-            val resolvedResumeMs = if (info?.type == "Series" && entryState != null) {
-                val (season, episode) = decodeSeriesProgress(rawPosition)
-                if (season > 0) {
-                    selectedSeasonIndex = maxOf(0, season - 1)
-                }
-                rawPosition
-            } else {
-                rawPosition
-            }
-            resumeMs = resolvedResumeMs
-
-            entryInfo = info?.let { ArtUrlInjector.applyInfo(it, protocol) }
-
-            // Fetch children based on type
-            when (entryInfo?.type) {
-                "Series" -> {
-                    val result = withContext(Dispatchers.IO) {
-                        client.listEntry(itemRefDecoded, 0, 500)
-                    }
-                    seasons = ArtUrlInjector.apply(result.items, protocol, endpointId)
-                }
-                "Digipak" -> {
-                    val childCount = entryInfo?.childCount ?: 0
-                    val result = withContext(Dispatchers.IO) {
-                        client.listEntry(itemRefDecoded, 0, maxOf(childCount, 1))
-                    }
-                    val filtered = result.items
-                    if (childCount <= 1 && filtered.isNotEmpty()) {
-                        singleChild = filtered.first()
-                    } else {
-                        digipakChildren.addAll(
-                            ArtUrlInjector.apply(filtered, protocol, endpointId, ArtType.Thumb)
-                        )
-                    }
-                }
-                else -> {}
-            }
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "detail load", e)
-            error = e.message
-        } finally {
-            loading = false
+    LaunchedEffect(protocol, endpointId) {
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+            ?: throw IllegalStateException("No provider instance for $endpointId")
+        imageLoader = client.imageLoader
+        val entryState = withContext(Dispatchers.IO) {
+            StorageBindingsHolder.get().entryStateStore.get(stateKey)
         }
+        isFavorite = entryState?.isFavorite ?: false
+
+        val rawPosition = entryState?.positionMs ?: 0L
+        val info = initialInfo
+        val resolvedResumeMs = if (info?.type == "Series" && entryState != null) {
+            val (season) = decodeSeriesProgress(rawPosition)
+            if (season > 0) viewModel.selectSeason(maxOf(0, season - 1))
+            rawPosition
+        } else {
+            rawPosition
+        }
+        resumeMs = resolvedResumeMs
     }
 
-    // Load episodes when season changes (Series)
-    LaunchedEffect(seasons, selectedSeasonIndex, episodePage) {
-        val seasonList = seasons ?: return@LaunchedEffect
-        val season = seasonList.getOrNull(selectedSeasonIndex) ?: return@LaunchedEffect
-        try {
-            val inst = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
-            val result = withContext(Dispatchers.IO) {
-                inst.listEntry(season.id, episodePage * 50, 50)
-            }
-            episodes = ArtUrlInjector.apply(result.items, protocol, endpointId, ArtType.Thumb)
-                .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
-            totalEpisodes = result.totalCount
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "episodes load", e)
+    // Initialize ViewModel and trigger loads
+    LaunchedEffect(protocol, endpointId, itemRefDecoded) {
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        viewModel.initialize(client, protocol, endpointId)
+
+        // Set cached info immediately so the screen doesn't show a spinner
+        if (initialInfo != null && vmEntryInfo == null) {
+            viewModel.setEntryInfo(ArtUrlInjector.applyInfo(initialInfo, protocol))
+            Log.d(LOG_TAG, "Using cached EntryInfo: type=${initialInfo.type}")
         }
+        // Always fetch fresh data — replaces placeholder with real info
+        viewModel.loadEntry()
+    }
+
+    // Load seasons when entry is a Series
+    LaunchedEffect(vmEntryInfo?.type) {
+        if (vmEntryInfo?.type == "Series") viewModel.loadSeasons()
+    }
+
+    // Load digipak children when entry is a Digipak
+    LaunchedEffect(vmEntryInfo?.type) {
+        if (vmEntryInfo?.type == "Digipak") viewModel.loadDigipakChildren()
+    }
+
+    // Load episodes when season changes
+    LaunchedEffect(vmSeasons, vmSelectedSeasonIndex, vmEpisodePage) {
+        if (vmSeasons.isNotEmpty()) viewModel.loadEpisodes()
     }
 
     val loader = imageLoader
+    val entryInfo = vmEntryInfo
+    Log.d(LOG_TAG, "render state: error=$vmError loading=$vmLoading entryInfo=${entryInfo?.type} loader=$loader")
     when {
-        error != null -> Text("Error: $error")
-        loading || loader == null || entryInfo == null -> Box(
+        vmError != null -> Text("Error: ${vmError}")
+        vmLoading || loader == null || entryInfo == null -> Box(
             modifier = androidx.compose.ui.Modifier.fillMaxSize(),
             contentAlignment = androidx.compose.ui.Alignment.Center,
         ) { CircularProgressIndicator() }
         else -> {
-            val info = entryInfo!!
+            val info = entryInfo
             val playFromStart = {
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, 0L, info))
+                sharedVm.cache(info)
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info))
             }
             val resumePlay = {
-                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, resumeMs, info))
+                sharedVm.cache(info)
+                nav.navigate(Routes.player(protocol, endpointId, itemRefDecoded, info))
             }
             val toggleFav = {
                 scope.launch {
@@ -187,22 +148,25 @@ fun DetailRoute(
                 }
                 Unit
             }
-            val selectSeason = { index: Int -> selectedSeasonIndex = index; episodePage = 0 }
+            val selectSeason = { index: Int -> viewModel.selectSeason(index) }
             val selectEpisode = { episode: EntryInfo ->
                 val startMs = episode.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, episode.id, startMs, episode))
+                sharedVm.cache(episode)
+                nav.navigate(Routes.player(protocol, endpointId, episode.id, episode))
             }
-            val selectPage = { page: Int -> episodePage = page }
+            val selectPage = { page: Int -> viewModel.selectEpisodePage(page) }
             val selectChild = { child: EntryInfo ->
                 val startMs = child.userData?.positionMs ?: 0L
-                nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
+                sharedVm.cache(child)
+                nav.navigate(Routes.player(protocol, endpointId, child.id, child))
             }
             val playSingleChild: () -> Unit = run {
-                val child = singleChild
+                val child = vmSingleChild
                 {
                     if (child != null) {
                         val startMs = child.userData?.positionMs ?: 0L
-                        nav.navigate(Routes.player(protocol, endpointId, child.id, startMs, child))
+                        sharedVm.cache(child)
+                        nav.navigate(Routes.player(protocol, endpointId, child.id, child))
                     }
                 }
             }
@@ -222,11 +186,11 @@ fun DetailRoute(
                     titleLang = titleLang,
                     resumeMs = resumeMs,
                     isFavorite = isFavorite,
-                    seasons = seasons ?: emptyList(),
-                    selectedSeasonIndex = selectedSeasonIndex,
-                    episodes = episodes,
-                    totalEpisodes = totalEpisodes,
-                    episodePage = episodePage,
+                    seasons = vmSeasons,
+                    selectedSeasonIndex = vmSelectedSeasonIndex,
+                    episodes = vmEpisodes,
+                    totalEpisodes = vmTotalEpisodes,
+                    episodePage = vmEpisodePage,
                     imageLoader = loader,
                     onResume = resumePlay,
                     onPlayFromStart = playFromStart,
@@ -240,8 +204,8 @@ fun DetailRoute(
                     titleLang = titleLang,
                     resumeMs = resumeMs,
                     isFavorite = isFavorite,
-                    children = digipakChildren.toList(),
-                    singleChild = singleChild,
+                    children = vmDigipakChildren,
+                    singleChild = vmSingleChild,
                     imageLoader = loader,
                     onResume = resumePlay,
                     onPlayFromStart = playFromStart,

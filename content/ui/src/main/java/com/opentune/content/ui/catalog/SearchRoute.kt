@@ -14,7 +14,6 @@ import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.ui.Routes
-import com.opentune.content.ui.toJson
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.SearchQuery
@@ -27,6 +26,7 @@ fun SearchRoute(
     protocol: String,
     endpointId: String,
     scopeLocationEncoded: String,
+    sharedVm: NavSharedViewModel,
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
     var client by remember { mutableStateOf<EndpointClient?>(null) }
@@ -59,9 +59,19 @@ fun SearchRoute(
                 },
                 titleLang = titleLang,
                 onBack = { nav.popBackStack() },
-                onOpenBrowse = { entry -> nav.navigate(Routes.browse(protocol, endpointId, entry)) },
-                onOpenDetail = { item -> nav.navigate(Routes.detail(protocol, endpointId, item.id, item.toJson())) },
-                onOpenPlayer = { raw, startMs -> nav.navigate(Routes.player(protocol, endpointId, raw, startMs ?: 0L)) },
+                onOpenBrowse = { entry ->
+                    sharedVm.cache(entry)
+                    nav.navigate(Routes.browse(protocol, endpointId, entry))
+                },
+                onOpenDetail = { item ->
+                    sharedVm.cache(item)
+                    nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
+                },
+                onOpenPlayer = { raw, startMs ->
+                    val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
+                    sharedVm.cache(entry)
+                    nav.navigate(Routes.player(protocol, endpointId, raw, entry))
+                },
             )
         }
     }

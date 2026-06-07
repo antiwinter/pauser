@@ -16,6 +16,7 @@ object OpenTuneExoPlayer {
      * ExoPlayer for provider-supplied [androidx.media3.exoplayer.source.MediaSource] instances
      * (each source bundles its own [androidx.media3.datasource.DataSource]).
      */
+    @JvmStatic
     fun createForBundledSources(
         context: Context,
         preBufferMs: Int = AppPrefsStore.DEFAULT_PRE_BUFFER_MS,

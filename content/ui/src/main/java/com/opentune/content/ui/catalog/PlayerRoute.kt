@@ -17,12 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
-import com.opentune.player.LocalPlaybackStorageContext
-import com.opentune.player.OpenTunePlayer
-import com.opentune.player.PlaybackStorageContext
 import com.opentune.content.contract.EntryInfo
-import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +25,10 @@ import kotlinx.coroutines.withContext
 
 private const val PLAYER_ROUTE_LOG = "OT_PlayerRoute"
 
+/**
+ * Thin PlayerRoute — resolves PlaybackSpec, hands off to PlayerController.
+ * The PlayerController owns the ExoPlayer; this route just renders the surface.
+ */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlayerRoute(
@@ -38,6 +37,7 @@ fun PlayerRoute(
     itemRefDecoded: String,
     startMs: Long,
     entryInfo: EntryInfo? = null,
+    playerController: PlayerController,
     onExit: () -> Unit,
 ) {
     val stateKey = remember(protocol, endpointId, itemRefDecoded) {
@@ -50,40 +50,47 @@ fun PlayerRoute(
         entryInfo?.seriesId?.let { EntryStateKey(protocol, endpointId, it) }
     }
 
-    var spec by remember { mutableStateOf<PlaybackSpec?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var initialSubtitleTrackId by remember { mutableStateOf<String?>(null) }
     var initialAudioTrackId by remember { mutableStateOf<String?>(null) }
     var initialSubtitlePrefs by remember { mutableStateOf(SubtitlePrefs()) }
 
+    // Resolve spec and prepare player
     LaunchedEffect(protocol, endpointId, itemRefDecoded, startMs) {
-        spec = null
         error = null
         try {
-            withContext(Dispatchers.IO) {
-                val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
-                    ?: throw IllegalStateException("No provider instance for $endpointId")
-                val resolvedSpec = client.getPlaybackSpec(itemRefDecoded, startMs)
-                val store = StorageBindingsHolder.get().entryStateStore
-                val episodeState = store.get(protocol, endpointId, itemRefDecoded)
-                val parentState = entryInfo?.parentId?.let { store.get(protocol, endpointId, it) }
-                val seriesState = entryInfo?.seriesId?.let { store.get(protocol, endpointId, it) }
-                val subtitlePrefs = StorageBindingsHolder.get().appConfigStore.loadSubtitlePrefs()
-                initialSubtitleTrackId = episodeState?.selectedSubtitleTrackId
-                    ?: parentState?.selectedSubtitleTrackId
-                    ?: seriesState?.selectedSubtitleTrackId
-                initialAudioTrackId = episodeState?.selectedAudioTrackId
-                    ?: parentState?.selectedAudioTrackId
-                    ?: seriesState?.selectedAudioTrackId
-                initialSubtitlePrefs = subtitlePrefs
-                Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/${endpointId}/${itemRefDecoded} subtitleTrackId=$initialSubtitleTrackId audioTrackId=$initialAudioTrackId")
-                spec = resolvedSpec
+            val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+                ?: throw IllegalStateException("No provider instance for $endpointId")
+
+            val spec = withContext(Dispatchers.IO) {
+                client.getPlaybackSpec(itemRefDecoded, startMs)
             }
+
+            val store = StorageBindingsHolder.get().entryStateStore
+            val episodeState = store.get(protocol, endpointId, itemRefDecoded)
+            val parentState = entryInfo?.parentId?.let { store.get(protocol, endpointId, it) }
+            val seriesState = entryInfo?.seriesId?.let { store.get(protocol, endpointId, it) }
+            val subtitlePrefs = StorageBindingsHolder.get().appConfigStore.loadSubtitlePrefs()
+            initialSubtitleTrackId = episodeState?.selectedSubtitleTrackId
+                ?: parentState?.selectedSubtitleTrackId
+                ?: seriesState?.selectedSubtitleTrackId
+            initialAudioTrackId = episodeState?.selectedAudioTrackId
+                ?: parentState?.selectedAudioTrackId
+                ?: seriesState?.selectedAudioTrackId
+            initialSubtitlePrefs = subtitlePrefs
+
+            Log.d(PLAYER_ROUTE_LOG, "PlayerRoute: key=$protocol/$endpointId/$itemRefDecoded subtitle=$initialSubtitleTrackId")
+
+            // Hand off to PlayerController
+            // TODO: pass subtitle/audio track prefs to PlayerController
+            playerController.prepare(itemRefDecoded, client, startMs)
         } catch (e: Exception) {
+            Log.e(PLAYER_ROUTE_LOG, "PlayerRoute error", e)
             error = e.message ?: "Playback failed"
         }
     }
 
+    val exo = playerController.exoPlayer
     when {
         error != null -> {
             Column(modifier = Modifier.fillMaxSize().padding(48.dp)) {
@@ -91,33 +98,19 @@ fun PlayerRoute(
                 Button(onClick = onExit) { Text("Back") }
             }
         }
-        spec != null -> {
-            CompositionLocalProvider(
-                LocalPlaybackStorageContext provides PlaybackStorageContext(
-                    entryStateStore = StorageBindingsHolder.get().entryStateStore,
-                    entryStateKey = stateKey,
-                    parentStateKey = parentKey,
-                    seriesStateKey = seriesKey,
-                    seriesSeasonNumber = entryInfo?.seasonNumber,
-                    seriesEpisodeNumber = entryInfo?.indexNumber,
-                    appConfigStore = StorageBindingsHolder.get().appConfigStore,
-                )
-            ) {
-                PlayerShell {
-                    OpenTunePlayer(
-                        spec = spec!!,
-                        startMs = startMs,
-                        onExit = onExit,
-                        initialSubtitleTrackId = initialSubtitleTrackId,
-                        initialAudioTrackId = initialAudioTrackId,
-                        initialSubtitleOffsetFraction = initialSubtitlePrefs.offsetFraction,
-                        initialSubtitleSizeScale = initialSubtitlePrefs.sizeScale,
-                    )
-                }
-            }
+        exo != null -> {
+            PlayerSurface(
+                exoPlayer = exo,
+                startMs = startMs,
+                onBack = {
+                    playerController.release()
+                    onExit()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         else -> {
-            Text("Loading\u2026", modifier = Modifier.padding(48.dp))
+            Text("Loading…", modifier = Modifier.padding(48.dp))
         }
     }
 }

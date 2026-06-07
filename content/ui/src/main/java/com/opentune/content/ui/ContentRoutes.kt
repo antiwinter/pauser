@@ -11,7 +11,9 @@ import com.opentune.content.ui.catalog.BrowseRoute
 import com.opentune.content.ui.catalog.BrowseViewModel
 import com.opentune.content.ui.catalog.CatalogNav
 import com.opentune.content.ui.catalog.NavSharedViewModel
+import com.opentune.content.ui.catalog.PlayerController
 import com.opentune.content.ui.catalog.DetailRoute
+import com.opentune.content.ui.catalog.DetailViewModel
 import com.opentune.content.ui.catalog.ImageViewerRoute
 import com.opentune.content.ui.catalog.PlayerRoute
 import com.opentune.content.ui.catalog.SearchRoute
@@ -24,7 +26,11 @@ import com.opentune.core.form.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute
 
-fun NavGraphBuilder.contentRoutes(nav: NavHostController, sharedVm: NavSharedViewModel) {
+fun NavGraphBuilder.contentRoutes(
+    nav: NavHostController,
+    sharedVm: NavSharedViewModel,
+    playerController: PlayerController,
+) {
     composable(
         Routes.PROVIDER_EDIT,
         listOf(
@@ -100,16 +106,28 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController, sharedVm: NavSharedVie
             navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
             navArgument("itemRef") { type = NavType.StringType },
-            navArgument("infoJson") { type = NavType.StringType; nullable = true },
+            navArgument("id") { type = NavType.StringType },
         ),
     ) {
-        val infoJson = it.arguments!!.getString("infoJson")
+        val provider = it.arguments!!.getString("provider")!!
+        val endpointId = it.arguments!!.getString("endpointId")!!
+        val itemRef = it.arguments!!.getString("itemRef")!!
+        val id = it.arguments!!.getString("id")!!
+        // Prefer cache lookup; fallback to null for backward compat (debug API navigate)
+        val entryInfo = sharedVm.get(id)
+
+        val detailVm: DetailViewModel = viewModel(
+            factory = DetailViewModel.factory(itemRef),
+        )
+
         DetailRoute(
             nav = nav,
-            protocol = it.arguments!!.getString("provider")!!,
-            endpointId = it.arguments!!.getString("endpointId")!!,
-            itemRefEncoded = it.arguments!!.getString("itemRef")!!,
-            initialInfo = if (!infoJson.isNullOrBlank()) decodeEntryInfo(infoJson) else null,
+            protocol = provider,
+            endpointId = endpointId,
+            itemRefEncoded = itemRef,
+            initialInfo = entryInfo,
+            sharedVm = sharedVm,
+            viewModel = detailVm,
         )
     }
     composable(
@@ -125,6 +143,7 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController, sharedVm: NavSharedVie
             protocol = it.arguments!!.getString("provider")!!,
             endpointId = it.arguments!!.getString("endpointId")!!,
             scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
+            sharedVm = sharedVm,
         )
     }
     composable(
@@ -134,16 +153,20 @@ fun NavGraphBuilder.contentRoutes(nav: NavHostController, sharedVm: NavSharedVie
             navArgument("endpointId") { type = NavType.StringType },
             navArgument("itemRef") { type = NavType.StringType },
             navArgument("startMs") { type = NavType.LongType },
-            navArgument("infoJson") { type = NavType.StringType; nullable = true },
+            navArgument("id") { type = NavType.StringType },
         ),
     ) {
-        val infoJson = it.arguments!!.getString("infoJson")
+        val id = it.arguments!!.getString("id")!!
+        val entryInfo = sharedVm.get(id)
+            ?: error("No EntryInfo cached for id=$id — navigate via sharedVm.cache() before navigating to player")
+
         PlayerRoute(
             protocol = it.arguments!!.getString("provider")!!,
             endpointId = it.arguments!!.getString("endpointId")!!,
             itemRefDecoded = CatalogNav.decodeSegment(it.arguments!!.getString("itemRef")!!),
             startMs = it.arguments!!.getLong("startMs"),
-            entryInfo = if (!infoJson.isNullOrBlank()) decodeEntryInfo(infoJson) else null,
+            entryInfo = entryInfo,
+            playerController = playerController,
             onExit = { nav.popBackStack() },
         )
     }
