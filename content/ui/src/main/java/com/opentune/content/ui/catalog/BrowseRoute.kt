@@ -1,8 +1,6 @@
 package com.opentune.content.ui.catalog
 
 import android.util.Log
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -12,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
-import androidx.compose.runtime.collectAsState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.contract.EndpointClient
@@ -25,16 +22,6 @@ import com.opentune.storage.TitleLang
 
 private const val LOG_TAG = "OpenTuneBrowseRoute"
 
-/**
- * Browse route entry point.
- *
- * Lifecycle:
- * 1. ViewModel is scoped to the back stack entry — survives navigation back/forward
- * 2. On first visit: ViewModel.load() fetches from network
- * 3. On return visit: ViewModel.load() sees items already present → skips fetch
- *    → BrowseScreen renders cached items immediately
- * 4. Data layer (CachingEndpointClient) handles network dedup and stale detection
- */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseRoute(
@@ -54,15 +41,11 @@ fun BrowseRoute(
 
     var client by remember { mutableStateOf<EndpointClient?>(null) }
 
-    // Observe ViewModel state
     val vmItems by viewModel.items.collectAsState()
     val vmLoading by viewModel.loading.collectAsState()
     val vmError by viewModel.error.collectAsState()
     val vmTotal by viewModel.totalCount.collectAsState()
 
-    // Sync ViewModel items into SnapshotStateList for LazyVerticalGrid.
-    // NEVER clear items that are already present — this preserves the display
-    // when navigating back (ViewModel has items, Screen shows them immediately).
     val items = remember { mutableStateListOf<EntryInfo>() }
     LaunchedEffect(vmItems) {
         if (vmItems.isNotEmpty() && items.isEmpty()) {
@@ -70,7 +53,6 @@ fun BrowseRoute(
         }
     }
 
-    // Resolve the EndpointClient (which is already a CachingEndpointClient from the registry).
     LaunchedEffect(protocol, endpointId) {
         val existing = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
         if (existing == null) {
@@ -80,7 +62,6 @@ fun BrowseRoute(
         }
     }
 
-    // Build query options from the passed-in collectionType.
     val queryOptions = remember(collectionType) {
         when (collectionType?.lowercase()) {
             "movies" -> QueryOptions(recursive = true, filterByType = "Movie")
@@ -88,7 +69,6 @@ fun BrowseRoute(
         }
     }
 
-    // Initialize ViewModel with client once resolved; load if items are empty.
     LaunchedEffect(client, queryOptions) {
         val c = client ?: return@LaunchedEffect
         Log.d(LOG_TAG, "init+load for location=$location, client=$c, protocol=$protocol, endpointId=$endpointId")
@@ -97,24 +77,6 @@ fun BrowseRoute(
     }
 
     val c = client
-    val exoPlayer by playerController.exoPlayerFlow.collectAsState()
-
-    // Player overlay — full-screen when ExoPlayer is active
-    val currentExoPlayer = exoPlayer
-    if (currentExoPlayer != null) {
-        Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-            PlayerSurface(
-                exoPlayer = currentExoPlayer,
-                startMs = playerController.startMs,
-                onBack = {
-                    playerController.pause()
-                    playerController.release()
-                    Log.d(LOG_TAG, "player overlay: back → pause & release")
-                },
-            )
-        }
-        return
-    }
 
     when {
         client == null -> Text("Loading…")
@@ -146,7 +108,7 @@ fun BrowseRoute(
             },
             onOpenPlayer = { raw, startMs ->
                 val clientRef = c ?: return@BrowseScreen
-                playerController.setItem(raw, clientRef, startMs ?: 0L)
+                playerController.prepare(protocol, endpointId, raw, clientRef, startMs ?: 0L)
                 playerController.play()
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },

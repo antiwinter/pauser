@@ -175,17 +175,16 @@ fun DetailOverviewFull(
 @Composable
 fun SeasonSelector(
     seasons: List<EntryInfo>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
+    selectedSeasonId: String?,
+    onSelect: (String) -> Unit,
 ) {
     if (seasons.size <= 1) return
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(seasons) { season ->
-            val index = seasons.indexOf(season)
-            Button(onClick = { onSelect(index) }) {
+            Button(onClick = { onSelect(season.id) }) {
                 Text(
                     text = season.title,
-                    fontWeight = if (index == selectedIndex)
+                    fontWeight = if (season.id == selectedSeasonId)
                         FontWeight.Bold else FontWeight.Normal,
                 )
             }
@@ -199,6 +198,7 @@ fun EpisodeRow(
     episodes: List<EntryInfo>,
     imageLoader: ImageLoader,
     initialScrollIndex: Int = 0,
+    onFocusEpisode: ((EntryInfo) -> Unit)? = null,
     onPlayEpisode: (EntryInfo) -> Unit,
 ) {
     if (episodes.isEmpty()) return
@@ -215,6 +215,7 @@ fun EpisodeRow(
                 onClick = { onPlayEpisode(episode) },
                 imageLoader = imageLoader,
                 modifier = Modifier.width(200.dp),
+                onFocus = if (onFocusEpisode != null) {{ onFocusEpisode(episode) }} else null,
             )
         }
     }

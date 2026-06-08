@@ -32,8 +32,8 @@ class DetailViewModel(
     private val _seasons = MutableStateFlow<List<EntryInfo>>(emptyList())
     val seasons: StateFlow<List<EntryInfo>> = _seasons.asStateFlow()
 
-    private val _selectedSeasonIndex = MutableStateFlow(0)
-    val selectedSeasonIndex: StateFlow<Int> = _selectedSeasonIndex.asStateFlow()
+    private val _selectedSeasonId = MutableStateFlow<String?>(null)
+    val selectedSeasonId: StateFlow<String?> = _selectedSeasonId.asStateFlow()
 
     private val _episodes = MutableStateFlow<List<EntryInfo>>(emptyList())
     val episodes: StateFlow<List<EntryInfo>> = _episodes.asStateFlow()
@@ -43,6 +43,14 @@ class DetailViewModel(
 
     private val _episodePage = MutableStateFlow(0)
     val episodePage: StateFlow<Int> = _episodePage.asStateFlow()
+
+    // Currently selected episode, identified by its stable id (null = not yet resolved).
+    private val _selectedEpisodeId = MutableStateFlow<String?>(null)
+    val selectedEpisodeId: StateFlow<String?> = _selectedEpisodeId.asStateFlow()
+
+    fun setSelectedEpisodeId(id: String?) {
+        _selectedEpisodeId.value = id
+    }
 
     // Digipak state
     private val _digipakChildren = MutableStateFlow<List<EntryInfo>>(emptyList())
@@ -162,11 +170,11 @@ class DetailViewModel(
 
     fun loadEpisodes() {
         val seasonList = _seasons.value
-        val seasonIndex = _selectedSeasonIndex.value
         if (seasonList.isEmpty()) return
-        val season = seasonList.getOrNull(seasonIndex) ?: return
+        val season = seasonList.firstOrNull { it.id == _selectedSeasonId.value }
+            ?: seasonList.first()
 
-        Log.d(LOG_TAG, "loadEpisodes() season=$seasonIndex page=${_episodePage.value}")
+        Log.d(LOG_TAG, "loadEpisodes() seasonId=${season.id} page=${_episodePage.value}")
         viewModelScope.launch {
             val c = client ?: return@launch
             val p = protocol ?: return@launch
@@ -185,13 +193,15 @@ class DetailViewModel(
         }
     }
 
-    fun selectSeason(index: Int) {
-        _selectedSeasonIndex.value = index
+    fun selectSeason(id: String?) {
+        _selectedSeasonId.value = id
         _episodePage.value = 0
+        _selectedEpisodeId.value = null
     }
 
     fun selectEpisodePage(page: Int) {
         _episodePage.value = page
+        _selectedEpisodeId.value = null
     }
 
     companion object {

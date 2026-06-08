@@ -10,8 +10,6 @@ data class PlaybackStorageContext(
     val entryStateKey: EntryStateKey,
     val parentStateKey: EntryStateKey? = null,
     val seriesStateKey: EntryStateKey? = null,
-    val seriesSeasonNumber: Int? = null,
-    val seriesEpisodeNumber: Int? = null,
     val appConfigStore: AppPrefsStore,
 )
 

@@ -9,8 +9,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.content.contract.EndpointClient
 import com.opentune.player.MediaCodecInfo
-import com.opentune.player.engine.OpenTuneExoPlayer
-import com.opentune.player.engine.toMediaSource
+import com.opentune.player.PlaybackStorageContext
+import com.opentune.player.PlayerController as BasePlayerController
+import com.opentune.storage.EntryStateKey
+import com.opentune.storage.StorageBindingsHolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -18,121 +20,75 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "PlayerController"
 private const val DEBOUNCE_MS = 800L
 
-/**
- * NavHost-scoped player controller. Owns a single long-lived ExoPlayer instance
- * shared between DetailScreen (embedded) and BrowseRoute (overlay).
- *
- * The player is created once and kept alive — only the media source is swapped
- * via [prepare]. Call [release] to stop playback and clear state (player stays
- * warm). The player is only fully released in [onCleared].
- *
- * Lifecycle:
- *   - Created when the NavHost is created
- *   - Survives configuration changes
- *   - Released when the NavHost is cleared
- */
 @UnstableApi
 class PlayerController(
     application: Application,
 ) : AndroidViewModel(application) {
 
-    private val appContext = application.applicationContext
+    val player = BasePlayerController(application)
 
-    // Last item set by setItem — survives release so play() can re-prepare.
     private var _lastItemRef: String? = null
     private var _lastClient: EndpointClient? = null
     private var _lastStartMs: Long = 0L
 
-    // Current resolved spec
-    private var _currentSpec: com.opentune.player.PlaybackSpec? = null
+    private val _isShown = MutableStateFlow(false)
+    val isShownFlow: StateFlow<Boolean> = _isShown.asStateFlow()
 
-    // The long-lived ExoPlayer instance.
-    private val _player = OpenTuneExoPlayer.createForBundledSources(appContext).player
-
-    // Playback listener for state tracking
-    private var _listener: Player.Listener? = null
-
-    // StateFlow observers
-    private val _exoPlayerFlow = MutableStateFlow<ExoPlayer?>(null)
-    private val _playbackState = MutableStateFlow<Int>(Player.STATE_IDLE)
-    private val _playWhenReady = MutableStateFlow(false)
     private val _mediaCodecs = MutableStateFlow<List<MediaCodecInfo>>(emptyList())
-    private var _startMs: Long = 0L
+    val mediaCodecs: StateFlow<List<MediaCodecInfo>> = _mediaCodecs
 
-    // Derived: non-null ExoPlayer only when actively playing/buffering (for overlay visibility)
-    val exoPlayerFlow: StateFlow<ExoPlayer?> = _exoPlayerFlow.asStateFlow()
-        .combine(_playWhenReady) { exo, pwr -> exo.takeIf { pwr } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
-    // Single job: either a debounce delay or an active prepare coroutine.
     private var _debounceJob: Job? = null
 
-    init {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                _playbackState.value = state
-            }
-
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                _playWhenReady.value = playWhenReady
-            }
-        }
-        _player.addListener(listener)
-        _listener = listener
+    // Delegate next-video callback to the base player so TvPlayerSurface can read it directly.
+    fun setNextVideoCallback(cb: (() -> Unit)?) {
+        player.setRequestNextVideoCallback(cb)
     }
 
-    // Public state
-    val playbackState: StateFlow<Int> = _playbackState.asStateFlow()
-    val mediaCodecs: StateFlow<List<MediaCodecInfo>> = _mediaCodecs.asStateFlow()
-    val isPrepared: Boolean get() = _currentSpec != null
-    val exoPlayer: ExoPlayer? get() = _player
-    val startMs: Long get() = _startMs
+    fun requestNextVideo() {
+        player.requestNextVideo()
+    }
 
-    /**
-     * How much content is currently buffered ahead of the current position,
-     * in milliseconds. Returns 0 when nothing is prepared.
-     */
+    val isPrepared: Boolean get() = player.currentSpec != null
+    val exoPlayer: ExoPlayer get() = player.exoPlayer
+    val startMs: Long get() = player.startMs
+    val currentItemRef: String? get() = _lastItemRef
+
     val bufferedDurationMs: Long
         get() {
-            val exo = _player
-            if (_currentSpec == null) return 0L
-            val pos = exo.currentPosition
-            val buf = exo.bufferedPosition
+            if (player.currentSpec == null) return 0L
+            val pos = player.exoPlayer.currentPosition
+            val buf = player.exoPlayer.bufferedPosition
             return maxOf(0L, buf - pos)
         }
 
-    /** Last item URL that was set (for debugging). */
-    val currentItemRef: String? get() = _lastItemRef
-
-    /**
-     * Set the item to play.
-     *
-     * - First call → prepare immediately (no debounce).
-     * - Subsequent call while one is pending → cancel, wait [DEBOUNCE_MS], then prepare.
-     * - Same-item reuse → seek immediately.
-     */
-    fun setItem(
+    fun prepare(
+        protocol: String,
+        endpointId: String,
         itemRef: String,
         client: EndpointClient,
         startMs: Long = 0L,
+        seriesStateKey: EntryStateKey? = null,
     ) {
         _lastItemRef = itemRef
         _lastClient = client
         _lastStartMs = startMs
+        player.setStorageCtx(PlaybackStorageContext(
+            entryStateStore = StorageBindingsHolder.get().entryStateStore,
+            entryStateKey = EntryStateKey(protocol, endpointId, itemRef),
+            seriesStateKey = seriesStateKey,
+            appConfigStore = StorageBindingsHolder.get().appConfigStore,
+        ))
 
-        // Same item already prepared — just seek.
-        if (itemRef == _currentSpec?.url && _player.playbackState != Player.STATE_IDLE) {
-            _player.seekTo(startMs)
-            Log.d(LOG_TAG, "setItem: same item, seekTo=$startMs")
+        // Same item already prepared — just seek, no re-resolve needed.
+        if (itemRef == player.currentSpec?.url && player.exoPlayer.playbackState != Player.STATE_IDLE) {
+            player.exoPlayer.seekTo(startMs)
+            Log.d(LOG_TAG, "prepare: same item, seekTo=$startMs")
             return
         }
 
@@ -141,128 +97,50 @@ class PlayerController(
         _debounceJob = viewModelScope.launch {
             if (hadPending) delay(DEBOUNCE_MS)
             try {
-                prepare(itemRef, client, startMs)
+                resolveAndSetSpec(itemRef, client, startMs)
             } catch (_: CancellationException) {
-                // expected when superseded
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "setItem: prepare failed", e)
+                Log.e(LOG_TAG, "prepare: failed", e)
             }
         }
     }
 
-    /**
-     * Start playback.
-     *
-     * - Cancel any pending debounced prepare.
-     * - Same item already prepared → play.
-     * - Item changed or not yet prepared → prepare then play.
-     */
+    /** Show the player surface immediately. Spinner shown until spec resolves. */
     fun play() {
-        _debounceJob?.cancel()
-
-        val itemRef = _lastItemRef
-        val client = _lastClient
-        if (itemRef != null && client != null && itemRef == _currentSpec?.url) {
-            // Same item already prepared — just play.
-            if (!_player.playWhenReady) {
-                _player.playWhenReady = true
-                Log.d(LOG_TAG, "play: playWhenReady=true (prepared)")
-            }
-            return
-        }
-
-        if (itemRef == null || client == null) {
-            Log.w(LOG_TAG, "play: no item set")
-            return
-        }
-
-        val start = _lastStartMs
-        _debounceJob = viewModelScope.launch {
-            try {
-                prepare(itemRef, client, start)
-                _player.playWhenReady = true
-                Log.d(LOG_TAG, "play: prepare+play")
-            } catch (_: CancellationException) {
-                // expected when superseded
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "play: prepare+play failed", e)
-            }
-        }
+        _isShown.value = true
+        player.play()
+        Log.d(LOG_TAG, "play: isShown=true")
     }
 
-    /** Pause playback (playWhenReady = false). */
-    fun pause() {
-        if (_player.playWhenReady) {
-            _player.playWhenReady = false
-            Log.d(LOG_TAG, "pause: playWhenReady=false")
-        }
-    }
+    fun pause() = player.pause()
 
-    /** Seek to position. */
-    fun seekTo(positionMs: Long) {
-        _player.seekTo(positionMs)
-    }
-
-    /** Get current position. */
-    fun currentPosition(): Long = _player.currentPosition
-
-    /** Get duration. */
-    fun duration(): Long = _player.duration
-
-    /** Check if currently playing. */
-    fun isPlaying(): Boolean = _player.isPlaying
-
-    /** Check if buffering. */
-    fun isBuffering(): Boolean = _player.playbackState == Player.STATE_BUFFERING
-
-    /**
-     * Stop playback and clear current item state.
-     * Player stays alive for reuse.
-     */
-    fun release() {
+    fun stop() {
         _debounceJob?.cancel()
         _debounceJob = null
-        _player.stop()
-        _exoPlayerFlow.value = null
-        _currentSpec = null
+        _isShown.value = false
+        player.stop()
         _mediaCodecs.value = emptyList()
-        _startMs = 0L
+        Log.d(LOG_TAG, "stop")
     }
 
-    /**
-     * Resolve PlaybackSpec and set it on the player.
-     * Leaves playWhenReady unchanged.
-     */
-    private suspend fun prepare(
+    fun release() = stop()
+
+    private suspend fun resolveAndSetSpec(
         itemRef: String,
         client: EndpointClient,
-        startMs: Long = 0L,
+        startMs: Long,
     ) {
-        Log.d(LOG_TAG, "prepare: itemRef=$itemRef startMs=$startMs")
-
-        val spec = withContext(Dispatchers.IO) {
-            client.getPlaybackSpec(itemRef, startMs)
-        }
-        _currentSpec = spec
+        Log.d(LOG_TAG, "resolveAndSetSpec: itemRef=$itemRef startMs=$startMs")
+        val spec = withContext(Dispatchers.IO) { client.getPlaybackSpec(itemRef, startMs) }
         _mediaCodecs.value = spec.mediaCodecs
-        _startMs = startMs
-
         withContext(Dispatchers.Main) {
-            _player.stop()
-            _player.setMediaSource(spec.toMediaSource(appContext))
-            _player.prepare()
-            _exoPlayerFlow.value = _player
-            Log.d(LOG_TAG, "prepare: player prepared")
+            player.setSpec(spec, startMs)
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        val listener = _listener
-        if (listener != null) {
-            _player.removeListener(listener)
-        }
-        _player.release()
-        Log.d(LOG_TAG, "onCleared: ExoPlayer released")
+        player.release()
+        Log.d(LOG_TAG, "onCleared")
     }
 }

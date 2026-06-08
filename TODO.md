@@ -62,6 +62,7 @@
 - [x] overlay control logic is verbose and messy and too stateful
 - [ ] next episode
 - [ ] sprite
+- [ ] proxied buffering
 
 ## Roadmap
 - [ ] remove opentune naming

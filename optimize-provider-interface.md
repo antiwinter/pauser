@@ -23,6 +23,7 @@ simplify hookstate, url/header seems overlap with hooksState, make single source
 
 check if mime is needed
 
+make clear the proxy logic
 
 3. revise detailScreen flow:
 make 3 kinds of detail screen:

@@ -73,8 +73,6 @@ internal class PlaybackEngine(
     private val entryStateStore: EntryStateStore,
     private val entryStateKey: EntryStateKey,
     private val seriesStateKey: EntryStateKey?,
-    private val seriesSeasonNumber: Int?,
-    private val seriesEpisodeNumber: Int?,
 ) {
     /** Idempotent — safe to call multiple times (e.g. from BackHandler and onDispose). */
     suspend fun release() {
@@ -85,12 +83,8 @@ internal class PlaybackEngine(
             val pos = withContext(Dispatchers.Main) { exo.currentPosition }
             withContext(Dispatchers.IO) {
                 entryStateStore.upsertPosition(entryStateKey, pos)
-                if (seriesStateKey != null && seriesSeasonNumber != null && seriesEpisodeNumber != null) {
-                    entryStateStore.upsertSeriesProgress(seriesStateKey, seriesSeasonNumber, seriesEpisodeNumber)
-                }
             }
             s.hooks.onStop(pos)
-            withContext(Dispatchers.Main) { exo.release() }
             s.hooks.onDispose()
         }
     }
@@ -109,14 +103,13 @@ internal fun rememberPlaybackEngine(
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
     initialSubtitleOffsetFraction: Float,
     initialSubtitleSizeScale: Float,
+    exo: ExoPlayer,
 ): PlaybackEngine {
     val storageCtx = LocalPlaybackStorageContext.current
     val entryStateStore = storageCtx.entryStateStore
     val entryStateKey = storageCtx.entryStateKey
     val parentStateKey = storageCtx.parentStateKey
     val seriesStateKey = storageCtx.seriesStateKey
-    val seriesSeasonNumber = storageCtx.seriesSeasonNumber
-    val seriesEpisodeNumber = storageCtx.seriesEpisodeNumber
     val appConfigStore = storageCtx.appConfigStore
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -126,20 +119,11 @@ internal fun rememberPlaybackEngine(
     val hooksState = rememberUpdatedState(spec.hooks)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
-    val preBufferMs by appConfigStore.preBufferMsFlow
-        .collectAsState(initial = AppPrefsStore.DEFAULT_PRE_BUFFER_MS)
-
-    // preBufferMs is a key so the player is recreated if the setting changes.
-    val playerWithMeter = remember(instanceKey, preBufferMs) {
-        OpenTuneExoPlayer.createForBundledSources(context, preBufferMs)
-    }
-    val exo = playerWithMeter.player
-    val released = remember(instanceKey, preBufferMs) { AtomicBoolean(false) }
+    val released = remember(instanceKey) { AtomicBoolean(false) }
 
     val stores = remember { PlayerStores(entryStateStore, appConfigStore) }
     val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
-
     val subtitleCtrl = rememberSubtitleController(
         exo = exo,
         spec = spec,
@@ -164,7 +148,8 @@ internal fun rememberPlaybackEngine(
         entryStateKey = instanceKey,
     )
 
-    val engine = remember(instanceKey, preBufferMs) {
+    val engineKey = instanceKey
+    val engine = remember(engineKey) {
         PlaybackEngine(
             exo = exo,
             subtitleCtrl = subtitleCtrl,
@@ -177,8 +162,6 @@ internal fun rememberPlaybackEngine(
             entryStateStore = entryStateStore,
             entryStateKey = instanceKey,
             seriesStateKey = seriesStateKey,
-            seriesSeasonNumber = seriesSeasonNumber,
-            seriesEpisodeNumber = seriesEpisodeNumber,
         )
     }
 
@@ -284,9 +267,6 @@ internal fun rememberPlaybackEngine(
             if (!isPaused) {
                 withContext(Dispatchers.IO) {
                     entryStateStore.upsertPosition(instanceKey, pos)
-                    if (seriesStateKey != null && seriesSeasonNumber != null && seriesEpisodeNumber != null) {
-                        entryStateStore.upsertSeriesProgress(seriesStateKey, seriesSeasonNumber, seriesEpisodeNumber)
-                    }
                 }
             }
         }

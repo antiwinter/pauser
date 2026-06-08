@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,10 +36,16 @@ fun ThumbEntryComponent(
     onClick: () -> Unit,
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
+    onFocus: (() -> Unit)? = null,
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (onFocus != null) Modifier.onFocusChanged { if (it.isFocused) onFocus() }
+                else Modifier
+            ),
     ) {
         Column {
             Box(

@@ -8,7 +8,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,61 +21,71 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.graphics.Color
+import com.opentune.player.LocalPlaybackStorageContext
+import com.opentune.player.PlayerController
 import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
-import com.opentune.player.PlaybackSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val PAD_CONTROLLER_AUTO_HIDE_MS = 3_000L
+private const val PAD_SURFACE_CONTROLLER_AUTO_HIDE_MS = 3_000L
 
 @UnstableApi
 @Composable
-fun PadPlayer(
-    spec: PlaybackSpec,
-    startMs: Long = 0L,
-    onExit: () -> Unit,
-    initialSubtitleTrackId: String? = null,
-    initialAudioTrackId: String? = null,
-    initialSubtitleOffsetFraction: Float = 0f,
-    initialSubtitleSizeScale: Float = 1f,
+fun PadPlayerSurface(
+    controller: PlayerController,
+    onBack: () -> Unit,
 ) {
+    val spec = controller.currentSpec ?: return
+    val storageCtx = controller.storageCtx ?: return
+
+    CompositionLocalProvider(LocalPlaybackStorageContext provides storageCtx) {
+        PadPlayerSurfaceContent(
+            controller = controller,
+            onBack = onBack,
+        )
+    }
+}
+
+@UnstableApi
+@Composable
+private fun PadPlayerSurfaceContent(
+    controller: PlayerController,
+    onBack: () -> Unit,
+) {
+    val spec = controller.currentSpec!!
     val engine = rememberPlaybackEngine(
         spec = spec,
-        startMs = startMs,
-        initialSubtitleTrackId = initialSubtitleTrackId,
-        initialAudioTrackId = initialAudioTrackId,
-        initialSubtitleOffsetFraction = initialSubtitleOffsetFraction,
-        initialSubtitleSizeScale = initialSubtitleSizeScale,
+        startMs = controller.startMs,
+        initialSubtitleTrackId = null,
+        initialAudioTrackId = null,
+        initialSubtitleOffsetFraction = 0f,
+        initialSubtitleSizeScale = 1f,
+        exo = controller.exoPlayer,
     )
     PlaybackHostEffects(engine.exo)
 
     val scope = rememberCoroutineScope()
     val exo = engine.exo
 
-    /** 0 = hidden, >0 = visible. Incrementing resets the auto-hide timer. */
     var controllerState by remember { mutableStateOf(0) }
     var position by remember { mutableLongStateOf(exo.currentPosition) }
     var isPaused by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
 
-    // Event-driven state updates from ExoPlayer.
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
             override fun onPositionDiscontinuity(
                 oldPosition: Player.PositionInfo,
                 newPosition: Player.PositionInfo,
                 reason: Int,
-            ) {
-                position = newPosition.positionMs
-            }
+            ) { position = newPosition.positionMs }
 
             override fun onPlaybackStateChanged(state: Int) {
                 position = exo.currentPosition
@@ -92,8 +104,6 @@ fun PadPlayer(
         onDispose { exo.removeListener(listener) }
     }
 
-    // Fast tick for smooth progress bar animation during steady playback.
-    // Not gating any action feedback — just drives the visual tick.
     LaunchedEffect(exo) {
         while (true) {
             position = exo.currentPosition
@@ -101,15 +111,14 @@ fun PadPlayer(
         }
     }
 
-    // Auto-hide after 3s on Pad.
     LaunchedEffect(controllerState) {
         if (controllerState != 0) {
-            delay(PAD_CONTROLLER_AUTO_HIDE_MS)
+            delay(PAD_SURFACE_CONTROLLER_AUTO_HIDE_MS)
             controllerState = 0
         }
     }
 
-    BackHandler { scope.launch { engine.release(); onExit() } }
+    BackHandler { scope.launch { engine.release(); onBack() } }
 
     Box(
         modifier = Modifier
@@ -142,7 +151,6 @@ fun PadPlayer(
             )
         }
 
-        // Centered spinner — visible during buffering, regardless of controller bar visibility.
         AnimatedVisibility(
             visible = isBuffering,
             enter = fadeIn(),
