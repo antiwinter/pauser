@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.detail
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.ArtType
+import com.opentune.content.ui.catalog.ArtUrlInjector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,13 +60,6 @@ class DetailViewModel(
     private val _singleChild = MutableStateFlow<EntryInfo?>(null)
     val singleChild: StateFlow<EntryInfo?> = _singleChild.asStateFlow()
 
-    // Loading / error
-    private val _loading = MutableStateFlow(false)
-    val loading: StateFlow<Boolean> = _loading.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
     private var client: EndpointClient? = null
     private var protocol: String? = null
     private var endpointId: String? = null
@@ -80,41 +74,11 @@ class DetailViewModel(
         this.endpointId = endpointId
     }
 
-    /** Set entry info from cache (before loading). */
+    /** Set entry info from the NavSharedViewModel cache. Called before type-specific loading begins. */
     fun setEntryInfo(info: EntryInfo) {
         if (_entryInfo.value == null) {
             _entryInfo.value = info
             Log.d(LOG_TAG, "setEntryInfo: type=${info.type}, id=${info.id}")
-        }
-    }
-
-    fun loadEntry() {
-        val existing = _entryInfo.value
-        if (existing != null && existing.title?.isNotEmpty() == true && existing.type !in setOf("Unknown", "Root")) {
-            Log.d(LOG_TAG, "loadEntry() skipped — already loaded for itemRef=$itemRef")
-            return
-        }
-        val c = client ?: return
-        val p = protocol ?: return
-        val eid = endpointId ?: return
-        Log.d(LOG_TAG, "loadEntry() fetching for itemRef=$itemRef")
-        viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(itemRef, 0, 1)
-                }
-                val info = result.items.firstOrNull()
-                    ?: throw IllegalStateException("No entry found for ref=$itemRef")
-                _entryInfo.value = ArtUrlInjector.applyInfo(info, p)
-                Log.d(LOG_TAG, "loadEntry() complete: type=${info.type}")
-            } catch (e: Exception) {
-                _error.value = e.message
-                Log.e(LOG_TAG, "loadEntry() failed", e)
-            } finally {
-                _loading.value = false
-            }
         }
     }
 
@@ -205,8 +169,6 @@ class DetailViewModel(
     }
 
     companion object {
-        private const val PAGE_SIZE = 50
-
         fun factory(itemRef: String) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =

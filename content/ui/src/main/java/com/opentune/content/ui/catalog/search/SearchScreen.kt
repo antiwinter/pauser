@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.search
 
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +28,7 @@ import com.opentune.content.contract.FilenameDetector
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.storage.TitleLang
+import com.opentune.content.ui.catalog.components.MediaEntryComponent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext

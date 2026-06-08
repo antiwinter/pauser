@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +32,7 @@ import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
 import com.opentune.player.MediaCodecInfo
 import java.io.File
+import com.opentune.content.ui.catalog.components.ThumbEntryComponent
 
 fun artImageModel(src: String?): Any? = when {
     src.isNullOrBlank() -> null

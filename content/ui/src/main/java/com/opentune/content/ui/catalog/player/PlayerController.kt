@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.player
 
 import android.app.Application
 import android.util.Log

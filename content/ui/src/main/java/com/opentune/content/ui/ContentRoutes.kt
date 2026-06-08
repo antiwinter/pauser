@@ -7,16 +7,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.opentune.content.ui.catalog.BrowseRoute
-import com.opentune.content.ui.catalog.BrowseViewModel
+import com.opentune.content.ui.catalog.browse.BrowseRoute
+import com.opentune.content.ui.catalog.browse.BrowseViewModel
 import com.opentune.content.ui.catalog.CatalogNav
 import com.opentune.content.ui.catalog.NavSharedViewModel
-import com.opentune.content.ui.catalog.PlayerController
-import com.opentune.content.ui.catalog.DetailRoute
-import com.opentune.content.ui.catalog.DetailViewModel
+import com.opentune.content.ui.catalog.player.PlayerController
+import com.opentune.content.ui.catalog.detail.DetailRoute
+import com.opentune.content.ui.catalog.detail.DetailViewModel
 import com.opentune.content.ui.catalog.ImageViewerRoute
-import com.opentune.content.ui.catalog.SearchRoute
-import com.opentune.content.ui.catalog.SettingsScreen
+import com.opentune.content.ui.catalog.search.SearchRoute
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
@@ -146,9 +145,6 @@ fun NavGraphBuilder.contentRoutes(
             scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
             sharedVm = sharedVm,
         )
-    }
-    composable(Routes.SETTINGS) {
-        SettingsScreen(onBack = { nav.popBackStack() })
     }
     composable(
         Routes.IMAGE_VIEWER,

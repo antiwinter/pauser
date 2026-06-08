@@ -16,8 +16,9 @@ import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.Routes
 import com.opentune.content.ui.catalog.NavSharedViewModel
-import com.opentune.content.ui.catalog.PlayerController
+import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.content.ui.contentRoutes
+import com.opentune.app.ui.settings.SettingsScreen
 import com.opentune.player.ui.tv.TvPlayerSurface
 import com.opentune.proxy.ui.ProxyRoutes
 import com.opentune.proxy.ui.proxyRoutes
@@ -92,6 +93,9 @@ fun OpenTuneNavHost() {
             }
             contentRoutes(nav, sharedVm, playerController)
             proxyRoutes(nav)
+            composable(Routes.SETTINGS) {
+                SettingsScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         if (isShown) {

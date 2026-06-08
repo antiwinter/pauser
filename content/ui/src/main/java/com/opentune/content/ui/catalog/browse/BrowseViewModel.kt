@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.browse
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.opentune.content.ui.catalog.ArtUrlInjector
 
 private const val LOG_TAG = "BrowseViewModel"
 

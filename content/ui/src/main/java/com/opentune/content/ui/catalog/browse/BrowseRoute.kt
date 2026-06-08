@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.browse
 
 import android.util.Log
 import androidx.compose.runtime.Composable
@@ -19,6 +19,9 @@ import com.opentune.content.contract.QueryOptions
 import com.opentune.content.ui.Routes
 import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
+import com.opentune.content.ui.catalog.ArtUrlInjector
+import com.opentune.content.ui.catalog.NavSharedViewModel
+import com.opentune.content.ui.catalog.player.PlayerController
 
 private const val LOG_TAG = "OpenTuneBrowseRoute"
 

@@ -1,25 +1,28 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import androidx.tv.material3.Surface
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.contract.EntryType
+import com.opentune.storage.TitleLang
 import java.io.File
 
 private fun coverImageModel(cover: String?): Any? = when {
@@ -31,35 +34,36 @@ private fun coverImageModel(cover: String?): Any? = when {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun ThumbEntryComponent(
+fun MediaEntryComponent(
     item: EntryInfo,
     onClick: () -> Unit,
+    titleLang: TitleLang = TitleLang.Local,
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
-    onFocus: (() -> Unit)? = null,
 ) {
+    val displayTitle = if (titleLang == TitleLang.Original)
+        item.originalTitle?.takeIf { it.isNotBlank() } ?: item.title
+    else item.title
+
     Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (onFocus != null) Modifier.onFocusChanged { if (it.isFocused) onFocus() }
-                else Modifier
-            ),
+            .aspectRatio(0.72f),
     ) {
-        Column {
+        Column(modifier = Modifier.padding(8.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
+                    .height(120.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
                 // Bottom layer: placeholder asset
                 AsyncImage(
-                    model = "file:///android_asset/art/thumb.png",
+                    model = "file:///android_asset/art/cover.png",
                     contentDescription = null,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
                     contentScale = ContentScale.Crop,
                 )
 
@@ -68,31 +72,44 @@ fun ThumbEntryComponent(
                 if (model != null) {
                     AsyncImage(
                         model = model,
-                        contentDescription = item.title,
+                        contentDescription = displayTitle,
                         imageLoader = imageLoader,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
                         contentScale = ContentScale.Crop,
                     )
                 }
 
-                // Episode number badge top-left
-                item.indexNumber?.let { num ->
+                // Favorite overlay (bottom-left)
+                if (item.userData?.isFavorite == true) {
                     Text(
-                        text = "E$num",
+                        text = "♥",
+                        color = Color(0xFFE53935),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp),
+                    )
+                }
+
+                // Rating overlay (bottom-right)
+                item.communityRating?.let { rating ->
+                    Text(
+                        text = "★ ${"%.1f".format(rating)}",
+                        color = Color(0xFFFDD835),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .background(Color.Black.copy(alpha = 0.55f))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                     )
                 }
             }
             Text(
-                text = item.title,
-                maxLines = 1,
+                text = displayTitle,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 6.dp),
             )
         }
     }

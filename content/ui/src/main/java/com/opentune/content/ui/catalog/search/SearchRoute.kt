@@ -1,4 +1,4 @@
-package com.opentune.content.ui.catalog
+package com.opentune.content.ui.catalog.search
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.storage.StorageBindingsHolder
 
@@ -18,6 +18,9 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.SearchQuery
 import com.opentune.storage.TitleLang
+import com.opentune.content.ui.catalog.ArtUrlInjector
+import com.opentune.content.ui.catalog.NavSharedViewModel
+import com.opentune.content.ui.catalog.CatalogNav
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
