@@ -76,7 +76,7 @@ class PlayerController(
     }
 
     val isPrepared: Boolean get() = currentSpec != null
-    val currentItemRef: String? get() = _lastItemRef
+    val currentItemRef: String? get() = _pendingSpec?.itemRef ?: _lastResolvedItemRef
 
     val bufferedDurationMs: Long
         get() {
@@ -86,8 +86,11 @@ class PlayerController(
             return maxOf(0L, buf - pos)
         }
 
-    private var _lastItemRef: String? = null
+    private data class PendingSpec(val itemRef: String, val client: EndpointClient, val startMs: Long)
+
     private var _debounceJob: Job? = null
+    private var _pendingSpec: PendingSpec? = null
+    private var _lastResolvedItemRef: String? = null
 
     fun prepare(
         protocol: String,
@@ -97,7 +100,6 @@ class PlayerController(
         startMs: Long = 0L,
         seriesStateKey: EntryStateKey? = null,
     ) {
-        _lastItemRef = itemRef
         storageCtx = PlaybackStorageContext(
             entryStateStore = StorageBindingsHolder.get().entryStateStore,
             entryStateKey = EntryStateKey(protocol, endpointId, itemRef),
@@ -113,22 +115,16 @@ class PlayerController(
         }
 
         val hadPending = _debounceJob?.isActive == true
-        _debounceJob?.cancel()
-        _debounceJob = viewModelScope.launch {
-            if (hadPending) delay(DEBOUNCE_MS)
-            try {
-                resolveAndSetSpec(itemRef, client, startMs)
-            } catch (_: CancellationException) {
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "prepare: failed", e)
-            }
-        }
+        _pendingSpec = PendingSpec(itemRef, client, startMs)
+        launchResolve(withDelay = hadPending)
     }
 
     /** Show the player surface immediately. Spinner shown until spec resolves. */
     fun play() {
         _isShown.value = true
         exoPlayer.playWhenReady = true
+        // If a debounced resolve is still waiting, skip the delay and run it now.
+        launchResolve()
         Log.d(LOG_TAG, "play: isShown=true")
     }
 
@@ -139,9 +135,11 @@ class PlayerController(
     fun stop() {
         _debounceJob?.cancel()
         _debounceJob = null
+        _pendingSpec = null
         _isShown.value = false
         exoPlayer.stop()
         _currentSpec.value = null
+        _lastResolvedItemRef = null
         storageCtx = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
@@ -149,17 +147,34 @@ class PlayerController(
         Log.d(LOG_TAG, "stop")
     }
 
-    private suspend fun resolveAndSetSpec(
-        itemRef: String,
-        client: EndpointClient,
-        startMs: Long,
-    ) {
+    private fun launchResolve(withDelay: Boolean = false) {
+        _debounceJob?.cancel()
+        _debounceJob = viewModelScope.launch {
+            if (withDelay) delay(DEBOUNCE_MS)
+            val params = _pendingSpec ?: return@launch
+            _pendingSpec = null
+            try {
+                resolveAndSetSpec(params)
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "launchResolve: failed", e)
+            }
+        }
+    }
+
+    private suspend fun resolveAndSetSpec(params: PendingSpec) {
+        val (itemRef, client, startMs) = params
+        if (itemRef == _lastResolvedItemRef && currentSpec != null && exoPlayer.playbackState != Player.STATE_IDLE) {
+            Log.d(LOG_TAG, "resolveAndSetSpec: already playing itemRef=$itemRef, skipping")
+            return
+        }
         Log.d(LOG_TAG, "resolveAndSetSpec: itemRef=$itemRef startMs=$startMs")
         val spec = withContext(Dispatchers.IO) { client.getPlaybackSpec(itemRef, startMs) }
         _mediaCodecs.value = spec.mediaCodecs
         withContext(Dispatchers.Main) {
             _currentSpec.value = spec
             _startMs = startMs
+            _lastResolvedItemRef = itemRef
             exoPlayer.stop()
             exoPlayer.setMediaSource(spec.toMediaSource(appContext))
             exoPlayer.prepare()
