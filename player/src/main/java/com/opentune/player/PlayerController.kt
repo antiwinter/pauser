@@ -14,21 +14,22 @@ import kotlinx.coroutines.flow.asStateFlow
 private const val LOG_TAG = "OT_PlayerController"
 
 @UnstableApi
-class PlayerController(application: Application) : AndroidViewModel(application) {
+class PlayerController(application: Application) : AndroidViewModel(application), PlayerSurfaceController {
 
     private val appContext = application.applicationContext
     private val _exo = OpenTuneExoPlayer.createForBundledSources(appContext).player
 
-    val exoPlayer: ExoPlayer get() = _exo
+    override val exoPlayer: ExoPlayer get() = _exo
 
     private val _currentSpec = MutableStateFlow<PlaybackSpec?>(null)
     val currentSpecFlow: StateFlow<PlaybackSpec?> = _currentSpec.asStateFlow()
-    val currentSpec: PlaybackSpec? get() = _currentSpec.value
+    override val currentSpec: PlaybackSpec? get() = _currentSpec.value
 
     private var _startMs: Long = 0L
-    val startMs: Long get() = _startMs
+    override var startMs: Long get() = _startMs
+        private set(value) { _startMs = value }
 
-    var storageCtx: PlaybackStorageContext? = null
+    override var storageCtx: PlaybackStorageContext? = null
         private set
 
     fun setStorageCtx(ctx: PlaybackStorageContext) {
@@ -37,14 +38,14 @@ class PlayerController(application: Application) : AndroidViewModel(application)
 
     private var _nextVideoCallback: (() -> Unit)? = null
     private val _hasNextVideo = MutableStateFlow(false)
-    val hasNextVideoFlow: StateFlow<Boolean> = _hasNextVideo.asStateFlow()
+    override val hasNextVideoFlow: StateFlow<Boolean> = _hasNextVideo.asStateFlow()
 
     fun setRequestNextVideoCallback(cb: (() -> Unit)?) {
         _nextVideoCallback = cb
         _hasNextVideo.value = cb != null
     }
 
-    fun requestNextVideo() {
+    override fun requestNextVideo() {
         _nextVideoCallback?.invoke()
     }
 

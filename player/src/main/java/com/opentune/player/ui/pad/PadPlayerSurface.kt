@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.LocalPlaybackStorageContext
-import com.opentune.player.PlayerController
+import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
@@ -39,7 +39,7 @@ private const val PAD_SURFACE_CONTROLLER_AUTO_HIDE_MS = 3_000L
 @UnstableApi
 @Composable
 fun PadPlayerSurface(
-    controller: PlayerController,
+    controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
     val spec = controller.currentSpec ?: return
@@ -56,7 +56,7 @@ fun PadPlayerSurface(
 @UnstableApi
 @Composable
 private fun PadPlayerSurfaceContent(
-    controller: PlayerController,
+    controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
     val spec = controller.currentSpec!!

@@ -35,7 +35,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.opentune.player.LocalPlaybackStorageContext
-import com.opentune.player.PlayerController
+import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.R
 import com.opentune.player.controller.rememberMenuOverlay
 import com.opentune.player.engine.TrackInfo
@@ -50,7 +50,7 @@ private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun TvPlayerSurface(
-    controller: PlayerController,
+    controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
     val spec = controller.currentSpec
@@ -88,7 +88,7 @@ private fun PlayerLoadingOverlay(onBack: () -> Unit) {
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 private fun TvPlayerSurfaceContent(
-    controller: PlayerController,
+    controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
     val storageCtx = controller.storageCtx!!
