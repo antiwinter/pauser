@@ -37,7 +37,6 @@ fun BrowseRoute(
     playerController: PlayerController,
 ) {
     val location = initialEntryInfo.id
-    val collectionType = initialEntryInfo.collectionType
 
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -65,12 +64,7 @@ fun BrowseRoute(
         }
     }
 
-    val queryOptions = remember(collectionType) {
-        when (collectionType?.lowercase()) {
-            "movies" -> QueryOptions(recursive = true, filterByType = "Movie")
-            else -> QueryOptions()
-        }
-    }
+    val queryOptions = remember { QueryOptions() }
 
     LaunchedEffect(client, queryOptions) {
         val c = client ?: return@LaunchedEffect

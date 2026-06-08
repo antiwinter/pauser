@@ -83,7 +83,6 @@ export function toListItem(
     indexNumber:     item.IndexNumber as number | null | undefined,
     overview:        item.Overview as string | null | undefined,
     childCount:      item.ChildCount as number | null | undefined,
-    collectionType:  (item.CollectionType as string | null | undefined)?.toLowerCase() ?? null,
     parentId:        item.ParentId as string | null | undefined,
     seriesId:        item.SeriesId as string | null | undefined,
     seasonNumber:    item.ParentIndexNumber as number | null | undefined,

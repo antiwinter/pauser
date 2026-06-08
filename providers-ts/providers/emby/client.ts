@@ -7,7 +7,7 @@ import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { fmtToMime } from '../../utils/mimes.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { DeviceProfile } from './dto.js';
+import type { DeviceProfile, QueryResultBaseItemDto } from './dto.js';
 import type {
   EntryInfo,
   EntryList,
@@ -37,6 +37,8 @@ export interface EmbyClientState {
   credentials?: EmbyCredentials;           // populated by test()
   deviceProfile: DeviceProfile;
   capabilities: PlatformInfo;
+  /** viewId → lowercased CollectionType. Populated on first getViews() call. */
+  viewsCache?: Record<string, string | null>;
 }
 
 // ── test() ───────────────────────────────────────────────────────────────────
@@ -94,6 +96,17 @@ function requireState(state: EmbyClientState): EmbyClientState & { credentials: 
   return state as EmbyClientState & { credentials: EmbyCredentials };
 }
 
+function populateViewsCache(state: EmbyClientState, views: QueryResultBaseItemDto): void {
+  const cache: Record<string, string | null> = {};
+  for (const item of views.Items ?? []) {
+    const id = item.Id as string | undefined;
+    if (id) {
+      cache[id] = (item.CollectionType as string | null | undefined)?.toLowerCase() ?? null;
+    }
+  }
+  state.viewsCache = cache;
+}
+
 export async function listEntry(
   state: EmbyClientState,
   location: string | null,
@@ -106,20 +119,27 @@ export async function listEntry(
 
   if (location === null) {
     const views = await api.getViews();
+    populateViewsCache(state, views);
     return {
       items: views.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],
       totalCount: views.TotalRecordCount,
     };
   } else {
+    // Ensure views cache is populated (fallback for direct deep-links).
+    if (!state.viewsCache) {
+      const views = await api.getViews();
+      populateViewsCache(state, views);
+    }
+    const isMoviesLibrary = state.viewsCache![location] === 'movies';
     const result = await api.getItems({
       parentId: location,
-      recursive: options?.recursive ?? false,
+      recursive: isMoviesLibrary ? true : (options?.recursive ?? false),
       startIndex,
       limit,
       fields: BROWSE_FIELDS_STR,
       sortBy: options?.sortBy ?? undefined,
       sortOrder: options?.sortOrder ?? undefined,
-      includeItemTypes: options?.filterByType ?? undefined,
+      includeItemTypes: isMoviesLibrary ? 'Movie' : (options?.filterByType ?? undefined),
     });
     return {
       items: result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],

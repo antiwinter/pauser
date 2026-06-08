@@ -106,7 +106,6 @@ export interface EntryInfo {
   indexNumber?: number | null;
   overview?: string | null;
   childCount?: number | null;
-  collectionType?: string | null;
   // detail fields
   parentId?: string | null;
   seriesId?: string | null;

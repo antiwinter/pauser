@@ -52,7 +52,6 @@ fun OpenTuneNavHost() {
                         id = location,
                         title = location,
                         type = "Root",
-                        collectionType = cmd.collectionType,
                     )
                     cacheAndBrowse(cmd.provider, cmd.endpointId, entry)
                 }

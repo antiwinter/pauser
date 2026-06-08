@@ -30,7 +30,6 @@ data class EntryInfo(
     val parentId: String? = null,
     val seriesId: String? = null,
     val seasonNumber: Int? = null,
-    val collectionType: String? = null,
     // Detail fields (previously in EntryDetail)
     val logo: String? = null,
     val backdrop: List<String> = emptyList(),

@@ -28,6 +28,7 @@
 - [x] detail screen entering rules
 - [ ] right most alphabet quick jump
 - [ ] recent
+- [ ] merge browse/search, use filter to distinguish
 
 ## js providers
 - [x] remove sidecar meta
@@ -67,7 +68,7 @@
 ## Roadmap
 - [ ] remove opentune naming
 - [ ] HDR support
-- [ ] release insomnia-x86_64-vx.x.x.apk
+- [-] release insomnia-x86_64-vx.x.x.apk
 - [ ] pro user decoration. ICON/badge
 
 ## Providers

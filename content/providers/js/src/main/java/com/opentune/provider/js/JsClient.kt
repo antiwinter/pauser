@@ -301,7 +301,6 @@ class JsClient(
             indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             overview = obj["overview"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             childCount = obj["childCount"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            collectionType = obj["collectionType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             parentId = obj["parentId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             seriesId = obj["seriesId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             seasonNumber = obj["seasonNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),

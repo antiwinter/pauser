@@ -2,8 +2,6 @@ package com.opentune.server.debug
 
 import android.util.Log
 import com.opentune.server.AppContext
-import com.opentune.content.contract.EntryList
-import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SearchQuery
 import com.opentune.core.form.contract.QrResult
 import com.opentune.storage.EndpointEntity
@@ -145,31 +143,16 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val location = call.request.queryParameters["location"]
                 val start = call.request.queryParameters["start"]?.toIntOrNull() ?: 0
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-                val collectionType = call.request.queryParameters["collectionType"]
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
 
-                val resolvedCollectionType = if (!collectionType.isNullOrEmpty()) {
-                    collectionType
-                } else if (!location.isNullOrEmpty()) {
-                    runCatching {
-                        instance.getEntries(listOf(location)).items.firstOrNull()?.collectionType
-                    }.getOrNull()
-                } else {
-                    null
-                }
+                Log.d(LOG_TAG, "[debug browse] location=$location")
 
-                val options = when (resolvedCollectionType?.lowercase()) {
-                    "movies" -> QueryOptions(recursive = true, filterByType = "Movie")
-                    else -> QueryOptions()
-                }
-                Log.d(LOG_TAG, "[debug browse] location=$location, collectionType=$resolvedCollectionType, options=$options")
-
-                val result = runCatching { instance.listEntry(location, start, limit, options) }.getOrElse {
+                val result = runCatching { instance.listEntry(location, start, limit) }.getOrElse {
                     Log.e(LOG_TAG, "listEntry error", it); return@get call.respond500(it.message)
                 }
                 val dto = EntryListDto(
                     items = result.items.map { e ->
-                        EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover, collectionType = e.collectionType)
+                        EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
                     },
                     totalCount = result.totalCount,
                 )
@@ -185,7 +168,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
                 }
                 val dtos = results.map { e ->
-                    EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover, collectionType = e.collectionType)
+                    EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
                 }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
@@ -235,12 +218,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     val p = body.provider ?: return@post call.respond400("missing provider")
                     val s = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    // If collectionType not provided, try to detect it from the item itself.
-                    val ct = body.collectionType ?: runCatching {
-                        val instance = ctx.getClient(s)
-                        instance?.getEntries(listOf(ref))?.items?.firstOrNull()?.collectionType
-                    }.getOrNull()
-                    NavCommand.Browse(p, s, ref, ct)
+                    NavCommand.Browse(p, s, ref)
                 }
                 "detail" -> {
                     val p = body.provider ?: return@post call.respond400("missing provider")
