@@ -49,7 +49,7 @@ When something changes, **update call sites and schema directly** and delete the
 - Route `GET /stream/{token}`: looks up token → calls `client.openStream(itemRef)` → streams bytes, honoring `Range` headers with `206 Partial Content`. One SMB session opened per HTTP request, closed when response finishes.
 - **Auth by token entropy**: tokens are single-use opaque strings revoked explicitly by the provider.
 - All SMB URLs produced for playback and cover extraction are `http://127.0.0.1:7920/stream/<token>` — loopback only. LAN features (future) will use the device's LAN IP.
-- Debug routes (provider/catalog/navigate API) installed only when `AppContext` (debug mode) is non-null. Gen-art routes also require `AppContext`.
+- Debug routes (provider/catalog/navigate API) and Gen-art routes installed only when `AppContext` (debug mode) is non-null.
 
 ### `StreamRegistrar` / `StreamRegistrarHolder`
 
@@ -95,13 +95,13 @@ interface ProviderStream {
   - `open suspend fun test(): EndpointValidationResult`
   - `abstract suspend fun listEntry(location, startIndex, limit, options): EntryList`
   - `abstract suspend fun search(scopeLocation, query): EntryList`
-  - `abstract suspend fun getDetail(itemRef): EntryDetail`
   - `abstract suspend fun getPlaybackSpec(itemRef, startMs): PlaybackSpec`
   - `abstract suspend fun getEntries(itemRefs): EntryList`
   - `open suspend fun getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder): EntryList`
   - `open suspend fun tagEntry(itemRef, tag, value): Unit`
   - `open suspend fun openStream(itemRef): ProviderStream? = null`
   - `open suspend fun getQr(): QrResult.QrReady?` / `open suspend fun pollQr(token): QrResult`
+  - **Removed:** `getDetail(itemRef): EntryDetail` — detail fields now live on `EntryInfo` (see `CatalogContracts.kt`: `logo`, `backdrop`, `bitrate`, `year`, `durationMs`, `width`, `height`, `officialRating`, `filename`). No `EntryDetail` type exists.
 - **`ProviderStream`** — random-access stream. See above.
 - **`StreamRegistrar`** / **`StreamRegistrarHolder`** — cross-module service locator for token registration. See above.
 - **`OpenTuneProviderRegistry`** / **`OpenTuneProviderRegistryHolder`** — protocol → `OpenTuneProvider` lookup.
@@ -114,6 +114,10 @@ interface ProviderStream {
 [`OpenTuneProviderRegistry`](content/contract/src/main/java/com/opentune/content/contract/OpenTuneProviderRegistry.kt) maps `protocol` string → `OpenTuneProvider` instance. Providers register via `OpenTuneProviderLoader` SPI (`META-INF/services/com.opentune.content.contract.OpenTuneProviderLoader`).
 
 [`EndpointClientRegistry`](app/src/main/java/com/opentune/app/providers/EndpointClientRegistry.kt) in `:app` manages the `EndpointClient` lifecycle — builds clients with shared `DiskCache`, `OkHttpClient` (optionally routed through a proxy), and per-endpoint `ImageLoader`. Set via `EndpointClientRegistryHolder`.
+
+**Access interfaces** (`content/contract/src/main/java/com/opentune/content/contract/RegistryHolders.kt`):
+- `OpenTuneProviderAccess` / `OpenTuneProviderRegistryHolder` — `getProvider(protocol)`, `getProviders()`, `set(registry)`
+- `EndpointClientAccess` / `EndpointClientRegistryHolder` — `getOrCreate(endpointId, entity)`, `registerHandle(endpointId, client)`, `update(endpointId, entity)`, `remove(endpointId)`, `buildHttpClient(proxy?, headers?)`
 
 ### Implementations
 
@@ -149,8 +153,8 @@ Providers **never** import `:storage`.
 
 [`PlaybackContracts.kt`](player/src/main/java/com/opentune/player/PlaybackContracts.kt) defines:
 
-- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `OpenTuneServer`). Contains `headers`, `mimeType`, `title`, `durationMs`, `bitrate`, `hooks: OpenTunePlaybackHooks`, `subtitleTracks: List<SubtitleTrack>`, `httpClient: OkHttpClient`. No `customMediaSourceFactory`.
-- **`OpenTunePlaybackHooks`** — `onPlaybackReady`, `onProgressTick`, `onStop`, `onDispose`, `progressIntervalMs`. SMB implementation revokes stream tokens on dispose.
+- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `OpenTuneServer`). Contains `url`, `headers`, `mimeType`, `hooks: OpenTunePlaybackHooks`, `subtitleTracks: List<SubtitleTrack>`, `httpClient: OkHttpClient`, `mediaCodecs: List<MediaCodecInfo>`. No `title`, `durationMs`, or `bitrate` (moved to `EntryInfo`). No `customMediaSourceFactory`.
+- **`OpenTunePlaybackHooks`** — `onPlaybackReady`, `onProgressTick(isPaused: Boolean = false)`, `onStop`, `onDispose`, `fun progressIntervalMs(): Long`. SMB implementation revokes stream tokens on dispose.
 - **`SubtitleTrack`** — `trackId`, `label`, `language`, `isDefault`, `isForced`, `externalRef`.
 
 ---
@@ -160,11 +164,11 @@ Providers **never** import `:storage`.
 [`:storage`](storage/src/main/java/com/opentune/storage/) owns all persistence. Key types:
 
 - **`EndpointEntity`** — `@PrimaryKey val endpointId: String` (`"${providerType}_${hash}"`), `protocol`, `displayName`, `fieldsJson`, `proxyId?`, timestamps.
-- **`ProxyEntity`** — `@PrimaryKey val id: String`, `proxyType`, `displayName`, `fieldsJson`, timestamps.
+- **`ProxyEntity`** — `@PrimaryKey val id: String`, `proxyType`, `displayName`, `fieldsJson`, `createdAtEpochMs`.
 - **`EntryStateEntity`** — composite PK `(endpointId, itemId)`. Field `protocol` is stored but is not part of the PK. Tracks `positionMs`, `playbackSpeed`, `isFavorite`, `title`, `type`, `selectedSubtitleTrackId`, `selectedAudioTrackId`, `updatedAtEpochMs`.
 - **`EndpointDao`** / **`ProxyDao`** — Room DAOs for CRUD.
-- **`EntryStateStore`** / **`RoomEntryStateStore`** — CRUD for `EntryStateEntity`.
-- **`AppPrefsStore`** — app-level preferences (proxy settings, etc.).
+- **`EntryStateStore`** — CRUD for `EntryStateEntity` (interface; Room-backed).
+- **`AppPrefsStore`** — app-level preferences (proxy settings, subtitle prefs, drafts, title language, pre-buffer duration).
 - **`OpenTuneStorageBindings`** — exposes `endpointDao`, `entryStateStore`, `appConfigStore`, `proxyDao`. Created by `OpenTuneApplication` and passed to routes.
 
 **No `OssCache` / blob cache** in current storage. Cover art is served directly from provider URLs (HTTP covers) or extracted on-demand.
@@ -175,72 +179,57 @@ Providers **never** import `:storage`.
 
 ## Cover art
 
-### List covers (`providesArt = false` providers, e.g. SMB)
+Cover art is generated **server-side** on-demand by `GenartRoutes.kt`. Clients fetch covers via:
 
-Cover generation is handled by [`rememberAssetGenerator`](content/ui/src/main/java/com/opentune/content/ui/catalog/BrowseRoute.kt), a `@Composable` hook used in `BrowseRoute` and `SearchRoute`:
-
-```kotlin
-val assetGenerator = rememberAssetGenerator(app, protocol, endpointId, client, items)
+```
+GET /genart/{type}/{version}/{endpointId}/{itemId}
 ```
 
-`items` is a `SnapshotStateList<EntryInfo>` owned by the route. When a cover is resolved, `rememberAssetGenerator` writes it directly into the list (`items[idx] = items[idx].copy(cover = path)`), which drives recomposition automatically. **No parallel override map; no extra cover props on `MediaEntryComponent`.**
+The server uses `com.opentune.genart.GenArt.generateCover` to extract embedded artwork from the media stream. Generated covers are served as HTTP image responses and cached client-side by Coil. No client-side cover extraction (`MediaMetadataRetriever`, `OssCache`, `Semaphore`-bounded jobs) exists.
 
-Priority chain per item:
-1. DB lookup for cached cover
-2. `ossCache.getPath(key)` — resolve key to file path; if LRU-evicted, falls through to re-extraction
-3. `client.getPlaybackSpec(itemId, 0)` → `PlaybackSpec` → `MediaMetadataRetriever` → embedded picture → store via `ossCache.put(bytes)`
-4. On failure: write `CACHE_FAILED` sentinel to DB, never retried
-
-Extraction is bounded to **4 concurrent jobs** via `Semaphore(4)`. Items with `CACHE_FAILED` or an already-resolved cover are skipped immediately.
-
-When `provider.providesArt = true` (Emby), `rememberAssetGenerator` returns a no-op and does no work.
-
-### Detail poster
-
-`DetailScreen` renders `detail.poster` (not `detail.cover`). `MediaArt.None` renders nothing. Posters are not cached on disk.
+When `provider.providesArt = true` (Emby), covers come directly from the provider's HTTP API URLs embedded in `EntryInfo.cover`.
 
 ### Cover clean-up on endpoint removal / identity change
 
 [`EndpointConfigRepository`](app/src/main/java/com/opentune/app/providers/EndpointConfigRepository.kt) `removeEndpoint` and the identity-change edit branch both execute, in order:
-1. `mediaStateStore.deleteByEndpoint(endpointId)` — deletes all Room rows for the endpoint
+1. `entryStateStore.deleteByEndpoint(endpointId)` — deletes all Room rows for the endpoint
 2. `endpointDao.delete(endpointId)` — deletes the endpoint record
 3. `instanceRegistry.remove(endpointId)` — evicts the live instance
 
-No explicit file deletion is needed — `OssCache` LRU eviction handles cleanup automatically.
+No explicit cover file deletion is needed — server-side generated covers are ephemeral.
 
 ---
 
 ## Shared catalog UI
 
-Routes and screens under **`content/ui/src/main/java/com/opentune/content/ui/catalog`**:
+Routes and screens under **`content/ui/src/main/java/com/opentune/content/ui/catalog/`** (subdirectories):
 
 | File | Role |
 |---|---|
-| `BrowseRoute` / `SearchRoute` | Create `mutableStateListOf<EntryInfo>()`, call `rememberAssetGenerator`, pass both to the screen |
-| `BrowseScreen` / `SearchScreen` | Accept `SnapshotStateList<EntryInfo>`; populate with `.clear()` + `.addAll()`; call `onItemsLoaded` after each batch |
-| `MediaEntryComponent` | Renders `item.cover` directly — no cover override param |
-| `DetailRoute` / `DetailScreen` | Load `EntryDetail`, render `detail.poster` |
-| `AssetGenerator` | `rememberAssetGenerator` hook + `updateItemCover` helper; currently covers only |
-| `ArtUrlInjector` | Protocol/endpoint → art URL injection for entries |
+| `catalog/browse/` BrowseRoute / BrowseScreen / BrowseViewModel | List entries; populate `EntryInfo` list; cover art URLs come from `EntryInfo.cover` (provider HTTP) or server-side gen-art |
+| `catalog/search/` SearchRoute / SearchScreen | Search entries |
+| `catalog/components/` MediaEntryComponent / ThumbEntryComponent | Render entries; `item.cover` from `EntryInfo.cover` |
+| `catalog/detail/` DetailRoute / DetailViewModel / DetailHeader / DetailOverviewShell + type-specific screens (MovieDetailRoute, SeriesDetailRoute, DigipakDetailRoute) | Load `EntryInfo` directly (no `EntryDetail`), render detail fields |
+| `catalog/player/` PlayerController | Orchestrates playback lifecycle |
 | `CatalogNav` | Navigation helpers; `LIBRARIES_ROOT_SEGMENT` = `CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT` |
 
-**Player shell:** [`OpenTunePlayerScreen`](player/src/main/java/com/opentune/player/OpenTunePlayerScreen.kt) in `:player` takes `PlaybackSpec` only — no SMB/Emby branching.
+**Player shell:** `:player` module defines `PlayerSurfaceController` interface ([`player/src/main/java/com/opentune/player/PlayerSurfaceController.kt`](player/src/main/java/com/opentune/player/PlayerSurfaceController.kt)) with platform implementations: `TvPlayerSurface` ([`player/src/main/java/com/opentune/player/ui/tv/TvPlayerSurface.kt`](player/src/main/java/com/opentune/player/ui/tv/TvPlayerSurface.kt)) for TV and `PadPlayerSurface` ([`player/src/main/java/com/opentune/player/ui/pad/PadPlayerSurface.kt`](player/src/main/java/com/opentune/player/ui/pad/PadPlayerSurface.kt)) for tablets. The `PlayerController` in `:content:ui` drives playback via these surfaces — no SMB/Emby branching.
 
 ---
 
 ## Navigation route strings
 
-Unified catalog flows (`protocol` values come from `OpenTuneProvider.protocol`):
+Unified catalog flows (`provider` values come from `OpenTuneProvider.protocol`):
 
-- `browse/{protocol}/{endpointId}/{location}` — URL-encoded `location` (opaque to Nav)
-- `detail/{protocol}/{endpointId}/{itemRef}`
-- `player/{protocol}/{endpointId}/{itemRef}/{startMs}`
-- `search/{protocol}/{endpointId}/{scopeLocation}`
+- `browse/{provider}/{endpointId}/{id}` — `{id}` is the entry location/id
+- `detail/{provider}/{endpointId}/{itemRef}/{id}` — `{id}` is URL-encoded serialized `EntryInfo` JSON
+- `player/{provider}/{endpointId}/{itemRef}/{startMs}/{id}` — `{id}` is URL-encoded serialized `EntryInfo` JSON
+- `search/{provider}/{endpointId}/{scopeLocation}`
 
 Endpoint configuration (neutral):
 
 - `endpoint_add/{protocol}` — `Routes.endpointAdd`
-- `endpoint_edit/{protocol}/{endpointId}` — `Routes.endpointEdit`
+- `provider_edit/{protocol}?endpointId={endpointId}` — `Routes.providerEdit` (query string, not path param)
 
 Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic strings. Libraries root token: `CatalogNav.LIBRARIES_ROOT_SEGMENT`.
 
@@ -251,6 +240,20 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 [`EndpointAddRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointAddRoute.kt) / [`EndpointEditRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointEditRoute.kt) under `ui/config`. Driven by `provider.getFieldsSpec()`. Field labels resolve via `strings.xml` + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
 
 ---
+
+## Gen-art routes
+
+[`GenartRoutes.kt`](server/src/main/java/com/opentune/server/GenartRoutes.kt) in `:server` exposes:
+
+```
+GET /genart/{type}/{version}/{endpointId}/{itemId}
+```
+
+- `type`: `"browse"` (grid thumbnails) or `"detail"` (poster/backdrop)
+- `version`: cover generation version string (bump to bust caches)
+- Uses `com.opentune.genart.GenArt.generateCover` to extract embedded artwork from the media stream
+- Returns the image bytes directly; no server-side disk caching
+- Installed alongside debug routes; requires non-null `AppContext`
 
 ## Form module (`:core:form`)
 
@@ -271,9 +274,10 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 
 ## Log tags
 
-- Cover/asset generation: `"OT_AssetGenerator"`.
 - Embedded server: `"OpenTuneServer"`.
+- Gen-art cover generation: `"GenartRoutes"`.
 - SMB player hints: `"OpenTunePlayer"` (from `SMB_LOG` in `SmbClient`).
+- Debug routes: `"OT_DebugRoutes"`.
 
 ---
 
