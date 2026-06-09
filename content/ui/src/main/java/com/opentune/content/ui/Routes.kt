@@ -15,6 +15,7 @@ fun decodeEntryInfo(json: String): EntryInfo? =
 object Routes {
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
+    const val ADD_ENDPOINT = "add_endpoint"
     const val BROWSE = "browse/{provider}/{endpointId}/{id}"
     const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{id}"
     const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{id}"

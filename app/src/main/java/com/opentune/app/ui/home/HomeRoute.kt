@@ -24,7 +24,6 @@ import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.content.ui.providers.ProxyRepository
 import com.opentune.storage.EndpointEntity
-import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -33,10 +32,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeRoute(
-    onAddProvider: (String) -> Unit,
+    onAddEndpoint: () -> Unit,
     onOpenBrowse: (String, String) -> Unit,
     onEditProvider: (String, String) -> Unit,
-    onAddProxy: (String) -> Unit,
     onEditProxy: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
@@ -68,11 +66,6 @@ fun HomeRoute(
         ) {
             Text(stringResource(R.string.home_title))
             providers.forEach { provider ->
-                Button(onClick = { onAddProvider(provider.protocol) }) {
-                    Text(stringResource(R.string.home_add_provider, provider.protocol))
-                }
-            }
-            providers.forEach { provider ->
                 (endpointsByType[provider.protocol] ?: emptyList()).forEach { e ->
                     Button(
                         onClick = { onOpenBrowse(provider.protocol, e.endpointId) },
@@ -82,20 +75,18 @@ fun HomeRoute(
                     }
                 }
             }
-            app.proxyProviderRegistry.allProxies().forEach { proxyProvider ->
-                Button(onClick = { onAddProxy(proxyProvider.proxyType) }) {
-                    Text("+ Add ${proxyProvider.proxyType} proxy")
-                }
-            }
             proxies.forEach { proxy ->
                 Button(
-                    onClick = { onEditProxy(proxy.proxyType, proxy.id) },
+                    onClick = {},
                     modifier = Modifier.onTvMenuKeyDown {
-                        scope.launch { ProxyRepository.delete(proxy.id) }
+                        onEditProxy(proxy.proxyType, proxy.id)
                     },
                 ) {
                     Text(proxy.displayName)
                 }
+            }
+            Button(onClick = onAddEndpoint) {
+                Text("[+]")
             }
         }
         Text(

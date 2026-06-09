@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.opentune.app.ui.home.AddEndpointRoute
 import com.opentune.app.ui.home.HomeRoute
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
@@ -80,14 +81,23 @@ fun OpenTuneNavHost() {
         NavHost(navController = nav, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
                 HomeRoute(
-                    onAddProvider = { pt -> nav.navigate(Routes.providerEdit(pt)) },
+                    onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
                     onOpenBrowse = { pt, sid ->
                         val entry = EntryInfo(id = "", title = "", type = "Root")
                         cacheAndBrowse(pt, sid, entry)
                     },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
-                    onAddProxy = { pt -> nav.navigate(ProxyRoutes.proxyEdit(pt)) },
                     onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
+                )
+            }
+            composable(Routes.ADD_ENDPOINT) {
+                AddEndpointRoute(
+                    onSelectProvider = { pt ->
+                        nav.navigate(Routes.providerEdit(pt))
+                    },
+                    onSelectProxy = { pt ->
+                        nav.navigate(ProxyRoutes.proxyEdit(pt))
+                    },
                 )
             }
             contentRoutes(nav, sharedVm, playerController)

@@ -39,6 +39,9 @@ fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
                 else                 ProxyRepository.submitEdit(proxyType, proxyId, values)
             },
             onDone = { nav.popBackStack() },
+            onDelete = if (proxyId != null) {
+                { ProxyRepository.delete(proxyId); Unit }
+            } else null,
         )
     }
 }
