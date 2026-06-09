@@ -23,6 +23,7 @@ import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.content.ui.providers.ProxyRepository
+import com.opentune.core.osd.gOSD
 import com.opentune.storage.EndpointEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -87,6 +88,9 @@ fun HomeRoute(
             }
             Button(onClick = onAddEndpoint) {
                 Text("[+]")
+            }
+            Button(onClick = { gOSD.msg("OSD test message") }) {
+                Text("[OSD test]")
             }
         }
         Text(

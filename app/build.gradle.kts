@@ -86,6 +86,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:osd"))
     implementation(project(":content:ui"))
     implementation(project(":proxy:ui"))
     implementation(project(":content:providers:js"))

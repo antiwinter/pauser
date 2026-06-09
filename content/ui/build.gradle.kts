@@ -21,6 +21,7 @@ dependencies {
     api(project(":proxy:contract"))
     implementation(project(":storage"))
     implementation(project(":player"))
+    implementation(project(":core:osd"))
     implementation(libs.media3.ui)
     implementation(libs.media3.exoplayer)
     implementation(project(":image-viewer"))

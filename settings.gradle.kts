@@ -21,6 +21,7 @@ rootProject.name = "OpenTune"
 include(":app")
 include(":core:form")
 include(":core:form:contract")
+include(":core:osd")
 include(":content:contract")
 include(":content:providers:smb")
 include(":content:providers:js")

@@ -20,6 +20,7 @@ import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.content.ui.contentRoutes
 import com.opentune.app.ui.settings.SettingsScreen
+import com.opentune.core.osd.GlobalOsdOverlay
 import com.opentune.player.ui.tv.TvPlayerSurface
 import com.opentune.proxy.ui.ProxyRoutes
 import com.opentune.proxy.ui.proxyRoutes
@@ -113,5 +114,7 @@ fun OpenTuneNavHost() {
                 onBack = { playerController.stop() },
             )
         }
+
+        GlobalOsdOverlay()
     }
 }

@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.content.contract.EndpointClient
+import com.opentune.core.osd.gOSD
 import com.opentune.player.MediaCodecInfo
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlaybackStorageContext
@@ -89,6 +90,7 @@ class PlayerController(
     private data class PendingSpec(val itemRef: String, val client: EndpointClient, val startMs: Long)
 
     private var _debounceJob: Job? = null
+    private var _osdJob: Job? = null
     private var _pendingSpec: PendingSpec? = null
     private var _lastResolvedItemRef: String? = null
 
@@ -116,13 +118,20 @@ class PlayerController(
 
         val hadPending = _debounceJob?.isActive == true
         _pendingSpec = PendingSpec(itemRef, client, startMs)
+
+        // Start pre-buffer OSD: show spec=0/1 immediately while debounce ticks.
+        startPrebufferOsd(itemRef)
+
         launchResolve(withDelay = hadPending)
     }
 
-    /** Show the player surface immediately. Spinner shown until spec resolves. */
+    /** Show the player surface immediately. "Loading spec..." shown until spec resolves. */
     fun play() {
         _isShown.value = true
         exoPlayer.playWhenReady = true
+        _osdJob?.cancel()
+        _osdJob = null
+        gOSD.clear()
         // If a debounced resolve is still waiting, skip the delay and run it now.
         launchResolve()
         Log.d(LOG_TAG, "play: isShown=true")
@@ -135,6 +144,8 @@ class PlayerController(
     fun stop() {
         _debounceJob?.cancel()
         _debounceJob = null
+        _osdJob?.cancel()
+        _osdJob = null
         _pendingSpec = null
         _isShown.value = false
         exoPlayer.stop()
@@ -145,6 +156,18 @@ class PlayerController(
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
         Log.d(LOG_TAG, "stop")
+    }
+
+    private fun startPrebufferOsd(itemRef: String) {
+        fun Long.toMinStr() = "%.1fmin".format(this / 60_000.0)
+        _osdJob?.cancel()
+        _osdJob = viewModelScope.launch {
+            while (true) {
+                val specFlag = if (_currentSpec.value != null) "1" else "0"
+                gOSD.msg("$itemRef, spec=$specFlag/1, buffered=${bufferedDurationMs.toMinStr()}")
+                delay(1000)
+            }
+        }
     }
 
     private fun launchResolve(withDelay: Boolean = false) {
