@@ -13,11 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +32,6 @@ import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private const val PAD_SURFACE_CONTROLLER_AUTO_HIDE_MS = 3_000L
 
@@ -42,12 +41,16 @@ fun PadPlayerSurface(
     controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
-    val spec = controller.currentSpec ?: return
-    val storageCtx = controller.storageCtx ?: return
+    val session = controller.playbackSession
+    val spec by session.currentSpecFlow.collectAsState()
+    val specValue = spec ?: return
+    val storageCtx by session.storageCtxFlow.collectAsState()
+    val ctx = storageCtx ?: return
 
-    CompositionLocalProvider(LocalPlaybackStorageContext provides storageCtx) {
+    CompositionLocalProvider(LocalPlaybackStorageContext provides ctx) {
         PadPlayerSurfaceContent(
             controller = controller,
+            spec = specValue,
             onBack = onBack,
         )
     }
@@ -57,9 +60,10 @@ fun PadPlayerSurface(
 @Composable
 private fun PadPlayerSurfaceContent(
     controller: PlayerSurfaceController,
+    spec: com.opentune.player.PlaybackSpec,
     onBack: () -> Unit,
 ) {
-    val spec = controller.currentSpec!!
+    val session = controller.playbackSession
     val engine = rememberPlaybackEngine(
         spec = spec,
         startMs = controller.startMs,
@@ -67,11 +71,10 @@ private fun PadPlayerSurfaceContent(
         initialAudioTrackId = null,
         initialSubtitleOffsetFraction = 0f,
         initialSubtitleSizeScale = 1f,
-        exo = controller.exoPlayer,
+        session = session,
     )
     PlaybackHostEffects(engine.exo)
 
-    val scope = rememberCoroutineScope()
     val exo = engine.exo
 
     var controllerState by remember { mutableStateOf(0) }
@@ -118,7 +121,7 @@ private fun PadPlayerSurfaceContent(
         }
     }
 
-    BackHandler { scope.launch { engine.release(); onBack() } }
+    BackHandler { engine.leaveSurface(); onBack() }
 
     Box(
         modifier = Modifier

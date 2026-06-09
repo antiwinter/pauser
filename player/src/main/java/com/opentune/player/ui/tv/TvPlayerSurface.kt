@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +42,6 @@ import com.opentune.player.engine.rememberPlaybackEngine
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
 
@@ -53,16 +51,20 @@ fun TvPlayerSurface(
     controller: PlayerSurfaceController,
     onBack: () -> Unit,
 ) {
-    val spec = controller.currentSpec
-    if (spec == null) {
+    val session = controller.playbackSession
+    val spec by session.currentSpecFlow.collectAsState()
+    val specValue = spec ?: run {
         PlayerLoadingOverlay(onBack = onBack)
         return
     }
 
-    val storageCtx = controller.storageCtx ?: return
-    CompositionLocalProvider(LocalPlaybackStorageContext provides storageCtx) {
+    val storageCtx by session.storageCtxFlow.collectAsState()
+    val ctx = storageCtx ?: return
+    CompositionLocalProvider(LocalPlaybackStorageContext provides ctx) {
         TvPlayerSurfaceContent(
             controller = controller,
+            spec = specValue,
+            storageCtx = ctx,
             onBack = onBack,
         )
     }
@@ -89,11 +91,12 @@ private fun PlayerLoadingOverlay(onBack: () -> Unit) {
 @Composable
 private fun TvPlayerSurfaceContent(
     controller: PlayerSurfaceController,
+    spec: com.opentune.player.PlaybackSpec,
+    storageCtx: com.opentune.player.PlaybackStorageContext,
     onBack: () -> Unit,
 ) {
-    val storageCtx = controller.storageCtx!!
-    val spec = controller.currentSpec!!
     val hasNextVideo by controller.hasNextVideoFlow.collectAsState()
+    val session = controller.playbackSession
     val engine = rememberPlaybackEngine(
         spec = spec,
         startMs = controller.startMs,
@@ -101,11 +104,10 @@ private fun TvPlayerSurfaceContent(
         initialAudioTrackId = null,
         initialSubtitleOffsetFraction = 0f,
         initialSubtitleSizeScale = 1f,
-        exo = controller.exoPlayer,
+        session = session,
     )
     PlaybackHostEffects(engine.exo)
 
-    val scope = rememberCoroutineScope()
     val exo = engine.exo
 
     var controllerState by remember { mutableStateOf(0) }
@@ -178,7 +180,7 @@ private fun TvPlayerSurfaceContent(
             menu.isOpen -> menu.back()
             engine.subtitleCtrl.isAdjustActive -> engine.subtitleCtrl.confirmAdjust()
             controllerState != 0 -> controllerState = 0
-            else -> scope.launch { engine.release(); onBack() }
+            else -> { engine.leaveSurface(); onBack() }
         }
     }
 
@@ -187,12 +189,13 @@ private fun TvPlayerSurfaceContent(
     Box(modifier = Modifier.fillMaxSize()) {
         TvPlayerView(
             player = exo,
+            session = session,
             modifier = Modifier.fillMaxSize(),
             onOpenMenu = { menu.open() },
             onBack = {
                 when {
                     controllerState != 0 -> controllerState = 0
-                    else -> scope.launch { engine.release(); onBack() }
+                    else -> { engine.leaveSurface(); onBack() }
                 }
             },
             onTransportKey = { isResume ->
@@ -265,11 +268,18 @@ private fun TvPlayerSurfaceContent(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-                strokeWidth = 4.dp,
-                color = Color.White,
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "buffering...",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
         }
 
         AnimatedVisibility(

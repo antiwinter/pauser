@@ -23,11 +23,6 @@ object GlobalOsd {
             _message.value = null
         }
     }
-
-    fun clear() {
-        hideJob?.cancel()
-        _message.value = null
-    }
 }
 
 val gOSD = GlobalOsd

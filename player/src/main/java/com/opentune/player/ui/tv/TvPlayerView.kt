@@ -16,6 +16,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.opentune.player.engine.PlaybackSession
 import androidx.media3.ui.PlayerView
 import com.opentune.player.R
 import com.opentune.player.ui.applySubtitleStyle
@@ -49,6 +50,9 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 
     /** Called when the MENU / PAGE_DOWN key is pressed to open the player menu. */
     var openMenuCallback: (() -> Unit)? = null
+
+    /** Lifecycle-stable session that owns player mutations. */
+    var session: PlaybackSession? = null
 
     /**
      * Called when BACK is pressed and no overlay is active. The caller decides
@@ -124,14 +128,14 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 // LEFT / RIGHT → seek ±15s; show controller bar
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     val pos = p?.currentPosition?.minus(SEEK_MS)?.coerceAtLeast(0L) ?: 0L
-                    p?.seekTo(pos)
+                    session?.seekTo(pos)
                     Log.d(LOG_TAG, "seek -${SEEK_MS}ms → ${p?.currentPosition}")
                     onTransportKey?.invoke(false)
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     val dur = p?.duration ?: C.TIME_UNSET
                     val to = (p?.currentPosition ?: 0L) + SEEK_MS
-                    p?.seekTo(if (dur > 0) to.coerceAtMost(dur) else to)
+                    session?.seekTo(if (dur > 0) to.coerceAtMost(dur) else to)
                     Log.d(LOG_TAG, "seek +${SEEK_MS}ms → ${p?.currentPosition}")
                     onTransportKey?.invoke(false)
                 }
@@ -146,7 +150,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 -> {
                     if (p != null) {
                         val wasPlayWhenReady = p.playWhenReady
-                        if (wasPlayWhenReady) p.pause() else p.play()
+                        if (wasPlayWhenReady) session?.pause() else session?.play()
                         Log.d(LOG_TAG, "toggle play/pause playWhenReady=$wasPlayWhenReady")
                         onTransportKey?.invoke(!wasPlayWhenReady)
                     }
@@ -154,7 +158,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 
                 // MEDIA_PLAY → play (no OSD)
                 KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                    p?.play()
+                    session?.play()
                     Log.d(LOG_TAG, "media play")
                 }
 
@@ -162,7 +166,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_MEDIA_PAUSE,
                 KeyEvent.KEYCODE_MEDIA_STOP,
                 -> {
-                    p?.pause()
+                    session?.pause()
                     Log.d(LOG_TAG, "media pause/stop")
                     onTransportKey?.invoke(false)
                 }
@@ -213,6 +217,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 @Composable
 internal fun TvPlayerView(
     player: ExoPlayer,
+    session: PlaybackSession,
     modifier: Modifier = Modifier,
     onPlayerViewBound: (PlayerView) -> Unit = {},
     onOpenMenu: () -> Unit = {},
@@ -233,6 +238,7 @@ internal fun TvPlayerView(
         },
         update = { view ->
             if (view.player !== player) view.player = player
+            view.session = session
             view.openMenuCallback = onOpenMenu
             view.onBack = onBack
             view.onTransportKey = onTransportKey

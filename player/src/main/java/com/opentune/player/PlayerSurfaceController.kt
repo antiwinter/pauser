@@ -1,6 +1,6 @@
 package com.opentune.player
 
-import androidx.media3.exoplayer.ExoPlayer
+import com.opentune.player.engine.PlaybackSession
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.StateFlow
  * host controller. Only `:player` types — no dependency on `:content:ui` or `:content:contract`.
  */
 interface PlayerSurfaceController {
+    val playbackSession: PlaybackSession
     val currentSpec: PlaybackSpec?
     val storageCtx: PlaybackStorageContext?
     val startMs: Long
-    val exoPlayer: ExoPlayer
     val hasNextVideoFlow: StateFlow<Boolean>
     fun requestNextVideo()
 }

@@ -6,11 +6,13 @@ import okio.BufferedSource
 import okio.ForwardingSource
 import okio.buffer
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 
 internal object BandwidthTracker {
 
     private data class Entry(val bytes: Long, val second: Long)
     private val entries = ConcurrentLinkedQueue<Entry>()
+    private val totalBytesCounter = AtomicLong(0L)
 
     @Volatile private var pendingBytes = 0L
     @Volatile private var lastSecond = 0L
@@ -20,6 +22,12 @@ internal object BandwidthTracker {
         response.newBuilder()
             .body(response.body?.let { body -> CountingResponseBody(body) })
             .build()
+    }
+
+    val totalBytes: Long get() = totalBytesCounter.get()
+
+    fun resetTotalBytes() {
+        totalBytesCounter.set(0L)
     }
 
     val mbps: Float
@@ -47,6 +55,7 @@ internal object BandwidthTracker {
                     override fun read(sink: okio.Buffer, byteCount: Long): Long {
                         val read = super.read(sink, byteCount)
                         if (read > 0) {
+                            totalBytesCounter.addAndGet(read)
                             val now = System.currentTimeMillis() / 1000
                             if (now > lastSecond) {
                                 entries.add(Entry(pendingBytes, lastSecond))

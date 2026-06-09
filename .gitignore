@@ -26,3 +26,4 @@ providers-ts/providers/*/.env
 **/bin/
 .env
 classes.dex
+.claude/worktrees
