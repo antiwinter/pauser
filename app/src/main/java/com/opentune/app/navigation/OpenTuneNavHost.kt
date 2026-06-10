@@ -111,7 +111,7 @@ fun OpenTuneNavHost() {
         if (isShown) {
             TvPlayerSurface(
                 controller = playerController,
-                onBack = { playerController.hide() },
+                onBack = { playerController.stop() },
             )
         }
 

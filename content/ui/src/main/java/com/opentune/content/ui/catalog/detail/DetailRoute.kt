@@ -89,10 +89,14 @@ fun DetailRoute(
         }
     }
 
-    // Back from detail: stop pre-buffer and navigate away.
+    // Stop player when leaving detail entirely.
+    DisposableEffect(playerController) {
+        onDispose { playerController?.reset() }
+    }
+
+    // Back from detail: navigate away (player stops via DisposableEffect above).
     // When surface is visible, TvPlayerSurface's BackHandler takes priority.
     BackHandler {
-        playerController?.stop()
         nav.popBackStack()
     }
 

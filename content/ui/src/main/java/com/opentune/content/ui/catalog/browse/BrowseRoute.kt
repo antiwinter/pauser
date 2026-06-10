@@ -105,7 +105,8 @@ fun BrowseRoute(
             },
             onOpenPlayer = { raw, startMs ->
                 val clientRef = c ?: return@BrowseScreen
-                playerController.prepare(protocol, endpointId, raw, clientRef, startMs ?: 0L)
+                playerController.setClient(clientRef)
+                playerController.prepare(raw, startMs ?: 0L)
                 playerController.play()
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },

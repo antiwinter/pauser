@@ -100,6 +100,8 @@ class EndpointClientRegistry(
             .diskCache(sharedDiskCache)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = httpClient)) }
             .build()
+        client.endpointId = entity.endpointId
+        client.protocol = entity.protocol
 
         return client
     }

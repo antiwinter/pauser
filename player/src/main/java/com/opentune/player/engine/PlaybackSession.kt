@@ -24,8 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SESSION_LOG = "PlaybackSession"
-private const val MAX_WAIT_READY_MS = 120_000L
-private const val MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS = 2_500L
 private const val DEFAULT_PROGRESS_INTERVAL_MS = 10_000L
 
 /**
@@ -41,188 +39,101 @@ class PlaybackSession(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val exoPlayer: ExoPlayer = OpenTuneExoPlayer.createForBundledSources(appContext).player
+    val exo: ExoPlayer = OpenTuneExoPlayer.createForBundledSources(appContext).player
 
-    private val _currentSpec = MutableStateFlow<PlaybackSpec?>(null)
-    val currentSpecFlow: StateFlow<PlaybackSpec?> = _currentSpec.asStateFlow()
-    val currentSpec: PlaybackSpec? get() = _currentSpec.value
-
+    private val _spec = MutableStateFlow<PlaybackSpec?>(null)
+    val currentSpec: PlaybackSpec? get() = _spec.value
+    val currentSpecFlow: StateFlow<PlaybackSpec?> = _spec.asStateFlow()
+    
     private val _storageCtx = MutableStateFlow<PlaybackStorageContext?>(null)
-    val storageCtxFlow: StateFlow<PlaybackStorageContext?> = _storageCtx.asStateFlow()
     val storageCtx: PlaybackStorageContext? get() = _storageCtx.value
+    val storageCtxFlow: StateFlow<PlaybackStorageContext?> = _storageCtx.asStateFlow()
 
-    var startMs: Long = 0L
-        private set
-
-    private var loadedKey: String? = null
-    private var currentHooks: OpenTunePlaybackHooks? = null
-    private var readyJob: Job? = null
     private var heartbeatJob: Job? = null
-    private var stoppedHooks: OpenTunePlaybackHooks? = null
 
-    val isPrepared: Boolean get() = currentSpec != null
-
-    val bufferedDurationMs: Long
+    val bufferedMs: Long
         get() {
-            // Guard on loadedKey (not currentSpec) so we return 0 during the transition
-            // window between spec being set and ExoPlayer actually loading the new source.
-            if (currentSpec == null || loadedKey == null) return 0L
-            val pos = exoPlayer.currentPosition
-            val buf = exoPlayer.bufferedPosition
+            val pos = exo.currentPosition
+            val buf = exo.bufferedPosition
             return maxOf(0L, buf - pos)
         }
 
-    val loadedBytes: Long get() = BandwidthTracker.totalBytes
+    val bufferedBytes: Long get() = BandwidthTracker.totalBytes
 
     suspend fun prepare(
         spec: PlaybackSpec,
         storageCtx: PlaybackStorageContext,
         startMs: Long,
     ) {
-        val key = storageCtx.entryStateKey.itemRef
         val savedSpeed = withContext(Dispatchers.IO) {
-            storageCtx.entryStateStore.get(
-                storageCtx.entryStateKey.protocol,
-                storageCtx.entryStateKey.endpointId,
-                storageCtx.entryStateKey.itemRef,
-            )?.playbackSpeed ?: 1f
+            storageCtx.entryStateStore.get(storageCtx.entryStateKey)?.playbackSpeed ?: 1f
         }.coerceIn(0.25f, 4f)
 
         _storageCtx.value = storageCtx
-        _currentSpec.value = spec
-        this.startMs = startMs
-        currentHooks = spec.hooks
-        stoppedHooks = null
+        _spec.value = spec
         startHeartbeat(spec, storageCtx)
-        startReadyWait(spec)
 
         withContext(Dispatchers.Main) {
-            val alreadyLoaded = key == loadedKey && exoPlayer.playbackState != Player.STATE_IDLE
-            if (alreadyLoaded) {
-                exoPlayer.playbackParameters = PlaybackParameters(savedSpeed)
-                if (startMs >= 0L) exoPlayer.seekTo(startMs)
-                Log.d(SESSION_LOG, "prepare: reuse key=$key seekTo=$startMs")
+            if (exo.playbackState != Player.STATE_IDLE) {
+                exo.playbackParameters = PlaybackParameters(savedSpeed)
+                if (startMs >= 0L) exo.seekTo(startMs)
+
+                Log.d(SESSION_LOG, "prepare: seekTo=$startMs")
                 return@withContext
             }
 
-            Log.d(SESSION_LOG, "prepare: load key=$key startMs=$startMs (was key=$loadedKey state=${exoPlayer.playbackState})")
-            // Mark key as not-yet-loaded so bufferedDurationMs returns 0 during transition.
-            loadedKey = null
-            BandwidthTracker.resetTotalBytes()
-            exoPlayer.stop()
-            Log.d(SESSION_LOG, "prepare: stopped key=$key pos=${exoPlayer.currentPosition} buf=${exoPlayer.bufferedPosition}")
-            exoPlayer.playWhenReady = false
-            exoPlayer.playbackParameters = PlaybackParameters(savedSpeed)
-            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            Log.d(SESSION_LOG, "prepare: load startMs=$startMs (was state=${exo.playbackState})")
+      
+            exo.stop()
+            Log.d(SESSION_LOG, "prepare: stopped pos=${exo.currentPosition} buf=${exo.bufferedPosition}")
+            exo.playWhenReady = false
+            exo.playbackParameters = PlaybackParameters(savedSpeed)
+            exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .build()
-            exoPlayer.setMediaSource(spec.toMediaSource(appContext), startMs)
-            loadedKey = key
-            exoPlayer.prepare()
+            exo.setMediaSource(spec.toMediaSource(appContext), startMs)
+            exo.prepare()
         }
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs)
-    }
-
-    fun setTrackSelectionParameters(parameters: TrackSelectionParameters) {
-        exoPlayer.trackSelectionParameters = parameters
-    }
-
-    fun setPlaybackParameters(parameters: PlaybackParameters) {
-        exoPlayer.playbackParameters = parameters
+        exo.seekTo(positionMs)
     }
 
     fun play() {
-        stoppedHooks = null
-        exoPlayer.playWhenReady = true
+        exo.playWhenReady = true
     }
 
     fun pause() {
-        exoPlayer.playWhenReady = false
+        exo.playWhenReady = false
+    }
+
+    private fun stopInternal() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+        exo.stop()
+        BandwidthTracker.resetTotalBytes()
     }
 
     fun stop() {
-        pause()
-        val hooks = currentHooks
-        val shouldCallStop = hooks != null && stoppedHooks !== hooks
-        if (shouldCallStop) stoppedHooks = hooks
-        val pos = exoPlayer.currentPosition
-        val ctx = _storageCtx.value
-
-        readyJob?.cancel()
-        readyJob = null
-        heartbeatJob?.cancel()
-        heartbeatJob = null
-        currentHooks = null
-        exoPlayer.stop()
-        _currentSpec.value = null
-        _storageCtx.value = null
-        startMs = 0L
-        loadedKey = null
-
-        hooks?.let {
-            scope.launch {
-                if (shouldCallStop) {
-                    ctx?.let { storageCtx ->
-                        withContext(Dispatchers.IO) {
-                            storageCtx.entryStateStore.upsertPosition(storageCtx.entryStateKey, pos)
-                        }
-                    }
-                    it.onStop(pos)
+        val pos = exo.currentPosition
+        val hooks = _spec.value?.hooks
+        stopInternal()
+        scope.launch {
+            _storageCtx.value?.let { ctx ->
+                withContext(Dispatchers.IO) {
+                    ctx.entryStateStore.upsertPosition(ctx.entryStateKey, pos)
                 }
-                it.onDispose()
             }
+            hooks?.onStop(pos)
+            hooks?.onDispose()
         }
     }
 
-    fun release() {
-        readyJob?.cancel()
-        readyJob = null
-        heartbeatJob?.cancel()
-        heartbeatJob = null
-        currentHooks?.onDispose()
-        currentHooks = null
-        stoppedHooks = null
-        exoPlayer.release()
-    }
-
-    private fun startReadyWait(spec: PlaybackSpec) {
-        readyJob?.cancel()
-        val hooks = spec.hooks
-        readyJob = scope.launch {
-            val strictReadyWait = hooks.progressIntervalMs() > 0L || startMs > 0L
-            val maxReadyMs = if (strictReadyWait) MAX_WAIT_READY_MS else MAX_WAIT_READY_NO_PROGRESS_HOOKS_MS
-            if (!strictReadyWait) Log.d(SESSION_LOG, "readyWait soft READY wait (no progress hooks / typical SMB)")
-            var waitedReadyMs = 0L
-            while (exoPlayer.playbackState != Player.STATE_READY && isActive) {
-                if (strictReadyWait && waitedReadyMs % 2000L < 32L) {
-                    val err = exoPlayer.playerError
-                    Log.i(
-                        SESSION_LOG,
-                        "waiting STATE_READY waitedMs=$waitedReadyMs playbackState=${exoPlayer.playbackState} " +
-                            "isLoading=${exoPlayer.isLoading} playWhenReady=${exoPlayer.playWhenReady} err=${err?.message}",
-                    )
-                }
-                delay(32)
-                waitedReadyMs += 32
-                if (waitedReadyMs >= maxReadyMs) {
-                    Log.w(
-                        SESSION_LOG,
-                        "timeout waiting STATE_READY after ${waitedReadyMs}ms (strict=$strictReadyWait) " +
-                            "state=${exoPlayer.playbackState} err=${exoPlayer.playerError?.message}",
-                    )
-                    break
-                }
-            }
-            if (!isActive) return@launch
-            val pos = exoPlayer.currentPosition
-            val rate = exoPlayer.playbackParameters.speed
-            Log.d(SESSION_LOG, "onPlaybackReady positionMs=$pos rate=$rate")
-            hooks.onPlaybackReady(pos, rate)
-        }
+    fun clear() {
+        stopInternal()
+        exo.release()
     }
 
     private fun startHeartbeat(spec: PlaybackSpec, storageCtx: PlaybackStorageContext) {
@@ -230,11 +141,18 @@ class PlaybackSession(
         val hooks = spec.hooks
         val interval = hooks.progressIntervalMs().takeIf { it > 0L } ?: DEFAULT_PROGRESS_INTERVAL_MS
         heartbeatJob = scope.launch {
+            var readyReported = false
             while (isActive) {
                 delay(interval)
-                val pos = exoPlayer.currentPosition
-                val isPaused = !exoPlayer.playWhenReady
-                hooks.onProgressTick(pos, exoPlayer.playbackParameters.speed, isPaused)
+                if(exo.playbackState != Player.STATE_READY) continue
+                val pos = exo.currentPosition
+                val isPaused = !exo.playWhenReady
+                val rate = exo.playbackParameters.speed
+                if (!readyReported) {
+                    hooks.onPlaybackReady(pos, rate)
+                    readyReported = true
+                }
+                hooks.onProgressTick(pos, rate, isPaused)
                 if (!isPaused) {
                     withContext(Dispatchers.IO) {
                         storageCtx.entryStateStore.upsertPosition(storageCtx.entryStateKey, pos)

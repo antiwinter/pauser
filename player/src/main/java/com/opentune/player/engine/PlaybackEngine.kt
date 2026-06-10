@@ -64,7 +64,6 @@ internal class PlaybackEngine(
 @Composable
 internal fun rememberPlaybackEngine(
     spec: PlaybackSpec,
-    startMs: Long,
     initialSubtitleTrackId: String?,
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
     initialSubtitleOffsetFraction: Float,
@@ -79,7 +78,7 @@ internal fun rememberPlaybackEngine(
     val appConfigStore = storageCtx.appConfigStore
     val context = LocalContext.current
     val instanceKey = entryStateKey
-    val exo = session.exoPlayer
+    val exo = session.exo
 
     val specState = rememberUpdatedState(spec)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }

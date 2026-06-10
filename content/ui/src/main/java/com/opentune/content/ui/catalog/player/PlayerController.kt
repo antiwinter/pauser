@@ -31,12 +31,7 @@ private const val DEBOUNCE_MS = 800L
 class PlayerController(
     application: Application,
 ) : AndroidViewModel(application), PlayerSurfaceController {
-
     override val playbackSession = PlaybackSession(application.applicationContext)
-
-    override val currentSpec: PlaybackSpec? get() = playbackSession.currentSpec
-    override val storageCtx: PlaybackStorageContext? get() = playbackSession.storageCtx
-    override val startMs: Long get() = playbackSession.startMs
 
     // UI visibility of the player surface.
     private val _isShown = MutableStateFlow(false)
@@ -60,79 +55,87 @@ class PlayerController(
         _nextVideoCallback?.invoke()
     }
 
-    val isPrepared: Boolean get() = playbackSession.isPrepared
-    val currentItemRef: String? get() = _pendingSpec?.itemRef ?: _lastResolvedItemRef
-    val bufferedDurationMs: Long get() = playbackSession.bufferedDurationMs
-    val loadedBytes: Long get() = playbackSession.loadedBytes
+    // --- Context state (set at different frequencies) ---
 
-    private data class PendingSpec(
-        val protocol: String,
-        val endpointId: String,
-        val itemRef: String,
-        val client: EndpointClient,
-        val startMs: Long,
-        val seriesStateKey: EntryStateKey?,
-    )
+    private var _client: EndpointClient? = null
+
+    /** Series-level state key — set when navigating into a series, cleared on stop. */
+    private var _seriesStateKey: EntryStateKey? = null
+    private var _parentStateKey: EntryStateKey? = null
 
     private var _debounceJob: Job? = null
     private var _osdJob: Job? = null
-    private var _pendingSpec: PendingSpec? = null
-    private var _lastResolvedItemRef: String? = null
+    
+    private var _pendingItemRef: String? = null
+    private var _pendingStartMs: Long? = null
 
-    fun prepare(
-        protocol: String,
-        endpointId: String,
-        itemRef: String,
-        client: EndpointClient,
-        startMs: Long = 0L,
+
+    private var _workingItemRef: String? = null
+    private var _workingStartMs: Long? = null
+
+    /** Set the endpoint client. Call when the user switches endpoints. */
+    fun setClient(client: EndpointClient) {
+        _client = client
+    }
+
+    /**
+     * Set series/parent context keys — call when entering a series, or clear on leaving.
+     * These have a longer lifetime than individual item prepares.
+     */
+    fun setContext(
         seriesStateKey: EntryStateKey? = null,
+        parentStateKey: EntryStateKey? = null,
     ) {
+        _seriesStateKey = seriesStateKey
+        _parentStateKey = parentStateKey
+    }
+
+    /**
+     * Prepare playback for [itemRef] starting at [startMs].
+     * [setClient] must have been called before this.
+     */
+    fun prepare(
+        itemRef: String,
+        startMs: Long = 0L,
+    ) {
+        val client = _client ?: run {
+            Log.w(LOG_TAG, "prepare: no client set, ignoring")
+            return
+        }
         Log.d(LOG_TAG, "prepare: ref=$itemRef startMs=$startMs (hadPending=${_debounceJob?.isActive})")
-        val hadPending = _debounceJob?.isActive == true
-        _pendingSpec = PendingSpec(protocol, endpointId, itemRef, client, startMs, seriesStateKey)
+        _pendingItemRef = itemRef
+        _pendingStartMs = startMs
 
-        // Start pre-buffer OSD: show spec=0/1 immediately while debounce ticks.
-        startPrebufferOsd(itemRef)
-
-        launchResolve(withDelay = hadPending)
+        launchResolve(withDelay = _debounceJob?.isActive == true)
     }
 
     /** Show the player surface immediately. "Loading spec..." shown until spec resolves. */
     fun play() {
         _isShown.value = true
-        playbackSession.play()
-        _osdJob?.cancel()
-        _osdJob = null
-        // If a debounced resolve is still waiting, skip the delay and run it now.
+        // kick off awaiting jobs
         launchResolve()
+        playbackSession.play()
         Log.d(LOG_TAG, "play: isShown=true")
     }
 
-    fun pause() {
-        playbackSession.pause()
-    }
-
-    fun hide() {
-        _isShown.value = false
-        playbackSession.pause()
-        _osdJob?.cancel()
-        _osdJob = null
-        Log.d(LOG_TAG, "hide")
-    }
-
     fun stop() {
-        _debounceJob?.cancel()
-        _debounceJob = null
-        _osdJob?.cancel()
-        _osdJob = null
-        _pendingSpec = null
         _isShown.value = false
+        playbackSession.pause()
+        Log.d(LOG_TAG, "stop")
+    }
+
+    fun reset() {
+        _isShown.value = false
+        _debounceJob?.cancel()
+        _osdJob?.cancel()
         playbackSession.stop()
-        _lastResolvedItemRef = null
+        _workingItemRef = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
-        Log.d(LOG_TAG, "stop")
+        _seriesStateKey = null
+        _parentStateKey = null
+        Log.d(LOG_TAG, "controller states cleared")
     }
 
     private fun startPrebufferOsd(itemRef: String) {
@@ -141,10 +144,10 @@ class PlayerController(
         _osdJob?.cancel()
         _osdJob = viewModelScope.launch {
             while (true) {
-                val specFlag = if (currentSpec != null) "1" else "0"
                 gOSD.msg(
-                    "$itemRef, spec=$specFlag, buffered=${bufferedDurationMs.toMinStr()}, " +
-                        "bytes=${loadedBytes.toMbStr()}"
+                    "$itemRef, spec=$_workingItemRef, " +
+                    "buffered=${playbackSession.bufferedMs.toMinStr()}, " +
+                    "bytes=${playbackSession.bufferedBytes.toMbStr()}"
                 )
                 delay(1000)
             }
@@ -154,11 +157,10 @@ class PlayerController(
     private fun launchResolve(withDelay: Boolean = false) {
         _debounceJob?.cancel()
         _debounceJob = viewModelScope.launch {
-            if (withDelay) delay(DEBOUNCE_MS)
-            val params = _pendingSpec ?: return@launch
-            _pendingSpec = null
             try {
-                resolveAndPrepare(params)
+                if (withDelay) delay(DEBOUNCE_MS)
+                startPrebufferOsd(_pendingItemRef!!)
+                resolveAndPrepare()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "launchResolve: failed", e)
@@ -166,25 +168,36 @@ class PlayerController(
         }
     }
 
-    private suspend fun resolveAndPrepare(params: PendingSpec) {
-        val (protocol, endpointId, itemRef, client, startMs, seriesStateKey) = params
+    private suspend fun resolveAndPrepare() {
+        val client = _client ?: return
+        if (_pendingItemRef == _workingItemRef 
+            && _pendingStartMs == _workingStartMs) {
+            Log.d(LOG_TAG, "launchResolve: pending spec matches working spec, ignoring")
+            return@launch
+        }
+
         val storageCtx = PlaybackStorageContext(
             entryStateStore = StorageBindingsHolder.get().entryStateStore,
-            entryStateKey = EntryStateKey(protocol, endpointId, itemRef),
-            seriesStateKey = seriesStateKey,
+            entryStateKey = EntryStateKey(client.endpointId, _pendingItemRef!!),
+            seriesStateKey = _seriesStateKey,
+            parentStateKey = _parentStateKey,
             appConfigStore = StorageBindingsHolder.get().appConfigStore,
         )
 
-        Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$itemRef startMs=$startMs")
-        val spec = withContext(Dispatchers.IO) { client.getPlaybackSpec(itemRef, startMs) }
+        Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$_pendingItemRef startMs=$_pendingStartMs")
+        val spec = withContext(Dispatchers.IO) {
+            client.getPlaybackSpec(_pendingItemRef!!, _pendingStartMs)
+        }
         _mediaCodecs.value = spec.mediaCodecs
-        playbackSession.prepare(spec, storageCtx, startMs)
-        _lastResolvedItemRef = itemRef
+        _workingItemRef = _pendingItemRef
+        _workingStartMs = _pendingStartMs
+
+        playbackSession.prepare(spec, storageCtx, _workingStartMs)
     }
 
     override fun onCleared() {
         super.onCleared()
-        playbackSession.release()
+        playbackSession.clear()
         Log.d(LOG_TAG, "onCleared")
     }
 }

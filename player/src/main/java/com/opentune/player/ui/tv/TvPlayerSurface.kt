@@ -99,7 +99,6 @@ private fun TvPlayerSurfaceContent(
     val session = controller.playbackSession
     val engine = rememberPlaybackEngine(
         spec = spec,
-        startMs = controller.startMs,
         initialSubtitleTrackId = null,
         initialAudioTrackId = null,
         initialSubtitleOffsetFraction = 0f,

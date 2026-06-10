@@ -52,17 +52,19 @@ fun DigipakDetailRoute(
         playbackSelection = PlaybackSelection(child.id, child.userData?.positionMs ?: 0L)
     }
 
+    // Set client once per endpoint.
+    LaunchedEffect(endpointId) {
+        val controller = playerController ?: return@LaunchedEffect
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        controller.setClient(client)
+    }
+
     // Unified prepare.
     LaunchedEffect(playbackSelection) {
         val sel = playbackSelection ?: return@LaunchedEffect
         val controller = playerController ?: return@LaunchedEffect
-        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
         Log.d(LOG_TAG, "prepare: ref=${sel.itemRef} startMs=${sel.startMs}")
-        controller.prepare(protocol, endpointId, sel.itemRef, client, sel.startMs, seriesStateKey = sel.seriesStateKey)
-    }
-
-    DisposableEffect(playerController) {
-        onDispose { playerController?.stop() }
+        controller.prepare(sel.itemRef, sel.startMs)
     }
 
     val playFromStart = {

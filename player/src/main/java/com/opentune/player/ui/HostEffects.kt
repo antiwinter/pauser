@@ -53,7 +53,6 @@ internal fun PlaybackHostEffects(exo: ExoPlayer) {
         }
         onDispose {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            session?.release()
         }
     }
 }

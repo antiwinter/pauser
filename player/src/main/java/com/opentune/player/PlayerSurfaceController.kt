@@ -9,9 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface PlayerSurfaceController {
     val playbackSession: PlaybackSession
-    val currentSpec: PlaybackSpec?
-    val storageCtx: PlaybackStorageContext?
-    val startMs: Long
     val hasNextVideoFlow: StateFlow<Boolean>
     fun requestNextVideo()
 }

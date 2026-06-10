@@ -112,6 +112,14 @@ class CachingEndpointClient(
         get() = delegate.httpClient
         set(value) { delegate.httpClient = value }
 
+    override var endpointId: String
+        get() = delegate.endpointId
+        set(value) { delegate.endpointId = value }
+
+    override var protocol: String
+        get() = delegate.protocol
+        set(value) { delegate.protocol = value }
+
     override suspend fun test(): EndpointValidationResult = delegate.test()
 
     override suspend fun listEntry(

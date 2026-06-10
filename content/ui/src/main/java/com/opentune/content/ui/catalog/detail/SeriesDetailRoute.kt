@@ -2,7 +2,6 @@ package com.opentune.content.ui.catalog.detail
 
 import android.util.Log
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -112,50 +111,49 @@ fun SeriesDetailRoute(
         }
     }
 
+    // Set client and series context once per endpoint/series.
+    LaunchedEffect(endpointId, stateKey) {
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        playerController?.setClient(client)
+        playerController?.setContext(seriesStateKey = stateKey)
+    }
+
     // Unified prepare.
     LaunchedEffect(playbackSelection) {
         val sel = playbackSelection ?: return@LaunchedEffect
         val controller = playerController ?: return@LaunchedEffect
-        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
         Log.d(LOG_TAG, "prepare: ref=${sel.itemRef} startMs=${sel.startMs}")
-        controller.prepare(protocol, endpointId, sel.itemRef, client, sel.startMs, seriesStateKey = sel.seriesStateKey)
+        controller.prepare(sel.itemRef, sel.startMs)
     }
 
-    // Register requestNextVideo callback; stop player on dispose.
-    DisposableEffect(playerController) {
-        if (playerController != null) {
-            playerController.setNextVideoCallback {
-                val episodes = viewModel.episodes.value
-                val currentId = viewModel.selectedEpisodeId.value
-                val currentIdx = episodes.indexOfFirst { it.id == currentId }
-                val nextEpisode = episodes.getOrNull(currentIdx + 1)
-                if (nextEpisode != null) {
-                    Log.d(LOG_TAG, "requestNextVideo: episode=${nextEpisode.id}")
-                    viewModel.setSelectedEpisodeId(nextEpisode.id)
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
-                                stateKey, nextEpisode.seasonNumber ?: 0, nextEpisode.indexNumber ?: 0
-                            )
-                        }
-                        playerController.play()
+    // Register requestNextVideo callback; cleared automatically by controller.stop().
+    LaunchedEffect(playerController) {
+        playerController?.setNextVideoCallback {
+            val episodes = viewModel.episodes.value
+            val currentId = viewModel.selectedEpisodeId.value
+            val currentIdx = episodes.indexOfFirst { it.id == currentId }
+            val nextEpisode = episodes.getOrNull(currentIdx + 1)
+            if (nextEpisode != null) {
+                Log.d(LOG_TAG, "requestNextVideo: episode=${nextEpisode.id}")
+                viewModel.setSelectedEpisodeId(nextEpisode.id)
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
+                            stateKey, nextEpisode.seasonNumber ?: 0, nextEpisode.indexNumber ?: 0
+                        )
                     }
-                } else {
-                    val seasons = viewModel.seasons.value
-                    val currentSeasonIdx = seasons.indexOfFirst { it.id == viewModel.selectedSeasonId.value }
-                    val nextSeason = seasons.getOrNull(currentSeasonIdx + 1)
-                    if (nextSeason != null) {
-                        Log.d(LOG_TAG, "requestNextVideo: advancing to season ${nextSeason.id}")
-                        pendingAutoPlay = true
-                        viewModel.selectSeason(nextSeason.id)
-                    }
+                    playerController.play()
+                }
+            } else {
+                val seasons = viewModel.seasons.value
+                val currentSeasonIdx = seasons.indexOfFirst { it.id == viewModel.selectedSeasonId.value }
+                val nextSeason = seasons.getOrNull(currentSeasonIdx + 1)
+                if (nextSeason != null) {
+                    Log.d(LOG_TAG, "requestNextVideo: advancing to season ${nextSeason.id}")
+                    pendingAutoPlay = true
+                    viewModel.selectSeason(nextSeason.id)
                 }
             }
-        }
-        onDispose {
-            playerController?.setNextVideoCallback(null)
-            playerController?.stop()
-            Log.d(LOG_TAG, "SeriesDetailRoute disposed: player stopped, nextVideo callback cleared")
         }
     }
 
