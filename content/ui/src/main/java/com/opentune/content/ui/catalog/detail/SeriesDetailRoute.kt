@@ -175,6 +175,7 @@ fun SeriesDetailRoute(
     val selectEpisode = { episode: EntryInfo ->
         sharedVm.cache(episode)
         viewModel.setSelectedEpisodeId(episode.id)
+        playbackSelection = PlaybackSelection(episode.id, episode.userData?.positionMs ?: 0L, stateKey)
         scope.launch {
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(

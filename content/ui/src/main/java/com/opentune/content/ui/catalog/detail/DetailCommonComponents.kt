@@ -204,7 +204,7 @@ fun EpisodeRow(
 ) {
     if (episodes.isEmpty()) return
     val listState = rememberLazyListState()
-    LaunchedEffect(episodes.size, initialScrollIndex) {
+    LaunchedEffect(episodes.size) {
         if (episodes.isNotEmpty() && initialScrollIndex > 0) {
             listState.scrollToItem(initialScrollIndex.coerceAtMost(episodes.lastIndex))
         }

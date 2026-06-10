@@ -87,6 +87,7 @@ class PlayerController(
         startMs: Long = 0L,
         seriesStateKey: EntryStateKey? = null,
     ) {
+        Log.d(LOG_TAG, "prepare: ref=$itemRef startMs=$startMs (hadPending=${_debounceJob?.isActive})")
         val hadPending = _debounceJob?.isActive == true
         _pendingSpec = PendingSpec(protocol, endpointId, itemRef, client, startMs, seriesStateKey)
 
@@ -142,7 +143,7 @@ class PlayerController(
             while (true) {
                 val specFlag = if (currentSpec != null) "1" else "0"
                 gOSD.msg(
-                    "$itemRef, spec=$specFlag/1, buffered=${bufferedDurationMs.toMinStr()}, " +
+                    "$itemRef, spec=$specFlag, buffered=${bufferedDurationMs.toMinStr()}, " +
                         "bytes=${loadedBytes.toMbStr()}"
                 )
                 delay(1000)

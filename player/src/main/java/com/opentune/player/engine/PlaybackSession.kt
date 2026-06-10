@@ -64,7 +64,9 @@ class PlaybackSession(
 
     val bufferedDurationMs: Long
         get() {
-            if (currentSpec == null) return 0L
+            // Guard on loadedKey (not currentSpec) so we return 0 during the transition
+            // window between spec being set and ExoPlayer actually loading the new source.
+            if (currentSpec == null || loadedKey == null) return 0L
             val pos = exoPlayer.currentPosition
             val buf = exoPlayer.bufferedPosition
             return maxOf(0L, buf - pos)
@@ -103,9 +105,12 @@ class PlaybackSession(
                 return@withContext
             }
 
-            Log.d(SESSION_LOG, "prepare: load key=$key startMs=$startMs")
+            Log.d(SESSION_LOG, "prepare: load key=$key startMs=$startMs (was key=$loadedKey state=${exoPlayer.playbackState})")
+            // Mark key as not-yet-loaded so bufferedDurationMs returns 0 during transition.
+            loadedKey = null
             BandwidthTracker.resetTotalBytes()
             exoPlayer.stop()
+            Log.d(SESSION_LOG, "prepare: stopped key=$key pos=${exoPlayer.currentPosition} buf=${exoPlayer.bufferedPosition}")
             exoPlayer.playWhenReady = false
             exoPlayer.playbackParameters = PlaybackParameters(savedSpeed)
             exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
@@ -137,20 +142,6 @@ class PlaybackSession(
 
     fun pause() {
         exoPlayer.playWhenReady = false
-    }
-
-    suspend fun endPlayback() {
-        pause()
-        val hooks = currentHooks ?: return
-        if (stoppedHooks === hooks) return
-        stoppedHooks = hooks
-        val pos = withContext(Dispatchers.Main) { exoPlayer.currentPosition }
-        _storageCtx.value?.let { ctx ->
-            withContext(Dispatchers.IO) {
-                ctx.entryStateStore.upsertPosition(ctx.entryStateKey, pos)
-            }
-        }
-        hooks.onStop(pos)
     }
 
     fun stop() {
