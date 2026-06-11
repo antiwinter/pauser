@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import java.util.UUID
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
@@ -47,11 +48,14 @@ internal fun PlaybackHostEffects(exo: ExoPlayer) {
         val activity = context.findActivity()
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val session = if (activity != null) {
-            MediaSession.Builder(activity, exo).build()
+            MediaSession.Builder(activity, exo)
+                .setId(UUID.randomUUID().toString())
+                .build()
         } else {
             null
         }
         onDispose {
+            session?.release()
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }

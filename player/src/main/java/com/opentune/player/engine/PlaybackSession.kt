@@ -73,17 +73,12 @@ class PlaybackSession(
         _spec.value = spec
         startHeartbeat(spec, storageCtx)
 
+        // Reset bandwidth tracker when preparing new content
+        BandwidthTracker.reset()
+
         withContext(Dispatchers.Main) {
-            if (exo.playbackState != Player.STATE_IDLE) {
-                exo.playbackParameters = PlaybackParameters(savedSpeed)
-                if (startMs >= 0L) exo.seekTo(startMs)
-
-                Log.d(SESSION_LOG, "prepare: seekTo=$startMs")
-                return@withContext
-            }
-
             Log.d(SESSION_LOG, "prepare: load startMs=$startMs (was state=${exo.playbackState})")
-      
+
             exo.stop()
             Log.d(SESSION_LOG, "prepare: stopped pos=${exo.currentPosition} buf=${exo.bufferedPosition}")
             exo.playWhenReady = false
@@ -113,7 +108,6 @@ class PlaybackSession(
         heartbeatJob?.cancel()
         heartbeatJob = null
         exo.stop()
-        BandwidthTracker.reset()
     }
 
     fun stop() {

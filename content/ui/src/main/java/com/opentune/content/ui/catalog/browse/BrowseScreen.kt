@@ -94,7 +94,10 @@ fun BrowseScreen(
                 val page = withContext(Dispatchers.IO) { loadMore(items.size, PAGE_SIZE) }
                 items.addAll(page.items)
             } catch (e: Exception) {
-                Log.e(logTag, "load more", e)
+                // Don't log CancellationException - it's normal when navigating away
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e(logTag, "load more", e)
+                }
             } finally {
                 localLoading = false
             }
