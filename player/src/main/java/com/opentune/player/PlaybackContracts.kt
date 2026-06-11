@@ -15,6 +15,15 @@ data class MediaCodecInfo(
     val profile: String? = null,
 )
 
+/**
+ * Display information for the player UI overlay.
+ * Set from [com.opentune.content.contract.EntryInfo] by content layer.
+ */
+data class PlaybackDisplayInfo(
+    val title: String = "",
+    val bitrate: Int? = null,
+)
+
 interface OpenTunePlaybackHooks {
     fun progressIntervalMs(): Long
     suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float)
@@ -49,5 +58,6 @@ data class PlaybackSpec(
 interface PlayerSurfaceController {
     val playbackSession: PlaybackSession
     val hasNextVideoFlow: StateFlow<Boolean>
+    val displayInfoFlow: StateFlow<PlaybackDisplayInfo>
     fun requestNextVideo()
 }

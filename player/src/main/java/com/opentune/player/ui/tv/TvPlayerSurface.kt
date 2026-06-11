@@ -94,6 +94,7 @@ private fun TvPlayerSurfaceContent(
     onBack: () -> Unit,
 ) {
     val hasNextVideo by controller.hasNextVideoFlow.collectAsState()
+    val displayInfo by controller.displayInfoFlow.collectAsState()
     val session = controller.playbackSession
     val surface = rememberPlaybackSurface(
         spec = spec,
@@ -161,7 +162,7 @@ private fun TvPlayerSurfaceContent(
     val trackInfo: TrackInfo by surface.trackInfo
     val infoOverlay = rememberInfoOverlayState(
         instanceKey = storageCtx.entryStateKey,
-        spec = spec,
+        displayInfo = displayInfo,
         exo = exo,
         videoMime = trackInfo.videoMime,
         videoDecoderStatus = trackInfo.videoDecoderStatus,

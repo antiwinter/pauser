@@ -252,6 +252,7 @@ fun EpisodePager(
 fun DigipakChildren(
     children: List<EntryInfo>,
     imageLoader: ImageLoader,
+    onFocusChild: ((EntryInfo) -> Unit)? = null,
     onPlayChild: (EntryInfo) -> Unit,
 ) {
     if (children.isEmpty()) return
@@ -262,6 +263,7 @@ fun DigipakChildren(
                 onClick = { onPlayChild(child) },
                 imageLoader = imageLoader,
                 modifier = Modifier.width(200.dp),
+                onFocus = if (onFocusChild != null) { { onFocusChild(child) } } else null,
             )
         }
     }

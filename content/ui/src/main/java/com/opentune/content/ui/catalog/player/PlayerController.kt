@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import com.opentune.content.contract.EndpointClient
 import com.opentune.core.osd.gOSD
 import com.opentune.player.MediaCodecInfo
+import com.opentune.player.PlaybackDisplayInfo
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlaybackStorageContext
 import com.opentune.player.PlayerSurfaceController
@@ -41,6 +42,10 @@ class PlayerController(
     private val _mediaCodecs = MutableStateFlow<List<MediaCodecInfo>>(emptyList())
     val mediaCodecs: StateFlow<List<MediaCodecInfo>> = _mediaCodecs
 
+    // Display info for player overlay (title, duration, bitrate) - set from EntryInfo.
+    private val _displayInfo = MutableStateFlow<PlaybackDisplayInfo>(PlaybackDisplayInfo())
+    override val displayInfoFlow: StateFlow<PlaybackDisplayInfo> = _displayInfo.asStateFlow()
+
     // Next-video callback — registered by SeriesDetailRoute; read by TvPlayerSurface.
     private var _nextVideoCallback: (() -> Unit)? = null
     private val _hasNextVideo = MutableStateFlow(false)
@@ -49,6 +54,12 @@ class PlayerController(
     fun setNextVideoCallback(cb: (() -> Unit)?) {
         _nextVideoCallback = cb
         _hasNextVideo.value = cb != null
+    }
+
+    /** Set display info from EntryInfo for player overlay. */
+    fun setDisplayInfo(title: String, bitrate: Int?) {
+        Log.d(LOG_TAG, "setDisplayInfo: title=$title bitrate=$bitrate")
+        _displayInfo.value = PlaybackDisplayInfo(title, bitrate)
     }
 
     override fun requestNextVideo() {
@@ -136,6 +147,7 @@ class PlayerController(
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
+        _displayInfo.value = PlaybackDisplayInfo()
         _seriesStateKey = null
         _parentStateKey = null
         Log.d(LOG_TAG, "controller states cleared")

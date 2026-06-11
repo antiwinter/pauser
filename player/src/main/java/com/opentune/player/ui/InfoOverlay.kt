@@ -19,11 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.exoplayer.ExoPlayer
-import com.opentune.player.PlaybackSpec
+import com.opentune.player.PlaybackDisplayInfo
 import com.opentune.storage.EntryStateKey
 
 internal class InfoOverlayState(
-    val spec: PlaybackSpec,
+    val displayInfo: PlaybackDisplayInfo,
     val durationMs: Long,
     val videoMime: String?,
     val videoDecoderStatus: String?,
@@ -58,6 +58,7 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                Text(text = state.displayInfo.title, color = Color.White, fontSize = 14.sp)
                 if (state.durationMs > 0) {
                     Text(text = formatDuration(state.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
@@ -71,6 +72,9 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                     color = if (isTrackFailed(state.audioMime, state.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
+                state.displayInfo.bitrate?.takeIf { it > 0 }?.let { br ->
+                    Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                }
                 if (mbps > 0f) {
                     Text(
                         text = "%.1f Mbps".format(mbps),
@@ -115,7 +119,7 @@ private fun formatDuration(ms: Long): String {
 @Composable
 internal fun rememberInfoOverlayState(
     instanceKey: EntryStateKey,
-    spec: PlaybackSpec,
+    displayInfo: PlaybackDisplayInfo,
     exo: ExoPlayer,
     videoMime: String?,
     videoDecoderStatus: String?,
@@ -124,9 +128,9 @@ internal fun rememberInfoOverlayState(
     mbpsState: MutableFloatState,
 ): InfoOverlayState {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, spec, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus) {
+    return remember(instanceKey, displayInfo, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus) {
         InfoOverlayState(
-            spec = spec,
+            displayInfo = displayInfo,
             durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
             videoDecoderStatus = videoDecoderStatus,

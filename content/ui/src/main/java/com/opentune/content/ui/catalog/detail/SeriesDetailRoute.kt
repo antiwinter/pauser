@@ -10,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import coil3.ImageLoader
-import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
@@ -41,11 +40,11 @@ fun SeriesDetailRoute(
     viewModel: DetailViewModel,
     sharedVm: NavSharedViewModel,
     onToggleFavorite: () -> Unit,
+    onSelectPlayback: (EntryInfo, Long, EntryStateKey?) -> Unit,
 ) {
     var pendingSeasonNumber by remember { mutableStateOf(0) }
     var pendingEpisodeNumber by remember { mutableStateOf(0) }
     var pendingAutoPlay by remember { mutableStateOf(false) }
-    var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
     val scope = rememberCoroutineScope()
 
     val vmSeasons by viewModel.seasons.collectAsState()
@@ -54,6 +53,11 @@ fun SeriesDetailRoute(
     val vmTotalEpisodes by viewModel.totalEpisodes.collectAsState()
     val vmEpisodePage by viewModel.episodePage.collectAsState()
     val vmSelectedEpisodeId by viewModel.selectedEpisodeId.collectAsState()
+
+    // Set series context for playback state persistence.
+    LaunchedEffect(stateKey) {
+        playerController?.setContext(seriesStateKey = stateKey)
+    }
 
     // Decode stored series position and kick off season loading.
     LaunchedEffect(entryInfo.id) {
@@ -87,7 +91,7 @@ fun SeriesDetailRoute(
             val episode = vmEpisodes.first()
             Log.d(LOG_TAG, "auto-advance season: episode=${episode.id}")
             viewModel.setSelectedEpisodeId(episode.id)
-            playbackSelection = PlaybackSelection(episode.id, 0L, stateKey)
+            onSelectPlayback(episode, 0L, stateKey)
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
                     stateKey, episode.seasonNumber ?: 0, episode.indexNumber ?: 0
@@ -101,29 +105,14 @@ fun SeriesDetailRoute(
                 ?: vmEpisodes.first()
             pendingEpisodeNumber = 0
             viewModel.setSelectedEpisodeId(episode.id)
-            playbackSelection = PlaybackSelection(episode.id, episode.userData?.positionMs ?: 0L, stateKey)
+            // Don't prepare yet - user will explicitly select
             return@LaunchedEffect
         }
         if (viewModel.selectedEpisodeId.value == null) {
             val episode = vmEpisodes.first()
             viewModel.setSelectedEpisodeId(episode.id)
-            playbackSelection = PlaybackSelection(episode.id, episode.userData?.positionMs ?: 0L, stateKey)
+            // Don't prepare yet - user will explicitly select
         }
-    }
-
-    // Set client and series context once per endpoint/series.
-    LaunchedEffect(endpointId, stateKey) {
-        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
-        playerController?.setClient(client)
-        playerController?.setContext(seriesStateKey = stateKey)
-    }
-
-    // Unified prepare.
-    LaunchedEffect(playbackSelection) {
-        val sel = playbackSelection ?: return@LaunchedEffect
-        val controller = playerController ?: return@LaunchedEffect
-        Log.d(LOG_TAG, "prepare: ref=${sel.itemRef} startMs=${sel.startMs}")
-        controller.prepare(sel.itemRef, sel.startMs)
     }
 
     // Register requestNextVideo callback; cleared automatically by controller.stop().
@@ -136,6 +125,7 @@ fun SeriesDetailRoute(
             if (nextEpisode != null) {
                 Log.d(LOG_TAG, "requestNextVideo: episode=${nextEpisode.id}")
                 viewModel.setSelectedEpisodeId(nextEpisode.id)
+                onSelectPlayback(nextEpisode, 0L, stateKey)
                 scope.launch {
                     withContext(Dispatchers.IO) {
                         StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
@@ -157,23 +147,19 @@ fun SeriesDetailRoute(
         }
     }
 
-    val playFromStart = {
-        playbackSelection = playbackSelection?.copy(startMs = 0L)
-            ?: PlaybackSelection(itemRefDecoded, 0L)
-        playerController?.play()
-        Unit
-    }
     val resumePlay = { playerController?.play(); Unit }
     val selectSeason = { id: String -> viewModel.selectSeason(id) }
     val focusEpisode = { episode: EntryInfo ->
+        Log.d(LOG_TAG, "focusEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
         viewModel.setSelectedEpisodeId(episode.id)
-        playbackSelection = PlaybackSelection(episode.id, episode.userData?.positionMs ?: 0L, stateKey)
+        onSelectPlayback(episode, episode.userData?.positionMs ?: 0L, stateKey)
     }
     val selectEpisode = { episode: EntryInfo ->
+        Log.d(LOG_TAG, "selectEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
         viewModel.setSelectedEpisodeId(episode.id)
-        playbackSelection = PlaybackSelection(episode.id, episode.userData?.positionMs ?: 0L, stateKey)
+        onSelectPlayback(episode, episode.userData?.positionMs ?: 0L, stateKey)
         scope.launch {
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
@@ -201,7 +187,7 @@ fun SeriesDetailRoute(
         initialEpisodeIndex = vmEpisodes.indexOfFirst { it.id == vmSelectedEpisodeId }.coerceAtLeast(0),
         onFocusEpisode = focusEpisode,
         onResume = resumePlay,
-        onPlayFromStart = playFromStart,
+        onPlayFromStart = { playerController?.playbackSession?.seekTo(0L); playerController?.play(); Unit },
         onToggleFavorite = onToggleFavorite,
         onSelectSeason = selectSeason,
         onSelectEpisode = selectEpisode,

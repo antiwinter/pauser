@@ -30,6 +30,7 @@ fun DigipakOverviewScreen(
     singleChild: EntryInfo?,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    onFocusChild: (EntryInfo) -> Unit = {},
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -76,6 +77,7 @@ fun DigipakOverviewScreen(
                     DigipakChildren(
                         children = children,
                         imageLoader = imageLoader,
+                        onFocusChild = onFocusChild,
                         onPlayChild = onSelectChild,
                     )
                 }

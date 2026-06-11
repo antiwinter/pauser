@@ -40,6 +40,8 @@ internal data class PlaybackSelection(
     val itemRef: String,
     val startMs: Long = 0L,
     val seriesStateKey: EntryStateKey? = null,
+    val title: String = "",
+    val bitrate: Int? = null,
 )
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -64,6 +66,7 @@ fun DetailRoute(
         .collectAsState(initial = TitleLang.Local)
 
     val vmEntryInfo by viewModel.entryInfo.collectAsState()
+    var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
 
     var imageLoader by remember { mutableStateOf<coil3.ImageLoader?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
@@ -90,13 +93,28 @@ fun DetailRoute(
         }
     }
 
+    // Set client on playerController once per endpoint.
+    LaunchedEffect(endpointId) {
+        val controller = playerController ?: return@LaunchedEffect
+        val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
+        controller.setClient(client)
+    }
+
+    // Common prepare logic: respond to selection changes.
+    LaunchedEffect(playbackSelection) {
+        val sel = playbackSelection ?: return@LaunchedEffect
+        val controller = playerController ?: return@LaunchedEffect
+        Log.d(LOG_TAG, "prepare: ref=${sel.itemRef} startMs=${sel.startMs}")
+        controller.setDisplayInfo(sel.title, sel.bitrate)
+        controller.prepare(sel.itemRef, sel.startMs)
+    }
+
     // Stop player when leaving detail entirely.
     DisposableEffect(playerController) {
         onDispose { playerController?.reset() }
     }
 
     // Back from detail: navigate away (player stops via DisposableEffect above).
-    // When surface is visible, TvPlayerSurface's BackHandler takes priority.
     BackHandler {
         nav.popBackStack()
     }
@@ -105,6 +123,18 @@ fun DetailRoute(
     val entryInfo = vmEntryInfo
     val vmMediaCodecs by (playerController?.mediaCodecs
         ?: MutableStateFlow(emptyList<MediaCodecInfo>())).collectAsState()
+
+    // Callback for child routes to update selection.
+    val onSelectPlayback: (EntryInfo, Long, EntryStateKey?) -> Unit = { info, startMs, seriesKey ->
+        Log.d(LOG_TAG, "onSelectPlayback: ref=${info.id} title=${info.title} startMs=$startMs")
+        playbackSelection = PlaybackSelection(
+            itemRef = info.id,
+            startMs = startMs,
+            seriesStateKey = seriesKey,
+            title = info.title,
+            bitrate = info.bitrate,
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -132,8 +162,6 @@ fun DetailRoute(
 
                 when (info.type) {
                     "Movie" -> MovieDetailRoute(
-                        protocol = protocol,
-                        endpointId = endpointId,
                         itemRefDecoded = itemRefDecoded,
                         entryInfo = info,
                         titleLang = titleLang,
@@ -142,6 +170,7 @@ fun DetailRoute(
                         mediaCodecs = vmMediaCodecs,
                         playerController = playerController,
                         onToggleFavorite = toggleFav,
+                        onSelectPlayback = onSelectPlayback,
                     )
                     "Series" -> SeriesDetailRoute(
                         protocol = protocol,
@@ -158,6 +187,7 @@ fun DetailRoute(
                         viewModel = viewModel,
                         sharedVm = sharedVm,
                         onToggleFavorite = toggleFav,
+                        onSelectPlayback = onSelectPlayback,
                     )
                     "Digipak" -> DigipakDetailRoute(
                         protocol = protocol,
@@ -172,6 +202,7 @@ fun DetailRoute(
                         viewModel = viewModel,
                         sharedVm = sharedVm,
                         onToggleFavorite = toggleFav,
+                        onSelectPlayback = onSelectPlayback,
                     )
                     else -> Text("Unsupported type: ${info.type}")
                 }
