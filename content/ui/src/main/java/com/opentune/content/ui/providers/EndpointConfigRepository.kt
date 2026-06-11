@@ -23,13 +23,14 @@ object EndpointConfigRepository {
 
     // Hash only identity fields to produce a stable endpointId.
     // Non-identity fields (name, password) can change without creating a new endpoint.
+    // Truncate to 16 hex digits (8 bytes) for shorter IDs.
     private fun computeHash(fields: Map<String, String>, identityKeys: Set<String>): String {
         val input = fields.entries
             .filter { it.key in identityKeys }
             .sortedBy { it.key }
             .joinToString { "${it.key}=${it.value}" }
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { b -> "%02x".format(b) }
+        return digest.take(8).joinToString("") { b -> "%02x".format(b) }
     }
 
     // Resolve display name: user input > suggested by provider > URL fallback.
