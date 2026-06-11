@@ -23,12 +23,12 @@ import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 
 internal class InfoOverlayState(
-    private val spec: PlaybackSpec,
+    val spec: PlaybackSpec,
     val durationMs: Long,
     val videoMime: String?,
-    val videoDecoderName: String?,
+    val videoDecoderStatus: String?,
     val audioMime: String?,
-    val audioDecoderName: String?,
+    val audioDecoderStatus: String?,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -62,40 +62,42 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                     Text(text = formatDuration(state.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
                 Text(
-                    text = trackLabel(state.videoMime, state.videoDecoderName),
-                    color = if (isTrackFailed(state.videoMime, state.videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    text = trackLabel(state.videoMime, state.videoDecoderStatus),
+                    color = if (isTrackFailed(state.videoMime, state.videoDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
                 Text(
-                    text = trackLabel(state.audioMime, state.audioDecoderName),
-                    color = if (isTrackFailed(state.audioMime, state.audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    text = trackLabel(state.audioMime, state.audioDecoderStatus),
+                    color = if (isTrackFailed(state.audioMime, state.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
-            }
-            if (mbps > 0f) {
-                Text(
-                    text = "%.1f Mbps".format(mbps),
-                    color = Color(0xFFAAAAAA),
-                    fontSize = 14.sp,
-                )
+                if (mbps > 0f) {
+                    Text(
+                        text = "%.1f Mbps".format(mbps),
+                        color = Color(0xFFAAAAAA),
+                        fontSize = 14.sp,
+                    )
+                }
             }
         }
     }
 }
 
-/** Returns codec name, "failed" if track exists but no decoder, or "" if no track. */
-private fun trackLabel(mime: String?, decoderName: String?): String {
+/** Returns format, format[c2], format[n/a], or format[err]. */
+private fun trackLabel(mime: String?, decoderStatus: String?): String {
     if (mime == null) return ""
     val codec = mime.replace(Regex("^(?:video|audio)/"), "")
-    // "passthrough" is a placeholder for offloaded/passthrough audio (no Android decoder)
-    return if (decoderName == null || decoderName == "passthrough") {
-        if (decoderName == "passthrough") codec else "$codec (failed)"
-    } else codec
+    return when {
+        decoderStatus == "n/a" -> "$codec[n/a]"
+        decoderStatus == "err" -> "$codec[err]"
+        !decoderStatus.isNullOrEmpty() -> "$codec[$decoderStatus]"
+        else -> codec
+    }
 }
 
-/** True when MIME is known but decoder never initialized (excludes passthrough). */
-private fun isTrackFailed(mime: String?, decoderName: String?): Boolean {
-    return mime != null && decoderName == null
+/** Returns true if the track has a decode error. */
+private fun isTrackFailed(mime: String?, decoderStatus: String?): Boolean {
+    return mime != null && decoderStatus == "err"
 }
 
 private fun formatDuration(ms: Long): String {
@@ -116,21 +118,20 @@ internal fun rememberInfoOverlayState(
     spec: PlaybackSpec,
     exo: ExoPlayer,
     videoMime: String?,
-    videoDecoderName: String?,
+    videoDecoderStatus: String?,
     audioMime: String?,
-    audioDecoderName: String?,
+    audioDecoderStatus: String?,
     mbpsState: MutableFloatState,
 ): InfoOverlayState {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-
-    return remember(instanceKey, spec, exo, videoMime, videoDecoderName, audioMime, audioDecoderName) {
+    return remember(instanceKey, spec, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus) {
         InfoOverlayState(
             spec = spec,
             durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
-            videoDecoderName = videoDecoderName,
+            videoDecoderStatus = videoDecoderStatus,
             audioMime = audioMime,
-            audioDecoderName = audioDecoderName,
+            audioDecoderStatus = audioDecoderStatus,
             showState = showState,
             mbpsState = mbpsState,
         )

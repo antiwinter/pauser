@@ -164,9 +164,9 @@ private fun TvPlayerSurfaceContent(
         spec = spec,
         exo = exo,
         videoMime = trackInfo.videoMime,
-        videoDecoderName = trackInfo.videoDecoderName,
+        videoDecoderStatus = trackInfo.videoDecoderStatus,
         audioMime = trackInfo.audioMime,
-        audioDecoderName = trackInfo.audioDecoderName,
+        audioDecoderStatus = trackInfo.audioDecoderStatus,
         mbpsState = surface.bandwidthMbps,
     )
 

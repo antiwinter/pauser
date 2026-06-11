@@ -17,17 +17,28 @@ import com.opentune.storage.EntryStateKey
 
 internal data class TrackInfo(
     val videoMime: String? = null,
-    val videoDecoderName: String? = null,
+    val videoDecoderStatus: String = "",
     val audioMime: String? = null,
-    val audioDecoderName: String? = null,
+    val audioDecoderStatus: String = "",
 )
 
-// MIME types come from onTracksChanged. Decoder names come from AnalyticsListener callbacks
-// which fire when a decoder is initialized — this covers both the normal path and fallback
-// retries (each retry re-initializes the decoder, firing again).
+// MIME types and availability come from onTracksChanged via lookFor().
+// Decoder names come from AnalyticsListener callbacks (fire when a decoder initializes).
 //
-// Tracks that exist but are disabled (e.g., no decoder available) are still tracked so the
-// OSD can show them with a "failed" indicator.
+// decoderStatus values:
+//   ""      — selected, decoder not yet initialized → shows "codec"
+//   "c2"    — decoder initialized                  → shows "codec[c2]"
+//   "n/a"   — track exists but not selected         → shows "codec[n/a]"
+//   "err"   — runtime decode error                  → shows "codec[err]"
+
+/** Extracts decoder prefix (e.g., "c2", "OMX") from full decoder name. */
+private fun simplifyDecoderName(decoderName: String): String {
+    return when {
+        decoderName.startsWith("c2.") -> "c2"
+        decoderName.startsWith("OMX.") -> "OMX"
+        else -> decoderName.substringBefore('.').takeIf { it.isNotEmpty() } ?: decoderName
+    }
+}
 @UnstableApi
 @Composable
 internal fun rememberTrackInfo(
@@ -40,32 +51,53 @@ internal fun rememberTrackInfo(
     DisposableEffect(exo, instanceKey) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
-                var vm: String? = null
-                var am: String? = null
-                for (group in tracks.groups) {
-                    if (!group.isSelected) continue
-                    for (i in 0 until group.length) {
-                        if (!group.isTrackSelected(i)) continue
-                        val fmt = group.getTrackFormat(i)
-                        when (group.type) {
-                            C.TRACK_TYPE_VIDEO -> vm = fmt.sampleMimeType
-                            C.TRACK_TYPE_AUDIO -> am = fmt.sampleMimeType
+                fun lookFor(trackType: @C.TrackType Int): Pair<String?, Boolean> {
+                    var mime: String? = null
+                    for (group in tracks.groups) {
+                        if (group.type != trackType) continue
+                        for (i in 0 until group.length) {
+                            if(mime == null || group.isTrackSelected(i))
+                                mime = group.getTrackFormat(0).sampleMimeType
+                            if (group.isTrackSelected(i))
+                                return mime to false
                         }
-                        break // first track in group
                     }
+                    return mime to true
                 }
+
+                val (vm, vNA) = lookFor(C.TRACK_TYPE_VIDEO)
+                val (am, aNA) = lookFor(C.TRACK_TYPE_AUDIO)
+
                 mainHandler.post {
                     val current = state.value
                     val updated = current.copy(
-                        videoMime = vm ?: current.videoMime,
-                        audioMime = am ?: current.audioMime,
+                        videoMime = vm,
+                        videoDecoderStatus = if (vNA) "n/a" else current.videoDecoderStatus,
+                        audioMime = am,
+                        audioDecoderStatus = if (aNA) "n/a" else current.audioDecoderStatus,
                     )
                     Log.d(
                         "TrackInfo",
                         "onTracksChanged videoMime=$vm audioMime=$am " +
-                            "stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
+                            "vNA=$vNA aNA=$aNA stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
                     )
                     state.value = updated
+                }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                mainHandler.post {
+                    val current = state.value
+                    when {
+                        error.causeChainContains("MediaCodecVideoRenderer") -> {
+                            Log.w("TrackInfo", "Video decode failed")
+                            state.value = current.copy(videoDecoderStatus = "err")
+                        }
+                        error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") -> {
+                            Log.w("TrackInfo", "Audio decode failed")
+                            state.value = current.copy(audioDecoderStatus = "err")
+                        }
+                    }
                 }
             }
         }
@@ -77,7 +109,7 @@ internal fun rememberTrackInfo(
                 initializedTimestampMs: Long,
                 initializationDurationMs: Long,
             ) {
-                state.value = state.value.copy(videoDecoderName = decoderName)
+                state.value = state.value.copy(videoDecoderStatus = simplifyDecoderName(decoderName))
             }
 
             override fun onAudioDecoderInitialized(
@@ -87,21 +119,7 @@ internal fun rememberTrackInfo(
                 initializationDurationMs: Long,
             ) {
                 Log.d("TrackInfo", "onAudioDecoderInitialized decoderName=$decoderName")
-                state.value = state.value.copy(audioDecoderName = decoderName)
-            }
-
-            // For passthrough audio (e.g., EAC3 via HDMI), no decoder is initialized.
-            // Use onAudioEnabled to set a placeholder name so passthrough doesn't show as "failed".
-            override fun onAudioEnabled(eventTime: AnalyticsListener.EventTime, decoderCounters: androidx.media3.exoplayer.DecoderCounters) {
-                mainHandler.post {
-                    val current = state.value
-                    Log.d("TrackInfo", "onAudioEnabled audioMime=${current.audioMime} audioDecoderName=${current.audioDecoderName}")
-                    // Set placeholder immediately - onTracksChanged fires right after and sets audioMime
-                    if (current.audioDecoderName == null) {
-                        Log.d("TrackInfo", "Setting passthrough placeholder")
-                        state.value = current.copy(audioDecoderName = "passthrough")
-                    }
-                }
+                state.value = state.value.copy(audioDecoderStatus = simplifyDecoderName(decoderName))
             }
         }
 
