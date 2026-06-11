@@ -33,7 +33,7 @@ class EndpointClientRegistry(
         clients[endpointId] ?: run {
             val entity = endpointDao.getByEndpointId(endpointId) ?: return@withLock null
             val client = buildClient(entity) ?: return@withLock null
-            val wrapped = CachingEndpointClient(client, endpointId)
+            val wrapped = CachingEndpointClient(client)
             clients[endpointId] = wrapped
             wrapped
         }
@@ -42,7 +42,7 @@ class EndpointClientRegistry(
     override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient? =
         mutex.withLock {
             val client = buildClient(entity) ?: return@withLock null
-            val wrapped = CachingEndpointClient(client, endpointId)
+            val wrapped = CachingEndpointClient(client)
             clients[endpointId] = wrapped
             wrapped
         }
@@ -51,7 +51,7 @@ class EndpointClientRegistry(
         EndpointCache.clearForEndpoint(endpointId)
         val client = buildClient(entity)
         if (client != null) {
-            val wrapped = CachingEndpointClient(client, endpointId)
+            val wrapped = CachingEndpointClient(client)
             clients[endpointId] = wrapped
         } else {
             clients.remove(endpointId)
@@ -67,7 +67,7 @@ class EndpointClientRegistry(
         for (entity in entities) {
             if (!clients.containsKey(entity.endpointId)) {
                 val client = buildClient(entity) ?: continue
-                val wrapped = CachingEndpointClient(client, entity.endpointId)
+                val wrapped = CachingEndpointClient(client)
                 clients[entity.endpointId] = wrapped
             }
         }

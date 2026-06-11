@@ -49,7 +49,7 @@ fun MovieDetailRoute(
         val sel = playbackSelection ?: return@LaunchedEffect
         val controller = playerController ?: return@LaunchedEffect
         Log.d(LOG_TAG, "prepare: ref=${sel.itemRef} startMs=${sel.startMs}")
-        controller.prepare(sel.itemRef, sel.startMs, seriesStateKey = sel.seriesStateKey)
+        controller.prepare(sel.itemRef, sel.startMs)
     }
 
     val playFromStart = {

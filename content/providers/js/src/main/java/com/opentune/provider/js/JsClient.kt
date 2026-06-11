@@ -38,7 +38,7 @@ import okhttp3.OkHttpClient
  * so JS state (client credentials) is fully isolated.
  */
 class JsClient(
-    private val protocol: String,
+    override var protocol: String,
     private val jsBundle: String,
     private val hostApis: HostApis,
     private val values: Map<String, String>,

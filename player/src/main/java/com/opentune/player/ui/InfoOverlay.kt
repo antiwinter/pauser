@@ -24,7 +24,7 @@ import com.opentune.storage.EntryStateKey
 
 internal class InfoOverlayState(
     private val spec: PlaybackSpec,
-    private val durationMs: Long,
+    val durationMs: Long,
     val videoMime: String?,
     val videoDecoderName: String?,
     val audioMime: String?,
@@ -40,7 +40,7 @@ internal class InfoOverlayState(
 
 @Composable
 internal fun InfoOverlay(state: InfoOverlayState) {
-    if (!state.showState.value) return
+    if (!state.isVisible) return
     val mbps = state.mbpsState.floatValue
     Box(
         modifier = Modifier.fillMaxSize(),

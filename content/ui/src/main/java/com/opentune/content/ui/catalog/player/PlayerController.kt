@@ -129,7 +129,10 @@ class PlayerController(
         _debounceJob?.cancel()
         _osdJob?.cancel()
         playbackSession.stop()
+        _pendingItemRef = null
+        _pendingStartMs = null
         _workingItemRef = null
+        _workingStartMs = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
@@ -159,7 +162,11 @@ class PlayerController(
         _debounceJob = viewModelScope.launch {
             try {
                 if (withDelay) delay(DEBOUNCE_MS)
-                startPrebufferOsd(_pendingItemRef!!)
+                val itemRef = _pendingItemRef ?: run {
+                    Log.w(LOG_TAG, "launchResolve: no pending item, ignoring")
+                    return@launch
+                }
+                startPrebufferOsd(itemRef)
                 resolveAndPrepare()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
@@ -170,10 +177,10 @@ class PlayerController(
 
     private suspend fun resolveAndPrepare() {
         val client = _client ?: return
-        if (_pendingItemRef == _workingItemRef 
+        if (_pendingItemRef == _workingItemRef
             && _pendingStartMs == _workingStartMs) {
             Log.d(LOG_TAG, "launchResolve: pending spec matches working spec, ignoring")
-            return@launch
+            return
         }
 
         val storageCtx = PlaybackStorageContext(
@@ -186,13 +193,13 @@ class PlayerController(
 
         Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$_pendingItemRef startMs=$_pendingStartMs")
         val spec = withContext(Dispatchers.IO) {
-            client.getPlaybackSpec(_pendingItemRef!!, _pendingStartMs)
+            client.getPlaybackSpec(_pendingItemRef!!, _pendingStartMs ?: 0L)
         }
         _mediaCodecs.value = spec.mediaCodecs
         _workingItemRef = _pendingItemRef
         _workingStartMs = _pendingStartMs
 
-        playbackSession.prepare(spec, storageCtx, _workingStartMs)
+        playbackSession.prepare(spec, storageCtx, _workingStartMs ?: 0L)
     }
 
     override fun onCleared() {

@@ -289,20 +289,18 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             }
 
             route("/media-state") {                get {
-                    val protocol = call.request.queryParameters["protocol"] ?: return@get call.respond400("missing protocol")
                     val endpointId = call.request.queryParameters["endpointId"] ?: return@get call.respond400("missing endpointId")
-                    val all = ctx.entryStateStore.observeForEndpoint(protocol, endpointId).first()
+                    val all = ctx.entryStateStore.observeForEndpoint(endpointId).first()
                     val dtos = all.map { it.toDto() }
                     call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
                 }
 
-                get("/{protocol}/{endpointId}/{itemId}") {
-                    val protocol = call.parameters["protocol"] ?: return@get call.respond400("missing protocol")
+                get("/{endpointId}/{itemId}") {
                     val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                     val itemId = call.parameters["itemId"] ?: return@get call.respond400("missing itemId")
-                    val snapshot = ctx.entryStateStore.get(protocol, endpointId, itemId)
+                    val snapshot = ctx.entryStateStore.get(endpointId, itemId)
                     if (snapshot == null) {
-                        call.respond404("no state found for $protocol/$endpointId/$itemId")
+                        call.respond404("no state found for $endpointId/$itemId")
                         return@get
                     }
                     call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
@@ -313,8 +311,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.entryStateStore.upsertSubtitleTrack(EntryStateKey(body.protocol, body.endpointId, body.itemId), body.trackId)
-                    val snapshot = ctx.entryStateStore.get(body.protocol, body.endpointId, body.itemId)
+                    ctx.entryStateStore.upsertSubtitleTrack(EntryStateKey(body.endpointId, body.itemId), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemId)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post
@@ -327,8 +325,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.entryStateStore.upsertAudioTrack(EntryStateKey(body.protocol, body.endpointId, body.itemId), body.trackId)
-                    val snapshot = ctx.entryStateStore.get(body.protocol, body.endpointId, body.itemId)
+                    ctx.entryStateStore.upsertAudioTrack(EntryStateKey(body.endpointId, body.itemId), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemId)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post

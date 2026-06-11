@@ -113,7 +113,7 @@ class PlaybackSession(
         heartbeatJob?.cancel()
         heartbeatJob = null
         exo.stop()
-        BandwidthTracker.resetTotalBytes()
+        BandwidthTracker.reset()
     }
 
     fun stop() {

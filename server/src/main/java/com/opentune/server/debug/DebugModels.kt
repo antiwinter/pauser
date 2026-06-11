@@ -84,7 +84,6 @@ data class ErrorResponse(val error: String)
 
 @Serializable
 data class EntryStateDto(
-    val protocol: String,
     val endpointId: String,
     val itemId: String,
     val positionMs: Long,
@@ -98,7 +97,6 @@ data class EntryStateDto(
 
 fun EntryStateEntity.toDto(): EntryStateDto =
     EntryStateDto(
-        protocol = protocol,
         endpointId = endpointId,
         itemId = itemId,
         positionMs = positionMs,
@@ -118,7 +116,6 @@ data class SubtitlePrefsDto(
 
 @Serializable
 data class SetTrackRequest(
-    val protocol: String,
     val endpointId: String,
     val itemId: String,
     val trackId: String?,

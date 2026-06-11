@@ -101,7 +101,6 @@ object EndpointCache {
  */
 class CachingEndpointClient(
     private val delegate: EndpointClient,
-    private val endpointId: String,
 ) : EndpointClient() {
 
     override var imageLoader: coil3.ImageLoader?

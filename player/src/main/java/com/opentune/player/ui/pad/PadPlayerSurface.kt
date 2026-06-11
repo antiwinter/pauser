@@ -66,7 +66,6 @@ private fun PadPlayerSurfaceContent(
     val session = controller.playbackSession
     val engine = rememberPlaybackSurface(
         spec = spec,
-        startMs = controller.startMs,
         initialSubtitleTrackId = null,
         initialAudioTrackId = null,
         initialSubtitleOffsetFraction = 0f,

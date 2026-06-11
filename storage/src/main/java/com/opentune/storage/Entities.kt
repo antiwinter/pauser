@@ -28,7 +28,6 @@ data class ProxyEntity(
     primaryKeys = ["endpointId", "itemId"],
 )
 data class EntryStateEntity(
-    val protocol: String,
     val endpointId: String,
     val itemId: String,
     val positionMs: Long = 0L,

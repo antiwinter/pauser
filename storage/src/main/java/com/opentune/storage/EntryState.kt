@@ -14,12 +14,11 @@ class EntryStateStore(private val db: OpenTuneDatabase) {
 
     private val dao: EntryStateDao get() = db.entryStateDao()
 
-    private suspend fun ensureRow(key: EntryStateKey, protocol: String = "") {
+    private suspend fun ensureRow(key: EntryStateKey) {
         val exists = dao.get(key.endpointId, key.itemRef)
         if (exists == null) {
             dao.upsert(
                 EntryStateEntity(
-                    protocol = protocol,
                     endpointId = key.endpointId,
                     itemId = key.itemRef,
                     updatedAtEpochMs = System.currentTimeMillis(),
@@ -34,33 +33,33 @@ class EntryStateStore(private val db: OpenTuneDatabase) {
     suspend fun get(endpointId: String, itemId: String): EntryStateEntity? =
         get(EntryStateKey(endpointId, itemId))
 
-    suspend fun upsertPosition(key: EntryStateKey, positionMs: Long, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertPosition(key: EntryStateKey, positionMs: Long) {
+        ensureRow(key)
         dao.updatePosition(key.endpointId, key.itemRef, positionMs, System.currentTimeMillis())
     }
 
-    suspend fun upsertSpeed(key: EntryStateKey, speed: Float, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertSpeed(key: EntryStateKey, speed: Float) {
+        ensureRow(key)
         dao.updateSpeed(key.endpointId, key.itemRef, speed, System.currentTimeMillis())
     }
 
-    suspend fun upsertFavorite(key: EntryStateKey, isFavorite: Boolean, title: String? = null, type: String? = null, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertFavorite(key: EntryStateKey, isFavorite: Boolean, title: String? = null, type: String? = null) {
+        ensureRow(key)
         dao.updateFavorite(key.endpointId, key.itemRef, isFavorite, title, type, System.currentTimeMillis())
     }
 
-    suspend fun upsertSubtitleTrack(key: EntryStateKey, trackId: String?, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertSubtitleTrack(key: EntryStateKey, trackId: String?) {
+        ensureRow(key)
         dao.updateSubtitleTrack(key.endpointId, key.itemRef, trackId, System.currentTimeMillis())
     }
 
-    suspend fun upsertAudioTrack(key: EntryStateKey, trackId: String?, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertAudioTrack(key: EntryStateKey, trackId: String?) {
+        ensureRow(key)
         dao.updateAudioTrack(key.endpointId, key.itemRef, trackId, System.currentTimeMillis())
     }
 
-    suspend fun upsertSeriesProgress(key: EntryStateKey, seasonNumber: Int, episodeNumber: Int, protocol: String = "") {
-        ensureRow(key, protocol)
+    suspend fun upsertSeriesProgress(key: EntryStateKey, seasonNumber: Int, episodeNumber: Int) {
+        ensureRow(key)
         val packed = (seasonNumber.toLong() shl 32) or episodeNumber.toLong()
         dao.updatePosition(key.endpointId, key.itemRef, packed, System.currentTimeMillis())
     }

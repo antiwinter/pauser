@@ -37,8 +37,8 @@ import com.opentune.player.ui.PlaybackHostEffects
 import com.opentune.player.ui.SubtitleAdjustOverlay
 import com.opentune.player.ui.rememberInfoOverlayState
 import com.opentune.player.ui.rememberMenuOverlayState
-import com.opentune.player.surface.TrackInfo
-import com.opentune.player.surface.rememberPlaybackSurface
+import com.opentune.player.engine.TrackInfo
+import com.opentune.player.engine.rememberPlaybackSurface
 import kotlinx.coroutines.delay
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
