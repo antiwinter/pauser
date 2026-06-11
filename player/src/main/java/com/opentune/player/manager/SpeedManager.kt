@@ -1,4 +1,4 @@
-package com.opentune.player.controller
+package com.opentune.player.manager
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 internal val SPEED_VALUES = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 private val SPEED_LABELS = SPEED_VALUES.map { if (it == 1f) "1×" else "${it}×" }
 
-internal class SpeedController(
+internal class SpeedManager(
     private val scope: CoroutineScope,
     private val stores: PlayerStores,
     private val entryStateKey: EntryStateKey,
@@ -47,11 +47,11 @@ internal class SpeedController(
 }
 
 @Composable
-internal fun rememberSpeedController(
+internal fun rememberSpeedManager(
     exo: ExoPlayer,
     stores: PlayerStores,
     entryStateKey: EntryStateKey,
-): SpeedController {
+): SpeedManager {
     val scope = rememberCoroutineScope()
 
     DisposableEffect(exo, entryStateKey) {
@@ -67,7 +67,7 @@ internal fun rememberSpeedController(
     }
 
     return remember {
-        SpeedController(
+        SpeedManager(
             scope = scope,
             stores = stores,
             entryStateKey = entryStateKey,

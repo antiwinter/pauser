@@ -14,8 +14,9 @@ internal object BandwidthTracker {
     private val entries = ConcurrentLinkedQueue<Entry>()
     private val totalBytesCounter = AtomicLong(0L)
 
-    @Volatile private var pendingBytes = 0L
-    @Volatile private var lastSecond = 0L
+    private val lock = Any()
+    private var pendingBytes = 0L
+    private var lastSecond = 0L
 
     val interceptor: Interceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
@@ -26,8 +27,11 @@ internal object BandwidthTracker {
 
     val totalBytes: Long get() = totalBytesCounter.get()
 
-    fun resetTotalBytes() {
+    fun reset() = synchronized(lock) {
         totalBytesCounter.set(0L)
+        pendingBytes = 0L
+        lastSecond = 0L
+        entries.clear()
     }
 
     val mbps: Float
@@ -54,7 +58,7 @@ internal object BandwidthTracker {
                 object : ForwardingSource(src) {
                     override fun read(sink: okio.Buffer, byteCount: Long): Long {
                         val read = super.read(sink, byteCount)
-                        if (read > 0) {
+                        if (read > 0) synchronized(lock) {
                             totalBytesCounter.addAndGet(read)
                             val now = System.currentTimeMillis() / 1000
                             if (now > lastSecond) {

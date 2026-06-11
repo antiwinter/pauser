@@ -1,4 +1,4 @@
-package com.opentune.player.controller
+package com.opentune.player.manager
 
 import android.content.Context
 import android.net.Uri
@@ -28,7 +28,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.R
-import com.opentune.player.engine.BandwidthTracker
 import com.opentune.player.engine.PlayerStores
 import com.opentune.player.engine.toMediaSource
 import com.opentune.player.PlaybackSpec
@@ -85,7 +84,6 @@ internal fun prepareWithSidecar(
         .build()
     val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
         spec.httpClient.newBuilder()
-            .addInterceptor(BandwidthTracker.interceptor)
             .apply {
                 if (spec.headers.isNotEmpty()) addInterceptor { chain ->
                     val req = chain.request().newBuilder().apply {
@@ -111,7 +109,7 @@ internal fun prepareWithSidecar(
 }
 
 @UnstableApi
-internal class SubtitleController(
+internal class SubtitleManager(
     private val currentTracksState: MutableState<Tracks>,
     private val activeTrackIdState: MutableState<String?>,
     private val offsetFractionState: MutableState<Float>,
@@ -289,7 +287,7 @@ internal class SubtitleController(
 
 @UnstableApi
 @Composable
-internal fun rememberSubtitleController(
+internal fun rememberSubtitleManager(
     exo: ExoPlayer,
     spec: PlaybackSpec,
     stores: PlayerStores,
@@ -299,12 +297,12 @@ internal fun rememberSubtitleController(
     initialTrackId: String?,
     initialOffsetFraction: Float,
     initialSizeScale: Float,
-): SubtitleController {
+): SubtitleManager {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val specState = rememberUpdatedState(spec)
 
-    Log.d(SUB_LOG_TAG, "rememberSubtitleController: initialTrackId=$initialTrackId offset=$initialOffsetFraction scale=$initialSizeScale")
+    Log.d(SUB_LOG_TAG, "rememberSubtitleManager: initialTrackId=$initialTrackId offset=$initialOffsetFraction scale=$initialSizeScale")
 
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
     val activeTrackIdState = remember { mutableStateOf(initialTrackId) }
@@ -336,7 +334,7 @@ internal fun rememberSubtitleController(
     }
 
     return remember {
-        SubtitleController(
+        SubtitleManager(
             currentTracksState = currentTracksState,
             activeTrackIdState = activeTrackIdState,
             offsetFractionState = offsetFractionState,

@@ -1,4 +1,4 @@
-package com.opentune.player.ui.tv
+package com.opentune.player.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,13 +22,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 
-internal class InfoOsd(
+internal class InfoOverlayState(
     private val spec: PlaybackSpec,
     private val durationMs: Long,
-    private val videoMime: String?,
-    private val videoDecoderName: String?,
-    private val audioMime: String?,
-    private val audioDecoderName: String?,
+    val videoMime: String?,
+    val videoDecoderName: String?,
+    val audioMime: String?,
+    val audioDecoderName: String?,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -36,48 +36,48 @@ internal class InfoOsd(
 
     fun show() { showState.value = true }
     fun hide() { showState.value = false }
+}
 
-    @Composable
-    fun Osd() {
-        if (!showState.value) return
-        val mbps = mbpsState.floatValue
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter,
+@Composable
+internal fun InfoOverlay(state: InfoOverlayState) {
+    if (!state.showState.value) return
+    val mbps = state.mbpsState.floatValue
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xCC000000))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xCC000000))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (durationMs > 0) {
-                        Text(text = formatDuration(durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                    }
-                    Text(
-                        text = trackLabel(videoMime, videoDecoderName),
-                        color = if (isTrackFailed(videoMime, videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
-                        fontSize = 14.sp,
-                    )
-                    Text(
-                        text = trackLabel(audioMime, audioDecoderName),
-                        color = if (isTrackFailed(audioMime, audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
-                        fontSize = 14.sp,
-                    )
+                if (state.durationMs > 0) {
+                    Text(text = formatDuration(state.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
-                if (mbps > 0f) {
-                    Text(
-                        text = "%.1f Mbps".format(mbps),
-                        color = Color(0xFFAAAAAA),
-                        fontSize = 14.sp,
-                    )
-                }
+                Text(
+                    text = trackLabel(state.videoMime, state.videoDecoderName),
+                    color = if (isTrackFailed(state.videoMime, state.videoDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    fontSize = 14.sp,
+                )
+                Text(
+                    text = trackLabel(state.audioMime, state.audioDecoderName),
+                    color = if (isTrackFailed(state.audioMime, state.audioDecoderName)) Color(0xFFFF6B6B) else Color.White,
+                    fontSize = 14.sp,
+                )
+            }
+            if (mbps > 0f) {
+                Text(
+                    text = "%.1f Mbps".format(mbps),
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 14.sp,
+                )
             }
         }
     }
@@ -111,7 +111,7 @@ private fun formatDuration(ms: Long): String {
 }
 
 @Composable
-internal fun rememberInfoOsd(
+internal fun rememberInfoOverlayState(
     instanceKey: EntryStateKey,
     spec: PlaybackSpec,
     exo: ExoPlayer,
@@ -120,11 +120,11 @@ internal fun rememberInfoOsd(
     audioMime: String?,
     audioDecoderName: String?,
     mbpsState: MutableFloatState,
-): InfoOsd {
+): InfoOverlayState {
     val showState = remember(instanceKey) { mutableStateOf(false) }
 
     return remember(instanceKey, spec, exo, videoMime, videoDecoderName, audioMime, audioDecoderName) {
-        InfoOsd(
+        InfoOverlayState(
             spec = spec,
             durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,

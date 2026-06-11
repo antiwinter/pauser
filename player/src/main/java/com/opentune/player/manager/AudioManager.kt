@@ -1,4 +1,4 @@
-package com.opentune.player.controller
+package com.opentune.player.manager
 
 import android.util.Log
 import androidx.compose.runtime.Composable
@@ -36,7 +36,7 @@ internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
 }
 
 @UnstableApi
-internal class AudioController(
+internal class AudioManager(
     private val currentTracksState: MutableState<Tracks>,
     private val activeTrackIdState: MutableState<String?>,
     private val scope: CoroutineScope,
@@ -104,13 +104,13 @@ internal class AudioController(
 
 @UnstableApi
 @Composable
-internal fun rememberAudioController(
+internal fun rememberAudioManager(
     exo: ExoPlayer,
     stores: PlayerStores,
     entryStateKey: EntryStateKey,
     parentStateKey: EntryStateKey? = null,
     seriesStateKey: EntryStateKey? = null,
-): AudioController {
+): AudioManager {
     val scope = rememberCoroutineScope()
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
     val activeTrackIdState = remember { mutableStateOf<String?>(null) }
@@ -127,7 +127,7 @@ internal fun rememberAudioController(
     }
 
     return remember {
-        AudioController(
+        AudioManager(
             currentTracksState = currentTracksState,
             activeTrackIdState = activeTrackIdState,
             scope = scope,

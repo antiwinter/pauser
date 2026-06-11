@@ -28,7 +28,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.PlayerSurfaceController
-import com.opentune.player.engine.rememberPlaybackEngine
+import com.opentune.player.engine.rememberPlaybackSurface
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
 import kotlinx.coroutines.delay
@@ -64,7 +64,7 @@ private fun PadPlayerSurfaceContent(
     onBack: () -> Unit,
 ) {
     val session = controller.playbackSession
-    val engine = rememberPlaybackEngine(
+    val engine = rememberPlaybackSurface(
         spec = spec,
         startMs = controller.startMs,
         initialSubtitleTrackId = null,

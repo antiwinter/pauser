@@ -1,4 +1,4 @@
-package com.opentune.player.controller
+package com.opentune.player.manager
 
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,22 +24,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.PlayerSurfaceController
-import com.opentune.player.R
-import com.opentune.player.controller.rememberMenuOverlay
-import com.opentune.player.engine.TrackInfo
-import com.opentune.player.engine.rememberPlaybackEngine
+import com.opentune.player.ui.InfoOverlay
+import com.opentune.player.ui.MenuOverlay
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
+import com.opentune.player.ui.SubtitleAdjustOverlay
+import com.opentune.player.ui.rememberInfoOverlayState
+import com.opentune.player.ui.rememberMenuOverlayState
+import com.opentune.player.surface.TrackInfo
+import com.opentune.player.surface.rememberPlaybackSurface
 import kotlinx.coroutines.delay
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
@@ -97,7 +95,7 @@ private fun TvPlayerSurfaceContent(
 ) {
     val hasNextVideo by controller.hasNextVideoFlow.collectAsState()
     val session = controller.playbackSession
-    val engine = rememberPlaybackEngine(
+    val surface = rememberPlaybackSurface(
         spec = spec,
         initialSubtitleTrackId = null,
         initialAudioTrackId = null,
@@ -105,9 +103,9 @@ private fun TvPlayerSurfaceContent(
         initialSubtitleSizeScale = 1f,
         session = session,
     )
-    PlaybackHostEffects(engine.exo)
+    PlaybackHostEffects(surface.exo)
 
-    val exo = engine.exo
+    val exo = surface.exo
 
     var controllerState by remember { mutableStateOf(0) }
     var position by remember { mutableLongStateOf(exo.currentPosition) }
@@ -153,15 +151,15 @@ private fun TvPlayerSurfaceContent(
         }
     }
 
-    val menu = rememberMenuOverlay(
-        engine.subtitleCtrl.menuEntry,
-        engine.subtitleCtrl.adjustMenuEntry,
-        engine.audioCtrl.menuEntry,
-        engine.speedCtrl.menuEntry,
+    val menu = rememberMenuOverlayState(
+        surface.subtitleCtrl.menuEntry,
+        surface.subtitleCtrl.adjustMenuEntry,
+        surface.audioCtrl.menuEntry,
+        surface.speedCtrl.menuEntry,
     )
 
-    val trackInfo: TrackInfo by engine.trackInfo
-    val infoOsd = rememberInfoOsd(
+    val trackInfo: TrackInfo by surface.trackInfo
+    val infoOverlay = rememberInfoOverlayState(
         instanceKey = storageCtx.entryStateKey,
         spec = spec,
         exo = exo,
@@ -169,17 +167,17 @@ private fun TvPlayerSurfaceContent(
         videoDecoderName = trackInfo.videoDecoderName,
         audioMime = trackInfo.audioMime,
         audioDecoderName = trackInfo.audioDecoderName,
-        mbpsState = engine.bandwidthMbps,
+        mbpsState = surface.bandwidthMbps,
     )
 
-    if (controllerState != 0) infoOsd.show() else infoOsd.hide()
+    if (controllerState != 0) infoOverlay.show() else infoOverlay.hide()
 
     BackHandler {
         when {
             menu.isOpen -> menu.back()
-            engine.subtitleCtrl.isAdjustActive -> engine.subtitleCtrl.confirmAdjust()
+            surface.subtitleCtrl.isAdjustActive -> surface.subtitleCtrl.confirmAdjust()
             controllerState != 0 -> controllerState = 0
-            else -> { engine.leaveSurface(); onBack() }
+            else -> { surface.leaveSurface(); onBack() }
         }
     }
 
@@ -194,7 +192,7 @@ private fun TvPlayerSurfaceContent(
             onBack = {
                 when {
                     controllerState != 0 -> controllerState = 0
-                    else -> { engine.leaveSurface(); onBack() }
+                    else -> { surface.leaveSurface(); onBack() }
                 }
             },
             onTransportKey = { isResume ->
@@ -221,17 +219,17 @@ private fun TvPlayerSurfaceContent(
                         menuConsumedDown = false
                         true
                     }
-                    engine.subtitleCtrl.isAdjustActive -> {
+                    surface.subtitleCtrl.isAdjustActive -> {
                         if (event.action == KeyEvent.ACTION_DOWN) {
                             when (event.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_UP -> engine.subtitleCtrl.adjustOffsetUp()
-                                KeyEvent.KEYCODE_DPAD_DOWN -> engine.subtitleCtrl.adjustOffsetDown()
-                                KeyEvent.KEYCODE_DPAD_LEFT -> engine.subtitleCtrl.adjustScaleDown()
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> engine.subtitleCtrl.adjustScaleUp()
+                                KeyEvent.KEYCODE_DPAD_UP -> surface.subtitleCtrl.adjustOffsetUp()
+                                KeyEvent.KEYCODE_DPAD_DOWN -> surface.subtitleCtrl.adjustOffsetDown()
+                                KeyEvent.KEYCODE_DPAD_LEFT -> surface.subtitleCtrl.adjustScaleDown()
+                                KeyEvent.KEYCODE_DPAD_RIGHT -> surface.subtitleCtrl.adjustScaleUp()
                                 KeyEvent.KEYCODE_DPAD_CENTER,
                                 KeyEvent.KEYCODE_ENTER,
                                 KeyEvent.KEYCODE_NUMPAD_ENTER,
-                                KeyEvent.KEYCODE_BACK -> engine.subtitleCtrl.confirmAdjust()
+                                KeyEvent.KEYCODE_BACK -> surface.subtitleCtrl.confirmAdjust()
                             }
                         }
                         true
@@ -239,8 +237,8 @@ private fun TvPlayerSurfaceContent(
                     else -> { menuConsumedDown = false; false }
                 }
             },
-            subtitleTranslationYPx = engine.subtitleCtrl.translationYPx,
-            subtitleSizeScale = engine.subtitleCtrl.sizeScale,
+            subtitleTranslationYPx = surface.subtitleCtrl.translationYPx,
+            subtitleSizeScale = surface.subtitleCtrl.sizeScale,
         )
 
         AnimatedVisibility(
@@ -294,45 +292,12 @@ private fun TvPlayerSurfaceContent(
             }
         }
 
-        menu.Overlay()
-        SubtitleAdjustOsd(
-            isActive = engine.subtitleCtrl.isAdjustActive,
-            translationYPx = engine.subtitleCtrl.translationYPx,
-            sizeScale = engine.subtitleCtrl.sizeScale,
+        MenuOverlay(menu)
+        SubtitleAdjustOverlay(
+            isActive = surface.subtitleCtrl.isAdjustActive,
+            translationYPx = surface.subtitleCtrl.translationYPx,
+            sizeScale = surface.subtitleCtrl.sizeScale,
         )
-        infoOsd.Osd()
-    }
-}
-
-@Composable
-private fun SubtitleAdjustOsd(
-    isActive: Boolean,
-    translationYPx: Float,
-    sizeScale: Float,
-) {
-    if (!isActive) return
-    val previewBottomDp = with(LocalDensity.current) { translationYPx.toDp() }
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.subtitle_adjust_sample),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = (previewBottomDp + 48.dp).coerceAtLeast(48.dp))
-                .graphicsLayer { scaleX = sizeScale; scaleY = sizeScale }
-                .background(Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp))
-                .padding(horizontal = 28.dp, vertical = 10.dp),
-            color = Color.White,
-            fontSize = 20.sp,
-        )
-        Text(
-            text = stringResource(R.string.subtitle_adjust_hint),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-                .background(Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(6.dp))
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            color = Color(0xFFAAAAAA),
-            fontSize = 13.sp,
-        )
+        InfoOverlay(infoOverlay)
     }
 }

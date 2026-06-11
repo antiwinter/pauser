@@ -16,12 +16,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.PlaybackSpec
-import com.opentune.player.controller.AudioController
-import com.opentune.player.controller.SpeedController
-import com.opentune.player.controller.SubtitleController
-import com.opentune.player.controller.rememberAudioController
-import com.opentune.player.controller.rememberSpeedController
-import com.opentune.player.controller.rememberSubtitleController
+import com.opentune.player.manager.AudioManager
+import com.opentune.player.manager.SpeedManager
+import com.opentune.player.manager.SubtitleManager
+import com.opentune.player.manager.rememberAudioManager
+import com.opentune.player.manager.rememberSpeedManager
+import com.opentune.player.manager.rememberSubtitleManager
 import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
@@ -29,7 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 // ---------------------------------------------------------------------------
-// Shared stores holder — used by SubtitleController, AudioController, SpeedController
+// Shared stores holder — used by SubtitleManager, AudioManager, SpeedManager
 // ---------------------------------------------------------------------------
 
 internal data class PlayerStores(
@@ -38,14 +38,14 @@ internal data class PlayerStores(
 )
 
 // ---------------------------------------------------------------------------
-// PlaybackEngine — Compose binding for playback UI/controllers, no media prep ownership
+// PlaybackSurface — Compose binding for playback UI/managers, no media prep ownership
 // ---------------------------------------------------------------------------
 
-internal class PlaybackEngine(
+internal class PlaybackSurface(
     val exo: ExoPlayer,
-    val subtitleCtrl: SubtitleController,
-    val audioCtrl: AudioController,
-    val speedCtrl: SpeedController,
+    val subtitleCtrl: SubtitleManager,
+    val audioCtrl: AudioManager,
+    val speedCtrl: SpeedManager,
     val trackInfo: State<TrackInfo>,
     val bandwidthMbps: MutableFloatState,
     private val session: PlaybackSession,
@@ -57,19 +57,19 @@ internal class PlaybackEngine(
 }
 
 // ---------------------------------------------------------------------------
-// rememberPlaybackEngine — owns Compose listeners/controllers for the player surface
+// rememberPlaybackSurface — owns Compose listeners/managers for the player surface
 // ---------------------------------------------------------------------------
 
 @UnstableApi
 @Composable
-internal fun rememberPlaybackEngine(
+internal fun rememberPlaybackSurface(
     spec: PlaybackSpec,
     initialSubtitleTrackId: String?,
     @Suppress("UNUSED_PARAMETER") initialAudioTrackId: String?,
     initialSubtitleOffsetFraction: Float,
     initialSubtitleSizeScale: Float,
     session: PlaybackSession,
-): PlaybackEngine {
+): PlaybackSurface {
     val storageCtx = LocalPlaybackStorageContext.current
     val entryStateStore = storageCtx.entryStateStore
     val entryStateKey = storageCtx.entryStateKey
@@ -86,7 +86,7 @@ internal fun rememberPlaybackEngine(
     val stores = remember { PlayerStores(entryStateStore, appConfigStore) }
     val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
-    val subtitleCtrl = rememberSubtitleController(
+    val subtitleCtrl = rememberSubtitleManager(
         exo = exo,
         spec = spec,
         stores = stores,
@@ -97,14 +97,14 @@ internal fun rememberPlaybackEngine(
         initialOffsetFraction = initialSubtitleOffsetFraction,
         initialSizeScale = initialSubtitleSizeScale,
     )
-    val audioCtrl = rememberAudioController(
+    val audioCtrl = rememberAudioManager(
         exo = exo,
         stores = stores,
         entryStateKey = instanceKey,
         parentStateKey = parentStateKey,
         seriesStateKey = seriesStateKey,
     )
-    val speedCtrl = rememberSpeedController(
+    val speedCtrl = rememberSpeedManager(
         exo = exo,
         stores = stores,
         entryStateKey = instanceKey,
@@ -112,7 +112,7 @@ internal fun rememberPlaybackEngine(
 
     val engineKey = instanceKey
     val engine = remember(engineKey) {
-        PlaybackEngine(
+        PlaybackSurface(
             exo = exo,
             subtitleCtrl = subtitleCtrl,
             audioCtrl = audioCtrl,

@@ -1,5 +1,20 @@
 package com.opentune.player
 
+import com.opentune.player.engine.PlaybackSession
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
+
+/**
+ * Media codec information included in [PlaybackSpec] and [com.opentune.content.contract.EntryInfo].
+ * info[0].codec is always the video codec (used on detail screen).
+ */
+@Serializable
+data class MediaCodecInfo(
+    val codec: String,
+    val bitDepth: Int? = null,
+    val profile: String? = null,
+)
+
 interface OpenTunePlaybackHooks {
     fun progressIntervalMs(): Long
     suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float)
@@ -26,3 +41,13 @@ data class PlaybackSpec(
     val httpClient: okhttp3.OkHttpClient,
     val mediaCodecs: List<MediaCodecInfo> = emptyList(),
 )
+
+/**
+ * Contract that player surfaces (TvPlayerSurface, PadPlayerSurface) need from the
+ * host controller. Only `:player` types — no dependency on `:content:ui` or `:content:contract`.
+ */
+interface PlayerSurfaceController {
+    val playbackSession: PlaybackSession
+    val hasNextVideoFlow: StateFlow<Boolean>
+    fun requestNextVideo()
+}
