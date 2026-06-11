@@ -11,7 +11,6 @@ import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.MediaCodecInfo
-import com.opentune.storage.EntryStateKey
 import com.opentune.storage.TitleLang
 
 private const val LOG_TAG = "OT_DigipakDetail"
@@ -30,7 +29,6 @@ fun DigipakDetailRoute(
     viewModel: DetailViewModel,
     sharedVm: NavSharedViewModel,
     onToggleFavorite: () -> Unit,
-    onSelectPlayback: (EntryInfo, Long, EntryStateKey?) -> Unit,
 ) {
     val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
     val vmSingleChild by viewModel.singleChild.collectAsState()
@@ -45,7 +43,8 @@ fun DigipakDetailRoute(
             ?: vmDigipakChildren.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
             ?: vmDigipakChildren.firstOrNull()
             ?: return@LaunchedEffect
-        onSelectPlayback(child, child.userData?.positionMs ?: 0L, null)
+        Log.d(LOG_TAG, "initial child: id=${child.id}")
+        playerController?.prepare(child)
     }
 
     val resumePlay = { playerController?.play(); Unit }
@@ -57,12 +56,13 @@ fun DigipakDetailRoute(
     val focusChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "focusChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
-        onSelectPlayback(child, child.userData?.positionMs ?: 0L, null)
+        playerController?.prepare(child)
+        Unit
     }
     val selectChild = { child: EntryInfo ->
-        val startMs = child.userData?.positionMs ?: 0L
+        Log.d(LOG_TAG, "selectChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
-        onSelectPlayback(child, startMs, null)
+        playerController?.prepare(child)
         playerController?.play()
         Unit
     }
@@ -70,9 +70,9 @@ fun DigipakDetailRoute(
         val child = vmSingleChild
         {
             if (child != null) {
-                val startMs = child.userData?.positionMs ?: 0L
+                Log.d(LOG_TAG, "playSingleChild: id=${child.id}")
                 sharedVm.cache(child)
-                onSelectPlayback(child, startMs, null)
+                playerController?.prepare(child)
                 playerController?.play()
             }
         }

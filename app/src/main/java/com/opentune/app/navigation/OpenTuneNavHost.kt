@@ -68,7 +68,7 @@ fun OpenTuneNavHost() {
                     val client = EndpointClientRegistryHolder.get().getOrCreate(cmd.endpointId)
                         ?: throw IllegalStateException("No provider instance for ${cmd.endpointId}")
                     playerController.setClient(client)
-                    playerController.prepare(cmd.itemRef, cmd.startMs)
+                    playerController.prepare(entry, cmd.startMs)
                     playerController.play()
                 }
                 is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))

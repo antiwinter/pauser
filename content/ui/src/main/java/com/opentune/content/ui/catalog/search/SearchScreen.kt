@@ -44,7 +44,7 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenBrowse: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
-    onOpenPlayer: (String, Long?) -> Unit,
+    onOpenPlayer: (EntryInfo) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
@@ -107,7 +107,7 @@ fun SearchScreen(
                         fun resolveAction(type: String): (() -> Unit)? = when (type) {
                             "Folder", "Season" -> { -> onOpenBrowse(item) }
                             "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
-                            "Episode", "Video" -> { -> onOpenPlayer(item.id, item.userData?.positionMs) }
+                            "Episode", "Video" -> { -> onOpenPlayer(item) }
                             "Image" -> { -> onOpenImageViewer(item.id) }
                             "Audio" -> { -> onOpenAudioUnsupported(item.id) }
                             else -> null

@@ -40,7 +40,6 @@ fun SeriesDetailRoute(
     viewModel: DetailViewModel,
     sharedVm: NavSharedViewModel,
     onToggleFavorite: () -> Unit,
-    onSelectPlayback: (EntryInfo, Long, EntryStateKey?) -> Unit,
 ) {
     var pendingSeasonNumber by remember { mutableStateOf(0) }
     var pendingEpisodeNumber by remember { mutableStateOf(0) }
@@ -91,7 +90,7 @@ fun SeriesDetailRoute(
             val episode = vmEpisodes.first()
             Log.d(LOG_TAG, "auto-advance season: episode=${episode.id}")
             viewModel.setSelectedEpisodeId(episode.id)
-            onSelectPlayback(episode, 0L, stateKey)
+            playerController?.prepare(episode, 0L)  // auto-advance: start fresh
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
                     stateKey, episode.seasonNumber ?: 0, episode.indexNumber ?: 0
@@ -125,7 +124,7 @@ fun SeriesDetailRoute(
             if (nextEpisode != null) {
                 Log.d(LOG_TAG, "requestNextVideo: episode=${nextEpisode.id}")
                 viewModel.setSelectedEpisodeId(nextEpisode.id)
-                onSelectPlayback(nextEpisode, 0L, stateKey)
+                playerController.prepare(nextEpisode, 0L)
                 scope.launch {
                     withContext(Dispatchers.IO) {
                         StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
@@ -153,13 +152,14 @@ fun SeriesDetailRoute(
         Log.d(LOG_TAG, "focusEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
         viewModel.setSelectedEpisodeId(episode.id)
-        onSelectPlayback(episode, episode.userData?.positionMs ?: 0L, stateKey)
+        playerController?.prepare(episode)
+        Unit
     }
     val selectEpisode = { episode: EntryInfo ->
         Log.d(LOG_TAG, "selectEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
         viewModel.setSelectedEpisodeId(episode.id)
-        onSelectPlayback(episode, episode.userData?.positionMs ?: 0L, stateKey)
+        playerController?.prepare(episode)
         scope.launch {
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(

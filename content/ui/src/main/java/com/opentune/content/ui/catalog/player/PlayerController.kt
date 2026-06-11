@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EntryInfo
 import com.opentune.core.osd.gOSD
 import com.opentune.player.MediaCodecInfo
 import com.opentune.player.PlaybackDisplayInfo
@@ -57,9 +58,9 @@ class PlayerController(
     }
 
     /** Set display info from EntryInfo for player overlay. */
-    fun setDisplayInfo(title: String, bitrate: Int?) {
-        Log.d(LOG_TAG, "setDisplayInfo: title=$title bitrate=$bitrate")
-        _displayInfo.value = PlaybackDisplayInfo(title, bitrate)
+    fun setDisplayInfo(info: EntryInfo) {
+        Log.d(LOG_TAG, "setDisplayInfo: title=${info.title} bitrate=${info.bitrate}")
+        _displayInfo.value = PlaybackDisplayInfo(info.title, info.bitrate)
     }
 
     override fun requestNextVideo() {
@@ -102,21 +103,24 @@ class PlayerController(
     }
 
     /**
-     * Prepare playback for [itemRef] starting at [startMs].
+     * Prepare playback for [entryInfo].
+     * [startMs] defaults to entryInfo.userData?.positionMs, or 0L if not set.
+     * Pass [startMs] explicitly to override (e.g., 0L for auto-advance).
      * [setClient] must have been called before this.
      */
     fun prepare(
-        itemRef: String,
-        startMs: Long = 0L,
+        entryInfo: EntryInfo,
+        startMs: Long? = null,
     ) {
         val client = _client ?: run {
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
-        Log.d(LOG_TAG, "prepare: ref=$itemRef startMs=$startMs (hadPending=${_debounceJob?.isActive})")
-        _pendingItemRef = itemRef
-        _pendingStartMs = startMs
-
+        _pendingItemRef = entryInfo.id
+        _pendingStartMs = startMs ?: entryInfo.userData?.positionMs ?: 0L
+        Log.d(LOG_TAG, "prepare: ref=${entryInfo.id} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
+        
+        setDisplayInfo(entryInfo)
         launchResolve(withDelay = _debounceJob?.isActive == true)
     }
 

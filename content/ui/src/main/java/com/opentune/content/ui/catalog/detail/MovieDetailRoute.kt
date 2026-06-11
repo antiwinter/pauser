@@ -1,11 +1,11 @@
 package com.opentune.content.ui.catalog.detail
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.MediaCodecInfo
-import com.opentune.storage.EntryStateKey
 import com.opentune.storage.TitleLang
 
 @Composable
@@ -18,11 +18,11 @@ fun MovieDetailRoute(
     mediaCodecs: List<MediaCodecInfo>,
     playerController: PlayerController?,
     onToggleFavorite: () -> Unit,
-    onSelectPlayback: (EntryInfo, Long, EntryStateKey?) -> Unit,
 ) {
-    // Set initial selection for Movie.
+    // Set initial selection for Movie (resumeMs from parent's entryState).
     LaunchedEffect(entryInfo.id) {
-        onSelectPlayback(entryInfo, resumeMs, null)
+        Log.d("OT_MovieDetail", "initial: id=${entryInfo.id} resumeMs=$resumeMs")
+        playerController?.prepare(entryInfo)
     }
 
     val resumePlay = { playerController?.play(); Unit }

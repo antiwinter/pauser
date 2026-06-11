@@ -70,10 +70,9 @@ fun SearchRoute(
                     sharedVm.cache(item)
                     nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
                 },
-                onOpenPlayer = { raw, startMs ->
-                    val entry = EntryInfo(id = raw, title = raw, type = "Unknown")
+                onOpenPlayer = { entry ->
                     sharedVm.cache(entry)
-                    nav.navigate(Routes.player(protocol, endpointId, raw, entry, startMs ?: 0L))
+                    nav.navigate(Routes.player(protocol, endpointId, entry.id, entry))
                 },
                 onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
                 onOpenAudioUnsupported = { nav.navigate(Routes.AUDIO_UNSUPPORTED) },

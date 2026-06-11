@@ -18,7 +18,7 @@ object Routes {
     const val ADD_ENDPOINT = "add_endpoint"
     const val BROWSE = "browse/{provider}/{endpointId}/{id}"
     const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{id}"
-    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{startMs}/{id}"
+    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{id}"
     const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
@@ -32,8 +32,8 @@ object Routes {
         "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
     fun detail(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
         "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
-    fun player(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo, startMs: Long = 0L) =
-        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/$startMs/${URLEncoder.encode(entry.id, UrlCharset)}"
+    fun player(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
+        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
     fun search(protocol: String, endpointId: String, scopeLocationRaw: String) =
         "search/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
     fun imageViewer(protocol: String, endpointId: String, itemRefRaw: String) =

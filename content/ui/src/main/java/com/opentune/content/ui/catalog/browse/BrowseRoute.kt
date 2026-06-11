@@ -103,10 +103,10 @@ fun BrowseRoute(
                 sharedVm.cache(item)
                 nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
             },
-            onOpenPlayer = { raw, startMs ->
+            onOpenPlayer = { entry ->
                 val clientRef = c ?: return@BrowseScreen
                 playerController.setClient(clientRef)
-                playerController.prepare(raw, startMs ?: 0L)
+                playerController.prepare(entry)
                 playerController.play()
             },
             onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
