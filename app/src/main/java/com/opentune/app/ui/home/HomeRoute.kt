@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +23,7 @@ import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
 import com.opentune.core.osd.gOSD
-import com.opentune.proxy.ui.ProxyCtrlUiRegistry
+import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
@@ -39,10 +40,17 @@ fun HomeRoute(
     onEditProxy: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
+    val scope = rememberCoroutineScope()
     val providers by app.providerRegistry.providersFlow.collectAsState()
     var endpointsByType by remember { mutableStateOf<Map<String, List<EndpointEntity>>>(emptyMap()) }
     val proxies by app.storageBindings.proxyDao.observeAll().collectAsState(initial = emptyList())
+    var proxyClients by remember { mutableStateOf<Map<String, ProxyClient>>(emptyMap()) }
     var ctrlUiProxy by remember { mutableStateOf<ProxyEntity?>(null) }
+
+    // Build all proxy clients on launch
+    LaunchedEffect(app) {
+        proxyClients = app.endpointClientRegistry.getAllProxyClients()
+    }
 
     LaunchedEffect(app) {
         val observedProtocols = mutableSetOf<String>()
@@ -77,12 +85,10 @@ fun HomeRoute(
                 }
             }
             proxies.forEach { proxy ->
-                val proxyProvider = runCatching {
-                    app.proxyProviderRegistry.proxy(proxy.proxyType)
-                }.getOrNull()
+                val client = proxyClients[proxy.id]
                 Button(
                     onClick = {
-                        if (proxyProvider?.hasCtrlUI == true) {
+                        if (client?.ctrlUI != null) {
                             ctrlUiProxy = proxy
                         } else {
                             onEditProxy(proxy.proxyType, proxy.id)
@@ -111,22 +117,13 @@ fun HomeRoute(
         )
 
         ctrlUiProxy?.let { proxy ->
-            val proxyProvider = runCatching {
-                app.proxyProviderRegistry.proxy(proxy.proxyType)
-            }.getOrNull()
-            proxyProvider?.let { provider ->
-                ProxyCtrlUiRegistry.render(
-                    proxyType = proxy.proxyType,
-                    proxyId = proxy.id,
-                    fieldsJson = proxy.fieldsJson,
-                    provider = provider,
-                    onNavigateToEdit = {
-                        ctrlUiProxy = null
-                        onEditProxy(proxy.proxyType, proxy.id)
-                    },
-                    onDismiss = { ctrlUiProxy = null },
-                )
-            }
+            proxyClients[proxy.id]?.ctrlUI?.invoke(
+                {
+                    ctrlUiProxy = null
+                    onEditProxy(proxy.proxyType, proxy.id)
+                },
+                { ctrlUiProxy = null },
+            )
         }
     }
 }

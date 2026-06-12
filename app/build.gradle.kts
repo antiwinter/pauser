@@ -91,6 +91,7 @@ dependencies {
     implementation(project(":proxy:ui"))
     implementation(project(":content:providers:js"))
     implementation(project(":proxy:providers:http"))
+    implementation(project(":proxy:providers:clash"))
     implementation(project(":storage"))
     implementation(project(":content:providers:smb"))
 

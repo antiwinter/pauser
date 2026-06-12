@@ -1,5 +1,6 @@
 package com.opentune.proxy.contract
 
+import androidx.compose.runtime.Composable
 import com.opentune.core.form.contract.FormFieldSpec
 import okhttp3.OkHttpClient
 
@@ -16,11 +17,13 @@ interface ProxyClient {
     fun getHttpClient(): OkHttpClient = OkHttpClient()
     fun getConfig(): Map<String, String>
     suspend fun test(): ProxyValidationResult
+
+    val ctrlUI: (@Composable (onNavigateToEdit: () -> Unit, onDismiss: () -> Unit) -> Unit)?
+        get() = null
 }
 
 interface ProxyProvider {
     val proxyType: String
-    val hasCtrlUI: Boolean get() = false
     fun getFieldsSpec(): List<FormFieldSpec>
     fun createClient(values: Map<String, String>): ProxyClient
 }

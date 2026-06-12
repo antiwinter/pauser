@@ -15,6 +15,8 @@ interface EndpointClientAccess {
     suspend fun update(endpointId: String, entity: EndpointEntity)
     suspend fun remove(endpointId: String)
     suspend fun buildProxyClient(proxyId: String?): ProxyClient?
+    suspend fun getProxyClient(proxyId: String): ProxyClient?
+    suspend fun getAllProxyClients(): Map<String, ProxyClient>
 }
 
 object OpenTuneProviderRegistryHolder {

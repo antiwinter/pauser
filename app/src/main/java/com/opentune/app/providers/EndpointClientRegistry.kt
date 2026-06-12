@@ -28,6 +28,7 @@ class EndpointClientRegistry(
 ) : EndpointClientAccess {
     private val mutex = Mutex()
     private val clients = mutableMapOf<String, EndpointClient>()
+    private val proxyClients = mutableMapOf<String, ProxyClient>()
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun getOrCreate(endpointId: String): EndpointClient? = mutex.withLock {
@@ -75,13 +76,32 @@ class EndpointClientRegistry(
     }
 
     override suspend fun buildProxyClient(proxyId: String?): ProxyClient? =
-        proxyId?.let { id ->
-            runCatching {
-                val proxy = proxyDao.getById(id) ?: return@runCatching null
-                val proxyFields = json.decodeFromString<Map<String, String>>(proxy.fieldsJson)
-                proxyProviderRegistry.proxy(proxy.proxyType).createClient(proxyFields)
-            }.getOrNull()
+        proxyId?.let { id -> getOrBuildProxyClient(id) }
+
+    private suspend fun getOrBuildProxyClient(proxyId: String): ProxyClient? {
+        proxyClients[proxyId]?.let { return it }
+        return runCatching {
+            val proxy = proxyDao.getById(proxyId) ?: return@runCatching null
+            val proxyFields = json.decodeFromString<Map<String, String>>(proxy.fieldsJson)
+            val client = proxyProviderRegistry.proxy(proxy.proxyType).createClient(proxyFields)
+            proxyClients[proxyId] = client
+            client
+        }.getOrNull()
+    }
+
+    override suspend fun getAllProxyClients(): Map<String, ProxyClient> = mutex.withLock {
+        val allProxies = proxyDao.getAll()
+        allProxies.forEach { proxy ->
+            if (!proxyClients.containsKey(proxy.id)) {
+                getOrBuildProxyClient(proxy.id)
+            }
         }
+        proxyClients.toMap()
+    }
+
+    override suspend fun getProxyClient(proxyId: String): ProxyClient? = mutex.withLock {
+        getOrBuildProxyClient(proxyId)
+    }
 
     private suspend fun buildClient(entity: EndpointEntity): EndpointClient? {
         val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()

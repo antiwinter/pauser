@@ -36,6 +36,9 @@ interface ProxyDao {
     @Query("SELECT * FROM proxies ORDER BY createdAtEpochMs ASC")
     fun observeAll(): Flow<List<ProxyEntity>>
 
+    @Query("SELECT * FROM proxies ORDER BY createdAtEpochMs ASC")
+    suspend fun getAll(): List<ProxyEntity>
+
     @Query("SELECT * FROM proxies WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): ProxyEntity?
 
