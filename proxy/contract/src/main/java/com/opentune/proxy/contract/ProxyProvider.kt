@@ -12,9 +12,15 @@ sealed class ProxyValidationResult {
     data class Error(val message: String) : ProxyValidationResult()
 }
 
+interface ProxyClient {
+    fun getHttpClient(): OkHttpClient = OkHttpClient()
+    fun getConfig(): Map<String, String>
+    suspend fun test(): ProxyValidationResult
+}
+
 interface ProxyProvider {
     val proxyType: String
+    val hasCtrlUI: Boolean get() = false
     fun getFieldsSpec(): List<FormFieldSpec>
-    suspend fun validateFields(values: Map<String, String>): ProxyValidationResult
-    fun createClient(values: Map<String, String>): OkHttpClient
+    fun createClient(values: Map<String, String>): ProxyClient
 }

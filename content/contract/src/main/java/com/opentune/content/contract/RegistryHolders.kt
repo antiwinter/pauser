@@ -1,7 +1,7 @@
 package com.opentune.content.contract
 
+import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EndpointEntity
-import okhttp3.OkHttpClient
 
 object EndpointClientRegistryHolder {
     @Volatile private var instance: EndpointClientAccess? = null
@@ -14,7 +14,7 @@ interface EndpointClientAccess {
     suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient?
     suspend fun update(endpointId: String, entity: EndpointEntity)
     suspend fun remove(endpointId: String)
-    suspend fun buildHttpClient(proxyId: String?): OkHttpClient
+    suspend fun buildProxyClient(proxyId: String?): ProxyClient?
 }
 
 object OpenTuneProviderRegistryHolder {

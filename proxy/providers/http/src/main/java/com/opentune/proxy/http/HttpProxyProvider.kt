@@ -2,6 +2,7 @@ package com.opentune.proxy.http
 
 import com.opentune.core.form.contract.FormFieldKind
 import com.opentune.core.form.contract.FormFieldSpec
+import com.opentune.proxy.contract.ProxyClient
 import com.opentune.proxy.contract.ProxyProvider
 import com.opentune.proxy.contract.ProxyValidationResult
 import kotlinx.coroutines.Dispatchers
@@ -51,39 +52,17 @@ class HttpProxyProvider : ProxyProvider {
         ),
     )
 
-    override suspend fun validateFields(values: Map<String, String>): ProxyValidationResult =
-        withContext(Dispatchers.IO) {
-            try {
-                val host = values["host"]?.trim().orEmpty()
-                val port = values["port"]?.trim()?.toIntOrNull()
-                    ?: return@withContext ProxyValidationResult.Error("Port must be a number")
-                if (host.isEmpty()) return@withContext ProxyValidationResult.Error("Host is required")
-                if (port !in 1..65535) return@withContext ProxyValidationResult.Error("Port must be between 1 and 65535")
+    override fun createClient(values: Map<String, String>): ProxyClient = HttpProxyClient(values)
+}
 
-                val client = createClient(values)
-                val request = Request.Builder().url("http://$host:$port").build()
-                client.newCall(request).execute().use { }
+class HttpProxyClient(private val values: Map<String, String>) : ProxyClient {
 
-                ProxyValidationResult.Success(
-                    name = "$host:$port",
-                    fields = mapOf(
-                        "host" to host,
-                        "port" to port.toString(),
-                        "username" to (values["username"]?.trim() ?: ""),
-                        "password" to (values["password"] ?: ""),
-                    ),
-                )
-            } catch (e: Exception) {
-                ProxyValidationResult.Error(e.message ?: "Proxy validation failed")
-            }
-        }
+    private val host = values["host"]?.trim() ?: error("Missing proxy host")
+    private val port = values["port"]?.trim()?.toIntOrNull() ?: error("Missing proxy port")
+    private val username = values["username"]?.trim() ?: ""
+    private val password = values["password"] ?: ""
 
-    override fun createClient(values: Map<String, String>): OkHttpClient {
-        val host = values["host"]?.trim() ?: error("Missing proxy host")
-        val port = values["port"]?.trim()?.toIntOrNull() ?: error("Missing proxy port")
-        val username = values["username"]?.trim() ?: ""
-        val password = values["password"] ?: ""
-
+    override fun getHttpClient(): OkHttpClient {
         val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port))
         return OkHttpClient.Builder()
             .proxy(proxy)
@@ -98,5 +77,35 @@ class HttpProxyProvider : ProxyProvider {
                 }
             }
             .build()
+    }
+
+    override fun getConfig(): Map<String, String> = buildMap {
+        put("type", "http")
+        put("host", host)
+        put("port", port.toString())
+        if (username.isNotEmpty()) put("username", username)
+    }
+
+    override suspend fun test(): ProxyValidationResult = withContext(Dispatchers.IO) {
+        try {
+            if (host.isEmpty()) return@withContext ProxyValidationResult.Error("Host is required")
+            if (port !in 1..65535) return@withContext ProxyValidationResult.Error("Port must be between 1 and 65535")
+
+            val client = getHttpClient()
+            val request = Request.Builder().url("http://$host:$port").build()
+            client.newCall(request).execute().use { }
+
+            ProxyValidationResult.Success(
+                name = "$host:$port",
+                fields = mapOf(
+                    "host" to host,
+                    "port" to port.toString(),
+                    "username" to username,
+                    "password" to password,
+                ),
+            )
+        } catch (e: Exception) {
+            ProxyValidationResult.Error(e.message ?: "Proxy validation failed")
+        }
     }
 }

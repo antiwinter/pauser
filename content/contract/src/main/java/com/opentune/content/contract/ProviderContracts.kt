@@ -3,6 +3,7 @@ package com.opentune.content.contract
 import com.opentune.player.PlaybackSpec
 import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.core.form.contract.QrResult
+import com.opentune.proxy.contract.ProxyClient
 
 // --- Endpoint-level validation result (extends core with domain fields) ---
 
@@ -37,7 +38,7 @@ interface OpenTuneProviderLoader {
 
 abstract class EndpointClient {
     open var imageLoader: coil3.ImageLoader? = null
-    open var httpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient()
+    open var proxyClient: ProxyClient? = null
     open var endpointId: String = ""
     open var protocol: String = ""
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())

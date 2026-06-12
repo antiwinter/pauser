@@ -59,7 +59,7 @@ fun NavGraphBuilder.contentRoutes(
             },
             onGetQr = if (hasQr) { proxyId ->
                 val client = provider.createClient(emptyMap())
-                client.httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
+                client.proxyClient = EndpointClientRegistryHolder.get().buildProxyClient(proxyId)
                 qrClientRef[0] = client
                 client.getQr()
             } else null,

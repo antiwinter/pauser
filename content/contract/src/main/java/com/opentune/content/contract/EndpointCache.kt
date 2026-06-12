@@ -107,9 +107,9 @@ class CachingEndpointClient(
         get() = delegate.imageLoader
         set(value) { delegate.imageLoader = value }
 
-    override var httpClient: okhttp3.OkHttpClient
-        get() = delegate.httpClient
-        set(value) { delegate.httpClient = value }
+    override var proxyClient: com.opentune.proxy.contract.ProxyClient?
+        get() = delegate.proxyClient
+        set(value) { delegate.proxyClient = value }
 
     override var endpointId: String
         get() = delegate.endpointId

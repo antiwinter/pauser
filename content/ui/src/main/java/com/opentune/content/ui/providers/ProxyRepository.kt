@@ -35,7 +35,10 @@ object ProxyRepository {
         withContext(Dispatchers.IO) {
             val proxyProvider = runCatching { ProxyProviderRegistryHolder.get().proxy(proxyType) }.getOrNull()
                 ?: return@withContext SubmitResult.Error("Unknown proxy type: $proxyType")
-            when (val result = proxyProvider.validateFields(values)) {
+            val client = runCatching { proxyProvider.createClient(values) }.getOrElse {
+                return@withContext SubmitResult.Error(it.message ?: "Failed to create client")
+            }
+            when (val result = client.test()) {
                 is ProxyValidationResult.Error -> SubmitResult.Error(result.message)
                 is ProxyValidationResult.Success -> {
                     val entity = ProxyEntity(
@@ -61,7 +64,10 @@ object ProxyRepository {
                 ?: return@withContext SubmitResult.Error("Unknown proxy type: $proxyType")
             val existing = StorageBindingsHolder.get().proxyDao.getById(proxyId)
                 ?: return@withContext SubmitResult.Error("Proxy not found")
-            when (val result = proxyProvider.validateFields(values)) {
+            val client = runCatching { proxyProvider.createClient(values) }.getOrElse {
+                return@withContext SubmitResult.Error(it.message ?: "Failed to create client")
+            }
+            when (val result = client.test()) {
                 is ProxyValidationResult.Error -> SubmitResult.Error(result.message)
                 is ProxyValidationResult.Success -> {
                     StorageBindingsHolder.get().proxyDao.update(

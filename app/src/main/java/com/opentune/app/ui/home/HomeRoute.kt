@@ -11,7 +11,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,9 +21,10 @@ import androidx.compose.ui.unit.sp
 import com.opentune.app.BuildConfig
 import com.opentune.app.OpenTuneApplication
 import com.opentune.app.R
-import com.opentune.content.ui.providers.ProxyRepository
 import com.opentune.core.osd.gOSD
+import com.opentune.proxy.ui.ProxyCtrlUiRegistry
 import com.opentune.storage.EndpointEntity
+import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -42,7 +42,7 @@ fun HomeRoute(
     val providers by app.providerRegistry.providersFlow.collectAsState()
     var endpointsByType by remember { mutableStateOf<Map<String, List<EndpointEntity>>>(emptyMap()) }
     val proxies by app.storageBindings.proxyDao.observeAll().collectAsState(initial = emptyList())
-    val scope = rememberCoroutineScope()
+    var ctrlUiProxy by remember { mutableStateOf<ProxyEntity?>(null) }
 
     LaunchedEffect(app) {
         val observedProtocols = mutableSetOf<String>()
@@ -77,8 +77,17 @@ fun HomeRoute(
                 }
             }
             proxies.forEach { proxy ->
+                val proxyProvider = runCatching {
+                    app.proxyProviderRegistry.proxy(proxy.proxyType)
+                }.getOrNull()
                 Button(
-                    onClick = {},
+                    onClick = {
+                        if (proxyProvider?.hasCtrlUI == true) {
+                            ctrlUiProxy = proxy
+                        } else {
+                            onEditProxy(proxy.proxyType, proxy.id)
+                        }
+                    },
                     modifier = Modifier.onTvMenuKeyDown {
                         onEditProxy(proxy.proxyType, proxy.id)
                     },
@@ -100,5 +109,24 @@ fun HomeRoute(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         )
+
+        ctrlUiProxy?.let { proxy ->
+            val proxyProvider = runCatching {
+                app.proxyProviderRegistry.proxy(proxy.proxyType)
+            }.getOrNull()
+            proxyProvider?.let { provider ->
+                ProxyCtrlUiRegistry.render(
+                    proxyType = proxy.proxyType,
+                    proxyId = proxy.id,
+                    fieldsJson = proxy.fieldsJson,
+                    provider = provider,
+                    onNavigateToEdit = {
+                        ctrlUiProxy = null
+                        onEditProxy(proxy.proxyType, proxy.id)
+                    },
+                    onDismiss = { ctrlUiProxy = null },
+                )
+            }
+        }
     }
 }

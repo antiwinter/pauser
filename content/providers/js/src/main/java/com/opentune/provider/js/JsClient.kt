@@ -79,7 +79,7 @@ class JsClient(
 
     override suspend fun getQr(): QrResult.QrReady? {
         return try {
-            val resultJson = withEngine(httpClient) { engine ->
+            val resultJson = withEngine(proxyClient?.getHttpClient() ?: OkHttpClient()) { engine ->
                 engine.callMethod("getQr", "{}")
             } ?: return null
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -101,7 +101,7 @@ class JsClient(
                 return QrResult.Confirmed(tokenEl.mapValues { (_, v) -> v.jsonPrimitive.content })
             }
             val args = buildJsonObject { put("token", token) }.toString()
-            val resultJson = withEngine(httpClient) { engine ->
+            val resultJson = withEngine(proxyClient?.getHttpClient() ?: OkHttpClient()) { engine ->
                 engine.callMethod("pollQr", args)
             } ?: return QrResult.Error("null response")
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -140,7 +140,8 @@ class JsClient(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            engine = QuickJsEngine(hostApis, httpClient)
+            val effectiveHttpClient = proxyClient?.getHttpClient() ?: OkHttpClient()
+            engine = QuickJsEngine(hostApis, effectiveHttpClient)
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
@@ -148,8 +149,12 @@ class JsClient(
             val deviceInfoJson = Json.encodeToString(
                 com.opentune.player.PlatformInfoData.serializer(), deviceInfo,
             )
-            val initArgs = """{"credentials":${Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)},"deviceInfo":$deviceInfoJson}"""
+            val proxyConfigJson = proxyClient?.getConfig()
+                ?.let { Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), it) }
+                ?: "null"
+            val initArgs = """{"credentials":${Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)},"deviceInfo":$deviceInfoJson,"proxyConfig":$proxyConfigJson}"""
             engine.callMethod("init", initArgs)
+            engine.evalSnippet("globalThis.__proxyConfig = $proxyConfigJson;")
             initialized = true
         }
     }
@@ -360,7 +365,7 @@ class JsClient(
             mimeType = mimeType,
             hooks = hooks,
             subtitleTracks = subtitles,
-            httpClient = httpClient,
+            httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
             mediaCodecs = mediaCodecs,
         )
     }

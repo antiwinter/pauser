@@ -120,6 +120,10 @@ class JsProvider private constructor(
     jar:    ns('jar'),
     fs:     ns('fs'),
   };
+  Object.defineProperty(globalThis.host, 'proxyConfig', {
+    get: function() { return globalThis.__proxyConfig || null; },
+    enumerable: true,
+  });
 })();
 """
     }

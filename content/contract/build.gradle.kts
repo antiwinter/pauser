@@ -25,6 +25,7 @@ dependencies {
     api(project(":player"))
     api(project(":storage"))
     api(project(":core:form:contract"))
+    api(project(":proxy:contract"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)

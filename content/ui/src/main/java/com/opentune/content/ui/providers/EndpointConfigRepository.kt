@@ -56,10 +56,10 @@ object EndpointConfigRepository {
     }
 
     private suspend fun buildClient(protocol: String, values: Map<String, String>, proxyId: String?): EndpointClient {
-        val provider   = OpenTuneProviderRegistryHolder.get().provider(protocol)
-        val httpClient = EndpointClientRegistryHolder.get().buildHttpClient(proxyId)
+        val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
+        val proxyClient = EndpointClientRegistryHolder.get().buildProxyClient(proxyId)
         return provider.createClient(values)
-            .also { it.httpClient = httpClient }
+            .also { it.proxyClient = proxyClient }
     }
 
     private fun identityKeys(protocol: String): Set<String> {

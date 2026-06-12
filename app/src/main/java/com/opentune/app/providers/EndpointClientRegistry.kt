@@ -9,6 +9,7 @@ import com.opentune.content.contract.CachingEndpointClient
 import com.opentune.content.contract.EndpointCache
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientAccess
+import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.ProxyDao
@@ -73,14 +74,14 @@ class EndpointClientRegistry(
         }
     }
 
-    override suspend fun buildHttpClient(proxyId: String?): OkHttpClient =
+    override suspend fun buildProxyClient(proxyId: String?): ProxyClient? =
         proxyId?.let { id ->
             runCatching {
                 val proxy = proxyDao.getById(id) ?: return@runCatching null
                 val proxyFields = json.decodeFromString<Map<String, String>>(proxy.fieldsJson)
                 proxyProviderRegistry.proxy(proxy.proxyType).createClient(proxyFields)
             }.getOrNull()
-        } ?: OkHttpClient()
+        }
 
     private suspend fun buildClient(entity: EndpointEntity): EndpointClient? {
         val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()
@@ -89,16 +90,16 @@ class EndpointClientRegistry(
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrNull() ?: return null
 
-        val httpClient: OkHttpClient = buildHttpClient(entity.proxyId)
+        val proxyClient: ProxyClient? = buildProxyClient(entity.proxyId)
 
         val client = runCatching {
             provider.createClient(values)
         }.getOrNull() ?: return null
 
-        client.httpClient = httpClient
+        client.proxyClient = proxyClient
         client.imageLoader = ImageLoader.Builder(appContext)
             .diskCache(sharedDiskCache)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = httpClient)) }
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = proxyClient?.getHttpClient() ?: OkHttpClient())) }
             .build()
         client.endpointId = entity.endpointId
         client.protocol = entity.protocol

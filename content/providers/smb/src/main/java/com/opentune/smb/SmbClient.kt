@@ -151,7 +151,7 @@ class SmbClient(
                 mimeType = null,
                 hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
-                httpClient = httpClient,
+                httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
             )
         }
     }
