@@ -51,6 +51,15 @@ class DetailViewModel(
 
     fun setSelectedEpisodeId(id: String?) {
         _selectedEpisodeId.value = id
+        _focusedChildEntryId.value = id
+    }
+
+    // Generalized focused child entry id for detail back-stack restoration.
+    private val _focusedChildEntryId = MutableStateFlow<String?>(null)
+    val focusedChildEntryId: StateFlow<String?> = _focusedChildEntryId.asStateFlow()
+
+    fun setFocusedChildEntryId(id: String?) {
+        _focusedChildEntryId.value = id
     }
 
     // Digipak state
@@ -161,11 +170,20 @@ class DetailViewModel(
         _selectedSeasonId.value = id
         _episodePage.value = 0
         _selectedEpisodeId.value = null
+        _focusedChildEntryId.value = null
     }
 
     fun selectEpisodePage(page: Int) {
         _episodePage.value = page
         _selectedEpisodeId.value = null
+        _focusedChildEntryId.value = null
+    }
+
+    /** Select season and page derived from saved episode number, without clearing focus if already set. */
+    fun selectSeasonAndPageForProgress(seasonId: String, episodePage: Int) {
+        _selectedSeasonId.value = seasonId
+        _episodePage.value = episodePage
+        // Don't clear focusedChildEntryId — will be set once episodes load
     }
 
     companion object {

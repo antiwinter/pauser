@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.search
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,68 +8,45 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.content.contract.FilenameDetector
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
-import com.opentune.storage.TitleLang
+import com.opentune.content.contract.FilenameDetector
 import com.opentune.content.ui.catalog.components.MediaEntryComponent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import com.opentune.content.ui.catalog.rememberGridFocusRequesters
+import com.opentune.storage.TitleLang
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    logTag: String,
     results: SnapshotStateList<EntryInfo>,
-    searchFn: suspend (String) -> List<EntryInfo>,
+    query: String,
+    searching: Boolean,
     titleLang: TitleLang,
-    imageLoader: coil3.ImageLoader,
+    imageLoader: ImageLoader,
+    initialFocusId: String? = null,
     onBack: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowse: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (EntryInfo) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
-    var query by remember { mutableStateOf("") }
-    var searching by remember { mutableStateOf(false) }
-
-    LaunchedEffect(query) {
-        delay(280)
-        val q = query.trim()
-        if (q.isEmpty()) {
-            results.clear()
-            searching = false
-            return@LaunchedEffect
-        }
-        searching = true
-        try {
-            val fetched = withContext(Dispatchers.IO) { searchFn(q) }
-            results.clear()
-            results.addAll(fetched)
-        } catch (e: Exception) {
-            Log.e(logTag, "search", e)
-            results.clear()
-        } finally {
-            searching = false
-        }
-    }
+    val gridState = rememberLazyGridState()
+    val focusRequesters = rememberGridFocusRequesters(results, initialFocusId, gridState)
 
     Column(
         modifier = Modifier
@@ -81,16 +57,17 @@ fun SearchScreen(
         Button(onClick = onBack) { Text("Back") }
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
             label = { M3Text("Search") },
             singleLine = true,
         )
         if (searching) {
-            Text("Searching\u2026")
+            Text("Searching…")
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(5),
+            state = gridState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -98,11 +75,15 @@ fun SearchScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(results, key = { it.id }) { item ->
+            itemsIndexed(results, key = { _, item -> item.id }) { index, item ->
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
                     imageLoader = imageLoader,
+                    modifier = if (index < focusRequesters.size)
+                        Modifier.focusRequester(focusRequesters[index])
+                    else Modifier,
+                    onFocused = { onItemFocused(item) },
                     onClick = {
                         fun resolveAction(type: String): (() -> Unit)? = when (type) {
                             "Folder", "Season" -> { -> onOpenBrowse(item) }

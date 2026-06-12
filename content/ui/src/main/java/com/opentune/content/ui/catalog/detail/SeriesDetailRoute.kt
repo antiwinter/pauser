@@ -51,7 +51,7 @@ fun SeriesDetailRoute(
     val vmEpisodes by viewModel.episodes.collectAsState()
     val vmTotalEpisodes by viewModel.totalEpisodes.collectAsState()
     val vmEpisodePage by viewModel.episodePage.collectAsState()
-    val vmSelectedEpisodeId by viewModel.selectedEpisodeId.collectAsState()
+    val vmFocusedChildEntryId by viewModel.focusedChildEntryId.collectAsState()
 
     // Set series context for playback state persistence.
     LaunchedEffect(stateKey) {
@@ -66,13 +66,15 @@ fun SeriesDetailRoute(
         viewModel.loadSeasons()
     }
 
-    // Resolve season selection and load episodes.
+    // Resolve season selection, page, and load episodes.
     LaunchedEffect(vmSeasons, vmSelectedSeasonId, vmEpisodePage) {
         if (vmSeasons.isNotEmpty() && pendingSeasonNumber > 0) {
             val season = vmSeasons.firstOrNull { it.indexNumber == pendingSeasonNumber }
                 ?: vmSeasons.first()
+            // Derive initial page from pending episode number
+            val targetPage = if (pendingEpisodeNumber > 0) (pendingEpisodeNumber - 1) / 50 else 0
             pendingSeasonNumber = 0
-            viewModel.selectSeason(season.id)
+            viewModel.selectSeasonAndPageForProgress(season.id, targetPage)
             return@LaunchedEffect
         }
         if (vmSeasons.isNotEmpty() && viewModel.selectedSeasonId.value == null && pendingSeasonNumber == 0) {
@@ -82,14 +84,14 @@ fun SeriesDetailRoute(
         if (vmSeasons.isNotEmpty()) viewModel.loadEpisodes()
     }
 
-    // Resolve episode selection; handle initial selection and cross-season auto-play.
+    // Resolve episode focus target after episodes load.
     LaunchedEffect(vmEpisodes) {
         if (vmEpisodes.isEmpty()) return@LaunchedEffect
         if (pendingAutoPlay) {
             pendingAutoPlay = false
             val episode = vmEpisodes.first()
             Log.d(LOG_TAG, "auto-advance season: episode=${episode.id}")
-            viewModel.setSelectedEpisodeId(episode.id)
+            viewModel.setFocusedChildEntryId(episode.id)
             playerController?.prepare(episode, 0L)  // auto-advance: start fresh
             withContext(Dispatchers.IO) {
                 StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
@@ -103,14 +105,13 @@ fun SeriesDetailRoute(
             val episode = vmEpisodes.firstOrNull { it.indexNumber == pendingEpisodeNumber }
                 ?: vmEpisodes.first()
             pendingEpisodeNumber = 0
-            viewModel.setSelectedEpisodeId(episode.id)
-            // Don't prepare yet - user will explicitly select
+            Log.d(LOG_TAG, "progress episode resolved: id=${episode.id}")
+            viewModel.setFocusedChildEntryId(episode.id)
             return@LaunchedEffect
         }
-        if (viewModel.selectedEpisodeId.value == null) {
+        if (viewModel.focusedChildEntryId.value == null) {
             val episode = vmEpisodes.first()
-            viewModel.setSelectedEpisodeId(episode.id)
-            // Don't prepare yet - user will explicitly select
+            viewModel.setFocusedChildEntryId(episode.id)
         }
     }
 
@@ -118,12 +119,12 @@ fun SeriesDetailRoute(
     LaunchedEffect(playerController) {
         playerController?.setNextVideoCallback {
             val episodes = viewModel.episodes.value
-            val currentId = viewModel.selectedEpisodeId.value
+            val currentId = viewModel.focusedChildEntryId.value
             val currentIdx = episodes.indexOfFirst { it.id == currentId }
             val nextEpisode = episodes.getOrNull(currentIdx + 1)
             if (nextEpisode != null) {
                 Log.d(LOG_TAG, "requestNextVideo: episode=${nextEpisode.id}")
-                viewModel.setSelectedEpisodeId(nextEpisode.id)
+                viewModel.setFocusedChildEntryId(nextEpisode.id)
                 playerController.prepare(nextEpisode, 0L)
                 scope.launch {
                     withContext(Dispatchers.IO) {
@@ -151,14 +152,14 @@ fun SeriesDetailRoute(
     val focusEpisode = { episode: EntryInfo ->
         Log.d(LOG_TAG, "focusEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
-        viewModel.setSelectedEpisodeId(episode.id)
+        viewModel.setFocusedChildEntryId(episode.id)
         playerController?.prepare(episode)
         Unit
     }
     val selectEpisode = { episode: EntryInfo ->
         Log.d(LOG_TAG, "selectEpisode: id=${episode.id} title=${episode.title}")
         sharedVm.cache(episode)
-        viewModel.setSelectedEpisodeId(episode.id)
+        viewModel.setFocusedChildEntryId(episode.id)
         playerController?.prepare(episode)
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -184,10 +185,10 @@ fun SeriesDetailRoute(
         episodePage = vmEpisodePage,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
-        initialEpisodeIndex = vmEpisodes.indexOfFirst { it.id == vmSelectedEpisodeId }.coerceAtLeast(0),
+        initialFocusId = vmFocusedChildEntryId,
         onFocusEpisode = focusEpisode,
         onResume = resumePlay,
-        onPlayFromStart = { playerController?.playbackSession?.seekTo(0L); playerController?.play(); Unit },
+        onPlayFromStart = { playerController?.playbackSession?.seekTo(0L); playerController?.play() },
         onToggleFavorite = onToggleFavorite,
         onSelectSeason = selectSeason,
         onSelectEpisode = selectEpisode,

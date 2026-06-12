@@ -12,11 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -105,7 +109,9 @@ fun DetailBadges(
     }
 }
 
-/** Play buttons (Resume, From start / Play, Like) */
+/** Play buttons (Resume, From start / Play, Like).
+ * When [focusPrimaryAction] is true, the primary button (Resume or Play) is focused
+ * once after composition — used by movie detail on initial load. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailPlayButtons(
@@ -115,14 +121,27 @@ fun DetailPlayButtons(
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
+    focusPrimaryAction: Boolean = false,
 ) {
     if (!hasContent) return
+    val primaryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (focusPrimaryAction) {
+            primaryFocusRequester.requestFocus()
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (resumeMs > 0) {
-            Button(onClick = onResume) { Text("Resume") }
-        }
-        Button(onClick = onPlayFromStart) {
-            Text(if (resumeMs > 0) "From start" else "Play")
+            Button(
+                onClick = onResume,
+                modifier = Modifier.focusRequester(primaryFocusRequester),
+            ) { Text("Resume") }
+            Button(onClick = onPlayFromStart) { Text("From start") }
+        } else {
+            Button(
+                onClick = onPlayFromStart,
+                modifier = Modifier.focusRequester(primaryFocusRequester),
+            ) { Text("Play") }
         }
         Button(onClick = onToggleFavorite) {
             Text(if (isFavorite) "♥ Liked" else "♡ Like")
@@ -198,24 +217,32 @@ fun SeasonSelector(
 fun EpisodeRow(
     episodes: List<EntryInfo>,
     imageLoader: ImageLoader,
-    initialScrollIndex: Int = 0,
+    initialFocusId: String? = null,
     onFocusEpisode: ((EntryInfo) -> Unit)? = null,
     onPlayEpisode: (EntryInfo) -> Unit,
 ) {
     if (episodes.isEmpty()) return
     val listState = rememberLazyListState()
-    LaunchedEffect(episodes.size) {
-        if (episodes.isNotEmpty() && initialScrollIndex > 0) {
-            listState.scrollToItem(initialScrollIndex.coerceAtMost(episodes.lastIndex))
+    val targetIndex = if (initialFocusId != null) episodes.indexOfFirst { it.id == initialFocusId } else -1
+    val focusRequesters = remember(episodes) { List(episodes.size) { FocusRequester() } }
+
+    LaunchedEffect(episodes, initialFocusId) {
+        if (targetIndex >= 0) {
+            listState.scrollToItem(targetIndex)
+        }
+    }
+    LaunchedEffect(episodes, initialFocusId, targetIndex) {
+        if (targetIndex >= 0) {
+            focusRequesters[targetIndex].requestFocus()
         }
     }
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(episodes, key = { it.id }) { episode ->
+        itemsIndexed(episodes, key = { _, ep -> ep.id }) { index, episode ->
             ThumbEntryComponent(
                 item = episode,
                 onClick = { onPlayEpisode(episode) },
                 imageLoader = imageLoader,
-                modifier = Modifier.width(200.dp),
+                modifier = Modifier.width(200.dp).focusRequester(focusRequesters[index]),
                 onFocus = if (onFocusEpisode != null) {{ onFocusEpisode(episode) }} else null,
             )
         }
@@ -252,17 +279,32 @@ fun EpisodePager(
 fun DigipakChildren(
     children: List<EntryInfo>,
     imageLoader: ImageLoader,
+    initialFocusId: String? = null,
     onFocusChild: ((EntryInfo) -> Unit)? = null,
     onPlayChild: (EntryInfo) -> Unit,
 ) {
     if (children.isEmpty()) return
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(children, key = { it.id }) { child ->
+    val listState = rememberLazyListState()
+    val targetIndex = if (initialFocusId != null) children.indexOfFirst { it.id == initialFocusId } else -1
+    val focusRequesters = remember(children) { List(children.size) { FocusRequester() } }
+
+    LaunchedEffect(children, initialFocusId) {
+        if (targetIndex >= 0) {
+            listState.scrollToItem(targetIndex)
+        }
+    }
+    LaunchedEffect(children, initialFocusId, targetIndex) {
+        if (targetIndex >= 0) {
+            focusRequesters[targetIndex].requestFocus()
+        }
+    }
+    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(children, key = { _, child -> child.id }) { index, child ->
             ThumbEntryComponent(
                 item = child,
                 onClick = { onPlayChild(child) },
                 imageLoader = imageLoader,
-                modifier = Modifier.width(200.dp),
+                modifier = Modifier.width(200.dp).focusRequester(focusRequesters[index]),
                 onFocus = if (onFocusChild != null) { { onFocusChild(child) } } else null,
             )
         }

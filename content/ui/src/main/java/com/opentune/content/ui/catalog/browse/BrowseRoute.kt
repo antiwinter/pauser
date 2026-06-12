@@ -47,6 +47,7 @@ fun BrowseRoute(
     val vmLoading by viewModel.loading.collectAsState()
     val vmError by viewModel.error.collectAsState()
     val vmTotal by viewModel.totalCount.collectAsState()
+    val vmLastFocusedItemId by viewModel.lastFocusedItemId.collectAsState()
 
     val items = remember { mutableStateListOf<EntryInfo>() }
     LaunchedEffect(vmItems) {
@@ -92,9 +93,11 @@ fun BrowseRoute(
             totalCount = vmTotal,
             loading = vmLoading,
             error = vmError,
+            initialFocusId = vmLastFocusedItemId,
             onBack = { nav.popBackStack() },
             onSearch = { nav.navigate(Routes.search(protocol, endpointId, location)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+            onItemFocused = { item -> viewModel.setlastFocusedItemId(item.id) },
             onOpenBrowseLocation = { folderEntry ->
                 sharedVm.cache(folderEntry)
                 nav.navigate(Routes.browse(protocol, endpointId, folderEntry))
@@ -109,8 +112,12 @@ fun BrowseRoute(
                 playerController.prepare(entry)
                 playerController.play()
             },
-            onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
-            onOpenAudioUnsupported = { nav.navigate(Routes.AUDIO_UNSUPPORTED) },
+            onOpenImageViewer = { raw ->
+                nav.navigate(Routes.imageViewer(protocol, endpointId, raw))
+            },
+            onOpenAudioUnsupported = { raw ->
+                nav.navigate(Routes.AUDIO_UNSUPPORTED)
+            },
         )
     }
 }

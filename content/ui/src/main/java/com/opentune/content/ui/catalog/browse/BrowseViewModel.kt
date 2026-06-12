@@ -42,6 +42,13 @@ class BrowseViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _lastFocusedItemId = MutableStateFlow<String?>(null)
+    val lastFocusedItemId: StateFlow<String?> = _lastFocusedItemId.asStateFlow()
+
+    fun setlastFocusedItemId(id: String) {
+        _lastFocusedItemId.value = id
+    }
+
     private var client: EndpointClient? = null
     private var queryOptions: QueryOptions? = null
     private var protocol: String? = null

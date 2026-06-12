@@ -47,6 +47,7 @@ fun MovieOverviewScreen(
                     onResume = onResume,
                     onPlayFromStart = onPlayFromStart,
                     onToggleFavorite = onToggleFavorite,
+                    focusPrimaryAction = true,
                 )
                 entryInfo.overview?.let { DetailOverviewSnippet(it) }
             }

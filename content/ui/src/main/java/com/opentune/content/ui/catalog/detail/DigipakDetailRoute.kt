@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.NavSharedViewModel
@@ -32,12 +31,14 @@ fun DigipakDetailRoute(
 ) {
     val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
     val vmSingleChild by viewModel.singleChild.collectAsState()
+    val vmFocusedChildEntryId by viewModel.focusedChildEntryId.collectAsState()
 
     LaunchedEffect(entryInfo.id) {
         viewModel.loadDigipakChildren()
     }
 
     // Select initial child: prefer one with saved position, then first.
+    // Also set the initial focus target when no explicit target is set.
     LaunchedEffect(vmDigipakChildren, vmSingleChild) {
         val child = vmSingleChild
             ?: vmDigipakChildren.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
@@ -45,6 +46,9 @@ fun DigipakDetailRoute(
             ?: return@LaunchedEffect
         Log.d(LOG_TAG, "initial child: id=${child.id}")
         playerController?.prepare(child)
+        if (viewModel.focusedChildEntryId.value == null && vmDigipakChildren.isNotEmpty()) {
+            viewModel.setFocusedChildEntryId(child.id)
+        }
     }
 
     val resumePlay = { playerController?.play(); Unit }
@@ -56,12 +60,14 @@ fun DigipakDetailRoute(
     val focusChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "focusChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
+        viewModel.setFocusedChildEntryId(child.id)
         playerController?.prepare(child)
         Unit
     }
     val selectChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "selectChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
+        viewModel.setFocusedChildEntryId(child.id)
         playerController?.prepare(child)
         playerController?.play()
         Unit
@@ -87,6 +93,7 @@ fun DigipakDetailRoute(
         singleChild = vmSingleChild,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
+        initialFocusId = vmFocusedChildEntryId,
         onFocusChild = focusChild,
         onResume = resumePlay,
         onPlayFromStart = playFromStart,

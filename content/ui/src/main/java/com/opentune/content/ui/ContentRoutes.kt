@@ -16,6 +16,7 @@ import com.opentune.content.ui.catalog.detail.DetailRoute
 import com.opentune.content.ui.catalog.detail.DetailViewModel
 import com.opentune.content.ui.catalog.ImageViewerRoute
 import com.opentune.content.ui.catalog.search.SearchRoute
+import com.opentune.content.ui.catalog.search.SearchViewModel
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
@@ -138,12 +139,14 @@ fun NavGraphBuilder.contentRoutes(
             navArgument("scopeLocation") { type = NavType.StringType },
         ),
     ) {
+        val searchVm: SearchViewModel = viewModel()
         SearchRoute(
             nav = nav,
             protocol = it.arguments!!.getString("provider")!!,
             endpointId = it.arguments!!.getString("endpointId")!!,
             scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
             sharedVm = sharedVm,
+            viewModel = searchVm,
         )
     }
     composable(

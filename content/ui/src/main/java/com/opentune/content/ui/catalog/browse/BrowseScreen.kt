@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,11 +19,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
+import com.opentune.content.ui.catalog.rememberGridFocusRequesters
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -65,18 +66,21 @@ fun BrowseScreen(
     totalCount: Int,
     loading: Boolean,
     error: String?,
+    initialFocusId: String? = null,
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowseLocation: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
     onOpenPlayer: (EntryInfo) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
-    val scope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
     var localLoading by remember { mutableStateOf(loading) }
+
+    val focusRequesters = rememberGridFocusRequesters(items, initialFocusId, gridState)
 
     val nearEnd by remember {
         derivedStateOf {
@@ -94,7 +98,6 @@ fun BrowseScreen(
                 val page = withContext(Dispatchers.IO) { loadMore(items.size, PAGE_SIZE) }
                 items.addAll(page.items)
             } catch (e: Exception) {
-                // Don't log CancellationException - it's normal when navigating away
                 if (e !is kotlinx.coroutines.CancellationException) {
                     Log.e(logTag, "load more", e)
                 }
@@ -143,11 +146,15 @@ fun BrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items, key = { it.id }) { item ->
+            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
                     imageLoader = imageLoader,
+                    modifier = if (index < focusRequesters.size)
+                        Modifier.focusRequester(focusRequesters[index])
+                    else Modifier,
+                    onFocused = { onItemFocused(item) },
                     onClick = {
                         fun resolveAction(type: String): (() -> Unit)? = when (type) {
                             "Folder", "Season" -> { -> onOpenBrowseLocation(item) }

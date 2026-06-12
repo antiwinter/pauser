@@ -30,7 +30,7 @@ fun SeriesOverviewScreen(
     episodePage: Int,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    initialEpisodeIndex: Int = 0,
+    initialFocusId: String? = null,
     onFocusEpisode: (EntryInfo) -> Unit = {},
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
@@ -70,7 +70,7 @@ fun SeriesOverviewScreen(
                 EpisodeRow(
                     episodes = episodes,
                     imageLoader = imageLoader,
-                    initialScrollIndex = initialEpisodeIndex,
+                    initialFocusId = initialFocusId,
                     onFocusEpisode = onFocusEpisode,
                     onPlayEpisode = onSelectEpisode,
                 )

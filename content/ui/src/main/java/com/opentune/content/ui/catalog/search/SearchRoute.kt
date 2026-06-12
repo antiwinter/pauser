@@ -7,7 +7,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
@@ -15,7 +14,6 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.ui.Routes
 import com.opentune.content.contract.EndpointClient
-import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.SearchQuery
 import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.ArtUrlInjector
@@ -30,13 +28,16 @@ fun SearchRoute(
     endpointId: String,
     scopeLocationEncoded: String,
     sharedVm: NavSharedViewModel,
+    viewModel: SearchViewModel,
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
     var client by remember { mutableStateOf<EndpointClient?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val results = remember { mutableStateListOf<EntryInfo>() }
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
+    val query by viewModel.query.collectAsState()
+    val searching by viewModel.searching.collectAsState()
+    val lastFocusedItemId by viewModel.lastFocusedItemId.collectAsState()
 
     LaunchedEffect(protocol, endpointId) {
         try {
@@ -47,21 +48,29 @@ fun SearchRoute(
         }
     }
 
+    LaunchedEffect(client, scopeDecoded, protocol, endpointId) {
+        val c = client ?: return@LaunchedEffect
+        viewModel.initialize { q ->
+            c.search(scopeDecoded, SearchQuery(term = q)).items
+                .let { ArtUrlInjector.apply(it, protocol, endpointId) }
+        }
+    }
+
     when {
         error != null -> Text("Error: $error")
         client == null -> Text("Loading…")
         else -> {
             val c = client!!
             SearchScreen(
-                logTag = "OT_Search_$endpointId",
-                results = results,
+                results = viewModel.results,
+                query = query,
+                searching = searching,
                 imageLoader = c.imageLoader!!,
-                searchFn = { query ->
-                    c.search(scopeDecoded, SearchQuery(term = query)).items
-                        .let { ArtUrlInjector.apply(it, protocol, endpointId) }
-                },
                 titleLang = titleLang,
+                initialFocusId = lastFocusedItemId,
                 onBack = { nav.popBackStack() },
+                onQueryChange = { viewModel.setQuery(it) },
+                onItemFocused = { item -> viewModel.setLastFocusedItemId(item.id) },
                 onOpenBrowse = { entry ->
                     sharedVm.cache(entry)
                     nav.navigate(Routes.browse(protocol, endpointId, entry))
@@ -74,8 +83,12 @@ fun SearchRoute(
                     sharedVm.cache(entry)
                     nav.navigate(Routes.player(protocol, endpointId, entry.id, entry))
                 },
-                onOpenImageViewer = { raw -> nav.navigate(Routes.imageViewer(protocol, endpointId, raw)) },
-                onOpenAudioUnsupported = { nav.navigate(Routes.AUDIO_UNSUPPORTED) },
+                onOpenImageViewer = { raw ->
+                    nav.navigate(Routes.imageViewer(protocol, endpointId, raw))
+                },
+                onOpenAudioUnsupported = { raw ->
+                    nav.navigate(Routes.AUDIO_UNSUPPORTED)
+                },
             )
         }
     }
