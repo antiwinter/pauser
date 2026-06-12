@@ -31,7 +31,7 @@ fun DigipakDetailRoute(
 ) {
     val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
     val vmSingleChild by viewModel.singleChild.collectAsState()
-    val vmFocusedChildEntryId by viewModel.focusedChildEntryId.collectAsState()
+    val vmsubEntryIndex by viewModel.subEntryIndex.collectAsState()
 
     LaunchedEffect(entryInfo.id) {
         viewModel.loadDigipakChildren()
@@ -46,22 +46,22 @@ fun DigipakDetailRoute(
             ?: return@LaunchedEffect
         Log.d(LOG_TAG, "initial child: id=${child.id}")
         playerController?.prepare(child)
-        if (viewModel.focusedChildEntryId.value == null && vmDigipakChildren.isNotEmpty()) {
-            viewModel.setFocusedChildEntryId(child.id)
+        if (viewModel.subEntryIndex.value == null && vmDigipakChildren.isNotEmpty()) {
+            viewModel.setsubEntryIndex(child.id)
         }
     }
 
     val focusChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "focusChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
-        viewModel.setFocusedChildEntryId(child.id)
+        viewModel.setsubEntryIndex(child.id)
         playerController?.prepare(child)
         Unit
     }
     val selectChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "selectChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
-        viewModel.setFocusedChildEntryId(child.id)
+        viewModel.setsubEntryIndex(child.id)
         playerController?.prepare(child)
         playerController?.play()
         Unit
@@ -87,7 +87,7 @@ fun DigipakDetailRoute(
         singleChild = vmSingleChild,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
-        initialFocusId = vmFocusedChildEntryId,
+        initialFocusId = vmsubEntryIndex,
         onFocusChild = focusChild,
         onToggleFavorite = onToggleFavorite,
         onPlaySingleChild = playSingleChild,

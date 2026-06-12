@@ -36,10 +36,10 @@ fun SeriesOverviewScreen(
     titleLang: TitleLang,
     isFavorite: Boolean,
     seasons: List<EntryInfo>,
-    selectedSeasonId: String?,
+    seasonIndex: String?,
     episodes: List<EntryInfo>,
     totalEpisodes: Int,
-    episodePage: Int,
+    pageIndex: Int,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
     initialFocusId: String? = null,
@@ -70,7 +70,7 @@ fun SeriesOverviewScreen(
 
                 SeasonSelector(
                     seasons = seasons,
-                    selectedSeasonId = selectedSeasonId,
+                    seasonIndex = seasonIndex,
                     onSelect = onSelectSeason,
                 )
                 EpisodeRow(
@@ -80,9 +80,9 @@ fun SeriesOverviewScreen(
                     onFocusEpisode = onFocusEpisode,
                     onPlayEpisode = onSelectEpisode,
                 )
-                EpisodePager(
+                pageIndexr(
                     totalEpisodes = totalEpisodes,
-                    currentPage = episodePage,
+                    currentPage = pageIndex,
                     onSelectPage = onSelectPage,
                 )
             }
@@ -94,7 +94,7 @@ fun SeriesOverviewScreen(
 @Composable
 private fun SeasonSelector(
     seasons: List<EntryInfo>,
-    selectedSeasonId: String?,
+    seasonIndex: String?,
     onSelect: (String) -> Unit,
 ) {
     if (seasons.size <= 1) return
@@ -103,7 +103,7 @@ private fun SeasonSelector(
             Button(onClick = { onSelect(season.id) }) {
                 Text(
                     text = season.title,
-                    fontWeight = if (season.id == selectedSeasonId)
+                    fontWeight = if (season.id == seasonIndex)
                         FontWeight.Bold else FontWeight.Normal,
                 )
             }
@@ -149,7 +149,7 @@ private fun EpisodeRow(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun EpisodePager(
+private fun pageIndexr(
     totalEpisodes: Int,
     currentPage: Int,
     onSelectPage: (Int) -> Unit,

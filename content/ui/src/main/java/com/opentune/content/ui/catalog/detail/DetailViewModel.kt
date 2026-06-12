@@ -29,36 +29,21 @@ class DetailViewModel(
     private val _entryInfo = MutableStateFlow<EntryInfo?>(null)
     val entryInfo: StateFlow<EntryInfo?> = _entryInfo.asStateFlow()
 
-    // Series state
-    private val _seasons = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val seasons: StateFlow<List<EntryInfo>> = _seasons.asStateFlow()
+    // subEntry: digipak items or seasons
+    private val _subEntries = MutableStateFlow<List<EntryInfo>>(emptyList())
+    val subEntries: StateFlow<List<EntryInfo>> = _subEntries.asStateFlow()
 
-    private val _selectedSeasonId = MutableStateFlow<String?>(null)
-    val selectedSeasonId: StateFlow<String?> = _selectedSeasonId.asStateFlow()
+    // indexes are position in array
+    private val _subEntryIndex = MutableStateFlow<Int>(0)
+    val subEntryIndex: StateFlow<Int> = _subEntryIndex.asStateFlow()
+    private val _pageIndex = MutableStateFlow(0)
+    val pageIndex: StateFlow<Int> = _pageIndex.asStateFlow()  
+    private val _episodeIndex = MutableStateFlow<Int>(0)
+    val episodeIndex: StateFlow<Int> = _episodeIndex.asStateFlow()
 
-    private val _episodes = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val episodes: StateFlow<List<EntryInfo>> = _episodes.asStateFlow()
-
-    private val _totalEpisodes = MutableStateFlow(0)
-    val totalEpisodes: StateFlow<Int> = _totalEpisodes.asStateFlow()
-
-    private val _episodePage = MutableStateFlow(0)
-    val episodePage: StateFlow<Int> = _episodePage.asStateFlow()
-
-    // Generalized focused child entry id for detail back-stack restoration.
-    private val _focusedChildEntryId = MutableStateFlow<String?>(null)
-    val focusedChildEntryId: StateFlow<String?> = _focusedChildEntryId.asStateFlow()
-
-    fun setFocusedChildEntryId(id: String?) {
-        _focusedChildEntryId.value = id
+    fun setsubEntryIndex(id: String?) {
+        _subEntryIndex.value = id
     }
-
-    // Digipak state
-    private val _digipakChildren = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val digipakChildren: StateFlow<List<EntryInfo>> = _digipakChildren.asStateFlow()
-
-    private val _singleChild = MutableStateFlow<EntryInfo?>(null)
-    val singleChild: StateFlow<EntryInfo?> = _singleChild.asStateFlow()
 
     private var client: EndpointClient? = null
     private var protocol: String? = null
@@ -82,97 +67,48 @@ class DetailViewModel(
         }
     }
 
-    fun loadSeasons() {
-        if (_seasons.value.isNotEmpty()) {
-            Log.d(LOG_TAG, "loadSeasons() skipped — already loaded")
+    fun loadEntries(val lvl: Number?) {
+    
+        val sub = when (lvl) {
+            2 -> _episodes
+            else -> _subEntries
+        }
+
+        if (sub.value.isNotEmpty()) {
+            Log.d(LOG_TAG, "loadSubEntries() skipped — already loaded")
             return
         }
-        val c = client ?: return
-        val p = protocol ?: return
-        val eid = endpointId ?: return
-        Log.d(LOG_TAG, "loadSeasons() fetching")
+
+        Log.d(LOG_TAG, "loadSubEntries() fetching")
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    c.listEntry(itemRef, 0, 500)
+                    client?.listEntry(itemRef, 0, 500)
                 }
-                _seasons.value = ArtUrlInjector.apply(result.items, p, eid)
-                Log.d(LOG_TAG, "loadSeasons() complete: ${result.items.size} seasons")
+                sub.value = result?.items ?: emptyList()
+                Log.d(LOG_TAG, "loadSubEntries() complete: ${result.items.size} subEntries")
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadSeasons() failed", e)
-            }
-        }
-    }
-
-    fun loadDigipakChildren() {
-        if (_digipakChildren.value.isNotEmpty() || _singleChild.value != null) {
-            Log.d(LOG_TAG, "loadDigipakChildren() skipped — already loaded")
-            return
-        }
-        val c = client ?: return
-        val p = protocol ?: return
-        val eid = endpointId ?: return
-        val childCount = _entryInfo.value?.childCount ?: 0
-        Log.d(LOG_TAG, "loadDigipakChildren() fetching childCount=$childCount")
-        viewModelScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(itemRef, 0, maxOf(childCount, 1))
-                }
-                val filtered = result.items
-                if (childCount <= 1 && filtered.isNotEmpty()) {
-                    _singleChild.value = filtered.first()
-                } else {
-                    _digipakChildren.value = ArtUrlInjector.apply(filtered, p, eid, ArtType.Thumb)
-                }
-                Log.d(LOG_TAG, "loadDigipakChildren() complete: ${filtered.size} children")
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadDigipakChildren() failed", e)
-            }
-        }
-    }
-
-    fun loadEpisodes() {
-        val seasonList = _seasons.value
-        if (seasonList.isEmpty()) return
-        val season = seasonList.firstOrNull { it.id == _selectedSeasonId.value }
-            ?: seasonList.first()
-
-        Log.d(LOG_TAG, "loadEpisodes() seasonId=${season.id} page=${_episodePage.value}")
-        viewModelScope.launch {
-            val c = client ?: return@launch
-            val p = protocol ?: return@launch
-            val eid = endpointId ?: return@launch
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(season.id, _episodePage.value * 50, 50)
-                }
-                _episodes.value = ArtUrlInjector.apply(result.items, p, eid, ArtType.Thumb)
-                    .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
-                _totalEpisodes.value = result.totalCount
-                Log.d(LOG_TAG, "loadEpisodes() complete: ${result.items.size}/${result.totalCount}")
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadEpisodes() failed", e)
+                Log.e(LOG_TAG, "loadSubEntries() failed", e)
             }
         }
     }
 
     fun selectSeason(id: String?) {
-        _selectedSeasonId.value = id
-        _episodePage.value = 0
-        _focusedChildEntryId.value = null
+        _episodeIndex.value = id
+        _pageIndex.value = 0
+        _subEntryIndex.value = null
     }
 
-    fun selectEpisodePage(page: Int) {
-        _episodePage.value = page
-        _focusedChildEntryId.value = null
+    fun selectpageIndex(page: Int) {
+        _pageIndex.value = page
+        _subEntryIndex.value = null
     }
 
     /** Select season and page derived from saved episode number, without clearing focus if already set. */
-    fun selectSeasonAndPageForProgress(seasonId: String, episodePage: Int) {
-        _selectedSeasonId.value = seasonId
-        _episodePage.value = episodePage
-        // Don't clear focusedChildEntryId — will be set once episodes load
+    fun selectSeasonAndPageForProgress(seasonId: String, pageIndex: Int) {
+        _episodeIndex.value = seasonId
+        _pageIndex.value = pageIndex
+        // Don't clear subEntryIndex — will be set once subEntries load
     }
 
     companion object {
