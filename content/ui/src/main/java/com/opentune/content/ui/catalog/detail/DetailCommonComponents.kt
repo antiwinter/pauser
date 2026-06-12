@@ -3,40 +3,28 @@ package com.opentune.content.ui.catalog.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
 import com.opentune.player.MediaCodecInfo
 import java.io.File
-import com.opentune.content.ui.catalog.components.ThumbEntryComponent
 
 fun artImageModel(src: String?): Any? = when {
     src.isNullOrBlank() -> null
@@ -109,40 +97,14 @@ fun DetailBadges(
     }
 }
 
-/** Play buttons (Resume, From start / Play, Like).
- * When [focusPrimaryAction] is true, the primary button (Resume or Play) is focused
- * once after composition — used by movie detail on initial load. */
+/** Shared detail action buttons (favorite, etc.). */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailPlayButtons(
-    resumeMs: Long,
+fun DetailButtons(
     isFavorite: Boolean,
-    hasContent: Boolean,
-    onResume: () -> Unit,
-    onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
-    focusPrimaryAction: Boolean = false,
 ) {
-    if (!hasContent) return
-    val primaryFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        if (focusPrimaryAction) {
-            primaryFocusRequester.requestFocus()
-        }
-    }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (resumeMs > 0) {
-            Button(
-                onClick = onResume,
-                modifier = Modifier.focusRequester(primaryFocusRequester),
-            ) { Text("Resume") }
-            Button(onClick = onPlayFromStart) { Text("From start") }
-        } else {
-            Button(
-                onClick = onPlayFromStart,
-                modifier = Modifier.focusRequester(primaryFocusRequester),
-            ) { Text("Play") }
-        }
         Button(onClick = onToggleFavorite) {
             Text(if (isFavorite) "♥ Liked" else "♡ Like")
         }
@@ -188,127 +150,6 @@ fun DetailOverviewFull(
         style = MaterialTheme.typography.bodyMedium,
         color = Color.White.copy(alpha = 0.87f),
     )
-}
-
-/** Season selector row */
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun SeasonSelector(
-    seasons: List<EntryInfo>,
-    selectedSeasonId: String?,
-    onSelect: (String) -> Unit,
-) {
-    if (seasons.size <= 1) return
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(seasons) { season ->
-            Button(onClick = { onSelect(season.id) }) {
-                Text(
-                    text = season.title,
-                    fontWeight = if (season.id == selectedSeasonId)
-                        FontWeight.Bold else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
-/** Episode row */
-@Composable
-fun EpisodeRow(
-    episodes: List<EntryInfo>,
-    imageLoader: ImageLoader,
-    initialFocusId: String? = null,
-    onFocusEpisode: ((EntryInfo) -> Unit)? = null,
-    onPlayEpisode: (EntryInfo) -> Unit,
-) {
-    if (episodes.isEmpty()) return
-    val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusId != null) episodes.indexOfFirst { it.id == initialFocusId } else -1
-    val focusRequesters = remember(episodes) { List(episodes.size) { FocusRequester() } }
-
-    LaunchedEffect(episodes, initialFocusId) {
-        if (targetIndex >= 0) {
-            listState.scrollToItem(targetIndex)
-        }
-    }
-    LaunchedEffect(episodes, initialFocusId, targetIndex) {
-        if (targetIndex >= 0) {
-            focusRequesters[targetIndex].requestFocus()
-        }
-    }
-    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(episodes, key = { _, ep -> ep.id }) { index, episode ->
-            ThumbEntryComponent(
-                item = episode,
-                onClick = { onPlayEpisode(episode) },
-                imageLoader = imageLoader,
-                modifier = Modifier.width(200.dp).focusRequester(focusRequesters[index]),
-                onFocus = if (onFocusEpisode != null) {{ onFocusEpisode(episode) }} else null,
-            )
-        }
-    }
-}
-
-/** Episode pagination */
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun EpisodePager(
-    totalEpisodes: Int,
-    currentPage: Int,
-    onSelectPage: (Int) -> Unit,
-) {
-    if (totalEpisodes <= 50) return
-    val pageCount = kotlin.math.ceil(totalEpisodes / 50.0).toInt()
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(pageCount) { page ->
-            val start = page * 50 + 1
-            val end = minOf((page + 1) * 50, totalEpisodes)
-            Button(onClick = { onSelectPage(page) }) {
-                Text(
-                    text = "$start–$end",
-                    fontWeight = if (page == currentPage)
-                        FontWeight.Bold else FontWeight.Normal,
-                )
-            }
-        }
-    }
-}
-
-/** Digipak children row */
-@Composable
-fun DigipakChildren(
-    children: List<EntryInfo>,
-    imageLoader: ImageLoader,
-    initialFocusId: String? = null,
-    onFocusChild: ((EntryInfo) -> Unit)? = null,
-    onPlayChild: (EntryInfo) -> Unit,
-) {
-    if (children.isEmpty()) return
-    val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusId != null) children.indexOfFirst { it.id == initialFocusId } else -1
-    val focusRequesters = remember(children) { List(children.size) { FocusRequester() } }
-
-    LaunchedEffect(children, initialFocusId) {
-        if (targetIndex >= 0) {
-            listState.scrollToItem(targetIndex)
-        }
-    }
-    LaunchedEffect(children, initialFocusId, targetIndex) {
-        if (targetIndex >= 0) {
-            focusRequesters[targetIndex].requestFocus()
-        }
-    }
-    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(children, key = { _, child -> child.id }) { index, child ->
-            ThumbEntryComponent(
-                item = child,
-                onClick = { onPlayChild(child) },
-                imageLoader = imageLoader,
-                modifier = Modifier.width(200.dp).focusRequester(focusRequesters[index]),
-                onFocus = if (onFocusChild != null) { { onFocusChild(child) } } else null,
-            )
-        }
-    }
 }
 
 /** Page indicator dots */

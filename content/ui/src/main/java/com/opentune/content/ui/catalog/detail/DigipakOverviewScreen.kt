@@ -7,15 +7,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.ui.catalog.components.ThumbEntryComponent
 import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.TitleLang
 
@@ -32,8 +41,6 @@ fun DigipakOverviewScreen(
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
     initialFocusId: String? = null,
     onFocusChild: (EntryInfo) -> Unit = {},
-    onResume: () -> Unit,
-    onPlayFromStart: () -> Unit,
     onToggleFavorite: () -> Unit,
     onPlaySingleChild: () -> Unit,
     onSelectChild: (EntryInfo) -> Unit,
@@ -66,11 +73,10 @@ fun DigipakOverviewScreen(
                     DetailBadges(entryInfo, mediaCodecs)
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onToggleFavorite) {
-                        Text(if (isFavorite) "\u2665 Liked" else "\u2661 Like")
-                    }
-                }
+                DetailButtons(
+                    isFavorite = isFavorite,
+                    onToggleFavorite = onToggleFavorite,
+                )
 
                 entryInfo.overview?.let { DetailOverviewSnippet(it) }
 
@@ -88,3 +94,38 @@ fun DigipakOverviewScreen(
     }
 }
 
+@Composable
+private fun DigipakChildren(
+    children: List<EntryInfo>,
+    imageLoader: ImageLoader,
+    initialFocusId: String? = null,
+    onFocusChild: ((EntryInfo) -> Unit)? = null,
+    onPlayChild: (EntryInfo) -> Unit,
+) {
+    if (children.isEmpty()) return
+    val listState = rememberLazyListState()
+    val targetIndex = if (initialFocusId != null) children.indexOfFirst { it.id == initialFocusId } else -1
+    val focusRequesters = remember(children) { List(children.size) { FocusRequester() } }
+
+    LaunchedEffect(children, initialFocusId) {
+        if (targetIndex >= 0) {
+            listState.scrollToItem(targetIndex)
+        }
+    }
+    LaunchedEffect(children, initialFocusId, targetIndex) {
+        if (targetIndex >= 0) {
+            focusRequesters[targetIndex].requestFocus()
+        }
+    }
+    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(children, key = { _, child -> child.id }) { index, child ->
+            ThumbEntryComponent(
+                item = child,
+                onClick = { onPlayChild(child) },
+                imageLoader = imageLoader,
+                modifier = Modifier.width(200.dp).focusRequester(focusRequesters[index]),
+                onFocus = if (onFocusChild != null) { { onFocusChild(child) } } else null,
+            )
+        }
+    }
+}

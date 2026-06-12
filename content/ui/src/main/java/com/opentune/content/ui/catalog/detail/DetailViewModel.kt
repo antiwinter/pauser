@@ -45,15 +45,6 @@ class DetailViewModel(
     private val _episodePage = MutableStateFlow(0)
     val episodePage: StateFlow<Int> = _episodePage.asStateFlow()
 
-    // Currently selected episode, identified by its stable id (null = not yet resolved).
-    private val _selectedEpisodeId = MutableStateFlow<String?>(null)
-    val selectedEpisodeId: StateFlow<String?> = _selectedEpisodeId.asStateFlow()
-
-    fun setSelectedEpisodeId(id: String?) {
-        _selectedEpisodeId.value = id
-        _focusedChildEntryId.value = id
-    }
-
     // Generalized focused child entry id for detail back-stack restoration.
     private val _focusedChildEntryId = MutableStateFlow<String?>(null)
     val focusedChildEntryId: StateFlow<String?> = _focusedChildEntryId.asStateFlow()
@@ -169,13 +160,11 @@ class DetailViewModel(
     fun selectSeason(id: String?) {
         _selectedSeasonId.value = id
         _episodePage.value = 0
-        _selectedEpisodeId.value = null
         _focusedChildEntryId.value = null
     }
 
     fun selectEpisodePage(page: Int) {
         _episodePage.value = page
-        _selectedEpisodeId.value = null
         _focusedChildEntryId.value = null
     }
 

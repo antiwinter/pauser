@@ -147,7 +147,6 @@ fun SeriesDetailRoute(
         }
     }
 
-    val resumePlay = { playerController?.play(); Unit }
     val selectSeason = { id: String -> viewModel.selectSeason(id) }
     val focusEpisode = { episode: EntryInfo ->
         Log.d(LOG_TAG, "focusEpisode: id=${episode.id} title=${episode.title}")
@@ -176,7 +175,6 @@ fun SeriesDetailRoute(
     SeriesOverviewScreen(
         entryInfo = entryInfo,
         titleLang = titleLang,
-        resumeMs = resumeMs,
         isFavorite = isFavorite,
         seasons = vmSeasons,
         selectedSeasonId = vmSelectedSeasonId,
@@ -187,8 +185,6 @@ fun SeriesDetailRoute(
         mediaCodecs = mediaCodecs,
         initialFocusId = vmFocusedChildEntryId,
         onFocusEpisode = focusEpisode,
-        onResume = resumePlay,
-        onPlayFromStart = { playerController?.playbackSession?.seekTo(0L); playerController?.play() },
         onToggleFavorite = onToggleFavorite,
         onSelectSeason = selectSeason,
         onSelectEpisode = selectEpisode,

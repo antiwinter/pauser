@@ -51,12 +51,6 @@ fun DigipakDetailRoute(
         }
     }
 
-    val resumePlay = { playerController?.play(); Unit }
-    val playFromStart = {
-        playerController?.playbackSession?.seekTo(0L)
-        playerController?.play()
-        Unit
-    }
     val focusChild = { child: EntryInfo ->
         Log.d(LOG_TAG, "focusChild: id=${child.id} title=${child.title}")
         sharedVm.cache(child)
@@ -95,8 +89,6 @@ fun DigipakDetailRoute(
         mediaCodecs = mediaCodecs,
         initialFocusId = vmFocusedChildEntryId,
         onFocusChild = focusChild,
-        onResume = resumePlay,
-        onPlayFromStart = playFromStart,
         onToggleFavorite = onToggleFavorite,
         onPlaySingleChild = playSingleChild,
         onSelectChild = selectChild,
