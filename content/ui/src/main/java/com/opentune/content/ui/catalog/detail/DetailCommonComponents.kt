@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -28,7 +30,9 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryTag
+import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.MediaCodecInfo
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.opentune.storage.TitleLang
 import java.io.File
 
@@ -43,8 +47,12 @@ fun artImageModel(src: String?): Any? = when {
 /** Logo (if available) or title text — shared header for all detail overview pages. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailHeader(entryInfo: EntryInfo, titleLang: TitleLang) {
-    val logoModel = artImageModel(entryInfo.logo)
+fun DetailHeader(viewModel: DetailViewModel) {
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
+    val titleLang by viewModel.appConfig.titleLangFlow
+        .collectAsState(initial = TitleLang.Local)
+    val logoModel = artImageModel(info.logo)
     if (logoModel != null) {
         AsyncImage(
             model = logoModel,
@@ -54,9 +62,9 @@ fun DetailHeader(entryInfo: EntryInfo, titleLang: TitleLang) {
         )
     } else {
         val displayTitle = when (titleLang) {
-            TitleLang.Original -> entryInfo.originalTitle
+            TitleLang.Original -> info.originalTitle
             else -> null
-        } ?: entryInfo.title
+        } ?: info.title
         Text(
             text = displayTitle,
             style = MaterialTheme.typography.headlineMedium,
@@ -74,9 +82,11 @@ fun DetailHeader(entryInfo: EntryInfo, titleLang: TitleLang) {
  */
 @Composable
 fun DetailOverviewShell(
-    entryInfo: EntryInfo,
+    viewModel: DetailViewModel,
     page1Content: @Composable () -> Unit,
 ) {
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
     val pagerState = rememberPagerState { 2 }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -86,7 +96,7 @@ fun DetailOverviewShell(
         ) { page ->
             when (page) {
                 0 -> page1Content()
-                1 -> DetailPage2(entryInfo = entryInfo)
+                1 -> DetailPage2(entryInfo = info)
             }
         }
 
@@ -158,33 +168,36 @@ fun DetailBackdrop(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailBadges(
-    entryInfo: EntryInfo,
-    mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    viewModel: DetailViewModel,
+    playerController: PlayerController?,
 ) {
-    val resolution = widthToResolutionLabel(entryInfo.width)
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
+    val mediaCodecs by (playerController?.mediaCodecs
+        ?: MutableStateFlow(emptyList<MediaCodecInfo>())).collectAsState()
+    val resolution = widthToResolutionLabel(info.width)
     val videoCodec = mediaCodecs.firstOrNull()
     val audioCodecs = mediaCodecs.drop(1)
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        entryInfo.communityRating?.let { Badge("★ ${"%.1f".format(it)}") }
-        entryInfo.year?.let { Badge(it.toString()) }
+        info.communityRating?.let { Badge("★ ${"%.1f".format(it)}") }
+        info.year?.let { Badge(it.toString()) }
         if (resolution.isNotEmpty()) Badge(resolution)
         videoCodec?.bitDepth?.let { Badge("${it}bit") }
         videoCodec?.let { Badge(it.codec.uppercase()) }
         audioCodecs.forEach { Badge(it.codec.uppercase()) }
-        entryInfo.officialRating?.let { Badge(it) }
-        entryInfo.genres?.take(3)?.forEach { Badge(it) }
+        info.officialRating?.let { Badge(it) }
+        info.genres?.take(3)?.forEach { Badge(it) }
     }
 }
 
 /** Shared detail action buttons (favorite, etc.). */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DetailButtons(
-    entryInfo: EntryInfo,
-    viewModel: DetailViewModel,
-) {
-    val isFavorite = entryInfo.userData?.isFavorite ?: false
+fun DetailButtons(viewModel: DetailViewModel) {
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
+    val isFavorite = info.userData?.isFavorite ?: false
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(onClick = { viewModel.tagEntry(EntryTag.Favorite, !isFavorite) }) {
             Text(if (isFavorite) "♥ Liked" else "♡ Like")

@@ -70,7 +70,7 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        SingletonImageLoader.setSafe { buildImageLoader() }
+        SingletonImageLoader.setSafe { imageLoader }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,
             name = getDatabasePath("opentune.db").absolutePath,
@@ -115,11 +115,6 @@ class OpenTuneApplication : Application() {
 
     private fun buildImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
-            .diskCache {
-                DiskCache.Builder()
-                    .directory(File(cacheDir, "coil").toOkioPath())
-                    .maxSizeBytes(200L * 1024 * 1024)
-                    .build()
-            }
+            .diskCache(sharedDiskCache)
             .build()
 }

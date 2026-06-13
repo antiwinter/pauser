@@ -1,5 +1,6 @@
 package com.opentune.content.ui.catalog.detail
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,24 +21,35 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.content.contract.EntryInfo
-import com.opentune.player.MediaCodecInfo
-import com.opentune.storage.TitleLang
+import com.opentune.content.ui.catalog.player.PlayerController
+
+private const val LOG_TAG = "OT_MovieDetail"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun MovieOverviewScreen(
-    entryInfo: EntryInfo,
-    titleLang: TitleLang,
-    resumeMs: Long,
+fun MovieDetailScreen(
+    playerController: PlayerController?,
     viewModel: DetailViewModel,
-    mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    onResume: () -> Unit,
-    onPlayFromStart: () -> Unit,
 ) {
-    DetailOverviewShell(entryInfo = entryInfo) {
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
+    val resumeMs = info.userData?.positionMs ?: 0L
+
+    LaunchedEffect(info.ref) {
+        Log.d(LOG_TAG, "initial: ref=${info.ref} resumeMs=$resumeMs")
+        playerController?.prepare(info)
+    }
+
+    val resumePlay = { playerController?.play(); Unit }
+    val playFromStart = {
+        playerController?.playbackSession?.seekTo(0L)
+        playerController?.play()
+        Unit
+    }
+
+    DetailOverviewShell(viewModel = viewModel) {
         Box(modifier = Modifier.fillMaxSize()) {
-            DetailBackdrop(backdropUrl = entryInfo.backdrop.firstOrNull())
+            DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
 
             Column(
                 modifier = Modifier
@@ -44,20 +58,17 @@ fun MovieOverviewScreen(
                     .padding(horizontal = 48.dp, vertical = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DetailHeader(entryInfo = entryInfo, titleLang = titleLang)
-                DetailBadges(entryInfo, mediaCodecs)
+                DetailHeader(viewModel = viewModel)
+                DetailBadges(viewModel = viewModel, playerController = playerController)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MoviePlayButton(
                         resumeMs = resumeMs,
-                        onResume = onResume,
-                        onPlayFromStart = onPlayFromStart,
+                        onResume = resumePlay,
+                        onPlayFromStart = playFromStart,
                     )
-                    DetailButtons(
-                        entryInfo = entryInfo,
-                        viewModel = viewModel,
-                    )
+                    DetailButtons(viewModel = viewModel)
                 }
-                entryInfo.overview?.let { DetailOverviewSnippet(it) }
+                info.overview?.let { DetailOverviewSnippet(it) }
             }
         }
     }

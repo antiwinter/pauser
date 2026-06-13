@@ -1,5 +1,6 @@
 package com.opentune.content.ui.catalog.detail
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,30 +28,68 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.components.ThumbEntryComponent
-import com.opentune.player.MediaCodecInfo
-import com.opentune.storage.TitleLang
+import com.opentune.content.ui.catalog.player.PlayerController
+
+private const val LOG_TAG = "OT_DigipakDetail"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun DigipakOverviewScreen(
-    entryInfo: EntryInfo,
-    titleLang: TitleLang,
-    resumeMs: Long,
+fun DigipakDetailScreen(
+    playerController: PlayerController?,
     viewModel: DetailViewModel,
-    children: List<EntryInfo>,
-    singleChild: EntryInfo?,
-    imageLoader: ImageLoader,
-    mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    initialFocusRef: String? = null,
-    onFocusChild: (EntryInfo) -> Unit = {},
-    onPlaySingleChild: () -> Unit,
-    onSelectChild: (EntryInfo) -> Unit,
 ) {
-    val isSingleChild = (entryInfo.childCount ?: 0) <= 1 && singleChild != null
+    val imageLoader = viewModel.imageLoader ?: return
+    val entryInfo by viewModel.entryInfo.collectAsState()
+    val info = entryInfo ?: return
 
-    DetailOverviewShell(entryInfo = entryInfo) {
+    val children by viewModel.digipakChildren.collectAsState()
+    val singleChild by viewModel.singleChild.collectAsState()
+    val initialFocusRef by viewModel.subEntryRef.collectAsState()
+
+    val isSingleChild = (info.childCount ?: 0) <= 1 && singleChild != null
+    val resumeMs = singleChild?.userData?.positionMs ?: 0L
+
+    LaunchedEffect(info.ref) {
+        viewModel.loadDigipakChildren()
+    }
+
+    LaunchedEffect(children, singleChild) {
+        val child = singleChild
+            ?: children.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
+            ?: children.firstOrNull()
+            ?: return@LaunchedEffect
+        Log.d(LOG_TAG, "initial child: ref=${child.ref}")
+        playerController?.prepare(child)
+        if (viewModel.subEntryRef.value == null && children.isNotEmpty()) {
+            viewModel.setSubEntryRef(child.ref)
+        }
+    }
+
+    val focusChild = { child: EntryInfo ->
+        Log.d(LOG_TAG, "focusChild: ref=${child.ref} title=${child.title}")
+        viewModel.setSubEntryRef(child.ref)
+        playerController?.prepare(child)
+        Unit
+    }
+    val selectChild = { child: EntryInfo ->
+        Log.d(LOG_TAG, "selectChild: ref=${child.ref} title=${child.title}")
+        viewModel.setSubEntryRef(child.ref)
+        playerController?.prepare(child)
+        playerController?.play()
+        Unit
+    }
+    val playSingleChild: () -> Unit = {
+        val child = singleChild
+        if (child != null) {
+            Log.d(LOG_TAG, "playSingleChild: ref=${child.ref}")
+            playerController?.prepare(child)
+            playerController?.play()
+        }
+    }
+
+    DetailOverviewShell(viewModel = viewModel) {
         Box(modifier = Modifier.fillMaxSize()) {
-            DetailBackdrop(backdropUrl = entryInfo.backdrop.firstOrNull())
+            DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
 
             Column(
                 modifier = Modifier
@@ -57,35 +98,32 @@ fun DigipakOverviewScreen(
                     .padding(horizontal = 48.dp, vertical = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DetailHeader(entryInfo = entryInfo, titleLang = titleLang)
+                DetailHeader(viewModel = viewModel)
 
                 if (isSingleChild) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (resumeMs > 0) {
-                            Button(onClick = onPlaySingleChild) { Text("Resume") }
+                            Button(onClick = playSingleChild) { Text("Resume") }
                         }
-                        Button(onClick = onPlaySingleChild) {
+                        Button(onClick = playSingleChild) {
                             Text(if (resumeMs > 0) "From start" else "Play")
                         }
                     }
                 } else {
-                    DetailBadges(entryInfo, mediaCodecs)
+                    DetailBadges(viewModel = viewModel, playerController = playerController)
                 }
 
-                DetailButtons(
-                    entryInfo = entryInfo,
-                    viewModel = viewModel,
-                )
+                DetailButtons(viewModel = viewModel)
 
-                entryInfo.overview?.let { DetailOverviewSnippet(it) }
+                info.overview?.let { DetailOverviewSnippet(it) }
 
                 if (children.isNotEmpty()) {
                     DigipakChildren(
                         children = children,
                         imageLoader = imageLoader,
                         initialFocusRef = initialFocusRef,
-                        onFocusChild = onFocusChild,
-                        onPlayChild = onSelectChild,
+                        onFocusChild = focusChild,
+                        onPlayChild = selectChild,
                     )
                 }
             }

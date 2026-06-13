@@ -5,15 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.opentune.content.contract.EndpointClient
+import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.QueryOptions
+import com.opentune.content.ui.catalog.ArtUrlInjector
+import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.opentune.content.ui.catalog.ArtUrlInjector
 
 private const val LOG_TAG = "BrowseViewModel"
 
@@ -45,52 +48,48 @@ class BrowseViewModel(
     private val _lastFocusedItemRef = MutableStateFlow<String?>(null)
     val lastFocusedItemRef: StateFlow<String?> = _lastFocusedItemRef.asStateFlow()
 
+    private val _client = MutableStateFlow<EndpointClient?>(null)
+    val client: StateFlow<EndpointClient?> = _client.asStateFlow()
+
+    val imageLoader: ImageLoader?
+        get() = _client.value?.imageLoader
+
+    private val queryOptions = QueryOptions()
+    private var endpointId: String? = null
+
     fun setLastFocusedItemRef(ref: String) {
         _lastFocusedItemRef.value = ref
     }
 
-    private var client: EndpointClient? = null
-    private var queryOptions: QueryOptions? = null
-    private var protocol: String? = null
-    private var endpointId: String? = null
-
-    /**
-     * Initialize with the client and query options once they are available.
-     * Called from BrowseRoute after the EndpointClient is resolved.
-     */
-    fun initialize(
-        client: EndpointClient,
-        queryOptions: QueryOptions,
-        protocol: String,
-        endpointId: String,
-    ) {
-        this.client = client
-        this.queryOptions = queryOptions
-        this.protocol = protocol
-        this.endpointId = endpointId
+    fun initialize(endpointId: String) {
+        if (this.endpointId != null) return
+        viewModelScope.launch {
+            try {
+                val c = withContext(Dispatchers.IO) {
+                    EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+                } ?: throw IllegalStateException("No provider instance for $endpointId")
+                this@BrowseViewModel.endpointId = endpointId
+                _client.value = c
+                load()
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "initialize failed for endpointId=$endpointId", e)
+                _error.value = e.message ?: "Unknown error"
+            }
+        }
     }
 
     fun load() {
-        // Only load if we don't have items yet — this is what preserves data
-        // when navigating back (ViewModel survives, items are still here).
         if (_items.value.isNotEmpty()) {
             Log.d(LOG_TAG, "load() skipped — items already present for location=$location")
             return
         }
-        val c = client ?: return
-        val opts = queryOptions ?: return
-        val p = protocol ?: return
-        val eid = endpointId ?: return
+        if (_client.value == null) return
         Log.d(LOG_TAG, "load() fetching for location=$location")
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
             runCatching {
-                withContext(Dispatchers.IO) {
-                    c.listEntry(location, 0, PAGE_SIZE, opts)
-                }.let { result ->
-                    result.copy(items = ArtUrlInjector.apply(result.items, p, eid))
-                }
+                listPage(0, PAGE_SIZE)
             }.fold(
                 onSuccess = { result ->
                     _items.value = result.items
@@ -106,22 +105,24 @@ class BrowseViewModel(
         }
     }
 
+    suspend fun listPage(startIndex: Int, limit: Int): EntryList {
+        val c = _client.value ?: throw IllegalStateException("BrowseViewModel not initialized")
+        val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
+        return withContext(Dispatchers.IO) {
+            c.listEntry(location, startIndex, limit, queryOptions)
+        }.let { result ->
+            result.copy(items = ArtUrlInjector.apply(result.items, c.protocol, eid))
+        }
+    }
+
     fun loadMore() {
-        val c = client ?: return
-        val opts = queryOptions ?: return
-        val p = protocol ?: return
-        val eid = endpointId ?: return
         val currentItems = _items.value
         val total = _totalCount.value
         if (_loading.value || currentItems.size >= total) return
         viewModelScope.launch {
             _loading.value = true
             runCatching {
-                withContext(Dispatchers.IO) {
-                    c.listEntry(location, currentItems.size, PAGE_SIZE, opts)
-                }.let { result ->
-                    result.copy(items = ArtUrlInjector.apply(result.items, p, eid))
-                }
+                listPage(currentItems.size, PAGE_SIZE)
             }.onSuccess { result ->
                 _items.value = currentItems + result.items
                 _totalCount.value = result.totalCount

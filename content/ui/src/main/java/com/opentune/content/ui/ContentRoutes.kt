@@ -116,7 +116,6 @@ fun NavGraphBuilder.contentRoutes(
             endpointId = endpointId,
             itemRef = ref,
             initialInfo = entryInfo,
-            sharedVm = sharedVm,
             viewModel = detailVm,
             playerController = playerController,
         )

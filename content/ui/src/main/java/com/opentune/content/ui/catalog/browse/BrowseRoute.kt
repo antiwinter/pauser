@@ -1,29 +1,20 @@
 package com.opentune.content.ui.catalog.browse
 
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.opentune.content.contract.EndpointClient
-import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.QueryOptions
 import com.opentune.content.ui.Routes
 import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
-import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
-
-private const val LOG_TAG = "OpenTuneBrowseRoute"
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -35,13 +26,10 @@ fun BrowseRoute(
     sharedVm: NavSharedViewModel,
     playerController: PlayerController,
 ) {
-    val location = initialEntryInfo.ref
-
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    var client by remember { mutableStateOf<EndpointClient?>(null) }
-
+    val client by viewModel.client.collectAsState()
     val vmItems by viewModel.items.collectAsState()
     val vmLoading by viewModel.loading.collectAsState()
     val vmError by viewModel.error.collectAsState()
@@ -56,45 +44,27 @@ fun BrowseRoute(
     }
 
     LaunchedEffect(endpointId) {
-        val existing = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
-        if (existing == null) {
-            Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
-        } else {
-            client = existing
-        }
+        viewModel.initialize(endpointId)
     }
 
-    val queryOptions = remember { QueryOptions() }
-
-    LaunchedEffect(client, queryOptions) {
-        val c = client ?: return@LaunchedEffect
-        Log.d(LOG_TAG, "init+load for location=$location, client=$c, endpointId=$endpointId")
-        viewModel.initialize(c, queryOptions, c.protocol, endpointId)
-        viewModel.load()
-    }
-
-    val c = client
+    val imageLoader = viewModel.imageLoader
 
     when {
-        client == null -> Text("Loading…")
+        client == null || imageLoader == null -> Text("Loading…")
+        vmError != null && items.isEmpty() -> Text("Error: $vmError")
         else -> BrowseScreen(
             logTag = "OT_Browse_$endpointId",
             items = items,
-            loadMore = { startIndex, limit ->
-                c.listEntry(location, startIndex, limit, queryOptions)
-                    .let { result ->
-                        result.copy(items = ArtUrlInjector.apply(result.items, c.protocol, endpointId))
-                    }
-            },
+            loadMore = { startIndex, limit -> viewModel.listPage(startIndex, limit) },
             subtitle = initialEntryInfo.title,
             titleLang = titleLang,
-            imageLoader = c!!.imageLoader!!,
+            imageLoader = imageLoader,
             totalCount = vmTotal,
             loading = vmLoading,
             error = vmError,
             initialFocusRef = vmLastFocusedItemRef,
             onBack = { nav.popBackStack() },
-            onSearch = { nav.navigate(Routes.search(endpointId, location)) },
+            onSearch = { nav.navigate(Routes.search(endpointId, initialEntryInfo.ref)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
             onOpenBrowseLocation = { folderEntry ->
@@ -106,8 +76,7 @@ fun BrowseRoute(
                 nav.navigate(Routes.detail(endpointId, item))
             },
             onOpenPlayer = { entry ->
-                val clientRef = c ?: return@BrowseScreen
-                playerController.setClient(clientRef)
+                playerController.setClient(client!!)
                 playerController.prepare(entry)
                 playerController.play()
             },

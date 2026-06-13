@@ -47,7 +47,7 @@ class PlayerController(
     private val _displayInfo = MutableStateFlow<PlaybackDisplayInfo>(PlaybackDisplayInfo())
     override val displayInfoFlow: StateFlow<PlaybackDisplayInfo> = _displayInfo.asStateFlow()
 
-    // Next-video callback — registered by SeriesDetailRoute; read by TvPlayerSurface.
+    // Next-video callback — registered by SeriesDetailScreen; read by TvPlayerSurface.
     private var _nextVideoCallback: (() -> Unit)? = null
     private val _hasNextVideo = MutableStateFlow(false)
     override val hasNextVideoFlow: StateFlow<Boolean> = _hasNextVideo.asStateFlow()
