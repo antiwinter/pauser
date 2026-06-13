@@ -93,7 +93,7 @@ export interface EntryUserData {
 }
 
 export interface EntryInfo {
-  id: string;
+  ref: string;
   title: string;
   type: EntryType;
   cover: string | null;
@@ -107,8 +107,8 @@ export interface EntryInfo {
   overview?: string | null;
   childCount?: number | null;
   // detail fields
-  parentId?: string | null;
-  seriesId?: string | null;
+  parentRef?: string | null;
+  seriesRef?: string | null;
   seasonNumber?: number | null;
   logo?: string | null;
   backdrop?: string[];

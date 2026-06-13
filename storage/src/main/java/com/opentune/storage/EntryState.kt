@@ -20,7 +20,7 @@ class EntryStateStore(private val db: OpenTuneDatabase) {
             dao.upsert(
                 EntryStateEntity(
                     endpointId = key.endpointId,
-                    itemId = key.itemRef,
+                    itemRef = key.itemRef,
                     updatedAtEpochMs = System.currentTimeMillis(),
                 ),
             )
@@ -30,8 +30,8 @@ class EntryStateStore(private val db: OpenTuneDatabase) {
     suspend fun get(key: EntryStateKey): EntryStateEntity? =
         dao.get(key.endpointId, key.itemRef)
 
-    suspend fun get(endpointId: String, itemId: String): EntryStateEntity? =
-        get(EntryStateKey(endpointId, itemId))
+    suspend fun get(endpointId: String, itemRef: String): EntryStateEntity? =
+        get(EntryStateKey(endpointId, itemRef))
 
     suspend fun upsertPosition(key: EntryStateKey, positionMs: Long) {
         ensureRow(key)

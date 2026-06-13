@@ -57,8 +57,8 @@ interface EntryStateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: EntryStateEntity)
 
-    @Query("SELECT * FROM media_state WHERE endpointId = :endpointId AND itemId = :itemId LIMIT 1")
-    suspend fun get(endpointId: String, itemId: String): EntryStateEntity?
+    @Query("SELECT * FROM media_state WHERE endpointId = :endpointId AND itemRef = :itemRef LIMIT 1")
+    suspend fun get(endpointId: String, itemRef: String): EntryStateEntity?
 
     @Query("SELECT * FROM media_state WHERE endpointId = :endpointId ORDER BY updatedAtEpochMs DESC")
     fun observeForEndpoint(endpointId: String): Flow<List<EntryStateEntity>>
@@ -66,24 +66,24 @@ interface EntryStateDao {
     @Query("SELECT * FROM media_state WHERE isFavorite = 1 ORDER BY updatedAtEpochMs DESC")
     fun observeAllFavorites(): Flow<List<EntryStateEntity>>
 
-    @Query("UPDATE media_state SET positionMs = :positionMs, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun updatePosition(endpointId: String, itemId: String, positionMs: Long, now: Long)
+    @Query("UPDATE media_state SET positionMs = :positionMs, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updatePosition(endpointId: String, itemRef: String, positionMs: Long, now: Long)
 
-    @Query("UPDATE media_state SET playbackSpeed = :speed, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun updateSpeed(endpointId: String, itemId: String, speed: Float, now: Long)
+    @Query("UPDATE media_state SET playbackSpeed = :speed, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updateSpeed(endpointId: String, itemRef: String, speed: Float, now: Long)
 
-    @Query("UPDATE media_state SET isFavorite = :isFavorite, title = :title, type = :type, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun updateFavorite(endpointId: String, itemId: String, isFavorite: Boolean, title: String?, type: String?, now: Long)
+    @Query("UPDATE media_state SET isFavorite = :isFavorite, title = :title, type = :type, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updateFavorite(endpointId: String, itemRef: String, isFavorite: Boolean, title: String?, type: String?, now: Long)
 
-    @Query("UPDATE media_state SET selectedSubtitleTrackId = :id, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun updateSubtitleTrack(endpointId: String, itemId: String, id: String?, now: Long)
+    @Query("UPDATE media_state SET selectedSubtitleTrackId = :id, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updateSubtitleTrack(endpointId: String, itemRef: String, id: String?, now: Long)
 
-    @Query("UPDATE media_state SET selectedAudioTrackId = :id, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun updateAudioTrack(endpointId: String, itemId: String, id: String?, now: Long)
+    @Query("UPDATE media_state SET selectedAudioTrackId = :id, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updateAudioTrack(endpointId: String, itemRef: String, id: String?, now: Long)
 
     @Query("DELETE FROM media_state WHERE endpointId = :endpointId")
     suspend fun deleteByEndpoint(endpointId: String)
 
-    @Query("DELETE FROM media_state WHERE endpointId = :endpointId AND itemId = :itemId")
-    suspend fun delete(endpointId: String, itemId: String)
+    @Query("DELETE FROM media_state WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun delete(endpointId: String, itemRef: String)
 }

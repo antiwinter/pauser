@@ -9,7 +9,7 @@ import androidx.room.RoomDatabase
         EntryStateEntity::class,
         ProxyEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false,
 )
 abstract class OpenTuneDatabase : RoomDatabase() {

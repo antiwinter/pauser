@@ -46,7 +46,7 @@ fun SeriesDetailRoute(
     val vmEpisodes by viewModel.episodes.collectAsState()
     val vmTotalEpisodes by viewModel.totalEpisodes.collectAsState()
     val vmpageIndex by viewModel.pageIndex.collectAsState()
-    val vmsubEntryIndex by viewModel.subEntryIndex.collectAsState()
+    val vmsubEntryRef by viewModel.subEntryRef.collectAsState()
 
     // Set series context for playback state persistence.
     LaunchedEffect(stateKey) {
@@ -54,7 +54,7 @@ fun SeriesDetailRoute(
     }
 
     // Decode stored series position and kick off season loading.
-    LaunchedEffect(entryInfo.id) {
+    LaunchedEffect(entryInfo.ref) {
         val (season, episode) = decodeSeriesProgress(resumeMs)
         viewModel.loadEntries()
         viewModel.loadEntries(2, season, episode)
@@ -83,14 +83,14 @@ fun SeriesDetailRoute(
 
     val setSeason = { id: String -> viewModel.setSeason(id) }
     val focusEpisode = { episode: EntryInfo ->
-        Log.d(LOG_TAG, "focusEpisode: id=${episode.id} title=${episode.title}")
+        Log.d(LOG_TAG, "focusEpisode: ref=${episode.ref} title=${episode.title}")
         sharedVm.cache(episode)
-        viewModel.setsubEntryIndex(episode.id)
+        viewModel.setSubEntryRef(episode.ref)
         playerController?.prepare(episode)
         Unit
     }
     val selectEpisode = { episode: EntryInfo ->
-        Log.d(LOG_TAG, "selectEpisode: id=${episode.id} title=${episode.title}")
+        Log.d(LOG_TAG, "selectEpisode: ref=${episode.ref} title=${episode.title}")
         sharedVm.cache(episode)
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -115,7 +115,7 @@ fun SeriesDetailRoute(
         pageIndex = vmpageIndex,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
-        initialFocusId = vmsubEntryIndex,
+        initialFocusRef = vmsubEntryRef,
         onFocusEpisode = focusEpisode,
         onToggleFavorite = onToggleFavorite,
         onSelectSeason = setSeason,

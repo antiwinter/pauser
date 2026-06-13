@@ -10,18 +10,18 @@ import com.opentune.content.contract.EntryInfo
 @Composable
 fun rememberGridFocusRequesters(
     items: List<EntryInfo>,
-    initialFocusId: String?,
+    initialFocusRef: String?,
     gridState: LazyGridState,
 ): List<FocusRequester> {
-    val targetIndex = remember(items.size, initialFocusId) {
-        if (initialFocusId != null) items.indexOfFirst { it.id == initialFocusId } else -1
+    val targetIndex = remember(items.size, initialFocusRef) {
+        if (initialFocusRef != null) items.indexOfFirst { it.ref == initialFocusRef } else -1
     }
     val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
 
-    LaunchedEffect(items.size, initialFocusId, targetIndex) {
+    LaunchedEffect(items.size, initialFocusRef, targetIndex) {
         if (targetIndex >= 0) gridState.scrollToItem(targetIndex)
     }
-    LaunchedEffect(items.size, initialFocusId, targetIndex) {
+    LaunchedEffect(items.size, initialFocusRef, targetIndex) {
         if (targetIndex >= 0) requesters.getOrNull(targetIndex)?.requestFocus()
     }
 

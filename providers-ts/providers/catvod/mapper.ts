@@ -15,7 +15,7 @@ export function categoryListToFolders(
 ): EntryList {
   return {
     items: categories.map((c) => ({
-      id: JSON.stringify({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
+      ref: JSON.stringify({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
       title: c.type_name ?? String(c.type_id),
       type: 'Folder' as const,
       cover: null,
@@ -44,7 +44,7 @@ export function vodListToEntries(
 export function liveChannelsToEntries(channels: M3UChannel[]): EntryList {
   return {
     items: channels.map((ch) => ({
-      id: JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
+      ref: JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
       title: ch.name,
       type: 'Video' as const,
       cover: ch.logo ?? null,
@@ -86,7 +86,7 @@ export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
   // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
   const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
   return {
-    id: JSON.stringify({ type: 'vod', key: siteKey, id: vodId }),
+    ref: JSON.stringify({ type: 'vod', key: siteKey, id: vodId }),
     title: item.vod_name ?? vodId,
     type,
     cover: item.vod_pic ?? null,
@@ -107,7 +107,7 @@ export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
   ).length;
 
   return {
-    id:          item.vod_id ? String(item.vod_id) : '',
+    ref:         item.vod_id ? String(item.vod_id) : '',
     title:       item.vod_name ?? '',
     type:        'Movie',
     cover:       item.vod_pic ?? null,

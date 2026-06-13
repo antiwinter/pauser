@@ -42,7 +42,7 @@ fun SeriesOverviewScreen(
     pageIndex: Int,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onFocusEpisode: (EntryInfo) -> Unit = {},
     onToggleFavorite: () -> Unit,
     onSelectSeason: (String) -> Unit,
@@ -76,7 +76,7 @@ fun SeriesOverviewScreen(
                 EpisodeRow(
                     episodes = episodes,
                     imageLoader = imageLoader,
-                    initialFocusId = initialFocusId,
+                    initialFocusRef = initialFocusRef,
                     onFocusEpisode = onFocusEpisode,
                     onPlayEpisode = onSelectEpisode,
                 )
@@ -100,10 +100,10 @@ private fun SeasonSelector(
     if (seasons.size <= 1) return
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(seasons) { season ->
-            Button(onClick = { onSelect(season.id) }) {
+            Button(onClick = { onSelect(season.ref) }) {
                 Text(
                     text = season.title,
-                    fontWeight = if (season.id == seasonIndex)
+                    fontWeight = if (season.ref == seasonIndex)
                         FontWeight.Bold else FontWeight.Normal,
                 )
             }
@@ -115,27 +115,27 @@ private fun SeasonSelector(
 private fun EpisodeRow(
     episodes: List<EntryInfo>,
     imageLoader: ImageLoader,
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onFocusEpisode: ((EntryInfo) -> Unit)? = null,
     onPlayEpisode: (EntryInfo) -> Unit,
 ) {
     if (episodes.isEmpty()) return
     val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusId != null) episodes.indexOfFirst { it.id == initialFocusId } else -1
+    val targetIndex = if (initialFocusRef != null) episodes.indexOfFirst { it.ref == initialFocusRef } else -1
     val focusRequesters = remember(episodes) { List(episodes.size) { FocusRequester() } }
 
-    LaunchedEffect(episodes, initialFocusId) {
+    LaunchedEffect(episodes, initialFocusRef) {
         if (targetIndex >= 0) {
             listState.scrollToItem(targetIndex)
         }
     }
-    LaunchedEffect(episodes, initialFocusId, targetIndex) {
+    LaunchedEffect(episodes, initialFocusRef, targetIndex) {
         if (targetIndex >= 0) {
             focusRequesters[targetIndex].requestFocus()
         }
     }
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(episodes, key = { _, ep -> ep.id }) { index, episode ->
+        itemsIndexed(episodes, key = { _, ep -> ep.ref }) { index, episode ->
             ThumbEntryComponent(
                 item = episode,
                 onClick = { onPlayEpisode(episode) },

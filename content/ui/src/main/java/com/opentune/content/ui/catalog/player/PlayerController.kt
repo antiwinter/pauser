@@ -116,9 +116,9 @@ class PlayerController(
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
-        _pendingItemRef = entryInfo.id
+        _pendingItemRef = entryInfo.ref
         _pendingStartMs = startMs ?: entryInfo.userData?.positionMs ?: 0L
-        Log.d(LOG_TAG, "prepare: ref=${entryInfo.id} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
+        Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
         
         setDisplayInfo(entryInfo)
         launchResolve(withDelay = _debounceJob?.isActive == true)

@@ -39,7 +39,7 @@ fun DigipakOverviewScreen(
     singleChild: EntryInfo?,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onFocusChild: (EntryInfo) -> Unit = {},
     onToggleFavorite: () -> Unit,
     onPlaySingleChild: () -> Unit,
@@ -84,7 +84,7 @@ fun DigipakOverviewScreen(
                     DigipakChildren(
                         children = children,
                         imageLoader = imageLoader,
-                        initialFocusId = initialFocusId,
+                        initialFocusRef = initialFocusRef,
                         onFocusChild = onFocusChild,
                         onPlayChild = onSelectChild,
                     )
@@ -98,27 +98,27 @@ fun DigipakOverviewScreen(
 private fun DigipakChildren(
     children: List<EntryInfo>,
     imageLoader: ImageLoader,
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onFocusChild: ((EntryInfo) -> Unit)? = null,
     onPlayChild: (EntryInfo) -> Unit,
 ) {
     if (children.isEmpty()) return
     val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusId != null) children.indexOfFirst { it.id == initialFocusId } else -1
+    val targetIndex = if (initialFocusRef != null) children.indexOfFirst { it.ref == initialFocusRef } else -1
     val focusRequesters = remember(children) { List(children.size) { FocusRequester() } }
 
-    LaunchedEffect(children, initialFocusId) {
+    LaunchedEffect(children, initialFocusRef) {
         if (targetIndex >= 0) {
             listState.scrollToItem(targetIndex)
         }
     }
-    LaunchedEffect(children, initialFocusId, targetIndex) {
+    LaunchedEffect(children, initialFocusRef, targetIndex) {
         if (targetIndex >= 0) {
             focusRequesters[targetIndex].requestFocus()
         }
     }
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(children, key = { _, child -> child.id }) { index, child ->
+        itemsIndexed(children, key = { _, child -> child.ref }) { index, child ->
             ThumbEntryComponent(
                 item = child,
                 onClick = { onPlayChild(child) },

@@ -58,7 +58,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     const itemsWithCover = rootList.items.filter((item) => item.cover != null);
     if (itemsWithCover.length === 0) throw new NAError('no items have a cover URL in root list');
     for (const item of itemsWithCover) {
-      assertUrl(item.cover, `item "${item.id}" cover`);
+      assertUrl(item.cover, `item "${item.ref}" cover`);
     }
     return `${itemsWithCover.length} cover URL(s) valid`;
   });
@@ -85,7 +85,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page = parseJsonResult(
       await runner.callMethod('listEntry', {
-        location: paginationContainer.id,
+        location: paginationContainer.ref,
         startIndex: 0,
         limit: PAGINATION_PAGE_SIZE,
       }),
@@ -103,7 +103,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page2 = parseJsonResult(
       await runner.callMethod('listEntry', {
-        location: paginationContainer.id,
+        location: paginationContainer.ref,
         startIndex: PAGINATION_PAGE_SIZE,
         limit: PAGINATION_PAGE_SIZE,
       }),
@@ -118,7 +118,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     if (!paginationContainer) throw new NAError('no container with enough items found for pagination test');
     const page1 = parseJsonResult(
       await runner.callMethod('listEntry', {
-        location: paginationContainer.id,
+        location: paginationContainer.ref,
         startIndex: 0,
         limit: PAGINATION_PAGE_SIZE,
       }),
@@ -126,15 +126,15 @@ export async function runCatalogChecks(reporter, runner, opts) {
     );
     const page2 = parseJsonResult(
       await runner.callMethod('listEntry', {
-        location: paginationContainer.id,
+        location: paginationContainer.ref,
         startIndex: PAGINATION_PAGE_SIZE,
         limit: PAGINATION_PAGE_SIZE,
       }),
       'listEntry dup-check page 2',
     );
-    const ids1 = new Set(page1.items.map((i) => i.id));
-    const dupes = page2.items.filter((i) => ids1.has(i.id));
-    assert(dupes.length === 0, `duplicate IDs between pages: ${dupes.map((i) => i.id).join(', ')}`);
+    const ids1 = new Set(page1.items.map((i) => i.ref));
+    const dupes = page2.items.filter((i) => ids1.has(i.ref));
+    assert(dupes.length === 0, `duplicate IDs between pages: ${dupes.map((i) => i.ref).join(', ')}`);
     return `${page1.items.length + page2.items.length} unique IDs`;
   });
 
@@ -146,12 +146,12 @@ export async function runCatalogChecks(reporter, runner, opts) {
 
   await reporter.step('Series children are Season or Episode only', async () => {
     if (!seriesItem) throw new NAError('no Series item found via search');
-    const children = await fetchAllChildren(runner, seriesItem.id);
-    if (children.length === 0) throw new NAError(`Series "${seriesItem.id}" has no children`);
+    const children = await fetchAllChildren(runner, seriesItem.ref);
+    if (children.length === 0) throw new NAError(`Series "${seriesItem.ref}" has no children`);
     for (const child of children) {
       assert(
         SERIES_CHILD_TYPES.has(child.type),
-        `Series child "${child.id}" has unexpected type "${child.type}"`,
+        `Series child "${child.ref}" has unexpected type "${child.type}"`,
       );
     }
     return `${children.length} child(ren) verified`;
@@ -161,7 +161,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
   let seasonItem = null;
   if (seriesItem) {
     try {
-      const seriesChildren = await fetchAllChildren(runner, seriesItem.id);
+      const seriesChildren = await fetchAllChildren(runner, seriesItem.ref);
       seasonItem = findByType(seriesChildren, 'Season');
     } catch {
       // ignore — fall through to search
@@ -174,30 +174,30 @@ export async function runCatalogChecks(reporter, runner, opts) {
 
   await reporter.step('Season children are Episode only', async () => {
     if (!seasonItem) throw new NAError('no Season item found');
-    const children = await fetchAllChildren(runner, seasonItem.id);
-    if (children.length === 0) throw new NAError(`Season "${seasonItem.id}" has no children`);
+    const children = await fetchAllChildren(runner, seasonItem.ref);
+    if (children.length === 0) throw new NAError(`Season "${seasonItem.ref}" has no children`);
     for (const child of children) {
-      assert(child.type === 'Episode', `Season child "${child.id}" has unexpected type "${child.type}"`);
+      assert(child.type === 'Episode', `Season child "${child.ref}" has unexpected type "${child.type}"`);
     }
     return `${children.length} episode(s) verified`;
   });
 
   await reporter.step('Season episodes all have indexNumber', async () => {
     if (!seasonItem) throw new NAError('no Season item found');
-    const children = await fetchAllChildren(runner, seasonItem.id);
-    if (children.length === 0) throw new NAError(`Season "${seasonItem.id}" has no episodes`);
+    const children = await fetchAllChildren(runner, seasonItem.ref);
+    if (children.length === 0) throw new NAError(`Season "${seasonItem.ref}" has no episodes`);
     const missing = children.filter((ep) => ep.indexNumber == null);
     assert(
       missing.length === 0,
-      `${missing.length} episode(s) missing indexNumber: ${missing.slice(0, 3).map((e) => e.id).join(', ')}`,
+      `${missing.length} episode(s) missing indexNumber: ${missing.slice(0, 3).map((e) => e.ref).join(', ')}`,
     );
     return `${children.length} episode(s) all have indexNumber`;
   });
 
   await reporter.step('Season episode indexNumbers are unique', async () => {
     if (!seasonItem) throw new NAError('no Season item found');
-    const children = await fetchAllChildren(runner, seasonItem.id);
-    if (children.length === 0) throw new NAError(`Season "${seasonItem.id}" has no episodes`);
+    const children = await fetchAllChildren(runner, seasonItem.ref);
+    if (children.length === 0) throw new NAError(`Season "${seasonItem.ref}" has no episodes`);
     const nums = children.map((ep) => ep.indexNumber).filter((n) => n != null);
     const dupes = nums.filter((n, i) => nums.indexOf(n) !== i);
     assert(dupes.length === 0, `duplicate indexNumbers in Season: ${dupes.join(', ')}`);
@@ -209,7 +209,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
 
     // Single large fetch as ground truth
     const bigPage = parseJsonResult(
-      await runner.callMethod('listEntry', { location: seasonItem.id, startIndex: 0, limit: 200 }),
+      await runner.callMethod('listEntry', { location: seasonItem.ref, startIndex: 0, limit: 200 }),
       'listEntry season all',
     );
     validateEntryList(bigPage, 'season full list');
@@ -225,7 +225,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     let offset = 0;
     while (offset < totalCount) {
       const page = parseJsonResult(
-        await runner.callMethod('listEntry', { location: seasonItem.id, startIndex: offset, limit: PAGINATION_PAGE_SIZE }),
+        await runner.callMethod('listEntry', { location: seasonItem.ref, startIndex: offset, limit: PAGINATION_PAGE_SIZE }),
         `listEntry season page at ${offset}`,
       );
       validateEntryList(page, `season page at ${offset}`);
@@ -234,7 +234,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
         `page at offset ${offset} returned ${page.items.length} items, expected ≤ ${PAGINATION_PAGE_SIZE}`,
       );
       for (const ep of page.items) {
-        pagedIds.push(ep.id);
+        pagedIds.push(ep.ref);
         if (ep.indexNumber != null) pagedIndexNumbers.push(ep.indexNumber);
       }
       if (page.items.length === 0) break;
@@ -246,7 +246,7 @@ export async function runCatalogChecks(reporter, runner, opts) {
     assert(uniquePagedIds.size === pagedIds.length, `duplicate IDs across paged episode fetch`);
 
     // Compare id sets with single-fetch ground truth
-    const singleIds = new Set(bigPage.items.map((e) => e.id));
+    const singleIds = new Set(bigPage.items.map((e) => e.ref));
     const missing = [...singleIds].filter((id) => !uniquePagedIds.has(id));
     const extra = [...uniquePagedIds].filter((id) => !singleIds.has(id));
     assert(missing.length === 0, `paginated fetch missing ${missing.length} episode(s) present in single fetch`);
@@ -284,10 +284,10 @@ export async function runCatalogChecks(reporter, runner, opts) {
     ) ?? rootList.items.find((item) => CONTAINER_TYPES.has(item.type));
     if (!container) throw new NAError('no container item in root list');
     const children = parseJsonResult(
-      await runner.callMethod('listEntry', { location: container.id, startIndex: 0, limit: 20 }),
+      await runner.callMethod('listEntry', { location: container.ref, startIndex: 0, limit: 20 }),
       'listEntry container',
     );
-    validateEntryList(children, `children of "${container.id}"`);
+    validateEntryList(children, `children of "${container.ref}"`);
     return `${children.items.length} child(ren) in "${container.title}"`;
   });
 
@@ -309,7 +309,7 @@ function validateEntryList(list, path) {
 
 function validateEntryInfoFields(item, path) {
   assertObject(item, path);
-  assertNonEmptyString(item.id, `${path}.id`);
+  assertNonEmptyString(item.ref, `${path}.ref`);
   assertNonEmptyString(item.title, `${path}.title`);
   assert(ENTRY_TYPES.has(item.type), `${path}.type is invalid: "${item.type}"`);
   if (item.cover != null) assertType(item.cover, 'string', `${path}.cover`);
@@ -347,8 +347,8 @@ async function findPaginationContainer(runner, rootList) {
     if (!CONTAINER_TYPES.has(item.type)) continue;
     try {
       const probe = parseJsonResult(
-        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: PAGINATION_PAGE_SIZE + 1 }),
-        `listEntry probe(${item.id})`,
+        await runner.callMethod('listEntry', { location: item.ref, startIndex: 0, limit: PAGINATION_PAGE_SIZE + 1 }),
+        `listEntry probe(${item.ref})`,
       );
       if (probe.totalCount > PAGINATION_PAGE_SIZE) return item;
     } catch {
@@ -417,8 +417,8 @@ async function findByTypeBFS(runner, rootList, type) {
 
   while (stack.length > 0 && scanned < 200) {
     const item = stack.pop();
-    if (!item || seen.has(item.id)) continue;
-    seen.add(item.id);
+    if (!item || seen.has(item.ref)) continue;
+    seen.add(item.ref);
     scanned += 1;
 
     if (item.type === type) return item;
@@ -426,8 +426,8 @@ async function findByTypeBFS(runner, rootList, type) {
 
     try {
       const childList = parseJsonResult(
-        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: 50 }),
-        `listEntry(${item.id})`,
+        await runner.callMethod('listEntry', { location: item.ref, startIndex: 0, limit: 50 }),
+        `listEntry(${item.ref})`,
       );
       // Push in reverse so the first child is on top of the stack (DFS order)
       for (let i = childList.items.length - 1; i >= 0; i--) {
@@ -450,8 +450,8 @@ async function findPlayableItem(runner, rootList) {
 
   while (stack.length > 0 && scanned < 200) {
     const item = stack.pop();
-    if (!item || seen.has(item.id)) continue;
-    seen.add(item.id);
+    if (!item || seen.has(item.ref)) continue;
+    seen.add(item.ref);
     scanned += 1;
 
     if (item.type === 'Playable' || item.type === 'Episode') return item;
@@ -459,8 +459,8 @@ async function findPlayableItem(runner, rootList) {
 
     try {
       const childList = parseJsonResult(
-        await runner.callMethod('listEntry', { location: item.id, startIndex: 0, limit: 50 }),
-        `listEntry(${item.id})`,
+        await runner.callMethod('listEntry', { location: item.ref, startIndex: 0, limit: 50 }),
+        `listEntry(${item.ref})`,
       );
       for (let i = childList.items.length - 1; i >= 0; i--) {
         stack.push(childList.items[i]);

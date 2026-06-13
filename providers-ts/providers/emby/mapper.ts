@@ -63,7 +63,7 @@ export function toListItem(
 
   const ud = item.UserData as { PlaybackPositionTicks?: number; IsFavorite?: boolean; Played?: boolean } | null | undefined;
   return {
-    id,
+    ref: id,
     title: (item.Name as string | undefined) ?? id,
     type: entryType,
     cover,
@@ -83,8 +83,8 @@ export function toListItem(
     indexNumber:     item.IndexNumber as number | null | undefined,
     overview:        item.Overview as string | null | undefined,
     childCount:      item.ChildCount as number | null | undefined,
-    parentId:        item.ParentId as string | null | undefined,
-    seriesId:        item.SeriesId as string | null | undefined,
+    parentRef:       item.ParentId as string | null | undefined,
+    seriesRef:       item.SeriesId as string | null | undefined,
     seasonNumber:    item.ParentIndexNumber as number | null | undefined,
     logo,
     backdrop,

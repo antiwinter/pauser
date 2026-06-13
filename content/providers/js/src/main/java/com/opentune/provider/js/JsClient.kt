@@ -280,14 +280,14 @@ class JsClient(
     // ── Parsers ────────────────────────────────────────────────────────────
 
     private fun parseListItem(obj: JsonObject): EntryInfo? {
-        val id = obj["id"]?.jsonPrimitive?.content ?: return null
-        val title = obj["title"]?.jsonPrimitive?.content ?: id
+        val ref = obj["ref"]?.jsonPrimitive?.content ?: return null
+        val title = obj["title"]?.jsonPrimitive?.content ?: ref
         val typeRaw = obj["type"]?.jsonPrimitive?.content ?: obj["kind"]?.jsonPrimitive?.content
         val cover = obj["cover"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
             ?: obj["coverUrl"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
         val ud = obj["userData"]?.takeIf { it !is JsonNull }?.jsonObject
         return EntryInfo(
-            id = id,
+            ref = ref,
             title = title,
             type = typeRaw ?: "Unknown",
             cover = cover,
@@ -306,8 +306,8 @@ class JsClient(
             indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             overview = obj["overview"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             childCount = obj["childCount"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            parentId = obj["parentId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            seriesId = obj["seriesId"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            parentRef = obj["parentRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            seriesRef = obj["seriesRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             seasonNumber = obj["seasonNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             logo = obj["logo"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             backdrop = obj["backdrop"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),

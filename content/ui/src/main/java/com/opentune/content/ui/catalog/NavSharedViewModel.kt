@@ -13,12 +13,12 @@ class NavSharedViewModel : ViewModel() {
     private val cache = mutableStateMapOf<String, EntryInfo>()
 
     fun cache(info: EntryInfo) {
-        cache[info.id] = info
+        cache[info.ref] = info
     }
 
-    fun get(id: String): EntryInfo? = cache[id]
+    fun get(ref: String): EntryInfo? = cache[ref]
 
-    fun remove(id: String) {
-        cache.remove(id)
+    fun remove(ref: String) {
+        cache.remove(ref)
     }
 }

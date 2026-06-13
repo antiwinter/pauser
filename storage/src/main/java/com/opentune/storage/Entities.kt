@@ -25,11 +25,11 @@ data class ProxyEntity(
 
 @Entity(
     tableName = "media_state",
-    primaryKeys = ["endpointId", "itemId"],
+    primaryKeys = ["endpointId", "itemRef"],
 )
 data class EntryStateEntity(
     val endpointId: String,
-    val itemId: String,
+    val itemRef: String,
     val positionMs: Long = 0L,
     val playbackSpeed: Float = 1f,
     val isFavorite: Boolean = false,

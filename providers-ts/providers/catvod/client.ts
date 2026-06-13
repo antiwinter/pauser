@@ -135,7 +135,7 @@ export async function listEntry(
     if (!detail) return { items: [], totalCount: 0 };
     const eps = parseEpisodes(detail);
     const items = eps.map((ep) => ({
-      id: encodeRef({
+      ref: encodeRef({
         type: "ep",
         key: ref.key,
         id: ref.id,
@@ -266,7 +266,7 @@ async function listRoot(state: CatVodClientState): Promise<EntryList> {
   }
 
   const items: EntryList["items"] = available.map((site) => ({
-    id: encodeRef({ type: "site", key: site.key }),
+    ref: encodeRef({ type: "site", key: site.key }),
     title: site.name,
     type: "Folder" as const,
     cover: null,
@@ -274,7 +274,7 @@ async function listRoot(state: CatVodClientState): Promise<EntryList> {
 
   if (unavailable.length > 0) {
     items.push({
-      id: encodeRef({ type: "unsupported", count: unavailable.length }),
+      ref: encodeRef({ type: "unsupported", count: unavailable.length }),
       title: `${unavailable.length} site${unavailable.length > 1 ? "s" : ""} unsupported`,
       type: "Folder" as const,
       cover: null,
@@ -284,7 +284,7 @@ async function listRoot(state: CatVodClientState): Promise<EntryList> {
   if (state.config.lives?.length) {
     for (let i = 0; i < state.config.lives.length; i++) {
       items.push({
-        id: encodeRef({ type: "live-source", index: i }),
+        ref: encodeRef({ type: "live-source", index: i }),
         title: state.config.lives[i].name,
         type: "Folder" as const,
         cover: null,

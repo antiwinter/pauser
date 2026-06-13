@@ -22,7 +22,7 @@ private const val LOG_TAG = "DetailViewModel"
  * Survives navigation back/forward — data is cached until the route is popped.
  */
 class DetailViewModel(
-    private val itemId: String,
+    private val itemRef: String,
 ) : ViewModel() {
 
     // Entry info
@@ -34,15 +34,15 @@ class DetailViewModel(
     val subEntries: StateFlow<List<EntryInfo>> = _subEntries.asStateFlow()
 
     // indexes are position in array
-    private val _subEntryIndex = MutableStateFlow<Int>(0)
-    val subEntryIndex: StateFlow<Int> = _subEntryIndex.asStateFlow()
+    private val _subEntryRef = MutableStateFlow<String?>(null)
+    val subEntryRef: StateFlow<String?> = _subEntryRef.asStateFlow()
     private val _pageIndex = MutableStateFlow(0)
     val pageIndex: StateFlow<Int> = _pageIndex.asStateFlow()  
-    private val _episodeIndex = MutableStateFlow<Int>(0)
-    val episodeIndex: StateFlow<Int> = _episodeIndex.asStateFlow()
+    private val _episodeIndex = MutableStateFlow<String?>(null)
+    val episodeIndex: StateFlow<String?> = _episodeIndex.asStateFlow()
 
-    fun setsubEntryIndex(id: String?) {
-        _subEntryIndex.value = id
+    fun setSubEntryRef(ref: String?) {
+        _subEntryRef.value = ref
     }
 
     private var client: EndpointClient? = null
@@ -60,14 +60,14 @@ class DetailViewModel(
     fun setEntryInfo(info: EntryInfo) {
         if (_entryInfo.value == null) {
             _entryInfo.value = info
-            Log.d(LOG_TAG, "setEntryInfo: type=${info.type}, id=${info.id}")
+            Log.d(LOG_TAG, "setEntryInfo: type=${info.type}, ref=${info.ref}")
         }
     }
 
-    fun loadEntries(val lvl: Number?) {
+    fun loadEntries(lvl: Number?) {
     
         val sub = when (lvl) {
-            2 -> _episodes
+            2 -> _subEntries
             else -> _subEntries
         }
 
@@ -80,39 +80,39 @@ class DetailViewModel(
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    client?.listEntry(itemId, 0, 500)
+                    client?.listEntry(itemRef, 0, 500)
                 }
                 sub.value = result?.items ?: emptyList()
-                Log.d(LOG_TAG, "loadSubEntries() complete: ${result.items.size} subEntries")
+                Log.d(LOG_TAG, "loadSubEntries() complete: ${result?.items?.size ?: 0} subEntries")
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "loadSubEntries() failed", e)
             }
         }
     }
 
-    fun selectSeason(id: String?) {
-        _episodeIndex.value = id
+    fun selectSeason(ref: String?) {
+        _episodeIndex.value = ref
         _pageIndex.value = 0
-        _subEntryIndex.value = null
+        _subEntryRef.value = null
     }
 
     fun selectpageIndex(page: Int) {
         _pageIndex.value = page
-        _subEntryIndex.value = null
+        _subEntryRef.value = null
     }
 
     /** Select season and page derived from saved episode number, without clearing focus if already set. */
-    fun selectSeasonAndPageForProgress(seasonId: String, pageIndex: Int) {
-        _episodeIndex.value = seasonId
+    fun selectSeasonAndPageForProgress(seasonRef: String, pageIndex: Int) {
+        _episodeIndex.value = seasonRef
         _pageIndex.value = pageIndex
-        // Don't clear subEntryIndex — will be set once subEntries load
+        // Don't clear subEntryRef — will be set once subEntries load
     }
 
     companion object {
-        fun factory(itemId: String) = object : ViewModelProvider.Factory {
+        fun factory(itemRef: String) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                DetailViewModel(itemId) as T
+                DetailViewModel(itemRef) as T
         }
     }
 }

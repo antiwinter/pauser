@@ -31,7 +31,7 @@ export async function runPlaybackChecks(reporter, runner, opts) {
     let result;
     try {
       result = parseJsonResult(
-        await runner.callMethod('getPlaybackSpec', { itemRef: playableItem.id, startMs: 0 }),
+        await runner.callMethod('getPlaybackSpec', { itemRef: playableItem.ref, startMs: 0 }),
         'getPlaybackSpec',
       );
     } catch (e) {

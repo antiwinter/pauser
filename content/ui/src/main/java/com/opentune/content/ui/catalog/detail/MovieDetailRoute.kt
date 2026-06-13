@@ -19,8 +19,8 @@ fun MovieDetailRoute(
     onToggleFavorite: () -> Unit,
 ) {
     // Set initial selection for Movie (resumeMs from parent's entryState).
-    LaunchedEffect(entryInfo.id) {
-        Log.d("OT_MovieDetail", "initial: id=${entryInfo.id} resumeMs=$resumeMs")
+    LaunchedEffect(entryInfo.ref) {
+        Log.d("OT_MovieDetail", "initial: ref=${entryInfo.ref} resumeMs=$resumeMs")
         playerController?.prepare(entryInfo)
     }
 

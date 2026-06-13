@@ -35,7 +35,7 @@ fun BrowseRoute(
     sharedVm: NavSharedViewModel,
     playerController: PlayerController,
 ) {
-    val location = initialEntryInfo.id
+    val location = initialEntryInfo.ref
 
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -46,7 +46,7 @@ fun BrowseRoute(
     val vmLoading by viewModel.loading.collectAsState()
     val vmError by viewModel.error.collectAsState()
     val vmTotal by viewModel.totalCount.collectAsState()
-    val vmLastFocusedItemId by viewModel.lastFocusedItemId.collectAsState()
+    val vmLastFocusedItemRef by viewModel.lastFocusedItemRef.collectAsState()
 
     val items = remember { mutableStateListOf<EntryInfo>() }
     LaunchedEffect(vmItems) {
@@ -92,11 +92,11 @@ fun BrowseRoute(
             totalCount = vmTotal,
             loading = vmLoading,
             error = vmError,
-            initialFocusId = vmLastFocusedItemId,
+            initialFocusRef = vmLastFocusedItemRef,
             onBack = { nav.popBackStack() },
             onSearch = { nav.navigate(Routes.search(endpointId, location)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-            onItemFocused = { item -> viewModel.setlastFocusedItemId(item.id) },
+            onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
             onOpenBrowseLocation = { folderEntry ->
                 sharedVm.cache(folderEntry)
                 nav.navigate(Routes.browse(endpointId, folderEntry))

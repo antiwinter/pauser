@@ -22,7 +22,7 @@ object ArtUrlInjector {
         }
         return items.map { item ->
             if (item.cover == null) {
-                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$endpointId/${item.id}")
+                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$endpointId/${item.ref}")
             } else item
         }
     }

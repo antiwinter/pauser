@@ -195,7 +195,7 @@ class SmbClient(
     private fun mapEntry(e: SmbListEntry): EntryInfo {
         val kind = if (e.isDirectory) "Folder" else "Unknown"
         return EntryInfo(
-            id = e.path,
+            ref = e.path,
             title = e.name + if (e.isDirectory) "/" else "",
             type = kind,
             cover = null,

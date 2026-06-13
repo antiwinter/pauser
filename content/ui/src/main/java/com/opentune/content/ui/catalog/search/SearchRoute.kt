@@ -38,7 +38,7 @@ fun SearchRoute(
         .collectAsState(initial = TitleLang.Local)
     val query by viewModel.query.collectAsState()
     val searching by viewModel.searching.collectAsState()
-    val lastFocusedItemId by viewModel.lastFocusedItemId.collectAsState()
+    val lastFocusedItemRef by viewModel.lastFocusedItemRef.collectAsState()
 
     LaunchedEffect(endpointId) {
         try {
@@ -68,10 +68,10 @@ fun SearchRoute(
                 searching = searching,
                 imageLoader = c.imageLoader!!,
                 titleLang = titleLang,
-                initialFocusId = lastFocusedItemId,
+                initialFocusRef = lastFocusedItemRef,
                 onBack = { nav.popBackStack() },
                 onQueryChange = { viewModel.setQuery(it) },
-                onItemFocused = { item -> viewModel.setLastFocusedItemId(item.id) },
+                onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
                 onOpenBrowse = { entry ->
                     sharedVm.cache(entry)
                     nav.navigate(Routes.browse(endpointId, entry))

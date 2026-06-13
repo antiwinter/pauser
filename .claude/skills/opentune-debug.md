@@ -161,17 +161,17 @@ curl -X POST http://localhost:7920/debug/subtitle-prefs \
 curl "http://localhost:7920/debug/media-state?protocol=catvod&endpointId=<id>"
 
 # Get state for a specific item
-curl "http://localhost:7920/debug/media-state/catvod/<endpointId>/<itemId>"
+curl "http://localhost:7920/debug/media-state/<endpointId>/<itemRef>"
 
 # Set subtitle track
 curl -X POST http://localhost:7920/debug/media-state/subtitle-track \
   -H 'Content-Type: application/json' \
-  -d '{"protocol":"catvod","endpointId":"<id>","itemId":"<id>","trackId":"<id>"}'
+  -d '{"endpointId":"<id>","itemRef":"<ref>","trackId":"<id>"}'
 
 # Set audio track
 curl -X POST http://localhost:7920/debug/media-state/audio-track \
   -H 'Content-Type: application/json' \
-  -d '{"protocol":"catvod","endpointId":"<id>","itemId":"<id>","trackId":"<id>"}'
+  -d '{"endpointId":"<id>","itemRef":"<ref>","trackId":"<id>"}'
 ```
 
 ## Typical debug workflow

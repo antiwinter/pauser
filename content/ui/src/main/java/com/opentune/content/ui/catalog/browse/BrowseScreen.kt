@@ -66,7 +66,7 @@ fun BrowseScreen(
     totalCount: Int,
     loading: Boolean,
     error: String?,
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -80,7 +80,7 @@ fun BrowseScreen(
     val gridState = rememberLazyGridState()
     var localLoading by remember { mutableStateOf(loading) }
 
-    val focusRequesters = rememberGridFocusRequesters(items, initialFocusId, gridState)
+    val focusRequesters = rememberGridFocusRequesters(items, initialFocusRef, gridState)
 
     val nearEnd by remember {
         derivedStateOf {
@@ -146,7 +146,7 @@ fun BrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+            itemsIndexed(items, key = { _, item -> item.ref }) { index, item ->
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
@@ -160,8 +160,8 @@ fun BrowseScreen(
                             "Folder", "Season" -> { -> onOpenBrowseLocation(item) }
                             "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
                             "Episode", "Video" -> { -> onOpenPlayer(item) }
-                            "Image" -> { -> onOpenImageViewer(item.id) }
-                            "Audio" -> { -> onOpenAudioUnsupported(item.id) }
+                            "Image" -> { -> onOpenImageViewer(item.ref) }
+                            "Audio" -> { -> onOpenAudioUnsupported(item.ref) }
                             else -> null
                         }
                         (resolveAction(item.type)

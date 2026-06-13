@@ -151,22 +151,22 @@ async function callSearch(runner, query) {
 // ── Real-data test suite ──────────────────────────────────────────────────────
 
 async function probeSite(runner, siteItem) {
-  const result = { id: siteItem.id, title: siteItem.title, type: siteItem.type };
+  const result = { ref: siteItem.ref, title: siteItem.title, type: siteItem.type };
   try {
-    const l1 = await callList(runner, siteItem.id, 0, 5);
+    const l1 = await callList(runner, siteItem.ref, 0, 5);
     result.listEntry_site = l1;
     const firstFolder = (l1?.items ?? []).find((i) => i.type === 'Folder');
     if (firstFolder) {
-      const l2 = await callList(runner, firstFolder.id, 0, 5);
+      const l2 = await callList(runner, firstFolder.ref, 0, 5);
       result.listEntry_cat = l2;
       const firstPlayable = (l2?.items ?? []).find((i) => i.type === 'Playable');
       if (firstPlayable) {
         result.getDetail = parseJsonResult(
-          await runner.callMethod('getDetail', { itemRef: firstPlayable.id }),
+          await runner.callMethod('getDetail', { itemRef: firstPlayable.ref }),
           'getDetail',
         );
         result.getPlaybackSpec = parseJsonResult(
-          await runner.callMethod('getPlaybackSpec', { itemRef: firstPlayable.id, startMs: 0 }),
+          await runner.callMethod('getPlaybackSpec', { itemRef: firstPlayable.ref, startMs: 0 }),
           'getPlaybackSpec',
         );
       }
@@ -252,7 +252,7 @@ async function runRealSiteChecks(out, runner, ffprobe) {
 
     for (const candidate of candidates) {
       const detail = parseJsonResult(
-        await runner.callMethod('getDetail', { itemRef: candidate.id }),
+        await runner.callMethod('getDetail', { itemRef: candidate.ref }),
         'getDetail',
       );
       if (detail != null && typeof detail === 'object' && typeof detail.title === 'string' && detail.title.length > 0) {
@@ -273,7 +273,7 @@ async function runRealSiteChecks(out, runner, ffprobe) {
       let spec;
       try {
         spec = parseJsonResult(
-          await runner.callMethod('getPlaybackSpec', { itemRef: candidate.id, startMs: 0 }),
+          await runner.callMethod('getPlaybackSpec', { itemRef: candidate.ref, startMs: 0 }),
           'getPlaybackSpec',
         );
       } catch (_) {

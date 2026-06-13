@@ -26,8 +26,8 @@ class SearchViewModel : ViewModel() {
 
     val results = mutableStateListOf<EntryInfo>()
 
-    private val _lastFocusedItemId = MutableStateFlow<String?>(null)
-    val lastFocusedItemId: StateFlow<String?> = _lastFocusedItemId.asStateFlow()
+    private val _lastFocusedItemRef = MutableStateFlow<String?>(null)
+    val lastFocusedItemRef: StateFlow<String?> = _lastFocusedItemRef.asStateFlow()
 
     private var searchFn: (suspend (String) -> List<EntryInfo>)? = null
 
@@ -66,7 +66,7 @@ class SearchViewModel : ViewModel() {
         _query.value = q
     }
 
-    fun setLastFocusedItemId(id: String?) {
-        _lastFocusedItemId.value = id
+    fun setLastFocusedItemRef(ref: String?) {
+        _lastFocusedItemRef.value = ref
     }
 }

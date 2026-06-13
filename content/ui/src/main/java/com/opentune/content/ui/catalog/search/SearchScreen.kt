@@ -35,7 +35,7 @@ fun SearchScreen(
     searching: Boolean,
     titleLang: TitleLang,
     imageLoader: ImageLoader,
-    initialFocusId: String? = null,
+    initialFocusRef: String? = null,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onItemFocused: (EntryInfo) -> Unit = {},
@@ -46,7 +46,7 @@ fun SearchScreen(
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
     val gridState = rememberLazyGridState()
-    val focusRequesters = rememberGridFocusRequesters(results, initialFocusId, gridState)
+    val focusRequesters = rememberGridFocusRequesters(results, initialFocusRef, gridState)
 
     Column(
         modifier = Modifier
@@ -75,7 +75,7 @@ fun SearchScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(results, key = { _, item -> item.id }) { index, item ->
+            itemsIndexed(results, key = { _, item -> item.ref }) { index, item ->
                 MediaEntryComponent(
                     item = item,
                     titleLang = titleLang,
@@ -89,8 +89,8 @@ fun SearchScreen(
                             "Folder", "Season" -> { -> onOpenBrowse(item) }
                             "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
                             "Episode", "Video" -> { -> onOpenPlayer(item) }
-                            "Image" -> { -> onOpenImageViewer(item.id) }
-                            "Audio" -> { -> onOpenAudioUnsupported(item.id) }
+                            "Image" -> { -> onOpenImageViewer(item.ref) }
+                            "Audio" -> { -> onOpenAudioUnsupported(item.ref) }
                             else -> null
                         }
                         (resolveAction(item.type)

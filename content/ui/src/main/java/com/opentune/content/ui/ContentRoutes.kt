@@ -75,16 +75,16 @@ fun NavGraphBuilder.contentRoutes(
         Routes.BROWSE,
         listOf(
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("id") { type = NavType.StringType },
+            navArgument("ref") { type = NavType.StringType },
         ),
     ) { backStackEntry ->
         val endpointId = backStackEntry.arguments!!.getString("endpointId")!!
-        val id = backStackEntry.arguments!!.getString("id")!!
-        val entryInfo = sharedVm.get(id)
-            ?: error("No EntryInfo cached for id=$id — navigate via cacheAndBrowse()")
+        val ref = backStackEntry.arguments!!.getString("ref")!!
+        val entryInfo = sharedVm.get(ref)
+            ?: error("No EntryInfo cached for ref=$ref — navigate via cacheAndBrowse()")
 
         val browseVm: BrowseViewModel = viewModel(
-            factory = BrowseViewModel.factory(id),
+            factory = BrowseViewModel.factory(ref),
         )
 
         BrowseRoute(
@@ -100,21 +100,21 @@ fun NavGraphBuilder.contentRoutes(
         Routes.DETAIL,
         listOf(
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("id") { type = NavType.StringType },
+            navArgument("ref") { type = NavType.StringType },
         ),
     ) {
         val endpointId = it.arguments!!.getString("endpointId")!!
-        val id = it.arguments!!.getString("id")!!
-        val entryInfo = sharedVm.get(id)
+        val ref = it.arguments!!.getString("ref")!!
+        val entryInfo = sharedVm.get(ref)
 
         val detailVm: DetailViewModel = viewModel(
-            factory = DetailViewModel.factory(id),
+            factory = DetailViewModel.factory(ref),
         )
 
         DetailRoute(
             nav = nav,
             endpointId = endpointId,
-            itemId = id,
+            itemRef = ref,
             initialInfo = entryInfo,
             sharedVm = sharedVm,
             viewModel = detailVm,
@@ -142,12 +142,12 @@ fun NavGraphBuilder.contentRoutes(
         Routes.IMAGE_VIEWER,
         listOf(
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("itemId") { type = NavType.StringType },
+            navArgument("itemRef") { type = NavType.StringType },
         ),
     ) {
         ImageViewerRoute(
             endpointId = it.arguments!!.getString("endpointId")!!,
-            itemId = it.arguments!!.getString("itemId")!!,
+            itemRef = it.arguments!!.getString("itemRef")!!,
             onExit = { nav.popBackStack() },
         )
     }

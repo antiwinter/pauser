@@ -50,19 +50,19 @@ fun OpenTuneNavHost() {
                 is NavCommand.Browse -> {
                     val location = cmd.location ?: ""
                     val entry = EntryInfo(
-                        id = location,
+                        ref = location,
                         title = location,
                         type = "Root",
                     )
                     cacheAndBrowse(cmd.endpointId, entry)
                 }
                 is NavCommand.Detail -> {
-                    val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
+                    val entry = EntryInfo(ref = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
                     nav.navigate(Routes.detail(cmd.endpointId, entry))
                 }
                 is NavCommand.Player -> {
-                    val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
+                    val entry = EntryInfo(ref = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
                     val client = EndpointClientRegistryHolder.get().getOrCreate(cmd.endpointId)
                         ?: throw IllegalStateException("No provider instance for ${cmd.endpointId}")
@@ -84,7 +84,7 @@ fun OpenTuneNavHost() {
                 HomeRoute(
                     onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
                     onOpenBrowse = { _, sid ->
-                        val entry = EntryInfo(id = "", title = "", type = "Root")
+                        val entry = EntryInfo(ref = "", title = "", type = "Root")
                         cacheAndBrowse(sid, entry)
                     },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },

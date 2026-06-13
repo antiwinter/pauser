@@ -152,7 +152,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 }
                 val dto = EntryListDto(
                     items = result.items.map { e ->
-                        EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
+                        EntryInfoDto(ref = e.ref, title = e.title, type = e.type, cover = e.cover)
                     },
                     totalCount = result.totalCount,
                 )
@@ -168,7 +168,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
                 }
                 val dtos = results.map { e ->
-                    EntryInfoDto(ref = e.id, title = e.title, type = e.type, cover = e.cover)
+                    EntryInfoDto(ref = e.ref, title = e.title, type = e.type, cover = e.cover)
                 }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
             }
@@ -290,12 +290,12 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
                 }
 
-                get("/{endpointId}/{itemId}") {
+                get("/{endpointId}/{itemRef}") {
                     val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
-                    val itemId = call.parameters["itemId"] ?: return@get call.respond400("missing itemId")
-                    val snapshot = ctx.entryStateStore.get(endpointId, itemId)
+                    val itemRef = call.parameters["itemRef"] ?: return@get call.respond400("missing itemRef")
+                    val snapshot = ctx.entryStateStore.get(endpointId, itemRef)
                     if (snapshot == null) {
-                        call.respond404("no state found for $endpointId/$itemId")
+                        call.respond404("no state found for $endpointId/$itemRef")
                         return@get
                     }
                     call.respondText(json.encodeToString(snapshot.toDto()), ContentType.Application.Json)
@@ -306,8 +306,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.entryStateStore.upsertSubtitleTrack(EntryStateKey(body.endpointId, body.itemId), body.trackId)
-                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemId)
+                    ctx.entryStateStore.upsertSubtitleTrack(EntryStateKey(body.endpointId, body.itemRef), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemRef)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post
@@ -320,8 +320,8 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     if (body == null) {
                         call.respond400("invalid request body"); return@post
                     }
-                    ctx.entryStateStore.upsertAudioTrack(EntryStateKey(body.endpointId, body.itemId), body.trackId)
-                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemId)
+                    ctx.entryStateStore.upsertAudioTrack(EntryStateKey(body.endpointId, body.itemRef), body.trackId)
+                    val snapshot = ctx.entryStateStore.get(body.endpointId, body.itemRef)
                     if (snapshot == null) {
                         call.respond500("state not found after upsert")
                         return@post

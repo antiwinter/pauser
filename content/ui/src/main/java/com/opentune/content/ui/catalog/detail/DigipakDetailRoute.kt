@@ -29,9 +29,9 @@ fun DigipakDetailRoute(
 ) {
     val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
     val vmSingleChild by viewModel.singleChild.collectAsState()
-    val vmsubEntryIndex by viewModel.subEntryIndex.collectAsState()
+    val vmsubEntryRef by viewModel.subEntryRef.collectAsState()
 
-    LaunchedEffect(entryInfo.id) {
+    LaunchedEffect(entryInfo.ref) {
         viewModel.loadDigipakChildren()
     }
 
@@ -42,24 +42,24 @@ fun DigipakDetailRoute(
             ?: vmDigipakChildren.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
             ?: vmDigipakChildren.firstOrNull()
             ?: return@LaunchedEffect
-        Log.d(LOG_TAG, "initial child: id=${child.id}")
+        Log.d(LOG_TAG, "initial child: ref=${child.ref}")
         playerController?.prepare(child)
-        if (viewModel.subEntryIndex.value == null && vmDigipakChildren.isNotEmpty()) {
-            viewModel.setsubEntryIndex(child.id)
+        if (viewModel.subEntryRef.value == null && vmDigipakChildren.isNotEmpty()) {
+            viewModel.setSubEntryRef(child.ref)
         }
     }
 
     val focusChild = { child: EntryInfo ->
-        Log.d(LOG_TAG, "focusChild: id=${child.id} title=${child.title}")
+        Log.d(LOG_TAG, "focusChild: ref=${child.ref} title=${child.title}")
         sharedVm.cache(child)
-        viewModel.setsubEntryIndex(child.id)
+        viewModel.setSubEntryRef(child.ref)
         playerController?.prepare(child)
         Unit
     }
     val selectChild = { child: EntryInfo ->
-        Log.d(LOG_TAG, "selectChild: id=${child.id} title=${child.title}")
+        Log.d(LOG_TAG, "selectChild: ref=${child.ref} title=${child.title}")
         sharedVm.cache(child)
-        viewModel.setsubEntryIndex(child.id)
+        viewModel.setSubEntryRef(child.ref)
         playerController?.prepare(child)
         playerController?.play()
         Unit
@@ -68,7 +68,7 @@ fun DigipakDetailRoute(
         val child = vmSingleChild
         {
             if (child != null) {
-                Log.d(LOG_TAG, "playSingleChild: id=${child.id}")
+                Log.d(LOG_TAG, "playSingleChild: ref=${child.ref}")
                 sharedVm.cache(child)
                 playerController?.prepare(child)
                 playerController?.play()
@@ -85,7 +85,7 @@ fun DigipakDetailRoute(
         singleChild = vmSingleChild,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
-        initialFocusId = vmsubEntryIndex,
+        initialFocusRef = vmsubEntryRef,
         onFocusChild = focusChild,
         onToggleFavorite = onToggleFavorite,
         onPlaySingleChild = playSingleChild,

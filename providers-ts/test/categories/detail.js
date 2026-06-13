@@ -28,7 +28,7 @@ export async function runDetailChecks(reporter, runner, opts) {
   detail = await reporter.step('getDetail returns a valid EntryDetail shape', async () => {
     if (!firstItem) throw new NAError('no item available from catalog — cannot test getDetail');
     const result = parseJsonResult(
-      await runner.callMethod('getDetail', { itemRef: firstItem.id }),
+      await runner.callMethod('getDetail', { itemRef: firstItem.ref }),
       'getDetail',
     );
     validateEntryDetailShape(result);

@@ -14,7 +14,7 @@ data class EntryUserData(
 
 @Serializable
 data class EntryInfo(
-    val id: String,
+    val ref: String,
     val title: String,
     val type: EntryType,
     val cover: String? = null,
@@ -27,8 +27,8 @@ data class EntryInfo(
     val indexNumber: Int? = null,
     val overview: String? = null,
     val childCount: Int? = null,
-    val parentId: String? = null,
-    val seriesId: String? = null,
+    val parentRef: String? = null,
+    val seriesRef: String? = null,
     val seasonNumber: Int? = null,
     // Detail fields (previously in EntryDetail)
     val logo: String? = null,

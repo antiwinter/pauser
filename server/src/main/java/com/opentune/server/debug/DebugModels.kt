@@ -85,7 +85,7 @@ data class ErrorResponse(val error: String)
 @Serializable
 data class EntryStateDto(
     val endpointId: String,
-    val itemId: String,
+    val itemRef: String,
     val positionMs: Long,
     val playbackSpeed: Float,
     val selectedSubtitleTrackId: String?,
@@ -98,7 +98,7 @@ data class EntryStateDto(
 fun EntryStateEntity.toDto(): EntryStateDto =
     EntryStateDto(
         endpointId = endpointId,
-        itemId = itemId,
+        itemRef = itemRef,
         positionMs = positionMs,
         playbackSpeed = playbackSpeed,
         selectedSubtitleTrackId = selectedSubtitleTrackId,
@@ -117,7 +117,7 @@ data class SubtitlePrefsDto(
 @Serializable
 data class SetTrackRequest(
     val endpointId: String,
-    val itemId: String,
+    val itemRef: String,
     val trackId: String?,
 )
 

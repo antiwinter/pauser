@@ -40,7 +40,7 @@ private const val LOG_TAG = "OT_Detail"
 fun DetailRoute(
     nav: NavHostController,
     endpointId: String,
-    itemId: String,
+    itemRef: String,
     initialInfo: EntryInfo? = null,
     sharedVm: NavSharedViewModel,
     viewModel: DetailViewModel,
@@ -48,8 +48,8 @@ fun DetailRoute(
 ) {
     var resumeMs by remember { mutableStateOf(0L) }
     val scope = rememberCoroutineScope()
-    val stateKey = remember(endpointId, itemId) {
-        EntryStateKey(endpointId, itemId)
+    val stateKey = remember(endpointId, itemRef) {
+        EntryStateKey(endpointId, itemRef)
     }
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
