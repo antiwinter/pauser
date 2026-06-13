@@ -12,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +29,6 @@ import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "OT_Detail"
@@ -47,7 +45,6 @@ fun DetailRoute(
     playerController: PlayerController? = null,
 ) {
     var resumeMs by remember { mutableStateOf(0L) }
-    val scope = rememberCoroutineScope()
     val stateKey = remember(endpointId, itemRef) {
         EntryStateKey(endpointId, itemRef)
     }
@@ -57,9 +54,8 @@ fun DetailRoute(
     val vmEntryInfo by viewModel.entryInfo.collectAsState()
 
     var imageLoader by remember { mutableStateOf<coil3.ImageLoader?>(null) }
-    var isFavorite by remember { mutableStateOf(false) }
 
-    // Resolve client, load stored state (position, favorite).
+    // Resolve client, load stored position (resumeMs — progress sync deferred).
     LaunchedEffect(endpointId) {
         val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
             ?: throw IllegalStateException("No provider instance for $endpointId")
@@ -67,7 +63,6 @@ fun DetailRoute(
         val entryState = withContext(Dispatchers.IO) {
             StorageBindingsHolder.get().entryStateStore.get(stateKey)
         }
-        isFavorite = entryState?.isFavorite ?: false
         resumeMs = entryState?.positionMs ?: 0L
     }
 
@@ -111,56 +106,35 @@ fun DetailRoute(
             ) { CircularProgressIndicator() }
             else -> {
                 val info = entryInfo
-                val toggleFav: () -> Unit = {
-                    scope.launch {
-                        val newVal = !isFavorite
-                        isFavorite = newVal
-                        try {
-                            withContext(Dispatchers.IO) {
-                                StorageBindingsHolder.get().entryStateStore.upsertFavorite(stateKey, newVal)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(LOG_TAG, "favorite toggle", e)
-                            isFavorite = !newVal
-                        }
-                    }
-                    Unit
-                }
-
                 when (info.type) {
                     "Movie" -> MovieDetailRoute(
                         entryInfo = info,
                         titleLang = titleLang,
                         resumeMs = resumeMs,
-                        isFavorite = isFavorite,
                         mediaCodecs = vmMediaCodecs,
                         playerController = playerController,
-                        onToggleFavorite = toggleFav,
+                        viewModel = viewModel,
                     )
                     "Series" -> SeriesDetailRoute(
                         stateKey = stateKey,
                         entryInfo = info,
                         titleLang = titleLang,
                         resumeMs = resumeMs,
-                        isFavorite = isFavorite,
                         imageLoader = loader,
                         mediaCodecs = vmMediaCodecs,
                         playerController = playerController,
                         viewModel = viewModel,
                         sharedVm = sharedVm,
-                        onToggleFavorite = toggleFav,
                     )
                     "Digipak" -> DigipakDetailRoute(
                         entryInfo = info,
                         titleLang = titleLang,
                         resumeMs = resumeMs,
-                        isFavorite = isFavorite,
                         imageLoader = loader,
                         mediaCodecs = vmMediaCodecs,
                         playerController = playerController,
                         viewModel = viewModel,
                         sharedVm = sharedVm,
-                        onToggleFavorite = toggleFav,
                     )
                     else -> Text("Unsupported type: ${info.type}")
                 }

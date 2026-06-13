@@ -34,7 +34,7 @@ import com.opentune.storage.TitleLang
 fun SeriesOverviewScreen(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
-    isFavorite: Boolean,
+    viewModel: DetailViewModel,
     seasons: List<EntryInfo>,
     seasonIndex: String?,
     episodes: List<EntryInfo>,
@@ -44,7 +44,6 @@ fun SeriesOverviewScreen(
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
     initialFocusRef: String? = null,
     onFocusEpisode: (EntryInfo) -> Unit = {},
-    onToggleFavorite: () -> Unit,
     onSelectSeason: (String) -> Unit,
     onSelectEpisode: (EntryInfo) -> Unit,
     onSelectPage: (Int) -> Unit,
@@ -63,8 +62,8 @@ fun SeriesOverviewScreen(
                 DetailHeader(entryInfo = entryInfo, titleLang = titleLang)
                 DetailBadges(entryInfo, mediaCodecs)
                 DetailButtons(
-                    isFavorite = isFavorite,
-                    onToggleFavorite = onToggleFavorite,
+                    entryInfo = entryInfo,
+                    viewModel = viewModel,
                 )
                 entryInfo.overview?.let { DetailOverviewSnippet(it) }
 

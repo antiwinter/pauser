@@ -27,6 +27,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.contract.EntryTag
 import com.opentune.player.MediaCodecInfo
 import com.opentune.storage.TitleLang
 import java.io.File
@@ -180,11 +181,12 @@ fun DetailBadges(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailButtons(
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
+    entryInfo: EntryInfo,
+    viewModel: DetailViewModel,
 ) {
+    val isFavorite = entryInfo.userData?.isFavorite ?: false
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = onToggleFavorite) {
+        Button(onClick = { viewModel.tagEntry(EntryTag.Favorite, !isFavorite) }) {
             Text(if (isFavorite) "♥ Liked" else "♡ Like")
         }
     }

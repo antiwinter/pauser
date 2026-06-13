@@ -19,13 +19,11 @@ fun DigipakDetailRoute(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,
-    isFavorite: Boolean,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo>,
     playerController: PlayerController?,
     viewModel: DetailViewModel,
     sharedVm: NavSharedViewModel,
-    onToggleFavorite: () -> Unit,
 ) {
     val vmDigipakChildren by viewModel.digipakChildren.collectAsState()
     val vmSingleChild by viewModel.singleChild.collectAsState()
@@ -80,14 +78,13 @@ fun DigipakDetailRoute(
         entryInfo = entryInfo,
         titleLang = titleLang,
         resumeMs = resumeMs,
-        isFavorite = isFavorite,
+        viewModel = viewModel,
         children = vmDigipakChildren,
         singleChild = vmSingleChild,
         imageLoader = imageLoader,
         mediaCodecs = mediaCodecs,
         initialFocusRef = vmsubEntryRef,
         onFocusChild = focusChild,
-        onToggleFavorite = onToggleFavorite,
         onPlaySingleChild = playSingleChild,
         onSelectChild = selectChild,
     )

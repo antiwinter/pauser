@@ -28,11 +28,10 @@ fun MovieOverviewScreen(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,
-    isFavorite: Boolean,
+    viewModel: DetailViewModel,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
     onResume: () -> Unit,
     onPlayFromStart: () -> Unit,
-    onToggleFavorite: () -> Unit,
 ) {
     DetailOverviewShell(entryInfo = entryInfo) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -54,8 +53,8 @@ fun MovieOverviewScreen(
                         onPlayFromStart = onPlayFromStart,
                     )
                     DetailButtons(
-                        isFavorite = isFavorite,
-                        onToggleFavorite = onToggleFavorite,
+                        entryInfo = entryInfo,
+                        viewModel = viewModel,
                     )
                 }
                 entryInfo.overview?.let { DetailOverviewSnippet(it) }

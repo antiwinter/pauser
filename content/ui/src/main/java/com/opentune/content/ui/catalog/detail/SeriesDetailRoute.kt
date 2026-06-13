@@ -30,13 +30,11 @@ fun SeriesDetailRoute(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,
-    isFavorite: Boolean,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo>,
     playerController: PlayerController?,
     viewModel: DetailViewModel,
     sharedVm: NavSharedViewModel,
-    onToggleFavorite: () -> Unit,
 ) {
     var pendingAutoPlay by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -107,7 +105,7 @@ fun SeriesDetailRoute(
     SeriesOverviewScreen(
         entryInfo = entryInfo,
         titleLang = titleLang,
-        isFavorite = isFavorite,
+        viewModel = viewModel,
         seasons = vmSeasons,
         seasonIndex = vmseasonIndex,
         episodes = vmEpisodes,
@@ -117,7 +115,6 @@ fun SeriesDetailRoute(
         mediaCodecs = mediaCodecs,
         initialFocusRef = vmsubEntryRef,
         onFocusEpisode = focusEpisode,
-        onToggleFavorite = onToggleFavorite,
         onSelectSeason = setSeason,
         onSelectEpisode = selectEpisode,
         onSelectPage = selectPage,

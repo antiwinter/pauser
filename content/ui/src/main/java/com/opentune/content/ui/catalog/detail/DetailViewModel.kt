@@ -6,8 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.ui.catalog.ArtType
-import com.opentune.content.ui.catalog.ArtUrlInjector
+import com.opentune.content.contract.EntryTag
+import com.opentune.content.contract.EntryUserData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +61,26 @@ class DetailViewModel(
         if (_entryInfo.value == null) {
             _entryInfo.value = info
             Log.d(LOG_TAG, "setEntryInfo: type=${info.type}, ref=${info.ref}")
+        }
+    }
+
+    fun tagEntry(tag: EntryTag, value: Boolean) {
+        val c = client ?: return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    c.tagEntry(itemRef, tag, value)
+                }
+                val info = _entryInfo.value ?: return@launch
+                val base = info.userData ?: EntryUserData(positionMs = 0L, isFavorite = false, played = false)
+                val userData = when (tag) {
+                    EntryTag.Favorite -> base.copy(isFavorite = value)
+                    else -> base
+                }
+                _entryInfo.value = info.copy(userData = userData)
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "tagEntry failed: tag=$tag value=$value", e)
+            }
         }
     }
 

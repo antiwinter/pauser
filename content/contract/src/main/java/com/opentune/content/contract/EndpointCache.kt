@@ -1,5 +1,8 @@
 package com.opentune.content.contract
 
+import com.opentune.storage.EntryStateKey
+import com.opentune.storage.EntryStateStore
+import com.opentune.storage.StorageBindingsHolder
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -85,7 +88,8 @@ object EndpointCache {
  * Decorator that wraps a real [EndpointClient] with transparent caching.
  *
  * Cached methods: listEntry, getEntries, getTaggedEntries, search
- * Non-cached (always go to network): getPlaybackSpec, test, tagEntry, openStream, getQr, pollQr
+ * Non-cached (always go to network): getPlaybackSpec, test, openStream, getQr, pollQr
+ * tagEntry: local persist first, then delegate remote
  *
  * Cache behavior:
  *   1. Check cache → if present and fresh, return immediately
@@ -131,13 +135,14 @@ class CachingEndpointClient(
         val cached = EndpointCache.get(key)
         val stale = cached == null || EndpointCache.isStale(key)
 
-        return if (stale) {
+        val list = if (stale) {
             val fresh = delegate.listEntry(location, startIndex, limit, options)
             EndpointCache.put(key, fresh)
             fresh
         } else {
             cached!!
         }
+        return mergeEntryList(list)
     }
 
     override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
@@ -145,13 +150,14 @@ class CachingEndpointClient(
         val cached = EndpointCache.get(key)
         val stale = cached == null || EndpointCache.isStale(key)
 
-        return if (stale) {
+        val list = if (stale) {
             val fresh = delegate.search(scopeLocation, query)
             EndpointCache.put(key, fresh)
             fresh
         } else {
             cached!!
         }
+        return mergeEntryList(list)
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {
@@ -159,13 +165,14 @@ class CachingEndpointClient(
         val cached = EndpointCache.get(key)
         val stale = cached == null || EndpointCache.isStale(key)
 
-        return if (stale) {
+        val list = if (stale) {
             val fresh = delegate.getEntries(itemRefs)
             EndpointCache.put(key, fresh)
             fresh
         } else {
             cached!!
         }
+        return mergeEntryList(list)
     }
 
     override suspend fun getTaggedEntries(
@@ -180,20 +187,43 @@ class CachingEndpointClient(
         val cached = EndpointCache.get(key)
         val stale = cached == null || EndpointCache.isStale(key)
 
-        return if (stale) {
+        val list = if (stale) {
             val fresh = delegate.getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder)
             EndpointCache.put(key, fresh)
             fresh
         } else {
             cached!!
         }
+        return mergeEntryList(list)
     }
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long) =
         delegate.getPlaybackSpec(itemRef, startMs)
 
-    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) =
+    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
+        when (tag) {
+            EntryTag.Favorite -> {
+                StorageBindingsHolder.get().entryStateStore.upsertFavorite(
+                    EntryStateKey(endpointId, itemRef),
+                    value,
+                )
+            }
+            else -> Unit
+        }
         delegate.tagEntry(itemRef, tag, value)
+    }
+
+    private suspend fun mergeEntryList(list: EntryList): EntryList {
+        val store = StorageBindingsHolder.get().entryStateStore
+        val merged = list.items.map { mergeEntry(it, store) }
+        return EntryList(merged, list.totalCount)
+    }
+
+    private suspend fun mergeEntry(info: EntryInfo, store: EntryStateStore): EntryInfo {
+        val local = store.get(endpointId, info.ref)
+        val userData = UserDataMerge.merge(info.userData, local)
+        return if (userData != info.userData) info.copy(userData = userData) else info
+    }
 
     override suspend fun openStream(itemRef: String) =
         delegate.openStream(itemRef)

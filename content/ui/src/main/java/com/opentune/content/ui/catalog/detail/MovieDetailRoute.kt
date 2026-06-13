@@ -13,10 +13,9 @@ fun MovieDetailRoute(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,
-    isFavorite: Boolean,
     mediaCodecs: List<MediaCodecInfo>,
     playerController: PlayerController?,
-    onToggleFavorite: () -> Unit,
+    viewModel: DetailViewModel,
 ) {
     // Set initial selection for Movie (resumeMs from parent's entryState).
     LaunchedEffect(entryInfo.ref) {
@@ -35,10 +34,9 @@ fun MovieDetailRoute(
         entryInfo = entryInfo,
         titleLang = titleLang,
         resumeMs = resumeMs,
-        isFavorite = isFavorite,
         mediaCodecs = mediaCodecs,
+        viewModel = viewModel,
         onResume = resumePlay,
         onPlayFromStart = playFromStart,
-        onToggleFavorite = onToggleFavorite,
     )
 }

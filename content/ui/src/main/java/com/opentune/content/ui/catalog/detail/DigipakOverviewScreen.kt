@@ -34,14 +34,13 @@ fun DigipakOverviewScreen(
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,
-    isFavorite: Boolean,
+    viewModel: DetailViewModel,
     children: List<EntryInfo>,
     singleChild: EntryInfo?,
     imageLoader: ImageLoader,
     mediaCodecs: List<MediaCodecInfo> = emptyList(),
     initialFocusRef: String? = null,
     onFocusChild: (EntryInfo) -> Unit = {},
-    onToggleFavorite: () -> Unit,
     onPlaySingleChild: () -> Unit,
     onSelectChild: (EntryInfo) -> Unit,
 ) {
@@ -74,8 +73,8 @@ fun DigipakOverviewScreen(
                 }
 
                 DetailButtons(
-                    isFavorite = isFavorite,
-                    onToggleFavorite = onToggleFavorite,
+                    entryInfo = entryInfo,
+                    viewModel = viewModel,
                 )
 
                 entryInfo.overview?.let { DetailOverviewSnippet(it) }
