@@ -9,7 +9,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.opentune.content.ui.catalog.browse.BrowseRoute
 import com.opentune.content.ui.catalog.browse.BrowseViewModel
-import com.opentune.content.ui.catalog.CatalogNav
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.content.ui.catalog.detail.DetailRoute
@@ -75,12 +74,10 @@ fun NavGraphBuilder.contentRoutes(
     composable(
         Routes.BROWSE,
         listOf(
-            navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
             navArgument("id") { type = NavType.StringType },
         ),
     ) { backStackEntry ->
-        val provider = backStackEntry.arguments!!.getString("provider")!!
         val endpointId = backStackEntry.arguments!!.getString("endpointId")!!
         val id = backStackEntry.arguments!!.getString("id")!!
         val entryInfo = sharedVm.get(id)
@@ -92,7 +89,6 @@ fun NavGraphBuilder.contentRoutes(
 
         BrowseRoute(
             nav = nav,
-            protocol = provider,
             endpointId = endpointId,
             initialEntryInfo = entryInfo,
             viewModel = browseVm,
@@ -103,28 +99,22 @@ fun NavGraphBuilder.contentRoutes(
     composable(
         Routes.DETAIL,
         listOf(
-            navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("itemRef") { type = NavType.StringType },
             navArgument("id") { type = NavType.StringType },
         ),
     ) {
-        val provider = it.arguments!!.getString("provider")!!
         val endpointId = it.arguments!!.getString("endpointId")!!
-        val itemRef = it.arguments!!.getString("itemRef")!!
         val id = it.arguments!!.getString("id")!!
-        // Prefer cache lookup; fallback to null for backward compat (debug API navigate)
         val entryInfo = sharedVm.get(id)
 
         val detailVm: DetailViewModel = viewModel(
-            factory = DetailViewModel.factory(itemRef),
+            factory = DetailViewModel.factory(id),
         )
 
         DetailRoute(
             nav = nav,
-            protocol = provider,
             endpointId = endpointId,
-            itemRefEncoded = itemRef,
+            itemId = id,
             initialInfo = entryInfo,
             sharedVm = sharedVm,
             viewModel = detailVm,
@@ -134,7 +124,6 @@ fun NavGraphBuilder.contentRoutes(
     composable(
         Routes.SEARCH,
         listOf(
-            navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
             navArgument("scopeLocation") { type = NavType.StringType },
         ),
@@ -142,24 +131,23 @@ fun NavGraphBuilder.contentRoutes(
         val searchVm: SearchViewModel = viewModel()
         SearchRoute(
             nav = nav,
-            protocol = it.arguments!!.getString("provider")!!,
             endpointId = it.arguments!!.getString("endpointId")!!,
             scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
             sharedVm = sharedVm,
             viewModel = searchVm,
+            playerController = playerController,
         )
     }
     composable(
         Routes.IMAGE_VIEWER,
         listOf(
-            navArgument("provider") { type = NavType.StringType },
             navArgument("endpointId") { type = NavType.StringType },
-            navArgument("itemRef") { type = NavType.StringType },
+            navArgument("itemId") { type = NavType.StringType },
         ),
     ) {
         ImageViewerRoute(
             endpointId = it.arguments!!.getString("endpointId")!!,
-            itemRefDecoded = CatalogNav.decodeSegment(it.arguments!!.getString("itemRef")!!),
+            itemId = it.arguments!!.getString("itemId")!!,
             onExit = { nav.popBackStack() },
         )
     }

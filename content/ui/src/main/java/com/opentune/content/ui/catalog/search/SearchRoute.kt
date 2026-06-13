@@ -19,16 +19,17 @@ import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.CatalogNav
+import com.opentune.content.ui.catalog.player.PlayerController
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchRoute(
     nav: NavHostController,
-    protocol: String,
     endpointId: String,
     scopeLocationEncoded: String,
     sharedVm: NavSharedViewModel,
     viewModel: SearchViewModel,
+    playerController: PlayerController,
 ) {
     val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
     var client by remember { mutableStateOf<EndpointClient?>(null) }
@@ -39,7 +40,7 @@ fun SearchRoute(
     val searching by viewModel.searching.collectAsState()
     val lastFocusedItemId by viewModel.lastFocusedItemId.collectAsState()
 
-    LaunchedEffect(protocol, endpointId) {
+    LaunchedEffect(endpointId) {
         try {
             client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
                 ?: throw IllegalStateException("No instance for $endpointId")
@@ -48,11 +49,11 @@ fun SearchRoute(
         }
     }
 
-    LaunchedEffect(client, scopeDecoded, protocol, endpointId) {
+    LaunchedEffect(client, scopeDecoded) {
         val c = client ?: return@LaunchedEffect
         viewModel.initialize { q ->
             c.search(scopeDecoded, SearchQuery(term = q)).items
-                .let { ArtUrlInjector.apply(it, protocol, endpointId) }
+                .let { ArtUrlInjector.apply(it, c.protocol, endpointId) }
         }
     }
 
@@ -73,18 +74,19 @@ fun SearchRoute(
                 onItemFocused = { item -> viewModel.setLastFocusedItemId(item.id) },
                 onOpenBrowse = { entry ->
                     sharedVm.cache(entry)
-                    nav.navigate(Routes.browse(protocol, endpointId, entry))
+                    nav.navigate(Routes.browse(endpointId, entry))
                 },
                 onOpenDetail = { item ->
                     sharedVm.cache(item)
-                    nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
+                    nav.navigate(Routes.detail(endpointId, item))
                 },
                 onOpenPlayer = { entry ->
-                    sharedVm.cache(entry)
-                    nav.navigate(Routes.player(protocol, endpointId, entry.id, entry))
+                    playerController.setClient(c)
+                    playerController.prepare(entry)
+                    playerController.play()
                 },
                 onOpenImageViewer = { raw ->
-                    nav.navigate(Routes.imageViewer(protocol, endpointId, raw))
+                    nav.navigate(Routes.imageViewer(endpointId, raw))
                 },
                 onOpenAudioUnsupported = { raw ->
                     nav.navigate(Routes.AUDIO_UNSUPPORTED)

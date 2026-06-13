@@ -16,8 +16,6 @@ private const val LOG_TAG = "OT_DigipakDetail"
 
 @Composable
 fun DigipakDetailRoute(
-    protocol: String,
-    endpointId: String,
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,

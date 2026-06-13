@@ -10,7 +10,6 @@ import com.opentune.storage.TitleLang
 
 @Composable
 fun MovieDetailRoute(
-    itemRefDecoded: String,
     entryInfo: EntryInfo,
     titleLang: TitleLang,
     resumeMs: Long,

@@ -27,7 +27,6 @@ import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.content.ui.catalog.NavSharedViewModel
-import com.opentune.content.ui.catalog.CatalogNav
 import com.opentune.content.ui.catalog.player.PlayerController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,19 +39,17 @@ private const val LOG_TAG = "OT_Detail"
 @Composable
 fun DetailRoute(
     nav: NavHostController,
-    protocol: String,
     endpointId: String,
-    itemRefEncoded: String,
+    itemId: String,
     initialInfo: EntryInfo? = null,
     sharedVm: NavSharedViewModel,
     viewModel: DetailViewModel,
     playerController: PlayerController? = null,
 ) {
     var resumeMs by remember { mutableStateOf(0L) }
-    val itemRefDecoded = remember(itemRefEncoded) { CatalogNav.decodeSegment(itemRefEncoded) }
     val scope = rememberCoroutineScope()
-    val stateKey = remember(protocol, endpointId, itemRefDecoded) {
-        EntryStateKey(endpointId, itemRefDecoded)
+    val stateKey = remember(endpointId, itemId) {
+        EntryStateKey(endpointId, itemId)
     }
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -63,7 +60,7 @@ fun DetailRoute(
     var isFavorite by remember { mutableStateOf(false) }
 
     // Resolve client, load stored state (position, favorite).
-    LaunchedEffect(protocol, endpointId) {
+    LaunchedEffect(endpointId) {
         val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
             ?: throw IllegalStateException("No provider instance for $endpointId")
         imageLoader = client.imageLoader
@@ -75,11 +72,11 @@ fun DetailRoute(
     }
 
     // Initialize ViewModel and load entry info.
-    LaunchedEffect(protocol, endpointId, itemRefDecoded) {
+    LaunchedEffect(endpointId) {
         val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@LaunchedEffect
-        viewModel.initialize(client, protocol, endpointId)
+        viewModel.initialize(client, endpointId)
         if (initialInfo != null && vmEntryInfo == null) {
-            viewModel.setEntryInfo(ArtUrlInjector.applyInfo(initialInfo, protocol))
+            viewModel.setEntryInfo(ArtUrlInjector.applyInfo(initialInfo, client.protocol))
             Log.d(LOG_TAG, "Using cached EntryInfo: type=${initialInfo.type}")
         }
     }
@@ -132,7 +129,6 @@ fun DetailRoute(
 
                 when (info.type) {
                     "Movie" -> MovieDetailRoute(
-                        itemRefDecoded = itemRefDecoded,
                         entryInfo = info,
                         titleLang = titleLang,
                         resumeMs = resumeMs,
@@ -142,9 +138,6 @@ fun DetailRoute(
                         onToggleFavorite = toggleFav,
                     )
                     "Series" -> SeriesDetailRoute(
-                        protocol = protocol,
-                        endpointId = endpointId,
-                        itemRefDecoded = itemRefDecoded,
                         stateKey = stateKey,
                         entryInfo = info,
                         titleLang = titleLang,
@@ -158,8 +151,6 @@ fun DetailRoute(
                         onToggleFavorite = toggleFav,
                     )
                     "Digipak" -> DigipakDetailRoute(
-                        protocol = protocol,
-                        endpointId = endpointId,
                         entryInfo = info,
                         titleLang = titleLang,
                         resumeMs = resumeMs,

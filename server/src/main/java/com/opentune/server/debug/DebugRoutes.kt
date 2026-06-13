@@ -215,33 +215,28 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             val cmd: NavCommand = when (body.route) {
                 "home" -> NavCommand.Home
                 "browse" -> {
-                    val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Browse(p, s, ref)
+                    NavCommand.Browse(endpointId, ref)
                 }
                 "detail" -> {
-                    val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    val r = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Detail(p, s, r)
+                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
+                    NavCommand.Detail(endpointId, ref)
                 }
                 "player" -> {
-                    val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    val r = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Player(p, s, r, body.startMs)
+                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
+                    NavCommand.Player(endpointId, ref, body.startMs)
                 }
                 "image" -> {
-                    val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    val r = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Image(p, s, r)
+                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
+                    NavCommand.Image(endpointId, ref)
                 }
                 "search" -> {
-                    val p = body.provider ?: return@post call.respond400("missing provider")
-                    val s = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    NavCommand.Search(p, s, body.itemRef ?: "")
+                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
+                    NavCommand.Search(endpointId, body.itemRef ?: "")
                 }
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }

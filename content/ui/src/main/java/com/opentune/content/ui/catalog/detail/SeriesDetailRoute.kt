@@ -26,9 +26,6 @@ private const val LOG_TAG = "OT_SeriesDetail"
 
 @Composable
 fun SeriesDetailRoute(
-    protocol: String,
-    endpointId: String,
-    itemRefDecoded: String,
     stateKey: EntryStateKey,
     entryInfo: EntryInfo,
     titleLang: TitleLang,

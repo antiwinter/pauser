@@ -22,7 +22,7 @@ private const val LOG_TAG = "DetailViewModel"
  * Survives navigation back/forward — data is cached until the route is popped.
  */
 class DetailViewModel(
-    private val itemRef: String,
+    private val itemId: String,
 ) : ViewModel() {
 
     // Entry info
@@ -46,16 +46,13 @@ class DetailViewModel(
     }
 
     private var client: EndpointClient? = null
-    private var protocol: String? = null
     private var endpointId: String? = null
 
     fun initialize(
         client: EndpointClient,
-        protocol: String,
         endpointId: String,
     ) {
         this.client = client
-        this.protocol = protocol
         this.endpointId = endpointId
     }
 
@@ -83,7 +80,7 @@ class DetailViewModel(
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    client?.listEntry(itemRef, 0, 500)
+                    client?.listEntry(itemId, 0, 500)
                 }
                 sub.value = result?.items ?: emptyList()
                 Log.d(LOG_TAG, "loadSubEntries() complete: ${result.items.size} subEntries")
@@ -112,10 +109,10 @@ class DetailViewModel(
     }
 
     companion object {
-        fun factory(itemRef: String) = object : ViewModelProvider.Factory {
+        fun factory(itemId: String) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                DetailViewModel(itemRef) as T
+                DetailViewModel(itemId) as T
         }
     }
 }

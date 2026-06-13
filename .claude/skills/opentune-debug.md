@@ -112,21 +112,24 @@ curl "http://localhost:7920/clients/<endpointId>/search?scope=<location>&q=<quer
 ```
 
 ### Navigate to player / browse / detail
+
+`provider` in the body is optional and ignored — protocol is derived from `endpointId` (`"${protocol}_${hash}"`).
+
 ```sh
-# player
+# player (overlay — no route navigation)
 curl -X POST http://localhost:7920/navigate \
   -H 'Content-Type: application/json' \
-  -d '{"route":"player","provider":"catvod","endpointId":"<id>","itemRef":"<ref>","startMs":0}'
+  -d '{"route":"player","endpointId":"<id>","itemRef":"<ref>","startMs":0}'
 
 # browse
 curl -X POST http://localhost:7920/navigate \
   -H 'Content-Type: application/json' \
-  -d '{"route":"browse","provider":"catvod","endpointId":"<id>","itemRef":"<location>"}'
+  -d '{"route":"browse","endpointId":"<id>","itemRef":"<location>"}'
 
 # detail
 curl -X POST http://localhost:7920/navigate \
   -H 'Content-Type: application/json' \
-  -d '{"route":"detail","provider":"catvod","endpointId":"<id>","itemRef":"<ref>"}'
+  -d '{"route":"detail","endpointId":"<id>","itemRef":"<ref>"}'
 
 # home
 curl -X POST http://localhost:7920/navigate \

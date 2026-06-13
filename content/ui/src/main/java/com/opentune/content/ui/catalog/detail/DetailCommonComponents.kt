@@ -3,18 +3,22 @@ package com.opentune.content.ui.catalog.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -24,6 +28,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
 import com.opentune.player.MediaCodecInfo
+import com.opentune.storage.TitleLang
 import java.io.File
 
 fun artImageModel(src: String?): Any? = when {
@@ -32,6 +37,80 @@ fun artImageModel(src: String?): Any? = when {
         src.startsWith("https://", ignoreCase = true) -> src
     src.startsWith("file://") -> src
     else -> File(src)
+}
+
+/** Logo (if available) or title text — shared header for all detail overview pages. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun DetailHeader(entryInfo: EntryInfo, titleLang: TitleLang) {
+    val logoModel = artImageModel(entryInfo.logo)
+    if (logoModel != null) {
+        AsyncImage(
+            model = logoModel,
+            contentDescription = null,
+            modifier = Modifier.padding(bottom = 8.dp),
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        val displayTitle = when (titleLang) {
+            TitleLang.Original -> entryInfo.originalTitle
+            else -> null
+        } ?: entryInfo.title
+        Text(
+            text = displayTitle,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
+    }
+}
+
+/**
+ * Two-page pager shell shared by Movie, Series, and Digipak detail screens.
+ *
+ * Page 0: [page1Content] — type-specific content provided by the caller.
+ * Page 1: Full-screen backdrop + full overview text.
+ */
+@Composable
+fun DetailOverviewShell(
+    entryInfo: EntryInfo,
+    page1Content: @Composable () -> Unit,
+) {
+    val pagerState = rememberPagerState { 2 }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+        ) { page ->
+            when (page) {
+                0 -> page1Content()
+                1 -> DetailPage2(entryInfo = entryInfo)
+            }
+        }
+
+        PageIndicator(
+            pageCount = 2,
+            currentPage = pagerState.currentPage,
+        )
+    }
+}
+
+@Composable
+private fun DetailPage2(entryInfo: EntryInfo) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        DetailBackdrop(backdropUrl = entryInfo.backdrop.getOrNull(1) ?: entryInfo.backdrop.firstOrNull())
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            entryInfo.overview?.let { DetailOverviewFull(it) }
+        }
+    }
 }
 
 /** Full-screen backdrop with asset fallback + item backdrop + gradient overlay */

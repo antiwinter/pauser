@@ -15,15 +15,15 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ImageViewerRoute(
     endpointId: String,
-    itemRefDecoded: String,
+    itemId: String,
     onExit: () -> Unit,
 ) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
-    DisposableEffect(itemRefDecoded) {
+    DisposableEffect(itemId) {
         var spec: com.opentune.player.PlaybackSpec? = null
         val job = MainScope().launch {
             val instance = withContext(Dispatchers.IO) { EndpointClientRegistryHolder.get().getOrCreate(endpointId) }
-            spec = withContext(Dispatchers.IO) { instance?.getPlaybackSpec(itemRefDecoded, 0) }
+            spec = withContext(Dispatchers.IO) { instance?.getPlaybackSpec(itemId, 0) }
             imageUrl = spec?.url
         }
         onDispose {
@@ -34,7 +34,7 @@ fun ImageViewerRoute(
     imageUrl?.let { url ->
         com.opentune.imageviewer.ImageViewerScreen(
             url = url,
-            title = itemRefDecoded.substringAfterLast('/').substringAfterLast('\\'),
+            title = itemId.substringAfterLast('/').substringAfterLast('\\'),
             onExit = onExit,
         )
     }

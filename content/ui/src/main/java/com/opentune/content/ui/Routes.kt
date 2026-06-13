@@ -16,26 +16,23 @@ object Routes {
     private const val UrlCharset = "UTF-8"
     const val HOME = "home"
     const val ADD_ENDPOINT = "add_endpoint"
-    const val BROWSE = "browse/{provider}/{endpointId}/{id}"
-    const val DETAIL = "detail/{provider}/{endpointId}/{itemRef}/{id}"
-    const val PLAYER = "player/{provider}/{endpointId}/{itemRef}/{id}"
-    const val SEARCH = "search/{provider}/{endpointId}/{scopeLocation}"
+    const val BROWSE = "browse/{endpointId}/{id}"
+    const val DETAIL = "detail/{endpointId}/{id}"
+    const val SEARCH = "search/{endpointId}/{scopeLocation}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
-    const val IMAGE_VIEWER = "image_viewer/{provider}/{endpointId}/{itemRef}"
+    const val IMAGE_VIEWER = "image_viewer/{endpointId}/{itemId}"
     const val AUDIO_UNSUPPORTED = "audio_unsupported"
 
     fun providerEdit(protocol: String, endpointId: String? = null) =
         if (endpointId != null) "provider_edit/$protocol?endpointId=${URLEncoder.encode(endpointId, UrlCharset)}"
         else "provider_edit/$protocol"
-    fun browse(protocol: String, endpointId: String, entry: EntryInfo) =
-        "browse/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
-    fun detail(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
-        "detail/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
-    fun player(protocol: String, endpointId: String, itemRefRaw: String, entry: EntryInfo) =
-        "player/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
-    fun search(protocol: String, endpointId: String, scopeLocationRaw: String) =
-        "search/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
-    fun imageViewer(protocol: String, endpointId: String, itemRefRaw: String) =
-        "image_viewer/$protocol/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRefRaw, UrlCharset)}"
+    fun browse(endpointId: String, entry: EntryInfo) =
+        "browse/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
+    fun detail(endpointId: String, entry: EntryInfo) =
+        "detail/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.id, UrlCharset)}"
+    fun search(endpointId: String, scopeLocationRaw: String) =
+        "search/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+    fun imageViewer(endpointId: String, itemId: String) =
+        "image_viewer/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemId, UrlCharset)}"
 }

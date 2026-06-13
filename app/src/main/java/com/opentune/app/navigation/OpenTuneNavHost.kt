@@ -34,12 +34,11 @@ fun OpenTuneNavHost() {
     val playerController: PlayerController = viewModel()
 
     fun cacheAndBrowse(
-        provider: String,
         endpointId: String,
         entry: EntryInfo,
     ) {
         sharedVm.cache(entry)
-        nav.navigate(Routes.browse(provider, endpointId, entry))
+        nav.navigate(Routes.browse(endpointId, entry))
     }
 
     LaunchedEffect(nav) {
@@ -55,12 +54,12 @@ fun OpenTuneNavHost() {
                         title = location,
                         type = "Root",
                     )
-                    cacheAndBrowse(cmd.provider, cmd.endpointId, entry)
+                    cacheAndBrowse(cmd.endpointId, entry)
                 }
                 is NavCommand.Detail -> {
                     val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
-                    nav.navigate(Routes.detail(cmd.provider, cmd.endpointId, cmd.itemRef, entry))
+                    nav.navigate(Routes.detail(cmd.endpointId, entry))
                 }
                 is NavCommand.Player -> {
                     val entry = EntryInfo(id = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
@@ -71,8 +70,8 @@ fun OpenTuneNavHost() {
                     playerController.prepare(entry, cmd.startMs)
                     playerController.play()
                 }
-                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.provider, cmd.endpointId, cmd.itemRef))
-                is NavCommand.Search -> nav.navigate(Routes.search(cmd.provider, cmd.endpointId, cmd.scopeLocation))
+                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.endpointId, cmd.itemRef))
+                is NavCommand.Search -> nav.navigate(Routes.search(cmd.endpointId, cmd.scopeLocation))
             }
         }
     }
@@ -84,9 +83,9 @@ fun OpenTuneNavHost() {
             composable(Routes.HOME) {
                 HomeRoute(
                     onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
-                    onOpenBrowse = { pt, sid ->
+                    onOpenBrowse = { _, sid ->
                         val entry = EntryInfo(id = "", title = "", type = "Root")
-                        cacheAndBrowse(pt, sid, entry)
+                        cacheAndBrowse(sid, entry)
                     },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
                     onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },

@@ -29,7 +29,6 @@ private const val LOG_TAG = "OpenTuneBrowseRoute"
 @Composable
 fun BrowseRoute(
     nav: NavHostController,
-    protocol: String,
     endpointId: String,
     initialEntryInfo: EntryInfo,
     viewModel: BrowseViewModel,
@@ -56,7 +55,7 @@ fun BrowseRoute(
         }
     }
 
-    LaunchedEffect(protocol, endpointId) {
+    LaunchedEffect(endpointId) {
         val existing = EndpointClientRegistryHolder.get().getOrCreate(endpointId)
         if (existing == null) {
             Log.e(LOG_TAG, "No instance for endpointId=$endpointId")
@@ -69,8 +68,8 @@ fun BrowseRoute(
 
     LaunchedEffect(client, queryOptions) {
         val c = client ?: return@LaunchedEffect
-        Log.d(LOG_TAG, "init+load for location=$location, client=$c, protocol=$protocol, endpointId=$endpointId")
-        viewModel.initialize(c, queryOptions, protocol, endpointId)
+        Log.d(LOG_TAG, "init+load for location=$location, client=$c, endpointId=$endpointId")
+        viewModel.initialize(c, queryOptions, c.protocol, endpointId)
         viewModel.load()
     }
 
@@ -84,7 +83,7 @@ fun BrowseRoute(
             loadMore = { startIndex, limit ->
                 c.listEntry(location, startIndex, limit, queryOptions)
                     .let { result ->
-                        result.copy(items = ArtUrlInjector.apply(result.items, protocol, endpointId))
+                        result.copy(items = ArtUrlInjector.apply(result.items, c.protocol, endpointId))
                     }
             },
             subtitle = initialEntryInfo.title,
@@ -95,16 +94,16 @@ fun BrowseRoute(
             error = vmError,
             initialFocusId = vmLastFocusedItemId,
             onBack = { nav.popBackStack() },
-            onSearch = { nav.navigate(Routes.search(protocol, endpointId, location)) },
+            onSearch = { nav.navigate(Routes.search(endpointId, location)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onItemFocused = { item -> viewModel.setlastFocusedItemId(item.id) },
             onOpenBrowseLocation = { folderEntry ->
                 sharedVm.cache(folderEntry)
-                nav.navigate(Routes.browse(protocol, endpointId, folderEntry))
+                nav.navigate(Routes.browse(endpointId, folderEntry))
             },
             onOpenDetail = { item ->
                 sharedVm.cache(item)
-                nav.navigate(Routes.detail(protocol, endpointId, item.id, item))
+                nav.navigate(Routes.detail(endpointId, item))
             },
             onOpenPlayer = { entry ->
                 val clientRef = c ?: return@BrowseScreen
@@ -113,7 +112,7 @@ fun BrowseRoute(
                 playerController.play()
             },
             onOpenImageViewer = { raw ->
-                nav.navigate(Routes.imageViewer(protocol, endpointId, raw))
+                nav.navigate(Routes.imageViewer(endpointId, raw))
             },
             onOpenAudioUnsupported = { raw ->
                 nav.navigate(Routes.AUDIO_UNSUPPORTED)
