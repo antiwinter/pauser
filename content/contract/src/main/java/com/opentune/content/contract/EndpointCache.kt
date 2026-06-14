@@ -135,6 +135,13 @@ object EndpointCache {
         }
     }
 
+    /** L2 item lookup for hierarchy refs. */
+    suspend fun getCachedItem(endpointId: String, itemRef: String): EntryInfo? = mutex.withLock {
+        val entry = items[itemKey(endpointId, itemRef)] ?: return@withLock null
+        if (isItemStale(entry.timestamp)) return@withLock null
+        entry.info
+    }
+
     private fun patchItem(endpointId: String, itemRef: String, transform: (EntryInfo) -> EntryInfo) {
         val entry = items[itemKey(endpointId, itemRef)] ?: return
         entry.info = transform(entry.info)
@@ -191,6 +198,12 @@ object EndpointCache {
 class CachingEndpointClient(
     private val delegate: EndpointClient,
 ) : EndpointClient() {
+
+    private val inheritableKeys = setOf(
+        EntryStateKeys.SPEED,
+        EntryStateKeys.SUBTITLE_TRACK_ID,
+        EntryStateKeys.AUDIO_TRACK_ID,
+    )
 
     override var imageLoader: coil3.ImageLoader?
         get() = delegate.imageLoader
@@ -254,24 +267,55 @@ class CachingEndpointClient(
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         val spec = delegate.getPlaybackSpec(itemRef, startMs)
-        val bindings = StorageBindingsHolder.get()
-        val store = bindings.entryStateStore
-        val key = EntryStateKey(endpointId, itemRef)
-        val row = store.get(key)
-        val subtitlePrefs = bindings.appConfigStore.loadSubtitlePrefs()
+        val subtitlePrefs = StorageBindingsHolder.get().appConfigStore.loadSubtitlePrefs()
+        val info = EndpointCache.getCachedItem(endpointId, itemRef)
+            ?: EntryInfo(ref = itemRef, title = "", type = "Unknown")
+
         val state = PlaybackState(
             positionMs = startMs,
-            speed = row?.playbackSpeed ?: 1f,
-            subtitleTrackId = row?.selectedSubtitleTrackId,
-            audioTrackId = row?.selectedAudioTrackId,
+            speed = getInheritedValue(info, "playbackSpeed") as? Float ?: 1f,
+            subtitleTrackId = getInheritedValue(info, "selectedSubtitleTrackId") as? String,
+            audioTrackId = getInheritedValue(info, "selectedAudioTrackId") as? String,
             subtitleOffsetFraction = subtitlePrefs.offsetFraction,
             subtitleSizeScale = subtitlePrefs.sizeScale,
             playingState = PlayingState.STOPPED,
         )
         return spec.copy(
             state = state,
-            updateEntryState = { k, v -> updateEntryState(itemRef, k, v) },
+            updateEntryState = { k, v -> updateEntryStateIntercepted(k, v, info) },
         )
+    }
+
+    private suspend fun getInheritedValue(info: EntryInfo, attribute: String): Any? {
+        val store = StorageBindingsHolder.get().entryStateStore
+        for (ref in listOf(info.ref, info.parentRef, info.seriesRef)) {
+            if (ref == null) continue
+            val row = store.get(endpointId, ref) ?: continue
+            val value = when (attribute) {
+                "playbackSpeed" -> row.playbackSpeed.takeUnless { it == 1f }
+                "selectedSubtitleTrackId" -> row.selectedSubtitleTrackId?.takeIf { it.isNotEmpty() }
+                "selectedAudioTrackId" -> row.selectedAudioTrackId?.takeIf { it.isNotEmpty() }
+                else -> null
+            }
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private suspend fun updateEntryStateIntercepted(
+        key: String,
+        value: String?,
+        info: EntryInfo,
+    ) {
+        withContext(Dispatchers.IO) {
+            persistLocalEntryState(info.ref, key, value)
+            if (key in inheritableKeys) {
+                for (ref in listOfNotNull(info.parentRef, info.seriesRef)) {
+                    persistLocalEntryState(ref, key, value)
+                }
+            }
+        }
+        delegate.updateEntryState(info.ref, key, value)
     }
 
     override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
