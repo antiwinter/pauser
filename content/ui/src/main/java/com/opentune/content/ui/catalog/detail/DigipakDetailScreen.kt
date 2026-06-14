@@ -53,6 +53,10 @@ fun DigipakDetailScreen(
         viewModel.loadDigipakChildren()
     }
 
+    LaunchedEffect(viewModel.entryStateKey) {
+        playerController?.setContext(parentStateKey = viewModel.entryStateKey)
+    }
+
     LaunchedEffect(children, singleChild) {
         val child = singleChild
             ?: children.firstOrNull { it.userData?.positionMs ?: 0L > 0L }
@@ -141,16 +145,13 @@ private fun DigipakChildren(
 ) {
     if (children.isEmpty()) return
     val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusRef != null) children.indexOfFirst { it.ref == initialFocusRef } else -1
-    val focusRequesters = remember(children) { List(children.size) { FocusRequester() } }
+    val refs = remember(children) { children.map { it.ref } }
+    val focusRequesters = remember(refs) { List(refs.size) { FocusRequester() } }
 
-    LaunchedEffect(children, initialFocusRef) {
+    LaunchedEffect(initialFocusRef) {
+        val targetIndex = initialFocusRef?.let { ref -> children.indexOfFirst { it.ref == ref } } ?: -1
         if (targetIndex >= 0) {
             listState.scrollToItem(targetIndex)
-        }
-    }
-    LaunchedEffect(children, initialFocusRef, targetIndex) {
-        if (targetIndex >= 0) {
             focusRequesters[targetIndex].requestFocus()
         }
     }

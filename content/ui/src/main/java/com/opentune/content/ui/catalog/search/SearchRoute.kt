@@ -14,6 +14,7 @@ import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.CatalogNav
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
+import com.opentune.content.ui.catalog.player.PlayerStopEffect
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -37,6 +38,10 @@ fun SearchRoute(
 
     LaunchedEffect(endpointId, scopeDecoded) {
         viewModel.initialize(endpointId, scopeDecoded)
+    }
+
+    PlayerStopEffect(playerController) {
+        viewModel.refresh()
     }
 
     val imageLoader = viewModel.imageLoader

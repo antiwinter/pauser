@@ -10,19 +10,24 @@ import com.opentune.content.contract.EntryInfo
 import com.opentune.core.osd.gOSD
 import com.opentune.player.MediaCodecInfo
 import com.opentune.player.PlaybackDisplayInfo
-import com.opentune.player.PlaybackSpec
-import com.opentune.player.PlaybackStorageContext
+import com.opentune.player.PlaybackState
 import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.storage.EntryStateKey
+import com.opentune.storage.EntryStateStore
 import com.opentune.storage.StorageBindingsHolder
+import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -35,9 +40,16 @@ class PlayerController(
 ) : AndroidViewModel(application), PlayerSurfaceController {
     override val playbackSession = PlaybackSession(application.applicationContext)
 
+    private val entryStateStore: EntryStateStore = StorageBindingsHolder.get().entryStateStore
+    private val appConfigStore = StorageBindingsHolder.get().appConfigStore
+
     // UI visibility of the player surface.
     private val _isShown = MutableStateFlow(false)
     val isShownFlow: StateFlow<Boolean> = _isShown.asStateFlow()
+
+    /** Emits when [stop] is called (user closed the player). Not emitted for [reset]. */
+    private val _stopEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val stopEvents: SharedFlow<Unit> = _stopEvents.asSharedFlow()
 
     // Codec info forwarded to detail screens for badge display.
     private val _mediaCodecs = MutableStateFlow<List<MediaCodecInfo>>(emptyList())
@@ -71,19 +83,25 @@ class PlayerController(
 
     private var _client: EndpointClient? = null
 
+    /** Episode/item key for the current prepare — set in resolveAndPrepare. */
+    private var _currentEntryKey: EntryStateKey? = null
+
     /** Series-level state key — set when navigating into a series, cleared on stop. */
     private var _seriesStateKey: EntryStateKey? = null
     private var _parentStateKey: EntryStateKey? = null
 
     private var _debounceJob: Job? = null
     private var _osdJob: Job? = null
-    
+
     private var _pendingItemRef: String? = null
     private var _pendingStartMs: Long? = null
 
-
     private var _workingItemRef: String? = null
     private var _workingStartMs: Long? = null
+
+    init {
+        startPersistenceCollectors()
+    }
 
     /** Set the endpoint client. Call when the user switches endpoints. */
     fun setClient(client: EndpointClient) {
@@ -91,7 +109,7 @@ class PlayerController(
     }
 
     /**
-     * Set series/parent context keys — call when entering a series, or clear on leaving.
+     * Set series/parent context keys — call when entering a series or digipak, or clear on leaving.
      * These have a longer lifetime than individual item prepares.
      */
     fun setContext(
@@ -112,14 +130,14 @@ class PlayerController(
         entryInfo: EntryInfo,
         startMs: Long? = null,
     ) {
-        val client = _client ?: run {
+        if (_client == null) {
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
         _pendingItemRef = entryInfo.ref
         _pendingStartMs = startMs ?: entryInfo.userData?.positionMs ?: 0L
         Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
-        
+
         setDisplayInfo(entryInfo)
         launchResolve(withDelay = _debounceJob?.isActive == true)
     }
@@ -127,7 +145,6 @@ class PlayerController(
     /** Show the player surface immediately. "Loading spec..." shown until spec resolves. */
     fun play() {
         _isShown.value = true
-        // kick off awaiting jobs
         launchResolve()
         playbackSession.play()
         Log.d(LOG_TAG, "play: isShown=true")
@@ -136,6 +153,7 @@ class PlayerController(
     fun stop() {
         _isShown.value = false
         playbackSession.pause()
+        _stopEvents.tryEmit(Unit)
         Log.d(LOG_TAG, "stop")
     }
 
@@ -148,6 +166,7 @@ class PlayerController(
         _pendingStartMs = null
         _workingItemRef = null
         _workingStartMs = null
+        _currentEntryKey = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
@@ -155,6 +174,59 @@ class PlayerController(
         _seriesStateKey = null
         _parentStateKey = null
         Log.d(LOG_TAG, "controller states cleared")
+    }
+
+    private fun startPersistenceCollectors() {
+        viewModelScope.launch {
+            playbackSession.speedFlow.collect { speed ->
+                _currentEntryKey?.let { saveSpeed(it, speed) }
+            }
+        }
+        viewModelScope.launch {
+            playbackSession.subtitleTrackIdFlow.collect { trackId ->
+                _currentEntryKey?.let { saveSubtitleTrack(it, trackId) }
+            }
+        }
+        viewModelScope.launch {
+            playbackSession.audioTrackIdFlow.collect { trackId ->
+                _currentEntryKey?.let { saveAudioTrack(it, trackId) }
+            }
+        }
+        viewModelScope.launch {
+            combine(
+                playbackSession.subtitleOffsetFractionFlow,
+                playbackSession.subtitleSizeScaleFlow,
+            ) { offset, scale -> SubtitlePrefs(offset, scale) }
+                .collect { prefs ->
+                    withContext(Dispatchers.IO) {
+                        appConfigStore.saveSubtitlePrefs(prefs)
+                    }
+                }
+        }
+    }
+
+    private suspend fun saveSpeed(entryKey: EntryStateKey, speed: Float) {
+        withContext(Dispatchers.IO) {
+            entryStateStore.upsertSpeed(entryKey, speed)
+            _seriesStateKey?.let { entryStateStore.upsertSpeed(it, speed) }
+            _parentStateKey?.let { entryStateStore.upsertSpeed(it, speed) }
+        }
+    }
+
+    private suspend fun saveSubtitleTrack(entryKey: EntryStateKey, trackId: String?) {
+        withContext(Dispatchers.IO) {
+            entryStateStore.upsertSubtitleTrack(entryKey, trackId)
+            _seriesStateKey?.let { entryStateStore.upsertSubtitleTrack(it, trackId) }
+            _parentStateKey?.let { entryStateStore.upsertSubtitleTrack(it, trackId) }
+        }
+    }
+
+    private suspend fun saveAudioTrack(entryKey: EntryStateKey, trackId: String?) {
+        withContext(Dispatchers.IO) {
+            entryStateStore.upsertAudioTrack(entryKey, trackId)
+            _seriesStateKey?.let { entryStateStore.upsertAudioTrack(it, trackId) }
+            _parentStateKey?.let { entryStateStore.upsertAudioTrack(it, trackId) }
+        }
     }
 
     private fun startPrebufferOsd(itemRef: String) {
@@ -165,8 +237,8 @@ class PlayerController(
             while (true) {
                 gOSD.msg(
                     "$itemRef, spec=$_workingItemRef, " +
-                    "buffered=${playbackSession.bufferedMs.toMinStr()}, " +
-                    "bytes=${playbackSession.bufferedBytes.toMbStr()}"
+                        "buffered=${playbackSession.bufferedMs.toMinStr()}, " +
+                        "bytes=${playbackSession.bufferedBytes.toMbStr()}",
                 )
                 delay(1000)
             }
@@ -194,28 +266,38 @@ class PlayerController(
     private suspend fun resolveAndPrepare() {
         val client = _client ?: return
         if (_pendingItemRef == _workingItemRef
-            && _pendingStartMs == _workingStartMs) {
+            && _pendingStartMs == _workingStartMs
+        ) {
             Log.d(LOG_TAG, "launchResolve: pending spec matches working spec, ignoring")
             return
         }
 
-        val storageCtx = PlaybackStorageContext(
-            entryStateStore = StorageBindingsHolder.get().entryStateStore,
-            entryStateKey = EntryStateKey(client.endpointId, _pendingItemRef!!),
-            seriesStateKey = _seriesStateKey,
-            parentStateKey = _parentStateKey,
-            appConfigStore = StorageBindingsHolder.get().appConfigStore,
-        )
+        val itemRef = _pendingItemRef!!
+        val startMs = _pendingStartMs ?: 0L
+        val entryKey = EntryStateKey(client.endpointId, itemRef)
+        _currentEntryKey = entryKey
 
-        Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$_pendingItemRef startMs=$_pendingStartMs")
-        val spec = withContext(Dispatchers.IO) {
-            client.getPlaybackSpec(_pendingItemRef!!, _pendingStartMs ?: 0L)
+        Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$itemRef startMs=$startMs")
+        val (spec, row, subtitlePrefs) = withContext(Dispatchers.IO) {
+            Triple(
+                client.getPlaybackSpec(itemRef, startMs),
+                entryStateStore.get(entryKey),
+                appConfigStore.loadSubtitlePrefs(),
+            )
         }
         _mediaCodecs.value = spec.mediaCodecs
-        _workingItemRef = _pendingItemRef
-        _workingStartMs = _pendingStartMs
+        _workingItemRef = itemRef
+        _workingStartMs = startMs
 
-        playbackSession.prepare(spec, storageCtx, _workingStartMs ?: 0L)
+        val seed = PlaybackState(
+            positionMs = startMs,
+            speed = row?.playbackSpeed ?: 1f,
+            subtitleTrackId = row?.selectedSubtitleTrackId,
+            audioTrackId = row?.selectedAudioTrackId,
+            subtitleOffsetFraction = subtitlePrefs.offsetFraction,
+            subtitleSizeScale = subtitlePrefs.sizeScale,
+        )
+        playbackSession.prepare(spec, seed)
     }
 
     override fun onCleared() {

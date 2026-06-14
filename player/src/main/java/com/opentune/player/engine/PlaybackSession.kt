@@ -8,9 +8,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import com.opentune.player.OpenTunePlaybackHooks
 import com.opentune.player.PlaybackSpec
-import com.opentune.player.PlaybackStorageContext
+import com.opentune.player.PlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,10 +43,21 @@ class PlaybackSession(
     private val _spec = MutableStateFlow<PlaybackSpec?>(null)
     val currentSpec: PlaybackSpec? get() = _spec.value
     val currentSpecFlow: StateFlow<PlaybackSpec?> = _spec.asStateFlow()
-    
-    private val _storageCtx = MutableStateFlow<PlaybackStorageContext?>(null)
-    val storageCtx: PlaybackStorageContext? get() = _storageCtx.value
-    val storageCtxFlow: StateFlow<PlaybackStorageContext?> = _storageCtx.asStateFlow()
+
+    private val _speed = MutableStateFlow(1f)
+    val speedFlow: StateFlow<Float> = _speed.asStateFlow()
+
+    private val _subtitleTrackId = MutableStateFlow<String?>(null)
+    val subtitleTrackIdFlow: StateFlow<String?> = _subtitleTrackId.asStateFlow()
+
+    private val _audioTrackId = MutableStateFlow<String?>(null)
+    val audioTrackIdFlow: StateFlow<String?> = _audioTrackId.asStateFlow()
+
+    private val _subtitleOffsetFraction = MutableStateFlow(0f)
+    val subtitleOffsetFractionFlow: StateFlow<Float> = _subtitleOffsetFraction.asStateFlow()
+
+    private val _subtitleSizeScale = MutableStateFlow(1f)
+    val subtitleSizeScaleFlow: StateFlow<Float> = _subtitleSizeScale.asStateFlow()
 
     private var heartbeatJob: Job? = null
 
@@ -60,24 +70,41 @@ class PlaybackSession(
 
     val bufferedBytes: Long get() = BandwidthTracker.totalBytes
 
+    fun updateSpeed(speed: Float) {
+        _speed.value = speed
+    }
+
+    fun updateSubtitleTrackId(trackId: String?) {
+        _subtitleTrackId.value = trackId
+    }
+
+    fun updateAudioTrackId(trackId: String?) {
+        _audioTrackId.value = trackId
+    }
+
+    fun updateSubtitlePrefs(offsetFraction: Float, sizeScale: Float) {
+        _subtitleOffsetFraction.value = offsetFraction
+        _subtitleSizeScale.value = sizeScale
+    }
+
     suspend fun prepare(
         spec: PlaybackSpec,
-        storageCtx: PlaybackStorageContext,
-        startMs: Long,
+        seed: PlaybackState,
     ) {
-        val savedSpeed = withContext(Dispatchers.IO) {
-            storageCtx.entryStateStore.get(storageCtx.entryStateKey)?.playbackSpeed ?: 1f
-        }.coerceIn(0.25f, 4f)
+        val savedSpeed = seed.speed.coerceIn(0.25f, 4f)
 
-        _storageCtx.value = storageCtx
+        _speed.value = savedSpeed
+        _subtitleTrackId.value = seed.subtitleTrackId
+        _audioTrackId.value = seed.audioTrackId
+        _subtitleOffsetFraction.value = seed.subtitleOffsetFraction
+        _subtitleSizeScale.value = seed.subtitleSizeScale
         _spec.value = spec
-        startHeartbeat(spec, storageCtx)
+        startHeartbeat(spec)
 
-        // Reset bandwidth tracker when preparing new content
         BandwidthTracker.reset()
 
         withContext(Dispatchers.Main) {
-            Log.d(SESSION_LOG, "prepare: load startMs=$startMs (was state=${exo.playbackState})")
+            Log.d(SESSION_LOG, "prepare: load startMs=${seed.positionMs} (was state=${exo.playbackState})")
 
             exo.stop()
             Log.d(SESSION_LOG, "prepare: stopped pos=${exo.currentPosition} buf=${exo.bufferedPosition}")
@@ -87,7 +114,7 @@ class PlaybackSession(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .build()
-            exo.setMediaSource(spec.toMediaSource(appContext), startMs)
+            exo.setMediaSource(spec.toMediaSource(appContext), seed.positionMs)
             exo.prepare()
         }
     }
@@ -115,14 +142,10 @@ class PlaybackSession(
         val hooks = _spec.value?.hooks
         stopInternal()
         scope.launch {
-            _storageCtx.value?.let { ctx ->
-                withContext(Dispatchers.IO) {
-                    ctx.entryStateStore.upsertPosition(ctx.entryStateKey, pos)
-                }
-            }
             hooks?.onStop(pos)
             hooks?.onDispose()
         }
+        _spec.value = null
     }
 
     fun clear() {
@@ -130,7 +153,7 @@ class PlaybackSession(
         exo.release()
     }
 
-    private fun startHeartbeat(spec: PlaybackSpec, storageCtx: PlaybackStorageContext) {
+    private fun startHeartbeat(spec: PlaybackSpec) {
         heartbeatJob?.cancel()
         val hooks = spec.hooks
         val interval = hooks.progressIntervalMs().takeIf { it > 0L } ?: DEFAULT_PROGRESS_INTERVAL_MS
@@ -138,7 +161,7 @@ class PlaybackSession(
             var readyReported = false
             while (isActive) {
                 delay(interval)
-                if(exo.playbackState != Player.STATE_READY) continue
+                if (exo.playbackState != Player.STATE_READY) continue
                 val pos = exo.currentPosition
                 val isPaused = !exo.playWhenReady
                 val rate = exo.playbackParameters.speed
@@ -147,11 +170,6 @@ class PlaybackSession(
                     readyReported = true
                 }
                 hooks.onProgressTick(pos, rate, isPaused)
-                if (!isPaused) {
-                    withContext(Dispatchers.IO) {
-                        storageCtx.entryStateStore.upsertPosition(storageCtx.entryStateKey, pos)
-                    }
-                }
             }
         }
     }

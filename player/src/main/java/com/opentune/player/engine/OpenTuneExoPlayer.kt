@@ -5,10 +5,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
-import com.opentune.storage.AppPrefsStore
 
 @UnstableApi
 object OpenTuneExoPlayer {
+
+    const val DEFAULT_PRE_BUFFER_MS = 5 * 60 * 1000
 
     data class PlayerWithMeter(val player: ExoPlayer, val bandwidthMeter: DefaultBandwidthMeter)
 
@@ -19,7 +20,7 @@ object OpenTuneExoPlayer {
     @JvmStatic
     fun createForBundledSources(
         context: Context,
-        preBufferMs: Int = AppPrefsStore.DEFAULT_PRE_BUFFER_MS,
+        preBufferMs: Int = DEFAULT_PRE_BUFFER_MS,
     ): PlayerWithMeter {
         val minBufferMs = preBufferMs - 10_000
         val loadControl = DefaultLoadControl.Builder()

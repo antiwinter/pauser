@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackDisplayInfo
-import com.opentune.storage.EntryStateKey
 
 internal class InfoOverlayState(
     val displayInfo: PlaybackDisplayInfo,
@@ -118,7 +117,7 @@ private fun formatDuration(ms: Long): String {
 
 @Composable
 internal fun rememberInfoOverlayState(
-    instanceKey: EntryStateKey,
+    instanceKey: String,
     displayInfo: PlaybackDisplayInfo,
     exo: ExoPlayer,
     videoMime: String?,

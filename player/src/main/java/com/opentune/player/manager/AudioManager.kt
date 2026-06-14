@@ -4,6 +4,9 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -15,11 +18,8 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
-import com.opentune.player.engine.PlayerStores
-import com.opentune.storage.EntryStateKey
+import com.opentune.player.engine.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 private const val AUDIO_LOG_TAG = "OT_Audio"
 
@@ -38,12 +38,9 @@ internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
 @UnstableApi
 internal class AudioManager(
     private val currentTracksState: MutableState<Tracks>,
-    private val activeTrackIdState: MutableState<String?>,
+    private val activeTrackId: State<String?>,
     private val scope: CoroutineScope,
-    private val stores: PlayerStores,
-    private val entryStateKey: EntryStateKey,
-    private val parentStateKey: EntryStateKey?,
-    private val seriesStateKey: EntryStateKey?,
+    private val session: PlaybackSession,
     private val exo: ExoPlayer,
 ) {
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -60,18 +57,13 @@ internal class AudioManager(
         entries += PlayerMenuEntry(
             label = @Composable { stringResource(R.string.player_audio_auto) },
             children = { emptyList() },
-            isSelected = { activeTrackIdState.value == null },
+            isSelected = { activeTrackId.value == null },
             onSelect = {
                 exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                     .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                     .build()
-                activeTrackIdState.value = null
-                scope.launch(Dispatchers.IO) {
-                    Log.d(AUDIO_LOG_TAG, "SAVE audio track: Auto for key=$entryStateKey")
-                    stores.entryStateStore.upsertAudioTrack(entryStateKey, null)
-                    parentStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, null) }
-                    seriesStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, null) }
-                }
+                Log.d(AUDIO_LOG_TAG, "select audio: Auto")
+                session.updateAudioTrackId(null)
             },
         )
 
@@ -81,19 +73,14 @@ internal class AudioManager(
             entries += PlayerMenuEntry(
                 label = @Composable { label },
                 children = { emptyList() },
-                isSelected = { activeTrackIdState.value == gid },
+                isSelected = { activeTrackId.value == gid },
                 onSelect = {
                     exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                         .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                         .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
                         .build()
-                    activeTrackIdState.value = gid
-                    scope.launch(Dispatchers.IO) {
-                        Log.d(AUDIO_LOG_TAG, "SAVE audio track: gid=$gid for key=$entryStateKey")
-                        stores.entryStateStore.upsertAudioTrack(entryStateKey, gid)
-                        parentStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, gid) }
-                        seriesStateKey?.let { stores.entryStateStore.upsertAudioTrack(it, gid) }
-                    }
+                    Log.d(AUDIO_LOG_TAG, "select audio: gid=$gid")
+                    session.updateAudioTrackId(gid)
                 },
             )
         }
@@ -106,14 +93,11 @@ internal class AudioManager(
 @Composable
 internal fun rememberAudioManager(
     exo: ExoPlayer,
-    stores: PlayerStores,
-    entryStateKey: EntryStateKey,
-    parentStateKey: EntryStateKey? = null,
-    seriesStateKey: EntryStateKey? = null,
+    session: PlaybackSession,
 ): AudioManager {
     val scope = rememberCoroutineScope()
     val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
-    val activeTrackIdState = remember { mutableStateOf<String?>(null) }
+    val activeTrackId = session.audioTrackIdFlow.collectAsState()
 
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
@@ -126,15 +110,12 @@ internal fun rememberAudioManager(
         onDispose { exo.removeListener(listener) }
     }
 
-    return remember {
+    return remember(exo, session) {
         AudioManager(
             currentTracksState = currentTracksState,
-            activeTrackIdState = activeTrackIdState,
+            activeTrackId = activeTrackId,
             scope = scope,
-            stores = stores,
-            entryStateKey = entryStateKey,
-            parentStateKey = parentStateKey,
-            seriesStateKey = seriesStateKey,
+            session = session,
             exo = exo,
         )
     }

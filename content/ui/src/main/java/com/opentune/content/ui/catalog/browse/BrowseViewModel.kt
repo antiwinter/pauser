@@ -115,6 +115,22 @@ class BrowseViewModel(
         }
     }
 
+    fun refresh() {
+        if (_client.value == null || _items.value.isEmpty()) return
+        viewModelScope.launch {
+            runCatching {
+                val limit = _items.value.size.coerceAtLeast(PAGE_SIZE)
+                listPage(0, limit)
+            }.onSuccess { result ->
+                _items.value = result.items
+                _totalCount.value = result.totalCount
+                Log.d(LOG_TAG, "refresh() complete: ${result.items.size}/${result.totalCount}")
+            }.onFailure { e ->
+                Log.e(LOG_TAG, "refresh() failed", e)
+            }
+        }
+    }
+
     fun loadMore() {
         val currentItems = _items.value
         val total = _totalCount.value

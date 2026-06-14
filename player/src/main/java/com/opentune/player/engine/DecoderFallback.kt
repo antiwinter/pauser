@@ -12,7 +12,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackSpec
-import com.opentune.storage.EntryStateKey
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Returns true when any keyword appears in the message, class name, or cause chain. */
@@ -42,7 +41,7 @@ private const val FALLBACK_LOG = "TrackFallback"
 @Composable
 internal fun TrackFallbackEffect(
     exo: ExoPlayer,
-    instanceKey: EntryStateKey,
+    instanceKey: String,
     specState: State<PlaybackSpec>,
     trackInfoState: State<TrackInfo>,
     mainHandler: Handler,

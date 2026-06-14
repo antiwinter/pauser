@@ -101,4 +101,20 @@ class SearchViewModel : ViewModel() {
     fun setLastFocusedItemRef(ref: String?) {
         _lastFocusedItemRef.value = ref
     }
+
+    fun refresh() {
+        val q = _query.value.trim()
+        val fn = searchFn ?: return
+        if (q.isEmpty()) return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { fn(q) }
+            }.onSuccess { fetched ->
+                results.clear()
+                results.addAll(fetched)
+            }.onFailure { e ->
+                Log.e(LOG_TAG, "refresh() failed", e)
+            }
+        }
+    }
 }

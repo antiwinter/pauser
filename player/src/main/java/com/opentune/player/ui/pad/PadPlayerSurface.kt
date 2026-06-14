@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,7 +25,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.engine.rememberPlaybackSurface
 import com.opentune.player.ui.PlaybackControllerBar
@@ -44,16 +42,12 @@ fun PadPlayerSurface(
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
     val specValue = spec ?: return
-    val storageCtx by session.storageCtxFlow.collectAsState()
-    val ctx = storageCtx ?: return
 
-    CompositionLocalProvider(LocalPlaybackStorageContext provides ctx) {
-        PadPlayerSurfaceContent(
-            controller = controller,
-            spec = specValue,
-            onBack = onBack,
-        )
-    }
+    PadPlayerSurfaceContent(
+        controller = controller,
+        spec = specValue,
+        onBack = onBack,
+    )
 }
 
 @UnstableApi
@@ -66,10 +60,6 @@ private fun PadPlayerSurfaceContent(
     val session = controller.playbackSession
     val engine = rememberPlaybackSurface(
         spec = spec,
-        initialSubtitleTrackId = null,
-        initialAudioTrackId = null,
-        initialSubtitleOffsetFraction = 0f,
-        initialSubtitleSizeScale = 1f,
         session = session,
     )
     PlaybackHostEffects(engine.exo)

@@ -19,6 +19,16 @@ When something changes, **update call sites and schema directly** and delete the
 
 ---
 
+## Naming
+
+Name functions and types for **what they do**, not **who calls them** or **when** they run.
+
+- Prefer `refresh(scope)` over `refreshAfterPlayback`, `refreshOnPlayerHide`, etc.
+- Prefer one `PlaybackState` over `PlaybackInitialState` / `PlaybackRuntimeState` unless the types genuinely differ.
+- Call-site context (after playback, on hide, on tag) belongs at the call site, not in the callee's name.
+
+---
+
 ## Module graph
 
 ```

@@ -15,6 +15,7 @@ import com.opentune.storage.StorageBindingsHolder
 import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.NavSharedViewModel
 import com.opentune.content.ui.catalog.player.PlayerController
+import com.opentune.content.ui.catalog.player.PlayerStopEffect
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -38,13 +39,23 @@ fun BrowseRoute(
 
     val items = remember { mutableStateListOf<EntryInfo>() }
     LaunchedEffect(vmItems) {
-        if (vmItems.isNotEmpty() && items.isEmpty()) {
+        if (vmItems.isEmpty()) return@LaunchedEffect
+        if (items.size == vmItems.size && items.map { it.ref } == vmItems.map { it.ref }) {
+            for (i in vmItems.indices) {
+                items[i] = vmItems[i]
+            }
+        } else {
+            items.clear()
             items.addAll(vmItems)
         }
     }
 
     LaunchedEffect(endpointId) {
         viewModel.initialize(endpointId)
+    }
+
+    PlayerStopEffect(playerController) {
+        viewModel.refresh()
     }
 
     val imageLoader = viewModel.imageLoader

@@ -8,7 +8,6 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryTag
-import com.opentune.content.contract.EntryUserData
 import com.opentune.content.ui.catalog.ArtType
 import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.storage.AppPrefsStore
@@ -23,6 +22,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "DetailViewModel"
+
+enum class DetailRefreshScope {
+    /** Current entry via getEntries. */
+    Header,
+    /** Header plus sub-entry lists (episodes, digipak children). */
+    Lists,
+}
 
 /**
  * Per-back-stack-entry ViewModel for DetailRoute.
@@ -112,16 +118,63 @@ class DetailViewModel(
                 withContext(Dispatchers.IO) {
                     c.tagEntry(itemRef, tag, value)
                 }
-                val info = _entryInfo.value ?: return@launch
-                val base = info.userData ?: EntryUserData(positionMs = 0L, isFavorite = false, played = false)
-                val userData = when (tag) {
-                    EntryTag.Favorite -> base.copy(isFavorite = value)
-                    else -> base
-                }
-                _entryInfo.value = info.copy(userData = userData)
+                refresh(DetailRefreshScope.Header)
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "tagEntry failed: tag=$tag value=$value", e)
             }
+        }
+    }
+
+    /** Re-fetch from the caching client; updates flows in place without clearing lists. */
+    fun refresh(scope: DetailRefreshScope) {
+        viewModelScope.launch {
+            val c = _client.value ?: return@launch
+            val eid = endpointId ?: return@launch
+            try {
+                withContext(Dispatchers.IO) {
+                    refreshHeader(c)
+                    if (scope == DetailRefreshScope.Lists) {
+                        refreshLists(c, eid)
+                    }
+                }
+                Log.d(LOG_TAG, "refresh($scope) complete")
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "refresh($scope) failed", e)
+            }
+        }
+    }
+
+    private suspend fun refreshHeader(c: EndpointClient) {
+        val info = c.getEntries(listOf(itemRef)).items.firstOrNull() ?: return
+        _entryInfo.value = ArtUrlInjector.applyInfo(info, c.protocol)
+    }
+
+    private suspend fun refreshLists(c: EndpointClient, eid: String) {
+        when (_entryInfo.value?.type) {
+            "Series" -> refreshEpisodes(c, eid)
+            "Digipak" -> refreshDigipakChildren(c, eid)
+        }
+    }
+
+    private suspend fun refreshEpisodes(c: EndpointClient, eid: String) {
+        val seasonList = _seasons.value
+        if (seasonList.isEmpty()) return
+        val season = seasonList.firstOrNull { it.ref == _episodeIndex.value }
+            ?: seasonList.first()
+        val result = c.listEntry(season.ref, _pageIndex.value * 50, 50)
+        _episodes.value = ArtUrlInjector.apply(result.items, c.protocol, eid, ArtType.Thumb)
+            .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
+        _totalEpisodes.value = result.totalCount
+    }
+
+    private suspend fun refreshDigipakChildren(c: EndpointClient, eid: String) {
+        val childCount = _entryInfo.value?.childCount ?: 0
+        val result = c.listEntry(itemRef, 0, maxOf(childCount, 1))
+        val filtered = result.items
+        if (childCount <= 1 && filtered.isNotEmpty()) {
+            _singleChild.value = filtered.first()
+        } else {
+            _digipakChildren.value = ArtUrlInjector.apply(filtered, c.protocol, eid, ArtType.Thumb)
         }
     }
 

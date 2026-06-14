@@ -16,6 +16,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.player.PlayerController
+import com.opentune.content.ui.catalog.player.PlayerStopEffect
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -36,6 +37,12 @@ fun DetailRoute(
 
     LaunchedEffect(client) {
         client?.let { playerController?.setClient(it) }
+    }
+
+    PlayerStopEffect(playerController) {
+        if (client != null) {
+            viewModel.refresh(DetailRefreshScope.Lists)
+        }
     }
 
     DisposableEffect(playerController) {

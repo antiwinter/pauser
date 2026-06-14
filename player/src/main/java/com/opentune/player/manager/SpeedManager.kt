@@ -9,19 +9,15 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
-import com.opentune.player.engine.PlayerStores
-import com.opentune.storage.EntryStateKey
+import com.opentune.player.engine.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 internal val SPEED_VALUES = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 private val SPEED_LABELS = SPEED_VALUES.map { if (it == 1f) "1×" else "${it}×" }
 
 internal class SpeedManager(
     private val scope: CoroutineScope,
-    private val stores: PlayerStores,
-    private val entryStateKey: EntryStateKey,
+    private val session: PlaybackSession,
     private val exo: ExoPlayer,
 ) {
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -36,8 +32,6 @@ internal class SpeedManager(
             PlayerMenuEntry(
                 label = @Composable { SPEED_LABELS[index] },
                 children = { emptyList() },
-                // Reading exo.playbackParameters.speed is accurate; the menu only renders
-                // after it opens (by which time the saved speed is already applied to exo).
                 isSelected = { exo.playbackParameters.speed == speed },
                 onSelect = {
                     exo.playbackParameters = PlaybackParameters(speed)
@@ -49,17 +43,14 @@ internal class SpeedManager(
 @Composable
 internal fun rememberSpeedManager(
     exo: ExoPlayer,
-    stores: PlayerStores,
-    entryStateKey: EntryStateKey,
+    session: PlaybackSession,
 ): SpeedManager {
     val scope = rememberCoroutineScope()
 
-    DisposableEffect(exo, entryStateKey) {
+    DisposableEffect(exo, session) {
         val listener = object : Player.Listener {
             override fun onPlaybackParametersChanged(parameters: PlaybackParameters) {
-                scope.launch(Dispatchers.IO) {
-                    stores.entryStateStore.upsertSpeed(entryStateKey, parameters.speed)
-                }
+                session.updateSpeed(parameters.speed)
             }
         }
         exo.addListener(listener)
@@ -69,8 +60,7 @@ internal fun rememberSpeedManager(
     return remember {
         SpeedManager(
             scope = scope,
-            stores = stores,
-            entryStateKey = entryStateKey,
+            session = session,
             exo = exo,
         )
     }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import com.opentune.player.LocalPlaybackStorageContext
 import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.ui.InfoOverlay
 import com.opentune.player.ui.MenuOverlay
@@ -56,16 +54,11 @@ fun TvPlayerSurface(
         return
     }
 
-    val storageCtx by session.storageCtxFlow.collectAsState()
-    val ctx = storageCtx ?: return
-    CompositionLocalProvider(LocalPlaybackStorageContext provides ctx) {
-        TvPlayerSurfaceContent(
-            controller = controller,
-            spec = specValue,
-            storageCtx = ctx,
-            onBack = onBack,
-        )
-    }
+    TvPlayerSurfaceContent(
+        controller = controller,
+        spec = specValue,
+        onBack = onBack,
+    )
 }
 
 @Composable
@@ -90,7 +83,6 @@ private fun PlayerLoadingOverlay(onBack: () -> Unit) {
 private fun TvPlayerSurfaceContent(
     controller: PlayerSurfaceController,
     spec: com.opentune.player.PlaybackSpec,
-    storageCtx: com.opentune.player.PlaybackStorageContext,
     onBack: () -> Unit,
 ) {
     val hasNextVideo by controller.hasNextVideoFlow.collectAsState()
@@ -98,10 +90,6 @@ private fun TvPlayerSurfaceContent(
     val session = controller.playbackSession
     val surface = rememberPlaybackSurface(
         spec = spec,
-        initialSubtitleTrackId = null,
-        initialAudioTrackId = null,
-        initialSubtitleOffsetFraction = 0f,
-        initialSubtitleSizeScale = 1f,
         session = session,
     )
     PlaybackHostEffects(surface.exo)
@@ -161,7 +149,7 @@ private fun TvPlayerSurfaceContent(
 
     val trackInfo: TrackInfo by surface.trackInfo
     val infoOverlay = rememberInfoOverlayState(
-        instanceKey = storageCtx.entryStateKey,
+        instanceKey = spec.url,
         displayInfo = displayInfo,
         exo = exo,
         videoMime = trackInfo.videoMime,

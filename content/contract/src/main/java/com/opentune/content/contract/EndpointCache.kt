@@ -1,5 +1,6 @@
 package com.opentune.content.contract
 
+import com.opentune.player.PlaybackSpec
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
 import com.opentune.storage.StorageBindingsHolder
@@ -7,25 +8,43 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Central in-memory cache for EndpointClient list responses.
+ * Two-level in-memory cache for [EndpointClient] list responses.
  *
- * Strategy: stale-while-revalidate
- *   - Always return cached data immediately (if any)
- *   - Trigger background re-fetch
- *   - If server data changed, update cache so next visit sees fresh data
- *   - If server data unchanged, cache stays — UI sees no flicker
+ * **L1 (query):** `queryKey → ordered item keys + totalCount + timestamp`
+ * **L2 (item):** `ItemKey(endpointId, itemRef) → EntryInfo + timestamp`
  *
- * TTL: cached entries are considered stale after CACHE_TTL_MS.
- * Stale entries are still returned immediately; they just trigger a background refresh.
+ * TTL rules (L2 ≤ L1):
+ * - On [put] and [get] hit: stamp all L2 entries, then L1 (same helper, joint epoch).
+ * - On [get] miss (L1 dead/missing, or any L2 missing/dead): cascade-evict dead L2 keys
+ *   from the old query list, drop L1, return null → caller refetches.
+ * - [patchEntryUserData] / [patchEntryFavorite]: mutate L2 only; do not touch TTL.
  *
- * Thread-safe: all access is guarded by a Mutex.
+ * Thread-safe: all access is guarded by a [Mutex].
  */
 object EndpointCache {
     private val mutex = Mutex()
-    private val cacheData = mutableMapOf<String, List<EntryInfo>>()
-    private val cacheMeta = mutableMapOf<String, CacheMeta>()
 
-    private const val CACHE_TTL_MS = 5L * 60 * 1000 // 5 minutes
+    /** L1: API query → key list + meta. */
+    private val queries = mutableMapOf<String, QueryEntry>()
+
+    /** L2: canonical entry by (endpointId, itemRef). */
+    private val items = mutableMapOf<ItemKey, ItemEntry>()
+
+    private const val ITEM_TTL_MS = 5L * 60 * 1000
+    private const val QUERY_TTL_MS = 5L * 60 * 1000
+
+    data class ItemKey(val endpointId: String, val itemRef: String)
+
+    private data class QueryEntry(
+        val itemKeys: List<ItemKey>,
+        val totalCount: Int,
+        val timestamp: Long,
+    )
+
+    private data class ItemEntry(
+        var info: EntryInfo,
+        var timestamp: Long,
+    )
 
     fun buildCacheKey(
         method: String,
@@ -41,47 +60,119 @@ object EndpointCache {
         }
     }
 
-    /** Return cached items, or null if not cached. */
-    suspend fun get(key: String): EntryList? = mutex.withLock {
-        val items = cacheData[key] ?: return@withLock null
-        val total = cacheMeta[key]?.totalCount ?: 0
-        EntryList(items, total)
+    fun itemKey(endpointId: String, itemRef: String): ItemKey =
+        ItemKey(endpointId, itemRef)
+
+    /**
+     * Resolve a cached query, or null on miss.
+     *
+     * Miss triggers [evictQueryLocked] (L1 dead → cascade dead L2 keys, drop L1).
+     */
+    suspend fun get(queryKey: String): EntryList? = mutex.withLock {
+        val query = queries[queryKey] ?: return@withLock null
+        if (isQueryStale(query.timestamp)) {
+            evictQueryLocked(queryKey)
+            return@withLock null
+        }
+        val resolved = mutableListOf<EntryInfo>()
+        for (key in query.itemKeys) {
+            val entry = items[key]
+            if (entry == null || isItemStale(entry.timestamp)) {
+                evictQueryLocked(queryKey)
+                return@withLock null
+            }
+            resolved.add(entry.info)
+        }
+        val now = System.currentTimeMillis()
+        stampLocked(queryKey, query.itemKeys, query.totalCount, now, entries = null)
+        EntryList(resolved, query.totalCount)
     }
 
-    /** Whether the cached entry is stale (should trigger background re-fetch). */
-    suspend fun isStale(key: String): Boolean = mutex.withLock {
-        val meta = cacheMeta[key] ?: return@withLock true
-        System.currentTimeMillis() - meta.timestamp > CACHE_TTL_MS
+    /** Store a query result: L2 entries first, then L1. */
+    suspend fun put(queryKey: String, endpointId: String, data: EntryList) = mutex.withLock {
+        val now = System.currentTimeMillis()
+        val keys = data.items.map { itemKey(endpointId, it.ref) }
+        stampLocked(queryKey, keys, data.totalCount, now, entries = data.items)
     }
 
-    /** Store a result in the cache. */
-    suspend fun put(key: String, data: EntryList) = mutex.withLock {
-        cacheData[key] = data.items
-        cacheMeta[key] = CacheMeta(data.totalCount, System.currentTimeMillis())
+    /** Evict a query and cascade dead L2 keys from its list. */
+    suspend fun evict(queryKey: String) = mutex.withLock {
+        evictQueryLocked(queryKey)
     }
 
-    /** Evict a single cache entry. */
-    suspend fun evict(key: String) = mutex.withLock {
-        cacheData.remove(key)
-        cacheMeta.remove(key)
-    }
-
-    /** Evict all cache entries for a given endpointId. */
+    /** Drop all L1/L2 state for [endpointId]. */
     suspend fun clearForEndpoint(endpointId: String) = mutex.withLock {
-        val prefix = ":$endpointId:"
-        val toRemove = cacheData.keys.filter { it.contains(prefix) }
-        for (key in toRemove) {
-            cacheData.remove(key)
-            cacheMeta.remove(key)
+        val queryPrefix = ":$endpointId:"
+        queries.keys.filter { it.contains(queryPrefix) }.toList().forEach { queries.remove(it) }
+        items.keys.filter { it.endpointId == endpointId }.toList().forEach { items.remove(it) }
+    }
+
+    suspend fun patchEntryUserData(endpointId: String, itemRef: String, positionMs: Long) = mutex.withLock {
+        patchItem(endpointId, itemRef) { item ->
+            val base = item.userData ?: EntryUserData(
+                positionMs = positionMs,
+                isFavorite = false,
+                played = positionMs > 0,
+            )
+            item.copy(userData = base.copy(positionMs = positionMs, played = positionMs > 0))
         }
     }
 
-    // Internal metadata — not exposed in public API, but can't be private
-    // due to Kotlin visibility analysis in generic withLock blocks.
-    data class CacheMeta(
-        val totalCount: Int,
-        val timestamp: Long,
-    )
+    suspend fun patchEntryFavorite(endpointId: String, itemRef: String, isFavorite: Boolean) = mutex.withLock {
+        patchItem(endpointId, itemRef) { item ->
+            val base = item.userData ?: EntryUserData(
+                positionMs = 0L,
+                isFavorite = isFavorite,
+                played = false,
+            )
+            item.copy(userData = base.copy(isFavorite = isFavorite))
+        }
+    }
+
+    private fun patchItem(endpointId: String, itemRef: String, transform: (EntryInfo) -> EntryInfo) {
+        val entry = items[itemKey(endpointId, itemRef)] ?: return
+        entry.info = transform(entry.info)
+    }
+
+    private fun isQueryStale(timestamp: Long): Boolean =
+        System.currentTimeMillis() - timestamp > QUERY_TTL_MS
+
+    private fun isItemStale(timestamp: Long): Boolean =
+        System.currentTimeMillis() - timestamp > ITEM_TTL_MS
+
+    /** L1 miss: drop query; remove dead L2 keys from its list (keep live ones). */
+    private fun evictQueryLocked(queryKey: String) {
+        val query = queries.remove(queryKey) ?: return
+        for (key in query.itemKeys) {
+            val entry = items[key] ?: continue
+            if (isItemStale(entry.timestamp)) {
+                items.remove(key)
+            }
+        }
+    }
+
+    /**
+     * Stamp L2 then L1 with [now].
+     * [entries] non-null → put (write info + timestamp); null → hit (timestamp only).
+     */
+    private fun stampLocked(
+        queryKey: String,
+        itemKeys: List<ItemKey>,
+        totalCount: Int,
+        now: Long,
+        entries: List<EntryInfo>?,
+    ) {
+        if (entries != null) {
+            for (i in itemKeys.indices) {
+                items[itemKeys[i]] = ItemEntry(entries[i], now)
+            }
+        } else {
+            for (key in itemKeys) {
+                items[key]?.timestamp = now
+            }
+        }
+        queries[queryKey] = QueryEntry(itemKeys, totalCount, now)
+    }
 }
 
 /**
@@ -90,18 +181,6 @@ object EndpointCache {
  * Cached methods: listEntry, getEntries, getTaggedEntries, search
  * Non-cached (always go to network): getPlaybackSpec, test, openStream, getQr, pollQr
  * tagEntry: local persist first, then delegate remote
- *
- * Cache behavior:
- *   1. Check cache → if present and fresh, return immediately
- *   2. If stale or missing, fetch from real client, update cache, return result
- *
- * This is intentionally synchronous for the caller — the cache lookup + fetch
- * happens within the suspend function. The caller doesn't need to know about caching.
- *
- * Scroll preservation is achieved because:
- *   - ViewModel retains its items across back-stack navigation
- *   - When data is re-fetched and matches the cache, the ViewModel keeps its existing items
- *   - The UI never clears its list unless the data actually changed
  */
 class CachingEndpointClient(
     private val delegate: EndpointClient,
@@ -132,47 +211,17 @@ class CachingEndpointClient(
         options: QueryOptions,
     ): EntryList {
         val key = EndpointCache.buildCacheKey("listEntry", endpointId, location, startIndex, limit, options)
-        val cached = EndpointCache.get(key)
-        val stale = cached == null || EndpointCache.isStale(key)
-
-        val list = if (stale) {
-            val fresh = delegate.listEntry(location, startIndex, limit, options)
-            EndpointCache.put(key, fresh)
-            fresh
-        } else {
-            cached!!
-        }
-        return mergeEntryList(list)
+        return cachedList(key) { delegate.listEntry(location, startIndex, limit, options) }
     }
 
     override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
         val key = EndpointCache.buildCacheKey("search", endpointId, scopeLocation, query)
-        val cached = EndpointCache.get(key)
-        val stale = cached == null || EndpointCache.isStale(key)
-
-        val list = if (stale) {
-            val fresh = delegate.search(scopeLocation, query)
-            EndpointCache.put(key, fresh)
-            fresh
-        } else {
-            cached!!
-        }
-        return mergeEntryList(list)
+        return cachedList(key) { delegate.search(scopeLocation, query) }
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {
         val key = EndpointCache.buildCacheKey("getEntries", endpointId, itemRefs)
-        val cached = EndpointCache.get(key)
-        val stale = cached == null || EndpointCache.isStale(key)
-
-        val list = if (stale) {
-            val fresh = delegate.getEntries(itemRefs)
-            EndpointCache.put(key, fresh)
-            fresh
-        } else {
-            cached!!
-        }
-        return mergeEntryList(list)
+        return cachedList(key) { delegate.getEntries(itemRefs) }
     }
 
     override suspend fun getTaggedEntries(
@@ -183,22 +232,34 @@ class CachingEndpointClient(
         sortBy: SortField?,
         sortOrder: SortOrder,
     ): EntryList {
-        val key = EndpointCache.buildCacheKey("getTaggedEntries", endpointId, tag, scopeLocation, startIndex, limit, sortBy, sortOrder)
-        val cached = EndpointCache.get(key)
-        val stale = cached == null || EndpointCache.isStale(key)
-
-        val list = if (stale) {
-            val fresh = delegate.getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder)
-            EndpointCache.put(key, fresh)
-            fresh
-        } else {
-            cached!!
+        val key = EndpointCache.buildCacheKey(
+            "getTaggedEntries", endpointId, tag, scopeLocation, startIndex, limit, sortBy, sortOrder,
+        )
+        return cachedList(key) {
+            delegate.getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder)
         }
+    }
+
+    private suspend fun cachedList(key: String, fetch: suspend () -> EntryList): EntryList {
+        val list = EndpointCache.get(key)
+            ?: fetch().also { EndpointCache.put(key, endpointId, it) }
         return mergeEntryList(list)
     }
 
-    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long) =
-        delegate.getPlaybackSpec(itemRef, startMs)
+    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
+        val spec = delegate.getPlaybackSpec(itemRef, startMs)
+        val store = StorageBindingsHolder.get().entryStateStore
+        val key = EntryStateKey(endpointId, itemRef)
+        return spec.copy(
+            hooks = CachedPlaybackHooks(
+                inner = spec.hooks,
+                entryStateKey = key,
+                store = store,
+                endpointId = endpointId,
+                itemRef = itemRef,
+            ),
+        )
+    }
 
     override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
         when (tag) {
@@ -207,6 +268,7 @@ class CachingEndpointClient(
                     EntryStateKey(endpointId, itemRef),
                     value,
                 )
+                EndpointCache.patchEntryFavorite(endpointId, itemRef, value)
             }
             else -> Unit
         }

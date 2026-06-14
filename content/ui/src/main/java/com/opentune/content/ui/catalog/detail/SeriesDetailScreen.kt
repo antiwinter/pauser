@@ -242,16 +242,13 @@ private fun EpisodeRow(
 ) {
     if (episodes.isEmpty()) return
     val listState = rememberLazyListState()
-    val targetIndex = if (initialFocusRef != null) episodes.indexOfFirst { it.ref == initialFocusRef } else -1
-    val focusRequesters = remember(episodes) { List(episodes.size) { FocusRequester() } }
+    val refs = remember(episodes) { episodes.map { it.ref } }
+    val focusRequesters = remember(refs) { List(refs.size) { FocusRequester() } }
 
-    LaunchedEffect(episodes, initialFocusRef) {
+    LaunchedEffect(initialFocusRef) {
+        val targetIndex = initialFocusRef?.let { ref -> episodes.indexOfFirst { it.ref == ref } } ?: -1
         if (targetIndex >= 0) {
             listState.scrollToItem(targetIndex)
-        }
-    }
-    LaunchedEffect(episodes, initialFocusRef, targetIndex) {
-        if (targetIndex >= 0) {
             focusRequesters[targetIndex].requestFocus()
         }
     }

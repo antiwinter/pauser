@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,27 +24,19 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.opentune.player.R
-import com.opentune.player.engine.PlayerStores
+import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.engine.toMediaSource
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.SubtitleTrack
-import com.opentune.storage.EntryStateKey
-import com.opentune.storage.SubtitlePrefs
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val SUB_LOG_TAG = "OT_Subtitle"
-
-// ---------------------------------------------------------------------------
-// Subtitle resolution helpers — used during initial playback setup
-// ---------------------------------------------------------------------------
 
 internal data class SubtitlePreference(
     val externalUri: Uri? = null,
@@ -66,7 +59,6 @@ internal fun resolveSubtitlePreference(
             }
         }
     }
-    // ExoPlayer-native ID like "exo_<groupId>" — language unknown, let ExoPlayer auto-select.
     return SubtitlePreference()
 }
 
@@ -111,16 +103,13 @@ internal fun prepareWithSidecar(
 @UnstableApi
 internal class SubtitleManager(
     private val currentTracksState: MutableState<Tracks>,
-    private val activeTrackIdState: MutableState<String?>,
+    private val activeTrackId: State<String?>,
     private val offsetFractionState: MutableState<Float>,
     private val sizeScaleState: MutableState<Float>,
     private val isAdjustActiveState: MutableState<Boolean>,
     private val screenHeightPxState: MutableState<Float>,
     private val scope: CoroutineScope,
-    private val stores: PlayerStores,
-    private val entryStateKey: EntryStateKey,
-    private val parentStateKey: EntryStateKey?,
-    private val seriesStateKey: EntryStateKey?,
+    private val session: PlaybackSession,
     private val specState: State<PlaybackSpec>,
     private val context: Context,
     private val exo: ExoPlayer,
@@ -142,10 +131,7 @@ internal class SubtitleManager(
         val offset = offsetFractionState.value
         val scale = sizeScaleState.value
         Log.d(SUB_LOG_TAG, "confirmAdjust: offset=$offset scale=$scale")
-        scope.launch(Dispatchers.IO) {
-            stores.appConfigStore.saveSubtitlePrefs(SubtitlePrefs(offset, scale))
-            Log.d(SUB_LOG_TAG, "confirmAdjust: saved subtitle prefs")
-        }
+        session.updateSubtitlePrefs(offset, scale)
     }
 
     val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
@@ -162,29 +148,26 @@ internal class SubtitleManager(
         onSelect = { isAdjustActiveState.value = true },
     )
 
+    private fun saveSubtitleTrack(trackId: String?) {
+        session.updateSubtitleTrackId(trackId)
+    }
+
     private fun buildSubtitleChildren(): List<PlayerMenuEntry> {
         val spec = specState.value
         val tracks = currentTracksState.value
         val entries = mutableListOf<PlayerMenuEntry>()
 
-        // Off
         entries += PlayerMenuEntry(
             label = @Composable { stringResource(R.string.subtitle_track_none) },
             children = { emptyList() },
-            isSelected = { activeTrackIdState.value == null },
+            isSelected = { activeTrackId.value == null },
             onSelect = {
                 Log.d(SUB_LOG_TAG, "select: Off — disabling text track type")
                 exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                     .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                     .build()
-                activeTrackIdState.value = null
-                scope.launch(Dispatchers.IO) {
-                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: Off for key=$entryStateKey")
-                    stores.entryStateStore.upsertSubtitleTrack(entryStateKey, null)
-                    parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, null) }
-                    seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, null) }
-                }
+                saveSubtitleTrack(null)
             },
         )
 
@@ -199,7 +182,7 @@ internal class SubtitleManager(
                 entries += PlayerMenuEntry(
                     label = @Composable { label },
                     children = { emptyList() },
-                    isSelected = { activeTrackIdState.value == track.trackId },
+                    isSelected = { activeTrackId.value == track.trackId },
                     onSelect = { selectFromSpec(track) },
                 )
             }
@@ -212,7 +195,7 @@ internal class SubtitleManager(
                     entries += PlayerMenuEntry(
                         label = @Composable { label },
                         children = { emptyList() },
-                        isSelected = { activeTrackIdState.value == gid },
+                        isSelected = { activeTrackId.value == gid },
                         onSelect = {
                             Log.d(SUB_LOG_TAG, "select: ExoNative gid=$gid")
                             exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
@@ -220,13 +203,7 @@ internal class SubtitleManager(
                                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                                 .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
                                 .build()
-                            activeTrackIdState.value = gid
-                            scope.launch(Dispatchers.IO) {
-                                Log.d(SUB_LOG_TAG, "SAVE subtitle track: ExoNative gid=$gid for key=$entryStateKey")
-                                stores.entryStateStore.upsertSubtitleTrack(entryStateKey, gid)
-                                parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, gid) }
-                                seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, gid) }
-                            }
+                            saveSubtitleTrack(gid)
                         },
                     )
                 }
@@ -240,7 +217,7 @@ internal class SubtitleManager(
             val exoGroup = currentTracksState.value.groups
                 .filter { it.type == C.TRACK_TYPE_TEXT }
                 .firstOrNull { it.mediaTrackGroup.id == track.trackId }
-            Log.d(SUB_LOG_TAG, "select: FromSpec embedded trackId=${track.trackId} lang=${track.language} exoGroupMatch=${exoGroup?.let { "id=${it.mediaTrackGroup.id} isSupported=${it.isSupported}" } ?: "null"}")
+            Log.d(SUB_LOG_TAG, "select: FromSpec embedded trackId=${track.trackId}")
             val params = exo.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -250,18 +227,9 @@ internal class SubtitleManager(
                 params.setPreferredTextLanguage(track.language)
             }
             exo.trackSelectionParameters = params.build()
-            activeTrackIdState.value = track.trackId
-            scope.launch(Dispatchers.IO) {
-                Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec embedded trackId=${track.trackId} for key=$entryStateKey")
-                stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
-                parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
-                seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
-            }
+            saveSubtitleTrack(track.trackId)
         } else {
-            // External sidecar: stop the player, re-prepare with a MergingMediaSource, then
-            // resume from the same position. prepareWithSidecar sets
-            // setSelectUndeterminedTextLanguage(true) so ExoPlayer auto-selects the new track.
-            Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId} externalRef=${track.externalRef}")
+            Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId}")
             scope.launch {
                 val pos = exo.currentPosition
                 exo.stop()
@@ -273,13 +241,7 @@ internal class SubtitleManager(
                     spec = specState.value,
                 )
                 exo.seekTo(pos)
-                activeTrackIdState.value = track.trackId
-                withContext(Dispatchers.IO) {
-                    Log.d(SUB_LOG_TAG, "SAVE subtitle track: FromSpec external trackId=${track.trackId} for key=$entryStateKey")
-                    stores.entryStateStore.upsertSubtitleTrack(entryStateKey, track.trackId)
-                    parentStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
-                    seriesStateKey?.let { stores.entryStateStore.upsertSubtitleTrack(it, track.trackId) }
-                }
+                saveSubtitleTrack(track.trackId)
             }
         }
     }
@@ -290,26 +252,23 @@ internal class SubtitleManager(
 internal fun rememberSubtitleManager(
     exo: ExoPlayer,
     spec: PlaybackSpec,
-    stores: PlayerStores,
-    entryStateKey: EntryStateKey,
-    parentStateKey: EntryStateKey? = null,
-    seriesStateKey: EntryStateKey? = null,
-    initialTrackId: String?,
-    initialOffsetFraction: Float,
-    initialSizeScale: Float,
+    session: PlaybackSession,
 ): SubtitleManager {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val specState = rememberUpdatedState(spec)
+    val instanceKey = spec.url
 
-    Log.d(SUB_LOG_TAG, "rememberSubtitleManager: initialTrackId=$initialTrackId offset=$initialOffsetFraction scale=$initialSizeScale")
-
-    val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
-    val activeTrackIdState = remember { mutableStateOf(initialTrackId) }
-    val offsetFractionState = remember { mutableStateOf(initialOffsetFraction) }
-    val sizeScaleState = remember { mutableStateOf(initialSizeScale) }
+    val activeTrackId = session.subtitleTrackIdFlow.collectAsState()
+    val offsetFractionState = remember(instanceKey) {
+        mutableStateOf(session.subtitleOffsetFractionFlow.value)
+    }
+    val sizeScaleState = remember(instanceKey) {
+        mutableStateOf(session.subtitleSizeScaleFlow.value)
+    }
     val isAdjustActiveState = remember { mutableStateOf(false) }
     val screenHeightPxState = remember { mutableStateOf(0f) }
+    val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
 
     val screenHeightPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenHeightDp.dp.toPx()
@@ -319,12 +278,6 @@ internal fun rememberSubtitleManager(
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
-                val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-                Log.d(SUB_LOG_TAG, "onTracksChanged: textGroups=${textGroups.size}" +
-                    textGroups.joinToString(prefix = " [", postfix = "]") { g ->
-                        val fmt = if (g.length > 0) g.getTrackFormat(0) else null
-                        "id=${g.mediaTrackGroup.id} lang=${fmt?.language} mime=${fmt?.sampleMimeType} supported=${g.isSupported}"
-                    })
                 currentTracksState.value = tracks
             }
         }
@@ -333,19 +286,16 @@ internal fun rememberSubtitleManager(
         onDispose { exo.removeListener(listener) }
     }
 
-    return remember {
+    return remember(exo, session, instanceKey) {
         SubtitleManager(
             currentTracksState = currentTracksState,
-            activeTrackIdState = activeTrackIdState,
+            activeTrackId = activeTrackId,
             offsetFractionState = offsetFractionState,
             sizeScaleState = sizeScaleState,
             isAdjustActiveState = isAdjustActiveState,
             screenHeightPxState = screenHeightPxState,
             scope = scope,
-            stores = stores,
-            entryStateKey = entryStateKey,
-            parentStateKey = parentStateKey,
-            seriesStateKey = seriesStateKey,
+            session = session,
             specState = specState,
             context = context,
             exo = exo,
