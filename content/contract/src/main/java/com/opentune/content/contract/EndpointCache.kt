@@ -1,11 +1,17 @@
 package com.opentune.content.contract
 
+import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSpec
+import com.opentune.player.PlaybackState
+import com.opentune.player.PlayingState
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
 import com.opentune.storage.StorageBindingsHolder
+import com.opentune.storage.SubtitlePrefs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Two-level in-memory cache for [EndpointClient] list responses.
@@ -180,7 +186,7 @@ object EndpointCache {
  *
  * Cached methods: listEntry, getEntries, getTaggedEntries, search
  * Non-cached (always go to network): getPlaybackSpec, test, openStream, getQr, pollQr
- * tagEntry: local persist first, then delegate remote
+ * [updateEntryState]: local persist + cache patch, then delegate remote
  */
 class CachingEndpointClient(
     private val delegate: EndpointClient,
@@ -248,31 +254,79 @@ class CachingEndpointClient(
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
         val spec = delegate.getPlaybackSpec(itemRef, startMs)
-        val store = StorageBindingsHolder.get().entryStateStore
+        val bindings = StorageBindingsHolder.get()
+        val store = bindings.entryStateStore
         val key = EntryStateKey(endpointId, itemRef)
+        val row = store.get(key)
+        val subtitlePrefs = bindings.appConfigStore.loadSubtitlePrefs()
+        val state = PlaybackState(
+            positionMs = startMs,
+            speed = row?.playbackSpeed ?: 1f,
+            subtitleTrackId = row?.selectedSubtitleTrackId,
+            audioTrackId = row?.selectedAudioTrackId,
+            subtitleOffsetFraction = subtitlePrefs.offsetFraction,
+            subtitleSizeScale = subtitlePrefs.sizeScale,
+            playingState = PlayingState.STOPPED,
+        )
         return spec.copy(
-            hooks = CachedPlaybackHooks(
-                inner = spec.hooks,
-                entryStateKey = key,
-                store = store,
-                endpointId = endpointId,
-                itemRef = itemRef,
-            ),
+            state = state,
+            updateEntryState = { k, v -> updateEntryState(itemRef, k, v) },
         )
     }
 
-    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
-        when (tag) {
-            EntryTag.Favorite -> {
-                StorageBindingsHolder.get().entryStateStore.upsertFavorite(
-                    EntryStateKey(endpointId, itemRef),
-                    value,
-                )
-                EndpointCache.patchEntryFavorite(endpointId, itemRef, value)
-            }
-            else -> Unit
+    override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
+        withContext(Dispatchers.IO) {
+            persistLocalEntryState(itemRef, key, value)
         }
-        delegate.tagEntry(itemRef, tag, value)
+        delegate.updateEntryState(itemRef, key, value)
+    }
+
+    private suspend fun persistLocalEntryState(itemRef: String, key: String, value: String?) {
+        val store = StorageBindingsHolder.get().entryStateStore
+        val appConfig = StorageBindingsHolder.get().appConfigStore
+        val entryKey = EntryStateKey(endpointId, itemRef)
+        when (key) {
+            EntryStateKeys.POSITION_MS -> {
+                val positionMs = value?.toLongOrNull() ?: return
+                store.upsertPosition(entryKey, positionMs)
+                EndpointCache.patchEntryUserData(endpointId, itemRef, positionMs)
+            }
+            EntryStateKeys.SPEED -> {
+                val speed = value?.toFloatOrNull() ?: return
+                store.upsertSpeed(entryKey, speed)
+            }
+            EntryStateKeys.SUBTITLE_TRACK_ID -> {
+                store.upsertSubtitleTrack(entryKey, value)
+            }
+            EntryStateKeys.AUDIO_TRACK_ID -> {
+                store.upsertAudioTrack(entryKey, value)
+            }
+            EntryStateKeys.SUBTITLE_OFFSET_FRACTION,
+            EntryStateKeys.SUBTITLE_SIZE_SCALE,
+            -> {
+                val prefs = appConfig.loadSubtitlePrefs()
+                val updated = when (key) {
+                    EntryStateKeys.SUBTITLE_OFFSET_FRACTION ->
+                        prefs.copy(offsetFraction = value?.toFloatOrNull() ?: prefs.offsetFraction)
+                    else ->
+                        prefs.copy(sizeScale = value?.toFloatOrNull() ?: prefs.sizeScale)
+                }
+                appConfig.saveSubtitlePrefs(updated)
+            }
+            EntryStateKeys.SERIES_PROGRESS -> {
+                val packed = value?.toLongOrNull() ?: return
+                val season = (packed ushr 32).toInt()
+                val episode = (packed and 0xFFFF_FFFFL).toInt()
+                store.upsertSeriesProgress(entryKey, season, episode)
+                EndpointCache.patchEntryUserData(endpointId, itemRef, packed)
+            }
+            EntryStateKeys.FAVORITE -> {
+                val isFavorite = value?.toBooleanStrictOrNull() ?: return
+                store.upsertFavorite(entryKey, isFavorite)
+                EndpointCache.patchEntryFavorite(endpointId, itemRef, isFavorite)
+            }
+            EntryStateKeys.PLAYING_STATE -> Unit
+        }
     }
 
     private suspend fun mergeEntryList(list: EntryList): EntryList {

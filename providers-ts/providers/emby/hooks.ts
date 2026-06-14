@@ -1,6 +1,5 @@
 /**
- * hooks.ts — Emby playback progress reporting hooks.
- * Mirrors EmbyPlaybackHooks.kt.
+ * hooks.ts — Emby playback progress reporting via updateEntryState.
  */
 import { EmbyApi, setGlobalAuth } from './api.js';
 import type { DeviceProfile } from './dto.js';
@@ -19,7 +18,65 @@ export interface EmbyHooksState {
   deviceProfile: DeviceProfile;
 }
 
-export async function onPlaybackReady(
+type SessionMeta = {
+  hasReportedPlaying: boolean;
+  positionMs: number;
+  playbackRate: number;
+};
+
+const sessionMeta = new Map<string, SessionMeta>();
+
+function metaKey(state: EmbyHooksState): string {
+  return state.playSessionId ?? state.itemId;
+}
+
+function getMeta(state: EmbyHooksState): SessionMeta {
+  const key = metaKey(state);
+  let meta = sessionMeta.get(key);
+  if (!meta) {
+    meta = { hasReportedPlaying: false, positionMs: 0, playbackRate: 1 };
+    sessionMeta.set(key, meta);
+  }
+  return meta;
+}
+
+export async function updateEntryState(
+  state: EmbyHooksState,
+  key: string,
+  value: string | null,
+): Promise<void> {
+  const meta = getMeta(state);
+  switch (key) {
+    case 'positionMs':
+      meta.positionMs = Number(value ?? 0);
+      return;
+    case 'speed':
+      meta.playbackRate = Number(value ?? 1);
+      return;
+    case 'playingState':
+      if (value === 'PLAYING') {
+        if (!meta.hasReportedPlaying) {
+          await reportPlaying(state, meta.positionMs, meta.playbackRate);
+          meta.hasReportedPlaying = true;
+        } else {
+          await reportProgress(state, meta.positionMs, meta.playbackRate, false);
+        }
+      } else if (value === 'PAUSED') {
+        await reportProgress(state, meta.positionMs, meta.playbackRate, true);
+      } else if (value === 'STOPPED') {
+        await reportStopped(state, meta.positionMs);
+        sessionMeta.delete(metaKey(state));
+      }
+      return;
+    case 'favorite':
+      // Remote favorite sync not implemented for Emby yet.
+      return;
+    default:
+      return;
+  }
+}
+
+async function reportPlaying(
   state: EmbyHooksState,
   positionMs: number,
   playbackRate: number,
@@ -37,7 +94,7 @@ export async function onPlaybackReady(
   });
 }
 
-export async function onProgressTick(
+async function reportProgress(
   state: EmbyHooksState,
   positionMs: number,
   playbackRate: number,
@@ -57,7 +114,7 @@ export async function onProgressTick(
   });
 }
 
-export async function onStop(
+async function reportStopped(
   state: EmbyHooksState,
   positionMs: number,
 ): Promise<void> {

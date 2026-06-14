@@ -53,10 +53,6 @@ fun DigipakDetailScreen(
         viewModel.loadDigipakChildren()
     }
 
-    LaunchedEffect(viewModel.entryStateKey) {
-        playerController?.setContext(parentStateKey = viewModel.entryStateKey)
-    }
-
     LaunchedEffect(children, singleChild) {
         val child = singleChild
             ?: children.firstOrNull { it.userData?.positionMs ?: 0L > 0L }

@@ -41,7 +41,10 @@ import { runBench } from './bench.js';
     throw new Error('not supported');
   },
 
-  async onPlaybackReady(): Promise<void> {},
-  async onProgressTick(): Promise<void> {},
-  async onStop(): Promise<void> {},
+  async updateEntryState(_args: {
+    itemRef: string;
+    key: string;
+    value: string | null;
+    state?: Record<string, unknown>;
+  }): Promise<void> {},
 };

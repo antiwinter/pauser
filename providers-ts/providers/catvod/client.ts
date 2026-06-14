@@ -230,7 +230,8 @@ export async function getPlaybackSpec(
       headers: {},
       mimeType: null,
       subtitleTracks: [],
-      hooksState: {},
+      progressIntervalMs: 0,
+      state: {},
       mediaCodecs: [],
     } as PlaybackSpec;
   }

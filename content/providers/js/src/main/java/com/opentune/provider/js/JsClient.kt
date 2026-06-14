@@ -5,7 +5,6 @@ import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.EntryTag
 import com.opentune.content.contract.EntryUserData
 import com.opentune.player.MediaCodecInfo
-import com.opentune.player.OpenTunePlaybackHooks
 import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
@@ -30,6 +29,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Live endpoint client backed by a dedicated QuickJS context.
@@ -45,12 +45,12 @@ class JsClient(
     private val deviceInfo: PlatformInfoData,
 ) : EndpointClient() {
 
-
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
     private lateinit var engine: QuickJsEngine
     private var initialized = false
     private val initMutex = Mutex()
+    private val providerStates = ConcurrentHashMap<String, String>()
 
     // ── Validation ─────────────────────────────────────────────────────────
 
@@ -91,9 +91,6 @@ class JsClient(
         }
     }
 
-    // pollQr: if the token is a JSON object, treat it as pre-computed Confirmed fields
-    // (used by providers like benchmark that encode results directly in the token).
-    // Otherwise delegate to JS.
     override suspend fun pollQr(token: String): QrResult {
         return try {
             val tokenEl = runCatching { json.parseToJsonElement(token) }.getOrNull()
@@ -256,14 +253,16 @@ class JsClient(
         )
     }
 
-    override suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean) {
+    override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
         ensureReady()
+        val stateJson = providerStates[itemRef] ?: "{}"
         val args = buildJsonObject {
             put("itemRef", itemRef)
-            put("tag", tag.name)
-            put("value", value)
+            put("key", key)
+            if (value != null) put("value", value) else put("value", JsonNull)
+            put("state", json.parseToJsonElement(stateJson))
         }
-        runCatching { engine.callMethod("tagEntry", args.toString()) }
+        runCatching { engine.callMethod("updateEntryState", args.toString()) }
     }
 
     override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
@@ -274,7 +273,7 @@ class JsClient(
         }
         val resultJson = engine.callMethod("getPlaybackSpec", args.toString())
             ?: error("getPlaybackSpec returned null")
-        return parsePlaybackSpec(json.parseToJsonElement(resultJson).jsonObject)
+        return parsePlaybackSpec(itemRef, json.parseToJsonElement(resultJson).jsonObject)
     }
 
     // ── Parsers ────────────────────────────────────────────────────────────
@@ -321,7 +320,7 @@ class JsClient(
         )
     }
 
-    private fun parsePlaybackSpec(obj: JsonObject): PlaybackSpec {
+    private fun parsePlaybackSpec(itemRef: String, obj: JsonObject): PlaybackSpec {
         val urlSpecObj = obj["urlSpec"]?.takeIf { it !is JsonNull }?.jsonObject
         val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
             ?: urlSpecObj?.get("url")?.jsonPrimitive?.content
@@ -345,10 +344,10 @@ class JsClient(
             )
         } ?: emptyList()
 
-        val hooks = JsPlaybackHooks(
-            engine = engine,
-            hooksStateJson = obj["hooksState"]?.toString() ?: "{}",
-        )
+        val stateJson = (obj["state"] ?: obj["hooksState"])?.toString() ?: "{}"
+        providerStates[itemRef] = stateJson
+
+        val progressIntervalMs = obj["progressIntervalMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
 
         val mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
             val so = s.jsonObject
@@ -363,51 +362,10 @@ class JsClient(
             url = requireNotNull(url) { "JS provider returned null URL in getPlaybackSpec" },
             headers = headers,
             mimeType = mimeType,
-            hooks = hooks,
             subtitleTracks = subtitles,
             httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
             mediaCodecs = mediaCodecs,
+            progressIntervalMs = progressIntervalMs,
         )
     }
-}
-
-/**
- * Delegates playback hook calls back into the JS client.
- */
-private class JsPlaybackHooks(
-    private val engine: QuickJsEngine,
-    private val hooksStateJson: String,
-) : OpenTunePlaybackHooks {
-
-    override fun progressIntervalMs(): Long = 10_000L
-
-    override suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float) {
-        callHook("onPlaybackReady", buildJsonObject {
-            put("hooksState", json.parseToJsonElement(hooksStateJson))
-            put("positionMs", positionMs)
-            put("playbackRate", playbackRate)
-        })
-    }
-
-    override suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean) {
-        callHook("onProgressTick", buildJsonObject {
-            put("hooksState", json.parseToJsonElement(hooksStateJson))
-            put("positionMs", positionMs)
-            put("playbackRate", playbackRate)
-            put("isPaused", isPaused)
-        })
-    }
-
-    override suspend fun onStop(positionMs: Long) {
-        callHook("onStop", buildJsonObject {
-            put("hooksState", json.parseToJsonElement(hooksStateJson))
-            put("positionMs", positionMs)
-        })
-    }
-
-    private suspend fun callHook(method: String, args: JsonObject) {
-        runCatching { engine.callMethod(method, args.toString()) }
-    }
-
-    private val json = Json { ignoreUnknownKeys = true }
 }

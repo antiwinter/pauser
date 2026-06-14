@@ -2,6 +2,8 @@ package com.opentune.server
 
 import android.util.Log
 import com.opentune.genart.GenArt
+import com.opentune.player.EntryStateKeys
+import com.opentune.player.PlayingState
 import io.ktor.http.ContentType
 import io.ktor.server.application.Application
 import io.ktor.server.response.respondBytes
@@ -49,7 +51,13 @@ fun Application.installGenartRoutes(ctx: AppContext) {
                         null
                     }
                 } finally {
-                    spec?.hooks?.onDispose()
+                    if (spec != null) {
+                        client.updateEntryState(
+                            itemRef,
+                            EntryStateKeys.PLAYING_STATE,
+                            PlayingState.STOPPED.name,
+                        )
+                    }
                 }
             }
 

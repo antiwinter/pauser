@@ -261,7 +261,7 @@ export async function getPlaybackSpec(
     }];
   });
 
-  const hooksState = {
+  const providerState = {
     itemId: itemRef,
     playMethod: method,
     playSessionId: info.PlaySessionId ?? null,
@@ -286,7 +286,8 @@ export async function getPlaybackSpec(
     headers,
     mimeType,
     subtitleTracks,
-    hooksState,
+    progressIntervalMs: 10_000,
+    state: providerState,
     mediaCodecs,
   };
 }

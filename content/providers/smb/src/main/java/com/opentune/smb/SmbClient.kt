@@ -14,7 +14,9 @@ import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
+import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSpec
+import com.opentune.player.PlayingState
 import com.opentune.content.contract.ProviderStream
 import com.opentune.content.contract.StreamRegistrarHolder
 import com.opentune.player.SubtitleTrack
@@ -22,12 +24,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.util.EnumSet
+import java.util.concurrent.ConcurrentHashMap
 
 private const val SMB_LOG = "OpenTunePlayer"
 
 class SmbClient(
     private val fields: SmbServerFieldsJson,
 ) : EndpointClient() {
+
+    private val activeTokenUrls = ConcurrentHashMap<String, List<String>>()
 
     private fun credentials() = SmbCredentials(
         host = fields.host,
@@ -144,16 +149,28 @@ class SmbClient(
             }
 
             val allTokenUrls = listOf(videoUrl) + subtitleTracks.mapNotNull { it.externalRef }
+            activeTokenUrls[itemRef] = allTokenUrls
 
             PlaybackSpec(
                 url = videoUrl,
                 headers = emptyMap(),
                 mimeType = null,
-                hooks = SmbPlaybackHooks(allTokenUrls),
                 subtitleTracks = subtitleTracks,
                 httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
+                progressIntervalMs = 0L,
             )
         }
+    }
+
+    override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
+        if (key == EntryStateKeys.PLAYING_STATE && value == PlayingState.STOPPED.name) {
+            revokeTokens(itemRef)
+        }
+    }
+
+    private fun revokeTokens(itemRef: String) {
+        val registrar = StreamRegistrarHolder.get()
+        activeTokenUrls.remove(itemRef)?.forEach { registrar.revokeToken(it) }
     }
 
     /**

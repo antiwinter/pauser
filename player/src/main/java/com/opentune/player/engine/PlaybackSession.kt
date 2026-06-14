@@ -8,8 +8,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSpec
-import com.opentune.player.PlaybackState
+import com.opentune.player.PlayingState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -72,25 +73,39 @@ class PlaybackSession(
 
     fun updateSpeed(speed: Float) {
         _speed.value = speed
+        notifyEntryState(EntryStateKeys.SPEED, speed.toString())
     }
 
     fun updateSubtitleTrackId(trackId: String?) {
         _subtitleTrackId.value = trackId
+        notifyEntryState(EntryStateKeys.SUBTITLE_TRACK_ID, trackId)
     }
 
     fun updateAudioTrackId(trackId: String?) {
         _audioTrackId.value = trackId
+        notifyEntryState(EntryStateKeys.AUDIO_TRACK_ID, trackId)
     }
 
     fun updateSubtitlePrefs(offsetFraction: Float, sizeScale: Float) {
         _subtitleOffsetFraction.value = offsetFraction
         _subtitleSizeScale.value = sizeScale
+        scope.launch {
+            val spec = _spec.value ?: return@launch
+            spec.updateEntryState(EntryStateKeys.SUBTITLE_OFFSET_FRACTION, offsetFraction.toString())
+            spec.updateEntryState(EntryStateKeys.SUBTITLE_SIZE_SCALE, sizeScale.toString())
+        }
     }
 
-    suspend fun prepare(
-        spec: PlaybackSpec,
-        seed: PlaybackState,
-    ) {
+    fun notifyEntryState(key: String, value: String?) {
+        scope.launch {
+            _spec.value?.updateEntryState(key, value)
+        }
+    }
+
+    suspend fun prepare(spec: PlaybackSpec) {
+        _spec.value?.let { emitTeardown(it, PlayingState.STOPPED) }
+
+        val seed = spec.state
         val savedSpeed = seed.speed.coerceIn(0.25f, 4f)
 
         _speed.value = savedSpeed
@@ -107,7 +122,6 @@ class PlaybackSession(
             Log.d(SESSION_LOG, "prepare: load startMs=${seed.positionMs} (was state=${exo.playbackState})")
 
             exo.stop()
-            Log.d(SESSION_LOG, "prepare: stopped pos=${exo.currentPosition} buf=${exo.bufferedPosition}")
             exo.playWhenReady = false
             exo.playbackParameters = PlaybackParameters(savedSpeed)
             exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
@@ -125,10 +139,12 @@ class PlaybackSession(
 
     fun play() {
         exo.playWhenReady = true
+        notifyEntryState(EntryStateKeys.PLAYING_STATE, PlayingState.PLAYING.name)
     }
 
     fun pause() {
         exo.playWhenReady = false
+        notifyEntryState(EntryStateKeys.PLAYING_STATE, PlayingState.PAUSED.name)
     }
 
     private fun stopInternal() {
@@ -138,38 +154,48 @@ class PlaybackSession(
     }
 
     fun stop() {
-        val pos = exo.currentPosition
-        val hooks = _spec.value?.hooks
+        val spec = _spec.value
         stopInternal()
-        scope.launch {
-            hooks?.onStop(pos)
-            hooks?.onDispose()
+        if (spec != null) {
+            scope.launch { emitTeardown(spec, PlayingState.STOPPED) }
         }
         _spec.value = null
     }
 
     fun clear() {
+        val spec = _spec.value
         stopInternal()
+        if (spec != null) {
+            scope.launch { emitTeardown(spec, PlayingState.STOPPED) }
+        }
+        _spec.value = null
         exo.release()
     }
 
+    private suspend fun emitTeardown(spec: PlaybackSpec, playingState: PlayingState) {
+        val pos = exo.currentPosition
+        spec.updateEntryState(EntryStateKeys.POSITION_MS, pos.toString())
+        spec.updateEntryState(EntryStateKeys.PLAYING_STATE, playingState.name)
+    }
+
+    private fun currentPlayingState(): PlayingState =
+        if (!exo.playWhenReady) PlayingState.PAUSED else PlayingState.PLAYING
+
     private fun startHeartbeat(spec: PlaybackSpec) {
         heartbeatJob?.cancel()
-        val hooks = spec.hooks
-        val interval = hooks.progressIntervalMs().takeIf { it > 0L } ?: DEFAULT_PROGRESS_INTERVAL_MS
+        val interval = spec.progressIntervalMs.takeIf { it > 0L } ?: DEFAULT_PROGRESS_INTERVAL_MS
+        if (interval <= 0L) return
         heartbeatJob = scope.launch {
-            var readyReported = false
             while (isActive) {
                 delay(interval)
                 if (exo.playbackState != Player.STATE_READY) continue
+                val activeSpec = _spec.value ?: continue
                 val pos = exo.currentPosition
-                val isPaused = !exo.playWhenReady
-                val rate = exo.playbackParameters.speed
-                if (!readyReported) {
-                    hooks.onPlaybackReady(pos, rate)
-                    readyReported = true
-                }
-                hooks.onProgressTick(pos, rate, isPaused)
+                activeSpec.updateEntryState(EntryStateKeys.POSITION_MS, pos.toString())
+                activeSpec.updateEntryState(
+                    EntryStateKeys.PLAYING_STATE,
+                    currentPlayingState().name,
+                )
             }
         }
     }

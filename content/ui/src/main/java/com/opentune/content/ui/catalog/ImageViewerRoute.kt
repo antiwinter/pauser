@@ -1,5 +1,8 @@
 package com.opentune.content.ui.catalog
+
 import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.player.EntryStateKeys
+import com.opentune.player.PlayingState
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,15 +23,25 @@ fun ImageViewerRoute(
 ) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     DisposableEffect(itemRef) {
-        var spec: com.opentune.player.PlaybackSpec? = null
+        var specUrl: String? = null
         val job = MainScope().launch {
-            val instance = withContext(Dispatchers.IO) { EndpointClientRegistryHolder.get().getOrCreate(endpointId) }
-            spec = withContext(Dispatchers.IO) { instance?.getPlaybackSpec(itemRef, 0) }
-            imageUrl = spec?.url
+            val client = withContext(Dispatchers.IO) {
+                EndpointClientRegistryHolder.get().getOrCreate(endpointId)
+            }
+            withContext(Dispatchers.IO) {
+                val spec = client?.getPlaybackSpec(itemRef, 0)
+                specUrl = spec?.url
+                imageUrl = specUrl
+            }
         }
         onDispose {
             job.cancel()
-            spec?.hooks?.onDispose()
+            MainScope().launch {
+                withContext(Dispatchers.IO) {
+                    val client = EndpointClientRegistryHolder.get().getOrCreate(endpointId) ?: return@withContext
+                    client.updateEntryState(itemRef, EntryStateKeys.PLAYING_STATE, PlayingState.STOPPED.name)
+                }
+            }
         }
     }
     imageUrl?.let { url ->

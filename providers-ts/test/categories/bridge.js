@@ -8,9 +8,7 @@ const REQUIRED_METHODS = [
   'search',
   'getDetail',
   'getPlaybackSpec',
-  'onPlaybackReady',
-  'onProgressTick',
-  'onStop',
+  'updateEntryState',
 ];
 
 /**

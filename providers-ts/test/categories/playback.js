@@ -14,14 +14,14 @@ import { NAError } from '../reporter.js';
 /**
  * Category: Playback
  * Covers getPlaybackSpec (structure, URL reachability, ffprobe validation)
- * and the playback hook lifecycle (onPlaybackReady, onProgressTick, onStop).
+ * and updateEntryState lifecycle.
  *
  * @param {import('../reporter.js').Reporter} reporter
  * @param {import('../quickjs-runner.js').QuickJsProviderRunner} runner
  * @param {{ playableItem: object|null, hooks: boolean, ffprobe: boolean }} opts
  */
 export async function runPlaybackChecks(reporter, runner, opts) {
-  reporter.beginCategory('Playback', ['getPlaybackSpec', 'onPlaybackReady', 'onProgressTick', 'onStop']);
+  reporter.beginCategory('Playback', ['getPlaybackSpec', 'updateEntryState']);
 
   const { playableItem, hooks, ffprobe } = opts;
   let spec = null;
@@ -35,8 +35,6 @@ export async function runPlaybackChecks(reporter, runner, opts) {
         'getPlaybackSpec',
       );
     } catch (e) {
-      // Provider returned a structurally valid item that has no playable content
-      // (e.g. empty vod, meta-search placeholder). Treat as N/A rather than failure.
       throw new NAError(`getPlaybackSpec threw: ${e.message}`);
     }
     validatePlaybackSpecShape(result);
@@ -72,8 +70,9 @@ export async function runPlaybackChecks(reporter, runner, opts) {
     if (!spec) throw new NAError('spec not loaded');
     if (spec.mimeType != null) assertType(spec.mimeType, 'string', 'spec.mimeType');
     if (spec.durationMs != null) assertType(spec.durationMs, 'number', 'spec.durationMs');
-    assertType(spec.title, 'string', 'spec.title');
-    return `title="${spec.title}"${spec.durationMs != null ? ` duration=${spec.durationMs}ms` : ''}`;
+    if (spec.title != null) assertType(spec.title, 'string', 'spec.title');
+    assertType(spec.progressIntervalMs, 'number', 'spec.progressIntervalMs');
+    return `progressIntervalMs=${spec.progressIntervalMs}`;
   });
 
   await reporter.step('playback spec subtitleTracks are valid', async () => {
@@ -84,42 +83,56 @@ export async function runPlaybackChecks(reporter, runner, opts) {
     return `${spec.subtitleTracks.length} track(s)`;
   });
 
-  await reporter.step('playback spec hooksState is an object', async () => {
+  await reporter.step('playback spec state is an object', async () => {
     if (!spec) throw new NAError('spec not loaded');
-    assertObject(spec.hooksState, 'spec.hooksState');
+    assertObject(spec.state, 'spec.state');
     return 'ok';
   });
 
-  // ── Playback hooks lifecycle ───────────────────────────────────────────────
-
-  await reporter.step('onPlaybackReady succeeds', async () => {
-    if (!hooks) throw new NAError('pass --hooks to exercise the playback lifecycle callbacks');
+  await reporter.step('updateEntryState PLAYING succeeds', async () => {
+    if (!hooks) throw new NAError('pass --hooks to exercise updateEntryState lifecycle');
     if (!spec) throw new NAError('spec not loaded');
-    await runner.callMethod('onPlaybackReady', {
-      hooksState: spec.hooksState,
-      positionMs: 0,
-      playbackRate: 1,
+    await runner.callMethod('updateEntryState', {
+      itemRef: playableItem.ref,
+      key: 'positionMs',
+      value: '0',
+      state: spec.state,
+    });
+    await runner.callMethod('updateEntryState', {
+      itemRef: playableItem.ref,
+      key: 'playingState',
+      value: 'PLAYING',
+      state: spec.state,
     });
     return 'ok';
   });
 
-  await reporter.step('onProgressTick succeeds', async () => {
-    if (!hooks) throw new NAError('pass --hooks to exercise the playback lifecycle callbacks');
+  await reporter.step('updateEntryState PAUSED succeeds', async () => {
+    if (!hooks) throw new NAError('pass --hooks to exercise updateEntryState lifecycle');
     if (!spec) throw new NAError('spec not loaded');
-    await runner.callMethod('onProgressTick', {
-      hooksState: spec.hooksState,
-      positionMs: 5_000,
-      playbackRate: 1,
+    await runner.callMethod('updateEntryState', {
+      itemRef: playableItem.ref,
+      key: 'positionMs',
+      value: '5000',
+      state: spec.state,
+    });
+    await runner.callMethod('updateEntryState', {
+      itemRef: playableItem.ref,
+      key: 'playingState',
+      value: 'PAUSED',
+      state: spec.state,
     });
     return 'ok';
   });
 
-  await reporter.step('onStop succeeds', async () => {
-    if (!hooks) throw new NAError('pass --hooks to exercise the playback lifecycle callbacks');
+  await reporter.step('updateEntryState STOPPED succeeds', async () => {
+    if (!hooks) throw new NAError('pass --hooks to exercise updateEntryState lifecycle');
     if (!spec) throw new NAError('spec not loaded');
-    await runner.callMethod('onStop', {
-      hooksState: spec.hooksState,
-      positionMs: 5_000,
+    await runner.callMethod('updateEntryState', {
+      itemRef: playableItem.ref,
+      key: 'playingState',
+      value: 'STOPPED',
+      state: spec.state,
     });
     return 'ok';
   });
@@ -127,14 +140,12 @@ export async function runPlaybackChecks(reporter, runner, opts) {
   reporter.endCategory();
 }
 
-// ── Validators ────────────────────────────────────────────────────────────────
-
 function validatePlaybackSpecShape(spec) {
   assertObject(spec, 'playback spec');
   assertObject(spec.headers, 'playback spec.headers');
-  assertType(spec.title, 'string', 'playback spec.title');
   assertArray(spec.subtitleTracks, 'playback spec.subtitleTracks');
-  assertObject(spec.hooksState, 'playback spec.hooksState');
+  assertObject(spec.state, 'playback spec.state');
+  assertType(spec.progressIntervalMs, 'number', 'playback spec.progressIntervalMs');
 }
 
 function validateSubtitleTrack(track, path) {

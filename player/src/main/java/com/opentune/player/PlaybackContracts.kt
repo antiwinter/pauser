@@ -24,12 +24,36 @@ data class PlaybackDisplayInfo(
     val bitrate: Int? = null,
 )
 
-interface OpenTunePlaybackHooks {
-    fun progressIntervalMs(): Long
-    suspend fun onPlaybackReady(positionMs: Long, playbackRate: Float)
-    suspend fun onProgressTick(positionMs: Long, playbackRate: Float, isPaused: Boolean = false)
-    suspend fun onStop(positionMs: Long)
-    fun onDispose() {}
+enum class PlayingState {
+    PLAYING,
+    PAUSED,
+    STOPPED,
+}
+
+/**
+ * Entry playback state — seeded from [PlaybackSpec.state] at prepare time.
+ * Persisted fields are written via [PlaybackSpec.updateEntryState].
+ */
+data class PlaybackState(
+    val positionMs: Long = 0L,
+    val speed: Float = 1f,
+    val subtitleTrackId: String? = null,
+    val audioTrackId: String? = null,
+    val subtitleOffsetFraction: Float = 0f,
+    val subtitleSizeScale: Float = 1f,
+    val playingState: PlayingState = PlayingState.STOPPED,
+)
+
+object EntryStateKeys {
+    const val POSITION_MS = "positionMs"
+    const val SPEED = "speed"
+    const val SUBTITLE_TRACK_ID = "subtitleTrackId"
+    const val AUDIO_TRACK_ID = "audioTrackId"
+    const val SUBTITLE_OFFSET_FRACTION = "subtitleOffsetFraction"
+    const val SUBTITLE_SIZE_SCALE = "subtitleSizeScale"
+    const val SERIES_PROGRESS = "seriesProgress"
+    const val FAVORITE = "favorite"
+    const val PLAYING_STATE = "playingState"
 }
 
 data class SubtitleTrack(
@@ -45,10 +69,12 @@ data class PlaybackSpec(
     val url: String,
     val headers: Map<String, String> = emptyMap(),
     val mimeType: String? = null,
-    val hooks: OpenTunePlaybackHooks,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val httpClient: okhttp3.OkHttpClient,
     val mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    val state: PlaybackState = PlaybackState(),
+    val progressIntervalMs: Long = 10_000L,
+    val updateEntryState: suspend (key: String, value: String?) -> Unit = { _, _ -> },
 )
 
 /**

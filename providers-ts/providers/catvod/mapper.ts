@@ -73,7 +73,8 @@ export function playResultToSpec(
     headers: result.header ?? {},
     mimeType: result.type ?? null,
     subtitleTracks,
-    hooksState: {},
+    progressIntervalMs: 0,
+    state: {},
     mediaCodecs: [],
   };
 }

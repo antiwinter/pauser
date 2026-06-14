@@ -8,6 +8,7 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryTag
+import com.opentune.player.EntryStateKeys
 import com.opentune.content.ui.catalog.ArtType
 import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.storage.AppPrefsStore
@@ -113,10 +114,11 @@ class DetailViewModel(
 
     fun tagEntry(tag: EntryTag, value: Boolean) {
         val c = _client.value ?: return
+        if (tag != EntryTag.Favorite) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    c.tagEntry(itemRef, tag, value)
+                    c.updateEntryState(itemRef, EntryStateKeys.FAVORITE, value.toString())
                 }
                 refresh(DetailRefreshScope.Header)
             } catch (e: Exception) {

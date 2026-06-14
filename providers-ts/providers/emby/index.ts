@@ -6,7 +6,7 @@
  */
 import { getFieldsSpec, makeClientState } from './provider.js';
 import { listEntry, search, getPlaybackSpec, test, getEntries } from './client.js';
-import { onPlaybackReady, onProgressTick, onStop, setDeviceAuth } from './hooks.js';
+import { updateEntryState, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksState } from './hooks.js';
 import type { EmbyClientState } from './client.js';
 import type {
@@ -90,29 +90,14 @@ let state: EmbyClientState | null = null;
     return getPlaybackSpec(state!, args.itemRef, args.startMs);
   },
 
-  // ── Playback hooks ────────────────────────────────────────────────────
-
-  async onPlaybackReady(args: {
-    hooksState: EmbyHooksState;
-    positionMs: number;
-    playbackRate: number;
+  async updateEntryState(args: {
+    itemRef: string;
+    key: string;
+    value: string | null;
+    state?: EmbyHooksState;
   }): Promise<void> {
-    await onPlaybackReady(args.hooksState, args.positionMs, args.playbackRate);
-  },
-
-  async onProgressTick(args: {
-    hooksState: EmbyHooksState;
-    positionMs: number;
-    playbackRate: number;
-    isPaused: boolean;
-  }): Promise<void> {
-    await onProgressTick(args.hooksState, args.positionMs, args.playbackRate, args.isPaused);
-  },
-
-  async onStop(args: {
-    hooksState: EmbyHooksState;
-    positionMs: number;
-  }): Promise<void> {
-    await onStop(args.hooksState, args.positionMs);
+    const hookState = args.state;
+    if (!hookState) return;
+    await updateEntryState(hookState, args.key, args.value);
   },
 };

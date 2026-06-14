@@ -59,7 +59,7 @@ abstract class EndpointClient {
         sortBy: SortField? = null,
         sortOrder: SortOrder = SortOrder.Descending,
     ): EntryList = EntryList(emptyList(), 0)
-    open suspend fun tagEntry(itemRef: String, tag: EntryTag, value: Boolean): Unit = Unit
+    open suspend fun updateEntryState(itemRef: String, key: String, value: String?): Unit = Unit
     open suspend fun openStream(itemRef: String): ProviderStream? = null
 
     open suspend fun getQr(): QrResult.QrReady? = null

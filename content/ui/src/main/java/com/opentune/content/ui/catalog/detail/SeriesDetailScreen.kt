@@ -30,16 +30,27 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.ImageLoader
+import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.components.ThumbEntryComponent
 import com.opentune.content.ui.catalog.player.PlayerController
-import com.opentune.storage.StorageBindingsHolder
+import com.opentune.player.EntryStateKeys
 import com.opentune.storage.decodeSeriesProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "OT_SeriesDetail"
+
+private suspend fun saveSeriesProgress(
+    client: EndpointClient,
+    seriesRef: String,
+    seasonNumber: Int,
+    episodeNumber: Int,
+) {
+    val packed = (seasonNumber.toLong() shl 32) or episodeNumber.toLong()
+    client.updateEntryState(seriesRef, EntryStateKeys.SERIES_PROGRESS, packed.toString())
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -52,7 +63,7 @@ fun SeriesDetailScreen(
     var pendingEpisodeNumber by remember { mutableStateOf(0) }
     var pendingAutoPlay by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val stateKey = viewModel.entryStateKey
+    val client by viewModel.client.collectAsState()
 
     val entryInfo by viewModel.entryInfo.collectAsState()
     val info = entryInfo ?: return
@@ -63,10 +74,6 @@ fun SeriesDetailScreen(
     val totalEpisodes by viewModel.totalEpisodes.collectAsState()
     val pageIndex by viewModel.pageIndex.collectAsState()
     val initialFocusRef by viewModel.subEntryRef.collectAsState()
-
-    LaunchedEffect(stateKey) {
-        playerController?.setContext(seriesStateKey = stateKey)
-    }
 
     LaunchedEffect(info.ref) {
         val resumeMs = info.userData?.positionMs ?: 0L
@@ -94,6 +101,7 @@ fun SeriesDetailScreen(
 
     LaunchedEffect(episodes) {
         if (episodes.isEmpty()) return@LaunchedEffect
+        val c = client ?: return@LaunchedEffect
         if (pendingAutoPlay) {
             pendingAutoPlay = false
             val episode = episodes.first()
@@ -101,9 +109,7 @@ fun SeriesDetailScreen(
             viewModel.setSubEntryRef(episode.ref)
             playerController?.prepare(episode, 0L)
             withContext(Dispatchers.IO) {
-                StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
-                    stateKey, episode.seasonNumber ?: 0, episode.indexNumber ?: 0,
-                )
+                saveSeriesProgress(c, info.ref, episode.seasonNumber ?: 0, episode.indexNumber ?: 0)
             }
             playerController?.play()
             return@LaunchedEffect
@@ -123,6 +129,7 @@ fun SeriesDetailScreen(
 
     LaunchedEffect(playerController) {
         playerController?.setNextVideoCallback {
+            val c = client ?: return@setNextVideoCallback
             val currentEpisodes = viewModel.episodes.value
             val currentRef = viewModel.subEntryRef.value
             val currentIdx = currentEpisodes.indexOfFirst { it.ref == currentRef }
@@ -133,8 +140,8 @@ fun SeriesDetailScreen(
                 playerController.prepare(nextEpisode, 0L)
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
-                            stateKey, nextEpisode.seasonNumber ?: 0, nextEpisode.indexNumber ?: 0,
+                        saveSeriesProgress(
+                            c, info.ref, nextEpisode.seasonNumber ?: 0, nextEpisode.indexNumber ?: 0,
                         )
                     }
                     playerController.play()
@@ -160,14 +167,17 @@ fun SeriesDetailScreen(
     }
     val selectEpisode = { episode: EntryInfo ->
         Log.d(LOG_TAG, "selectEpisode: ref=${episode.ref} title=${episode.title}")
+        val c = client
         viewModel.setSubEntryRef(episode.ref)
         playerController?.prepare(episode)
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                StorageBindingsHolder.get().entryStateStore.upsertSeriesProgress(
-                    stateKey, episode.seasonNumber ?: 0, episode.indexNumber ?: 0,
-                )
+        if (c != null) {
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    saveSeriesProgress(c, info.ref, episode.seasonNumber ?: 0, episode.indexNumber ?: 0)
+                }
+                playerController?.play()
             }
+        } else {
             playerController?.play()
         }
         Unit

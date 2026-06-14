@@ -61,9 +61,12 @@ let state: CatVodClientState | null = null;
     return getPlaybackSpec(state!, args.itemRef, args.startMs);
   },
 
-  async onPlaybackReady(): Promise<void> {},
-  async onProgressTick(): Promise<void> {},
-  async onStop():         Promise<void> {},
+  async updateEntryState(_args: {
+    itemRef: string;
+    key: string;
+    value: string | null;
+    state?: Record<string, unknown>;
+  }): Promise<void> {},
 
   async resetSpiders(): Promise<void> {
     const jar = state ? parseSpiderField(state.config?.spider) : undefined;

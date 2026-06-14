@@ -150,16 +150,17 @@ export interface SubtitleTrack {
 
 /**
  * Opaque state blob returned by `getPlaybackSpec` and passed back into
- * `onPlaybackReady`, `onProgressTick`, `onStop`.
+ * `updateEntryState`.
  */
-export type HooksState = Record<string, unknown>;
+export type ProviderState = Record<string, unknown>;
 
 export interface PlaybackSpec {
   url: string | null;
   headers: Record<string, string>;
   mimeType: string | null;
   subtitleTracks: SubtitleTrack[];
-  hooksState: HooksState;
+  progressIntervalMs: number;
+  state: ProviderState;
   mediaCodecs: MediaCodecInfo[];
 }
 
@@ -219,21 +220,10 @@ export interface OpenTuneProviderBridge {
     startMs: number;
   }): Promise<PlaybackSpec>;
 
-  onPlaybackReady(args: {
-    hooksState: HooksState;
-    positionMs: number;
-    playbackRate: number;
-  }): Promise<void>;
-
-  onProgressTick(args: {
-    hooksState: HooksState;
-    positionMs: number;
-    playbackRate: number;
-    isPaused: boolean;
-  }): Promise<void>;
-
-  onStop(args: {
-    hooksState: HooksState;
-    positionMs: number;
+  updateEntryState(args: {
+    itemRef: string;
+    key: string;
+    value: string | null;
+    state?: ProviderState;
   }): Promise<void>;
 }
