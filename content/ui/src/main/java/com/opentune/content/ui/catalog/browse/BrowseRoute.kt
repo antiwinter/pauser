@@ -35,7 +35,9 @@ fun BrowseRoute(
     val vmLoading by viewModel.loading.collectAsState()
     val vmError by viewModel.error.collectAsState()
     val vmTotal by viewModel.totalCount.collectAsState()
-    val vmLastFocusedItemRef by viewModel.lastFocusedItemRef.collectAsState()
+    val restoreFocusRef = remember(endpointId, initialEntryInfo.ref) {
+        viewModel.lastFocusedItemRef.value
+    }
 
     val items = remember { mutableStateListOf<EntryInfo>() }
     LaunchedEffect(vmItems) {
@@ -73,7 +75,7 @@ fun BrowseRoute(
             totalCount = vmTotal,
             loading = vmLoading,
             error = vmError,
-            initialFocusRef = vmLastFocusedItemRef,
+            initialFocusRef = restoreFocusRef,
             onBack = { nav.popBackStack() },
             onSearch = { nav.navigate(Routes.search(endpointId, initialEntryInfo.ref)) },
             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
