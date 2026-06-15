@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -101,5 +102,34 @@ fun ThumbEntryComponent(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             )
         }
+    }
+}
+
+/** Placeholder matching [ThumbEntryComponent] layout while entry data is loading. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun ThumbEntrySkeleton(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = "file:///android_asset/art/thumb.png",
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 4.dp, vertical = 8.dp)
+                .fillMaxWidth(0.6f)
+                .height(12.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        )
     }
 }

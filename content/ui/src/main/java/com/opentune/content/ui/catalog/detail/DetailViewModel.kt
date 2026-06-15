@@ -16,6 +16,7 @@ import com.opentune.storage.EntryStateKey
 import com.opentune.storage.StorageBindingsHolder
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,8 +72,7 @@ class DetailViewModel(
 
     private var endpointId: String? = null
     private var appConfigStore: AppPrefsStore? = null
-
-    private var loadedSeasonIdx: Int? = null
+    private var episodeFetchJob: Job? = null
 
     val appConfig: AppPrefsStore
         get() = requireNotNull(appConfigStore) { "DetailViewModel not initialized" }
@@ -171,28 +171,22 @@ class DetailViewModel(
 
     fun setEpisode(subEntryIdx: Int, episodeIdx: Int) {
         val subEntries = _subEntries.value
-        if (subEntries.isEmpty()) return
-        if (subEntryIdx !in subEntries.indices || episodeIdx < 0) return
-        val total = _totalCount.value
-        if (loadedSeasonIdx == subEntryIdx && total > 0 && episodeIdx >= total) return
+        if (subEntries.isEmpty() || subEntryIdx !in subEntries.indices || episodeIdx < 0) return
 
-        if (loadedSeasonIdx != subEntryIdx) {
-            loadedSeasonIdx = subEntryIdx
-            _episodes.value = emptyMap()
-            _totalCount.value = 0
-        }
-
-        _subEntryIndex.value = subEntryIdx
-
-        if (_episodes.value[episodeIdx] != null) {
+        if (subEntryIdx == _subEntryIndex.value && _episodes.value[episodeIdx] != null) {
             _episodeIndex.value = episodeIdx
             return
         }
 
-        viewModelScope.launch {
-            fetchEpisodePage(subEntryIdx, pageStart(episodeIdx))
-            if (_subEntryIndex.value == subEntryIdx && _episodes.value[episodeIdx] != null) {
-                _episodeIndex.value = episodeIdx
+        if (subEntryIdx != _subEntryIndex.value || _episodes.value[episodeIdx] == null) {
+            val mergePages = subEntryIdx == _subEntryIndex.value
+            _subEntryIndex.value = subEntryIdx
+            episodeFetchJob?.cancel()
+            episodeFetchJob = viewModelScope.launch {
+                fetchEpisodePage(subEntryIdx, pageStart(episodeIdx), mergePages)
+                if (_episodes.value[episodeIdx] != null) {
+                    _episodeIndex.value = episodeIdx
+                }
             }
         }
     }
@@ -210,14 +204,13 @@ class DetailViewModel(
         }
     }
 
-    private suspend fun fetchEpisodePage(seasonIdx: Int, start: Int) {
+    private suspend fun fetchEpisodePage(seasonIdx: Int, start: Int, mergePages: Boolean = true) {
         val c = _client.value ?: return
         val subEntry = _subEntries.value.getOrNull(seasonIdx) ?: return
 
         val result = withContext(Dispatchers.IO) {
             c.listEntry(subEntry.ref, start, LOADER_PAGE_SIZE, episodeListOptions)
         }
-        if (_subEntryIndex.value != seasonIdx) return
 
         if (result.totalCount > 0) {
             _totalCount.value = result.totalCount
@@ -226,9 +219,14 @@ class DetailViewModel(
         val items = result.items
         if (items.isEmpty()) return
 
-        val episodeMap = _episodes.value.toMutableMap()
+        val episodeMap = if (mergePages) {
+            _episodes.value.toMutableMap()
+        } else {
+            mutableMapOf()
+        }
         items.forEachIndexed { i, item -> episodeMap[start + i] = item }
         _episodes.value = episodeMap
+
         Log.d(LOG_TAG, "fetchEpisodePage: season=$seasonIdx start=$start count=${items.size} total=${result.totalCount}")
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -28,6 +29,7 @@ import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.components.ThumbEntryComponent
+import com.opentune.content.ui.catalog.components.ThumbEntrySkeleton
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.EntryStateKeys
 import com.opentune.storage.decodeSeriesProgress
@@ -156,7 +158,10 @@ private fun SeasonSelector(
     if (seasons.size <= 1) return
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(seasons, key = { _, season -> season.ref }) { index, season ->
-            Button(onClick = { onSelect(index) }) {
+            Button(
+                onClick = {},
+                modifier = Modifier.onFocusChanged { if (it.isFocused) onSelect(index) },
+            ) {
                 Text(
                     text = season.title,
                     fontWeight = if (index == seasonIndex)
@@ -184,8 +189,16 @@ private fun EpisodeRow(
 
     LaunchedEffect(selectedIndex) {
         val idx = selectedIndex ?: return@LaunchedEffect
-        if (idx in 0 until totalCount) {
+        if (idx !in 0 until totalCount) return@LaunchedEffect
+        val visible = listState.layoutInfo.visibleItemsInfo
+        if (visible.isEmpty()) {
             listState.scrollToItem(idx)
+            return@LaunchedEffect
+        }
+        val first = visible.first().index
+        val last = visible.last().index
+        if (idx < first || idx > last) {
+            listState.animateScrollToItem(idx)
         }
     }
 
@@ -205,7 +218,7 @@ private fun EpisodeRow(
                     onFocus = { onFocusEpisode(index) },
                 )
             } else {
-                Box(Modifier.width(200.dp))
+                ThumbEntrySkeleton(modifier = Modifier.width(200.dp))
             }
         }
     }

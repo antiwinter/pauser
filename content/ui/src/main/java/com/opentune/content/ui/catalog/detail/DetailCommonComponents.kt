@@ -93,6 +93,7 @@ fun DetailOverviewShell(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.weight(1f),
+            userScrollEnabled = false,
         ) { page ->
             when (page) {
                 0 -> page1Content()
