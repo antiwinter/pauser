@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.ui.catalog.LaunchedScrollToIndexIfNeeded
 import com.opentune.content.ui.catalog.components.ThumbEntryComponent
 import com.opentune.content.ui.catalog.player.PlayerController
 
@@ -98,12 +99,7 @@ private fun DigipakChildren(
     if (children.isEmpty()) return
     val listState = rememberLazyListState()
 
-    LaunchedEffect(subEntryIndex) {
-        val idx = subEntryIndex ?: return@LaunchedEffect
-        if (idx in children.indices) {
-            listState.scrollToItem(idx)
-        }
-    }
+    LaunchedScrollToIndexIfNeeded(listState, subEntryIndex)
 
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(children, key = { _, child -> child.ref }) { index, child ->

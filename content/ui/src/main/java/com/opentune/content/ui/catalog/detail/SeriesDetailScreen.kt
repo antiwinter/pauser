@@ -20,7 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import com.opentune.content.ui.catalog.LaunchedScrollToIndexIfNeeded
+import com.opentune.content.ui.catalog.rememberItemFocusRequesters
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
@@ -101,6 +106,8 @@ fun SeriesDetailScreen(
         // NOTE: no need to prepare, will be done by episodeIndex change effect
     }
 
+    val seasonFocusRequesters = rememberItemFocusRequesters(seasons.size)
+
     DetailOverviewShell(viewModel = vm) {
         Box(modifier = Modifier.fillMaxSize()) {
             DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
@@ -120,6 +127,7 @@ fun SeriesDetailScreen(
                 SeasonSelector(
                     seasons = seasons,
                     seasonIndex = seasonIndex,
+                    focusRequesters = seasonFocusRequesters,
                     onSelect = { vm.setEpisode(it, 0) },
                 )
                 // NOTE: EpisodeRow and PageSelector
@@ -133,6 +141,7 @@ fun SeriesDetailScreen(
                     episodes = episodes,
                     selectedIndex = episodeIndex,
                     imageLoader = imageLoader,
+                    seasonUpFocus = seasonIndex?.let { seasonFocusRequesters.getOrNull(it) },
                     onFocusEpisode = focusEpisode,
                     onPlayEpisode = { playEpisode() },
                 )
@@ -153,14 +162,24 @@ fun SeriesDetailScreen(
 private fun SeasonSelector(
     seasons: List<EntryInfo>,
     seasonIndex: Int?,
+    focusRequesters: List<FocusRequester>,
     onSelect: (Int) -> Unit,
 ) {
     if (seasons.size <= 1) return
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val listState = rememberLazyListState()
+
+    LaunchedScrollToIndexIfNeeded(listState, seasonIndex)
+
+    LazyRow(
+        state = listState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         itemsIndexed(seasons, key = { _, season -> season.ref }) { index, season ->
             Button(
                 onClick = {},
-                modifier = Modifier.onFocusChanged { if (it.isFocused) onSelect(index) },
+                modifier = Modifier
+                    .focusRequester(focusRequesters[index])
+                    .onFocusChanged { if (it.isFocused) onSelect(index) },
             ) {
                 Text(
                     text = season.title,
@@ -177,6 +196,7 @@ private fun EpisodeRow(
     totalCount: Int,
     episodes: Map<Int, EntryInfo>,
     imageLoader: ImageLoader,
+    seasonUpFocus: FocusRequester?,
     // NOTE: we don't use focus requester, but define a selected state index here.
     // the flow: onFocus -> setEpisode -> episodeIndex -> set style
     // the focus is just focus, don't apply special style
@@ -187,20 +207,7 @@ private fun EpisodeRow(
     if (totalCount == 0) return
     val listState = rememberLazyListState()
 
-    LaunchedEffect(selectedIndex) {
-        val idx = selectedIndex ?: return@LaunchedEffect
-        if (idx !in 0 until totalCount) return@LaunchedEffect
-        val visible = listState.layoutInfo.visibleItemsInfo
-        if (visible.isEmpty()) {
-            listState.scrollToItem(idx)
-            return@LaunchedEffect
-        }
-        val first = visible.first().index
-        val last = visible.last().index
-        if (idx < first || idx > last) {
-            listState.animateScrollToItem(idx)
-        }
-    }
+    LaunchedScrollToIndexIfNeeded(listState, selectedIndex)
 
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(
@@ -214,7 +221,15 @@ private fun EpisodeRow(
                     onClick = onPlayEpisode,
                     imageLoader = imageLoader,
                     selected = index == selectedIndex,
-                    modifier = Modifier.width(200.dp),
+                    modifier = Modifier
+                        .width(200.dp)
+                        .then(
+                            if (seasonUpFocus != null) {
+                                Modifier.focusProperties { up = seasonUpFocus }
+                            } else {
+                                Modifier
+                            },
+                        ),
                     onFocus = { onFocusEpisode(index) },
                 )
             } else {
