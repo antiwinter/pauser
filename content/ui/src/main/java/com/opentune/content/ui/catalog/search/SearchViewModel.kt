@@ -8,7 +8,6 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.SearchQuery
-import com.opentune.content.ui.catalog.ArtUrlInjector
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -84,7 +83,6 @@ class SearchViewModel : ViewModel() {
                 _client.value = c
                 searchFn = { q ->
                     c.search(scopeLocation, SearchQuery(term = q)).items
-                        .let { ArtUrlInjector.apply(it, c.protocol, endpointId) }
                 }
                 initializedKey = key
             } catch (e: Exception) {

@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.Flow
 fun decodeSeriesProgress(packed: Long): Pair<Int, Int> =
     (packed ushr 32).toInt() to (packed and 0xFFFF_FFFFL).toInt()
 
+fun encodeSeriesProgress(seasonIndex: Int, episodeIndex: Int): Long =
+    (seasonIndex.toLong() shl 32) or episodeIndex.toLong()
+
 data class EntryStateKey(
     val endpointId: String,
     val itemRef: String,
@@ -56,12 +59,6 @@ class EntryStateStore(private val db: OpenTuneDatabase) {
     suspend fun upsertAudioTrack(key: EntryStateKey, trackId: String?) {
         ensureRow(key)
         dao.updateAudioTrack(key.endpointId, key.itemRef, trackId, System.currentTimeMillis())
-    }
-
-    suspend fun upsertSeriesProgress(key: EntryStateKey, seasonNumber: Int, episodeNumber: Int) {
-        ensureRow(key)
-        val packed = (seasonNumber.toLong() shl 32) or episodeNumber.toLong()
-        dao.updatePosition(key.endpointId, key.itemRef, packed, System.currentTimeMillis())
     }
 
     fun observeForEndpoint(endpointId: String): Flow<List<EntryStateEntity>> =

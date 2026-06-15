@@ -33,6 +33,8 @@ fun DetailRoute(
 
     LaunchedEffect(endpointId, initialInfo) {
         viewModel.initialize(endpointId, initialInfo)
+        // NOTE: initialize should load all direct sub-entries into subEntries. 
+        // e.g. seasons, or digipak children.
     }
 
     LaunchedEffect(client) {

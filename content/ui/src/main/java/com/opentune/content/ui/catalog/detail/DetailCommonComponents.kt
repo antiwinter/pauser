@@ -29,7 +29,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.EntryTag
+import com.opentune.player.EntryStateKeys
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.MediaCodecInfo
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -199,7 +199,9 @@ fun DetailButtons(viewModel: DetailViewModel) {
     val info = entryInfo ?: return
     val isFavorite = info.userData?.isFavorite ?: false
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = { viewModel.tagEntry(EntryTag.Favorite, !isFavorite) }) {
+        Button(onClick = {
+            viewModel.updateEntryState(EntryStateKeys.FAVORITE, (!isFavorite).toString())
+        }) {
             Text(if (isFavorite) "♥ Liked" else "♡ Like")
         }
     }

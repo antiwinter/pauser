@@ -6,23 +6,29 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
+import com.opentune.content.contract.QueryOptions
+import com.opentune.content.contract.SortField
+import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.EntryTag
 import com.opentune.player.EntryStateKeys
-import com.opentune.content.ui.catalog.ArtType
-import com.opentune.content.ui.catalog.ArtUrlInjector
 import com.opentune.storage.AppPrefsStore
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.StorageBindingsHolder
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "DetailViewModel"
+private const val LOADER_PAGE_SIZE = 100
+
+private val episodeListOptions = QueryOptions(
+    sortBy = SortField.IndexNumber,
+    sortOrder = SortOrder.Ascending,
+)
 
 enum class DetailRefreshScope {
     /** Current entry via getEntries. */
@@ -42,33 +48,20 @@ class DetailViewModel(
     private val _entryInfo = MutableStateFlow<EntryInfo?>(null)
     val entryInfo: StateFlow<EntryInfo?> = _entryInfo.asStateFlow()
 
-    private val _seasons = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val seasons: StateFlow<List<EntryInfo>> = _seasons.asStateFlow()
+    private val _subEntries = MutableStateFlow<List<EntryInfo>>(emptyList())
+    val subEntries: StateFlow<List<EntryInfo>> = _subEntries.asStateFlow()
 
-    private val _episodeIndex = MutableStateFlow<String?>(null)
-    val seasonIndex: StateFlow<String?> = _episodeIndex.asStateFlow()
+    private val _subEntryIndex = MutableStateFlow<Int?>(null)
+    val subEntryIndex: StateFlow<Int?> = _subEntryIndex.asStateFlow()
 
-    private val _episodes = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val episodes: StateFlow<List<EntryInfo>> = _episodes.asStateFlow()
+    private val _episodeIndex = MutableStateFlow<Int?>(null)
+    val episodeIndex: StateFlow<Int?> = _episodeIndex.asStateFlow()
 
-    private val _totalEpisodes = MutableStateFlow(0)
-    val totalEpisodes: StateFlow<Int> = _totalEpisodes.asStateFlow()
+    private val _episodes = MutableStateFlow<Map<Int, EntryInfo>>(emptyMap())
+    val episodes: StateFlow<Map<Int, EntryInfo>> = _episodes.asStateFlow()
 
-    private val _pageIndex = MutableStateFlow(0)
-    val pageIndex: StateFlow<Int> = _pageIndex.asStateFlow()
-
-    private val _subEntryRef = MutableStateFlow<String?>(null)
-    val subEntryRef: StateFlow<String?> = _subEntryRef.asStateFlow()
-
-    private val _digipakChildren = MutableStateFlow<List<EntryInfo>>(emptyList())
-    val digipakChildren: StateFlow<List<EntryInfo>> = _digipakChildren.asStateFlow()
-
-    private val _singleChild = MutableStateFlow<EntryInfo?>(null)
-    val singleChild: StateFlow<EntryInfo?> = _singleChild.asStateFlow()
-
-    fun setSubEntryRef(ref: String?) {
-        _subEntryRef.value = ref
-    }
+    private val _totalCount = MutableStateFlow(0)
+    val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
 
     private val _client = MutableStateFlow<EndpointClient?>(null)
     val client: StateFlow<EndpointClient?> = _client.asStateFlow()
@@ -78,6 +71,8 @@ class DetailViewModel(
 
     private var endpointId: String? = null
     private var appConfigStore: AppPrefsStore? = null
+
+    private var loadedSeasonIdx: Int? = null
 
     val appConfig: AppPrefsStore
         get() = requireNotNull(appConfigStore) { "DetailViewModel not initialized" }
@@ -96,33 +91,28 @@ class DetailViewModel(
                 appConfigStore = StorageBindingsHolder.get().appConfigStore
                 _client.value = c
                 if (initialInfo != null && _entryInfo.value == null) {
-                    setEntryInfo(ArtUrlInjector.applyInfo(initialInfo, c.protocol))
+                    _entryInfo.value = initialInfo
                     Log.d(LOG_TAG, "Using cached EntryInfo: type=${initialInfo.type}")
                 }
+                loadSubEntries(c)
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "initialize failed for endpointId=$endpointId", e)
             }
         }
     }
 
-    fun setEntryInfo(info: EntryInfo) {
-        if (_entryInfo.value == null) {
-            _entryInfo.value = info
-            Log.d(LOG_TAG, "setEntryInfo: type=${info.type}, ref=${info.ref}")
-        }
-    }
-
-    fun tagEntry(tag: EntryTag, value: Boolean) {
+    fun updateEntryState(key: String, value: String) {
         val c = _client.value ?: return
-        if (tag != EntryTag.Favorite) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    c.updateEntryState(itemRef, EntryStateKeys.FAVORITE, value.toString())
+                    c.updateEntryState(itemRef, key, value)
                 }
-                refresh(DetailRefreshScope.Header)
+                if (key == EntryStateKeys.FAVORITE) {
+                    refresh(DetailRefreshScope.Header)
+                }
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "tagEntry failed: tag=$tag value=$value", e)
+                Log.e(LOG_TAG, "updateEntryState failed: key=$key", e)
             }
         }
     }
@@ -131,12 +121,12 @@ class DetailViewModel(
     fun refresh(scope: DetailRefreshScope) {
         viewModelScope.launch {
             val c = _client.value ?: return@launch
-            val eid = endpointId ?: return@launch
+            if (endpointId == null) return@launch
             try {
                 withContext(Dispatchers.IO) {
                     refreshHeader(c)
                     if (scope == DetailRefreshScope.Lists) {
-                        refreshLists(c, eid)
+                        refreshLists(c)
                     }
                 }
                 Log.d(LOG_TAG, "refresh($scope) complete")
@@ -148,125 +138,102 @@ class DetailViewModel(
 
     private suspend fun refreshHeader(c: EndpointClient) {
         val info = c.getEntries(listOf(itemRef)).items.firstOrNull() ?: return
-        _entryInfo.value = ArtUrlInjector.applyInfo(info, c.protocol)
+        _entryInfo.value = info
     }
 
-    private suspend fun refreshLists(c: EndpointClient, eid: String) {
+    private suspend fun refreshLists(c: EndpointClient) {
+        loadSubEntries(c)
         when (_entryInfo.value?.type) {
-            "Series" -> refreshEpisodes(c, eid)
-            "Digipak" -> refreshDigipakChildren(c, eid)
+            "Series" -> refreshEpisodes()
         }
     }
 
-    private suspend fun refreshEpisodes(c: EndpointClient, eid: String) {
-        val seasonList = _seasons.value
-        if (seasonList.isEmpty()) return
-        val season = seasonList.firstOrNull { it.ref == _episodeIndex.value }
-            ?: seasonList.first()
-        val result = c.listEntry(season.ref, _pageIndex.value * 50, 50)
-        _episodes.value = ArtUrlInjector.apply(result.items, c.protocol, eid, ArtType.Thumb)
-            .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
-        _totalEpisodes.value = result.totalCount
+    private suspend fun refreshEpisodes() {
+        val subIdx = _subEntryIndex.value ?: return
+        if (subIdx !in _subEntries.value.indices) return
+        val epIdx = _episodeIndex.value ?: 0
+        fetchEpisodePage(subIdx, pageStart(epIdx))
     }
 
-    private suspend fun refreshDigipakChildren(c: EndpointClient, eid: String) {
-        val childCount = _entryInfo.value?.childCount ?: 0
-        val result = c.listEntry(itemRef, 0, maxOf(childCount, 1))
-        val filtered = result.items
-        if (childCount <= 1 && filtered.isNotEmpty()) {
-            _singleChild.value = filtered.first()
-        } else {
-            _digipakChildren.value = ArtUrlInjector.apply(filtered, c.protocol, eid, ArtType.Thumb)
+    private suspend fun loadSubEntries(c: EndpointClient) {
+        if (_subEntries.value.isNotEmpty()) return
+        val result = c.listEntry(itemRef, 0, 500)
+        _subEntries.value = result.items
+        Log.d(LOG_TAG, "loadSubEntries: ${result.items.size} items")
+    }
+
+    fun setSubEntry(index: Int) {
+        val entries = _subEntries.value
+        if (entries.isEmpty() || index !in entries.indices) return
+        _subEntryIndex.value = index
+        Log.d(LOG_TAG, "setSubEntry: index=$index ref=${entries[index].ref}")
+    }
+
+    fun setEpisode(subEntryIdx: Int, episodeIdx: Int) {
+        val subEntries = _subEntries.value
+        if (subEntries.isEmpty()) return
+        if (subEntryIdx !in subEntries.indices || episodeIdx < 0) return
+        val total = _totalCount.value
+        if (loadedSeasonIdx == subEntryIdx && total > 0 && episodeIdx >= total) return
+
+        if (loadedSeasonIdx != subEntryIdx) {
+            loadedSeasonIdx = subEntryIdx
+            _episodes.value = emptyMap()
+            _totalCount.value = 0
         }
-    }
 
-    fun loadSeasons() {
-        if (_seasons.value.isNotEmpty()) {
-            Log.d(LOG_TAG, "loadSeasons() skipped — already loaded")
+        _subEntryIndex.value = subEntryIdx
+
+        if (_episodes.value[episodeIdx] != null) {
+            _episodeIndex.value = episodeIdx
             return
         }
+
+        viewModelScope.launch {
+            fetchEpisodePage(subEntryIdx, pageStart(episodeIdx))
+            if (_subEntryIndex.value == subEntryIdx && _episodes.value[episodeIdx] != null) {
+                _episodeIndex.value = episodeIdx
+            }
+        }
+    }
+
+    fun nextEpisode() {
+        val subIdx = _subEntryIndex.value ?: return
+        val episodeIdx = _episodeIndex.value ?: return
+        val total = _totalCount.value
+        val subEntries = _subEntries.value
+
+        when {
+            total > 0 && episodeIdx + 1 < total -> setEpisode(subIdx, episodeIdx + 1)
+            subIdx + 1 < subEntries.size -> setEpisode(subIdx + 1, 0)
+            else -> Log.d(LOG_TAG, "nextEpisode: end of series")
+        }
+    }
+
+    private suspend fun fetchEpisodePage(seasonIdx: Int, start: Int) {
         val c = _client.value ?: return
-        val eid = endpointId ?: return
-        Log.d(LOG_TAG, "loadSeasons() fetching")
-        viewModelScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(itemRef, 0, 500)
-                }
-                _seasons.value = ArtUrlInjector.apply(result.items, c.protocol, eid)
-                Log.d(LOG_TAG, "loadSeasons() complete: ${result.items.size} seasons")
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadSeasons() failed", e)
-            }
+        val subEntry = _subEntries.value.getOrNull(seasonIdx) ?: return
+
+        val result = withContext(Dispatchers.IO) {
+            c.listEntry(subEntry.ref, start, LOADER_PAGE_SIZE, episodeListOptions)
         }
-    }
+        if (_subEntryIndex.value != seasonIdx) return
 
-    fun loadDigipakChildren() {
-        if (_digipakChildren.value.isNotEmpty() || _singleChild.value != null) {
-            Log.d(LOG_TAG, "loadDigipakChildren() skipped — already loaded")
-            return
+        if (result.totalCount > 0) {
+            _totalCount.value = result.totalCount
         }
-        val c = _client.value ?: return
-        val eid = endpointId ?: return
-        val childCount = _entryInfo.value?.childCount ?: 0
-        Log.d(LOG_TAG, "loadDigipakChildren() fetching childCount=$childCount")
-        viewModelScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(itemRef, 0, maxOf(childCount, 1))
-                }
-                val filtered = result.items
-                if (childCount <= 1 && filtered.isNotEmpty()) {
-                    _singleChild.value = filtered.first()
-                } else {
-                    _digipakChildren.value = ArtUrlInjector.apply(filtered, c.protocol, eid, ArtType.Thumb)
-                }
-                Log.d(LOG_TAG, "loadDigipakChildren() complete: ${filtered.size} children")
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadDigipakChildren() failed", e)
-            }
-        }
+
+        val items = result.items
+        if (items.isEmpty()) return
+
+        val episodeMap = _episodes.value.toMutableMap()
+        items.forEachIndexed { i, item -> episodeMap[start + i] = item }
+        _episodes.value = episodeMap
+        Log.d(LOG_TAG, "fetchEpisodePage: season=$seasonIdx start=$start count=${items.size} total=${result.totalCount}")
     }
 
-    fun loadEpisodes() {
-        val seasonList = _seasons.value
-        if (seasonList.isEmpty()) return
-        val season = seasonList.firstOrNull { it.ref == _episodeIndex.value }
-            ?: seasonList.first()
-
-        Log.d(LOG_TAG, "loadEpisodes() seasonRef=${season.ref} page=${_pageIndex.value}")
-        viewModelScope.launch {
-            val c = _client.value ?: return@launch
-            val eid = endpointId ?: return@launch
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    c.listEntry(season.ref, _pageIndex.value * 50, 50)
-                }
-                _episodes.value = ArtUrlInjector.apply(result.items, c.protocol, eid, ArtType.Thumb)
-                    .sortedBy { it.indexNumber ?: Int.MAX_VALUE }
-                _totalEpisodes.value = result.totalCount
-                Log.d(LOG_TAG, "loadEpisodes() complete: ${result.items.size}/${result.totalCount}")
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "loadEpisodes() failed", e)
-            }
-        }
-    }
-
-    fun setSeason(ref: String?) {
-        _episodeIndex.value = ref
-        _pageIndex.value = 0
-        _subEntryRef.value = null
-    }
-
-    fun selectpageIndex(page: Int) {
-        _pageIndex.value = page
-        _subEntryRef.value = null
-    }
-
-    fun selectSeasonAndPageForProgress(seasonRef: String, pageIndex: Int) {
-        _episodeIndex.value = seasonRef
-        _pageIndex.value = pageIndex
-    }
+    private fun pageStart(episodeIdx: Int): Int =
+        (episodeIdx / LOADER_PAGE_SIZE) * LOADER_PAGE_SIZE
 
     companion object {
         fun factory(itemRef: String) = object : ViewModelProvider.Factory {

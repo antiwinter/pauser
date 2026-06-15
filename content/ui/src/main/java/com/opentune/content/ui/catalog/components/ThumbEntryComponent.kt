@@ -36,12 +36,18 @@ fun ThumbEntryComponent(
     onClick: () -> Unit,
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     onFocus: (() -> Unit)? = null,
 ) {
     Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (selected) Modifier.background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                ) else Modifier
+            )
             .then(
                 if (onFocus != null) Modifier.onFocusChanged { if (it.isFocused) onFocus() }
                 else Modifier

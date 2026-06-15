@@ -357,13 +357,6 @@ class CachingEndpointClient(
                 }
                 appConfig.saveSubtitlePrefs(updated)
             }
-            EntryStateKeys.SERIES_PROGRESS -> {
-                val packed = value?.toLongOrNull() ?: return
-                val season = (packed ushr 32).toInt()
-                val episode = (packed and 0xFFFF_FFFFL).toInt()
-                store.upsertSeriesProgress(entryKey, season, episode)
-                EndpointCache.patchEntryUserData(endpointId, itemRef, packed)
-            }
             EntryStateKeys.FAVORITE -> {
                 val isFavorite = value?.toBooleanStrictOrNull() ?: return
                 store.upsertFavorite(entryKey, isFavorite)

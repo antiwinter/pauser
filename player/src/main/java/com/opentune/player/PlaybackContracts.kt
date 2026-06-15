@@ -51,7 +51,6 @@ object EntryStateKeys {
     const val AUDIO_TRACK_ID = "audioTrackId"
     const val SUBTITLE_OFFSET_FRACTION = "subtitleOffsetFraction"
     const val SUBTITLE_SIZE_SCALE = "subtitleSizeScale"
-    const val SERIES_PROGRESS = "seriesProgress"
     const val FAVORITE = "favorite"
     const val PLAYING_STATE = "playingState"
 }
