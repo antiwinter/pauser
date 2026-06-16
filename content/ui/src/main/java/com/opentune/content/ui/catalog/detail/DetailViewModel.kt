@@ -178,6 +178,13 @@ class DetailViewModel(
             return
         }
 
+        if (subEntryIdx == _subEntryIndex.value &&
+            episodeIdx == _episodeIndex.value &&
+            _episodes.value[episodeIdx] != null
+        ) {
+            return
+        }
+
         if (subEntryIdx == _subEntryIndex.value && _episodes.value[episodeIdx] != null) {
             _episodeIndex.value = episodeIdx
             return
