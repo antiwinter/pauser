@@ -62,7 +62,7 @@ fun SeriesDetailScreen(
     val totalCount by vm.totalCount.collectAsState()
     val episodeIndex by vm.episodeIndex.collectAsState()
 
-    LaunchedEffect(info.ref, seasons) {
+    LaunchedEffect(info, seasons) {
         if (seasons.isEmpty()) return@LaunchedEffect
         val (s, e) = decodeSeriesProgress(info.userData?.positionMs ?: 0L)
         vm.setEpisode(s, e)

@@ -42,6 +42,12 @@ fun SearchRoute(
         viewModel.initialize(endpointId, scopeDecoded)
     }
 
+    // Refresh data when returning to search (e.g., from detail after playback).
+    // refresh() guards against empty query, so harmless on first entry.
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
     PlayerStopEffect(playerController) {
         viewModel.refresh()
     }

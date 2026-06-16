@@ -56,6 +56,12 @@ fun BrowseRoute(
         viewModel.initialize(endpointId)
     }
 
+    // Refresh data when returning to browse (e.g., from detail after playback).
+    // refresh() guards against empty initial state, so harmless on first entry.
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
     PlayerStopEffect(playerController) {
         viewModel.refresh()
     }

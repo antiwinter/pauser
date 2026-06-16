@@ -122,6 +122,11 @@ class DetailViewModel(
         viewModelScope.launch {
             val c = _client.value ?: return@launch
             if (endpointId == null) return@launch
+            // Clear episode selection so the resume effect can re-trigger focus after data update.
+            // Must happen *before* the IO suspension so compose processes the null state.
+            if (scope == DetailRefreshScope.Lists) {
+                _episodeIndex.value = null
+            }
             try {
                 withContext(Dispatchers.IO) {
                     refreshHeader(c)
@@ -175,13 +180,6 @@ class DetailViewModel(
 
         if (subEntryIdx !in subEntries.indices) {
             setEpisode(0, 0)
-            return
-        }
-
-        if (subEntryIdx == _subEntryIndex.value &&
-            episodeIdx == _episodeIndex.value &&
-            _episodes.value[episodeIdx] != null
-        ) {
             return
         }
 
