@@ -36,7 +36,6 @@ import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.ui.catalog.LaunchedScrollToIndexIfNeeded
 import com.opentune.content.ui.catalog.components.ThumbEntryComponent
-import com.opentune.content.ui.catalog.components.ThumbEntrySkeleton
 import com.opentune.content.ui.catalog.player.PlayerController
 import com.opentune.player.EntryStateKeys
 import com.opentune.storage.decodeSeriesProgress
@@ -192,22 +191,18 @@ private fun EpisodeRow(
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(totalCount, key = { episodes[it]?.ref ?: it }) { index ->
             val episode = episodes[index]
-            if (episode == null) {
-                ThumbEntrySkeleton(Modifier.width(200.dp))
+            val mod = if (index == focusIndex) {
+                Modifier.width(200.dp).focusRequester(resumeFocus)
             } else {
-                val mod = if (index == focusIndex) {
-                    Modifier.width(200.dp).focusRequester(resumeFocus)
-                } else {
-                    Modifier.width(200.dp)
-                }
-                ThumbEntryComponent(
-                    item = episode,
-                    onClick = onPlayEpisode,
-                    imageLoader = imageLoader,
-                    modifier = mod,
-                    onFocus = { onFocusEpisode(index) },
-                )
+                Modifier.width(200.dp)
             }
+            ThumbEntryComponent(
+                item = episode,
+                onClick = episode?.let { onPlayEpisode } ?: {},
+                imageLoader = imageLoader,
+                modifier = mod,
+                onFocus = { onFocusEpisode(index) },
+            )
         }
     }
 }

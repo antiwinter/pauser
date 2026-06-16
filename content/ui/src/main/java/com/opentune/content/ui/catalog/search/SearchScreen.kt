@@ -17,9 +17,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.FilenameDetector
@@ -27,7 +24,6 @@ import com.opentune.content.ui.catalog.components.MediaEntryComponent
 import com.opentune.content.ui.catalog.rememberGridFocusRequesters
 import com.opentune.storage.TitleLang
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SearchScreen(
     results: SnapshotStateList<EntryInfo>,
@@ -36,7 +32,6 @@ fun SearchScreen(
     titleLang: TitleLang,
     imageLoader: ImageLoader,
     initialFocusRef: String? = null,
-    onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowse: (EntryInfo) -> Unit,
@@ -54,7 +49,6 @@ fun SearchScreen(
             .padding(40.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(onClick = onBack) { Text("Back") }
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
@@ -63,7 +57,7 @@ fun SearchScreen(
             singleLine = true,
         )
         if (searching) {
-            Text("Searching…")
+            M3Text("Searching…")
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(5),

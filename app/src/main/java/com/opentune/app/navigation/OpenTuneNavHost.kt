@@ -87,6 +87,7 @@ fun OpenTuneNavHost() {
                         val entry = EntryInfo(ref = "", title = "", type = "Root")
                         cacheAndBrowse(sid, entry)
                     },
+                    onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
                     onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
                 )

@@ -33,7 +33,7 @@ private fun coverImageModel(cover: String?): Any? = when {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ThumbEntryComponent(
-    item: EntryInfo,
+    item: EntryInfo?,
     onClick: () -> Unit,
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
@@ -48,82 +48,73 @@ fun ThumbEntryComponent(
                 else Modifier
             ),
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Bottom layer: placeholder asset
-                AsyncImage(
-                    model = "file:///android_asset/art/thumb.png",
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentScale = ContentScale.Crop,
+        if (item == null) {
+            // Skeleton: episode data not yet available — gray placeholder, no thumb.png
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                 )
-
-                // Top layer: item image (transparent if genart failed)
-                val model = coverImageModel(item.cover)
-                if (model != null) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp, vertical = 8.dp)
+                        .fillMaxWidth(0.6f)
+                        .height(12.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            }
+        } else {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Bottom layer: placeholder asset for entries without cover art
                     AsyncImage(
-                        model = model,
-                        contentDescription = item.title,
-                        imageLoader = imageLoader,
+                        model = "file:///android_asset/art/thumb.png",
+                        contentDescription = null,
                         modifier = Modifier.fillMaxWidth(),
                         contentScale = ContentScale.Crop,
                     )
-                }
 
-                // Episode number badge top-left
-                item.indexNumber?.let { num ->
-                    Text(
-                        text = "E$num",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                    )
+                    // Top layer: actual cover image (transparent if genart failed)
+                    val model = coverImageModel(item.cover)
+                    if (model != null) {
+                        AsyncImage(
+                            model = model,
+                            contentDescription = item.title,
+                            imageLoader = imageLoader,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
+
+                    // Episode number badge top-left
+                    item.indexNumber?.let { num ->
+                        Text(
+                            text = "E$num",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
                 }
+                Text(
+                    text = item.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                )
             }
-            Text(
-                text = item.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            )
         }
     }
 }
 
-/** Placeholder matching [ThumbEntryComponent] layout while entry data is loading. */
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun ThumbEntrySkeleton(modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = "file:///android_asset/art/thumb.png",
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.Crop,
-            )
-        }
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 4.dp, vertical = 8.dp)
-                .fillMaxWidth(0.6f)
-                .height(12.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
-    }
-}

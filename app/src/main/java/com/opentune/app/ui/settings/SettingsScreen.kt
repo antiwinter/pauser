@@ -1,5 +1,6 @@
 package com.opentune.app.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onBack: () -> Unit,
 ) {
+    BackHandler(onBack = onBack)
+
     val scope = rememberCoroutineScope()
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
@@ -33,8 +36,6 @@ fun SettingsScreen(
             .padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Button(onClick = onBack) { Text("Back") }
-
         Text("Settings")
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

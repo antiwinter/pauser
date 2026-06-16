@@ -67,7 +67,7 @@ fun LaunchedRestoreFocus(
 ) {
     var restored by remember(restoreRef) { mutableStateOf(false) }
     LaunchedEffect(targetIndex, restoreRef) {
-        if (restored || restoreRef == null || targetIndex < 0) return@LaunchedEffect
+        if (restored || targetIndex < 0) return@LaunchedEffect
         requesters.getOrNull(targetIndex)?.requestFocus()
         restored = true
     }
@@ -80,7 +80,9 @@ fun rememberGridFocusRequesters(
     gridState: LazyGridState,
 ): List<FocusRequester> {
     val targetIndex = remember(items.size, initialFocusRef) {
-        restoreIndex(items, initialFocusRef)
+        val restored = restoreIndex(items, initialFocusRef)
+        // When no restore ref, focus the first item instead of skipping
+        if (restored < 0 && items.isNotEmpty()) 0 else restored
     }
     val requesters = rememberItemFocusRequesters(items.size)
 

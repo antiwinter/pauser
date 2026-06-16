@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 fun HomeRoute(
     onAddEndpoint: () -> Unit,
     onOpenBrowse: (String, String) -> Unit,
+    onOpenSettings: () -> Unit,
     onEditProvider: (String, String) -> Unit,
     onEditProxy: (String, String) -> Unit,
 ) {
@@ -101,6 +102,7 @@ fun HomeRoute(
                     Text(proxy.displayName)
                 }
             }
+            Button(onClick = onOpenSettings) { Text("Settings") }
             Button(onClick = onAddEndpoint) {
                 Text("[+]")
             }

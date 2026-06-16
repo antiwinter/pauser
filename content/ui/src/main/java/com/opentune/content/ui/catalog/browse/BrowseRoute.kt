@@ -1,10 +1,10 @@
 package com.opentune.content.ui.catalog.browse
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -31,26 +31,15 @@ fun BrowseRoute(
         .collectAsState(initial = TitleLang.Local)
 
     val client by viewModel.client.collectAsState()
-    val vmItems by viewModel.items.collectAsState()
-    val vmLoading by viewModel.loading.collectAsState()
-    val vmError by viewModel.error.collectAsState()
-    val vmTotal by viewModel.totalCount.collectAsState()
+    val items by viewModel.items.collectAsState()
+    val loading by viewModel.loading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val totalCount by viewModel.totalCount.collectAsState()
     val restoreFocusRef = remember(endpointId, initialEntryInfo.ref) {
         viewModel.lastFocusedItemRef.value
     }
 
-    val items = remember { mutableStateListOf<EntryInfo>() }
-    LaunchedEffect(vmItems) {
-        if (vmItems.isEmpty()) return@LaunchedEffect
-        if (items.size == vmItems.size && items.map { it.ref } == vmItems.map { it.ref }) {
-            for (i in vmItems.indices) {
-                items[i] = vmItems[i]
-            }
-        } else {
-            items.clear()
-            items.addAll(vmItems)
-        }
-    }
+    BackHandler { nav.popBackStack() }
 
     LaunchedEffect(endpointId) {
         viewModel.initialize(endpointId)
@@ -70,21 +59,19 @@ fun BrowseRoute(
 
     when {
         client == null || imageLoader == null -> Text("Loading…")
-        vmError != null && items.isEmpty() -> Text("Error: $vmError")
+        error != null && items.isEmpty() -> Text("Error: $error")
         else -> BrowseScreen(
             logTag = "OT_Browse_$endpointId",
             items = items,
-            loadMore = { startIndex, limit -> viewModel.listPage(startIndex, limit) },
+            totalCount = totalCount,
+            loading = loading,
+            error = error,
             subtitle = initialEntryInfo.title,
             titleLang = titleLang,
             imageLoader = imageLoader,
-            totalCount = vmTotal,
-            loading = vmLoading,
-            error = vmError,
             initialFocusRef = restoreFocusRef,
-            onBack = { nav.popBackStack() },
+            onLoadMore = { viewModel.loadMore() },
             onSearch = { nav.navigate(Routes.search(endpointId, initialEntryInfo.ref)) },
-            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
             onOpenBrowseLocation = { folderEntry ->
                 sharedVm.cache(folderEntry)

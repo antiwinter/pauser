@@ -1,5 +1,6 @@
 package com.opentune.content.ui.catalog.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +39,8 @@ fun SearchRoute(
         viewModel.lastFocusedItemRef.value
     }
 
+    BackHandler { nav.popBackStack() }
+
     LaunchedEffect(endpointId, scopeDecoded) {
         viewModel.initialize(endpointId, scopeDecoded)
     }
@@ -64,7 +67,6 @@ fun SearchRoute(
             imageLoader = imageLoader,
             titleLang = titleLang,
             initialFocusRef = restoreFocusRef,
-            onBack = { nav.popBackStack() },
             onQueryChange = { viewModel.setQuery(it) },
             onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
             onOpenBrowse = { entry ->

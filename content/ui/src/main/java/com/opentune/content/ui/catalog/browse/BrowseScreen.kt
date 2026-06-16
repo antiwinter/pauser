@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.browse
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,10 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
@@ -31,45 +27,27 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.ImageLoader
 import com.opentune.content.contract.EntryInfo
-import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.FilenameDetector
 import com.opentune.storage.TitleLang
 import com.opentune.content.ui.catalog.components.MediaEntryComponent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-private const val PAGE_SIZE = 30
 private const val COLUMNS = 5
 private const val OVERSCAN_ROWS = 3
 
-/**
- * Browse screen that displays items in a paginated grid.
- *
- * This component is ONLY responsible for:
- * - Displaying items provided by the caller
- * - Triggering loadMore when the user scrolls near the end
- *
- * Initial load is driven externally by the caller (ViewModel).
- * This ensures that when navigating back, the screen shows
- * cached items without clearing/reloading.
- */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     logTag: String,
-    items: SnapshotStateList<EntryInfo>,
-    loadMore: suspend (startIndex: Int, limit: Int) -> EntryList,
-    subtitle: String,
-    titleLang: TitleLang,
-    imageLoader: ImageLoader,
+    items: List<EntryInfo>,
     totalCount: Int,
     loading: Boolean,
     error: String?,
+    imageLoader: ImageLoader,
+    titleLang: TitleLang,
+    subtitle: String,
     initialFocusRef: String? = null,
-    onBack: () -> Unit,
+    onLoadMore: () -> Unit,
     onSearch: () -> Unit,
-    onOpenSettings: () -> Unit,
     onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowseLocation: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
@@ -78,7 +56,6 @@ fun BrowseScreen(
     onOpenAudioUnsupported: (String) -> Unit = {},
 ) {
     val gridState = rememberLazyGridState()
-    var localLoading by remember { mutableStateOf(loading) }
 
     val focusRequesters = rememberGridFocusRequesters(items, initialFocusRef, gridState)
 
@@ -91,23 +68,10 @@ fun BrowseScreen(
     }
 
     LaunchedEffect(nearEnd, items.size, totalCount) {
-        val effectiveLoading = localLoading || loading
-        if (nearEnd && !effectiveLoading && items.size < totalCount) {
-            localLoading = true
-            try {
-                val page = withContext(Dispatchers.IO) { loadMore(items.size, PAGE_SIZE) }
-                items.addAll(page.items)
-            } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    Log.e(logTag, "load more", e)
-                }
-            } finally {
-                localLoading = false
-            }
+        if (nearEnd && !loading && items.size < totalCount) {
+            onLoadMore()
         }
     }
-
-    val effectiveLoading = loading || localLoading
 
     Column(
         modifier = Modifier
@@ -118,17 +82,15 @@ fun BrowseScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(onClick = onBack) { Text("Back") }
             Button(onClick = onSearch) { Text("Search") }
-            Button(onClick = onOpenSettings) { Text("Settings") }
         }
         Text(text = subtitle, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         error?.let { Text("Error: $it") }
         if (error == null) {
             Text(
                 when {
-                    effectiveLoading && items.isEmpty() -> "Loading…"
-                    !effectiveLoading && items.isEmpty() -> "Nothing here."
+                    loading && items.isEmpty() -> "Loading…"
+                    !loading && items.isEmpty() -> "Nothing here."
                     totalCount > 0 && items.size < totalCount -> "Showing ${items.size} of $totalCount"
                     totalCount > 0 -> "$totalCount items"
                     else -> "${items.size} items"
@@ -170,7 +132,7 @@ fun BrowseScreen(
                     },
                 )
             }
-            if (effectiveLoading && items.size < totalCount) {
+            if (loading && items.size < totalCount) {
                 item(span = { GridItemSpan(COLUMNS) }) {
                     Text(
                         "Loading…",
