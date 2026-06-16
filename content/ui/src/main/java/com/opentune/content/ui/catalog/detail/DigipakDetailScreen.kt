@@ -107,7 +107,6 @@ private fun DigipakChildren(
                 item = child,
                 onClick = onPlayChild,
                 imageLoader = imageLoader,
-                selected = index == subEntryIndex,
                 modifier = Modifier.width(200.dp),
                 onFocus = { onFocusChild(index) },
             )

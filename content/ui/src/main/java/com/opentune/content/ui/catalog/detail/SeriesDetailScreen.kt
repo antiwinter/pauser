@@ -197,9 +197,7 @@ private fun EpisodeRow(
     episodes: Map<Int, EntryInfo>,
     imageLoader: ImageLoader,
     seasonUpFocus: FocusRequester?,
-    // NOTE: we don't use focus requester, but define a selected state index here.
-    // the flow: onFocus -> setEpisode -> episodeIndex -> set style
-    // the focus is just focus, don't apply special style
+    // NOTE: selectedIndex drives scroll-into-view only; focus styling comes from TV focus.
     selectedIndex: Int? = null,
     onFocusEpisode: (Int) -> Unit,
     onPlayEpisode: () -> Unit,
@@ -220,7 +218,6 @@ private fun EpisodeRow(
                     item = episode,
                     onClick = onPlayEpisode,
                     imageLoader = imageLoader,
-                    selected = index == selectedIndex,
                     modifier = Modifier
                         .width(200.dp)
                         .then(
