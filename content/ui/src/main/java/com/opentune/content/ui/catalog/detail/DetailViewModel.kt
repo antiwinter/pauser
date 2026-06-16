@@ -171,22 +171,27 @@ class DetailViewModel(
 
     fun setEpisode(subEntryIdx: Int, episodeIdx: Int) {
         val subEntries = _subEntries.value
-        if (subEntries.isEmpty() || subEntryIdx !in subEntries.indices || episodeIdx < 0) return
+        if (subEntries.isEmpty()) return
+
+        if (subEntryIdx !in subEntries.indices) {
+            setEpisode(0, 0)
+            return
+        }
 
         if (subEntryIdx == _subEntryIndex.value && _episodes.value[episodeIdx] != null) {
             _episodeIndex.value = episodeIdx
             return
         }
 
-        if (subEntryIdx != _subEntryIndex.value || _episodes.value[episodeIdx] == null) {
-            val mergePages = subEntryIdx == _subEntryIndex.value
-            _subEntryIndex.value = subEntryIdx
-            episodeFetchJob?.cancel()
-            episodeFetchJob = viewModelScope.launch {
-                fetchEpisodePage(subEntryIdx, pageStart(episodeIdx), mergePages)
-                if (_episodes.value[episodeIdx] != null) {
-                    _episodeIndex.value = episodeIdx
-                }
+        val mergePages = subEntryIdx == _subEntryIndex.value
+        _subEntryIndex.value = subEntryIdx
+        episodeFetchJob?.cancel()
+        episodeFetchJob = viewModelScope.launch {
+            fetchEpisodePage(subEntryIdx, pageStart(episodeIdx), mergePages)
+            if (_episodes.value[episodeIdx] != null) {
+                _episodeIndex.value = episodeIdx
+            } else if (episodeIdx != 0) {
+                setEpisode(subEntryIdx, 0)
             }
         }
     }

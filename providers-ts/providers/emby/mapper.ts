@@ -62,6 +62,9 @@ export function toListItem(
   );
 
   const ud = item.UserData as { PlaybackPositionTicks?: number; IsFavorite?: boolean; Played?: boolean } | null | undefined;
+  const positionMs = entryType === 'Series'
+    ? null
+    : Math.floor((ud?.PlaybackPositionTicks ?? 0) / 10_000);
   return {
     ref: id,
     title: (item.Name as string | undefined) ?? id,
@@ -69,7 +72,7 @@ export function toListItem(
     cover,
     userData: ud
       ? {
-          positionMs: Math.floor((ud.PlaybackPositionTicks ?? 0) / 10_000),
+          positionMs,
           isFavorite: ud.IsFavorite ?? false,
           played:     ud.Played ?? false,
         }

@@ -327,7 +327,9 @@ function validateEntryInfoFields(item, path) {
   }
   if (item.userData != null) {
     assertObject(item.userData, `${path}.userData`);
-    assertType(item.userData.positionMs, 'number', `${path}.userData.positionMs`);
+    if (item.userData.positionMs != null) {
+      assertType(item.userData.positionMs, 'number', `${path}.userData.positionMs`);
+    }
     assertType(item.userData.isFavorite, 'boolean', `${path}.userData.isFavorite`);
     assertType(item.userData.played, 'boolean', `${path}.userData.played`);
   }

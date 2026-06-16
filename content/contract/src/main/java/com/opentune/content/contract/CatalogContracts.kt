@@ -7,7 +7,8 @@ typealias EntryType = String
 
 @Serializable
 data class EntryUserData(
-    val positionMs: Long,
+    /** Playback resume position; null when the provider does not report it (e.g. series sXeY). */
+    val positionMs: Long? = null,
     val isFavorite: Boolean,
     val played: Boolean,
 )

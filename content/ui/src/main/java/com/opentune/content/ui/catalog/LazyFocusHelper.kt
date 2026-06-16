@@ -39,10 +39,15 @@ suspend fun LazyGridState.scrollToIndexIfNeeded(index: Int) {
 }
 
 @Composable
-fun LaunchedScrollToIndexIfNeeded(listState: LazyListState, index: Int?) {
-    LaunchedEffect(index) {
+fun LaunchedScrollToIndexIfNeeded(
+    listState: LazyListState,
+    index: Int?,
+    focusRequester: FocusRequester? = null,
+) {
+    LaunchedEffect(index, focusRequester) {
         val idx = index ?: return@LaunchedEffect
         listState.scrollToIndexIfNeeded(idx)
+        focusRequester?.requestFocus()
     }
 }
 

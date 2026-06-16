@@ -3,10 +3,10 @@ package com.opentune.storage
 import kotlinx.coroutines.flow.Flow
 
 fun decodeSeriesProgress(packed: Long): Pair<Int, Int> =
-    (packed ushr 32).toInt() to (packed and 0xFFFF_FFFFL).toInt()
+    (packed / 10000).toInt() to (packed % 10000).toInt()
 
 fun encodeSeriesProgress(seasonIndex: Int, episodeIndex: Int): Long =
-    (seasonIndex.toLong() shl 32) or episodeIndex.toLong()
+    seasonIndex.toLong() * 10000 + episodeIndex
 
 data class EntryStateKey(
     val endpointId: String,

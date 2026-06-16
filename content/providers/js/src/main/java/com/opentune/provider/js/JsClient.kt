@@ -292,7 +292,8 @@ class JsClient(
             cover = cover,
             userData = ud?.let {
                 EntryUserData(
-                    positionMs = it["positionMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    positionMs = it["positionMs"]?.takeIf { field -> field !is JsonNull }
+                        ?.jsonPrimitive?.content?.toLongOrNull(),
                     isFavorite = it["isFavorite"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                     played = it["played"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
                 )

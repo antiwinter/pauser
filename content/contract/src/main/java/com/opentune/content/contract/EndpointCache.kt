@@ -127,7 +127,6 @@ object EndpointCache {
     suspend fun patchEntryFavorite(endpointId: String, itemRef: String, isFavorite: Boolean) = mutex.withLock {
         patchItem(endpointId, itemRef) { item ->
             val base = item.userData ?: EntryUserData(
-                positionMs = 0L,
                 isFavorite = isFavorite,
                 played = false,
             )

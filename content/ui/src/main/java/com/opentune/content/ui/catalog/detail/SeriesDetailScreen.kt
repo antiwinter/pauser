@@ -197,15 +197,16 @@ private fun EpisodeRow(
     episodes: Map<Int, EntryInfo>,
     imageLoader: ImageLoader,
     seasonUpFocus: FocusRequester?,
-    // NOTE: selectedIndex drives scroll-into-view only; focus styling comes from TV focus.
     selectedIndex: Int? = null,
     onFocusEpisode: (Int) -> Unit,
     onPlayEpisode: () -> Unit,
 ) {
     if (totalCount == 0) return
     val listState = rememberLazyListState()
+    val selectedFocusRequester = remember { FocusRequester() }
+    val focusIndex = selectedIndex?.takeIf { episodes[it] != null }
 
-    LaunchedScrollToIndexIfNeeded(listState, selectedIndex)
+    LaunchedScrollToIndexIfNeeded(listState, focusIndex, selectedFocusRequester)
 
     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(
@@ -220,6 +221,13 @@ private fun EpisodeRow(
                     imageLoader = imageLoader,
                     modifier = Modifier
                         .width(200.dp)
+                        .then(
+                            if (index == focusIndex) {
+                                Modifier.focusRequester(selectedFocusRequester)
+                            } else {
+                                Modifier
+                            },
+                        )
                         .then(
                             if (seasonUpFocus != null) {
                                 Modifier.focusProperties { up = seasonUpFocus }

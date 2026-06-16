@@ -87,7 +87,8 @@ export type ValidationResult =
 export type EntryType = string;
 
 export interface EntryUserData {
-  positionMs: number;
+  /** Omitted or null when the provider has no resume position (e.g. series sXeY). */
+  positionMs?: number | null;
   isFavorite: boolean;
   played: boolean;
 }
