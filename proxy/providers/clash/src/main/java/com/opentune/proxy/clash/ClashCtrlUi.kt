@@ -37,10 +37,24 @@ import com.opentune.core.form.TvOutlinedTextField
 import kotlinx.coroutines.launch
 
 private fun latencyColor(ms: Long?): Color = when {
-    ms == null || ms < 0 -> Color(0xFF808080)
-    ms < 100            -> Color(0xFF2E7D32)
-    ms < 300            -> Color(0xFFF9A825)
-    else                -> Color(0xFFC62828)
+    ms == null           -> Color(0xFF808080)  // not tested yet
+    ms < 0 || ms == 0L   -> Color(0xFFC62828)  // timeout / failed
+    ms <= 200            -> Color(0xFF2E7D32)  // green: fast
+    ms <= 300            -> Color(0xFFF9A825)  // yellow: medium
+    else                 -> Color(0xFFE65100)  // orange: slow
+}
+
+private fun latencyText(ms: Long?): String = when {
+    ms == null           -> "—"
+    ms < 0 || ms == 0L   -> "timeout"
+    else                 -> "${ms}ms"
+}
+
+/** Sort key: timeout/null go last, valid latencies sort ascending. */
+private fun latencySortKey(ms: Long?): Long = when {
+    ms == null           -> Long.MAX_VALUE
+    ms < 0 || ms == 0L   -> Long.MAX_VALUE - 1  // timeout before unknown
+    else                 -> ms
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -57,24 +71,53 @@ fun ClashCtrlUi(
     var activeProxy by remember { mutableStateOf<String?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
     var subscriptionUrl by remember { mutableStateOf("") }
+    var subscriptionLabel by remember { mutableStateOf<String?>(null) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
+    /** Load current proxy lines from controller without testing latency. */
+    fun load() {
+        scope.launch {
+            try {
+                subscriptionLabel = client.fetchSubscriptionLabel()
+                lines = client.fetchProxyLines()
+                // Use cached latency from Clash proxy history if available
+                latencies = lines.associate { it.name to (it.latencyMs ?: Long.MIN_VALUE) }
+                    .filterValues { it != Long.MIN_VALUE }
+                activeProxy = client.getActiveProxy()
+            } catch (_: Exception) { }
+        }
+    }
+
+    /** Refresh subscription + re-test all latency. */
     fun refresh() {
         if (isRefreshing) return
         isRefreshing = true
+        errorMsg = null
+        latencies = emptyMap()
         scope.launch {
             try {
-                val fetched = client.fetchProxyLines()
-                lines = fetched
-                activeProxy = client.getActiveProxy()
-                val lats = client.testLatencyParallel(fetched)
-                latencies = lats
+                val subscriptionOk = if (subscriptionUrl.isNotBlank()) {
+                    client.refreshSubscription(subscriptionUrl)
+                } else true
+
+                if (subscriptionOk) {
+                    if (subscriptionUrl.isNotBlank()) subscriptionUrl = ""
+                    subscriptionLabel = client.fetchSubscriptionLabel()
+                    val fetched = client.fetchProxyLines()
+                    val lats = client.testLatencyParallel(fetched)
+                    latencies = lats
+                    lines = fetched.sortedBy { latencySortKey(lats[it.name]) }
+                    activeProxy = client.getActiveProxy()
+                } else {
+                    errorMsg = "Subscription failed"
+                }
             } finally {
                 isRefreshing = false
             }
         }
     }
 
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(Unit) { load() }
 
     Column(
         modifier = Modifier
@@ -100,6 +143,9 @@ fun ClashCtrlUi(
                 value = subscriptionUrl,
                 onValueChange = { subscriptionUrl = it },
                 label = { Text("Subscription URL", fontSize = 12.sp) },
+                placeholder = if (subscriptionLabel != null) {
+                    { Text(subscriptionLabel!!, fontSize = 12.sp, color = Color(0xFF808080)) }
+                } else null,
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -112,12 +158,26 @@ fun ClashCtrlUi(
             }
         }
 
+        // Error message
+        errorMsg?.let { msg ->
+            LaunchedEffect(msg) {
+                kotlinx.coroutines.delay(3000)
+                errorMsg = null
+            }
+            Text(
+                text = msg,
+                color = Color(0xFFC62828),
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         // Proxy line grid
         LazyVerticalGrid(
             columns = GridCells.Adaptive(160.dp),
-            contentPadding = PaddingValues(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
             items(lines, key = { it.name }) { line ->
@@ -147,29 +207,31 @@ private fun ProxyLineChip(
     isActive: Boolean,
     onClick: () -> Unit,
 ) {
-    val bgColor = latencyColor(latencyMs).copy(alpha = 0.18f)
+    val latColor = latencyColor(latencyMs)
+    val bgColor = latColor.copy(alpha = 0.18f)
     val borderColor = if (isActive) Color(0xFF1565C0) else Color.Transparent
 
     Button(
         onClick = onClick,
         modifier = Modifier
-            .height(64.dp)
+            .height(40.dp)
             .fillMaxWidth()
-            .border(width = 2.dp, color = borderColor, shape = RoundedCornerShape(8.dp))
-            .background(bgColor, RoundedCornerShape(8.dp)),
+            .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(6.dp))
+            .background(bgColor, RoundedCornerShape(6.dp)),
     ) {
-        Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+        Box(modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
             Text(
                 text = name,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.CenterStart),
             )
             Text(
-                text = latencyMs?.takeIf { it >= 0 }?.let { "${it}ms" } ?: "—",
+                text = latencyText(latencyMs),
+                color = latColor,
                 fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.BottomEnd),
+                modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
     }

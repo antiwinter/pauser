@@ -34,4 +34,11 @@ data class ClashConfigsResponse(
     val mixedPort: Int? = null,
     val port: Int? = null,
     val socksPort: Int? = null,
+    val path: String? = null,
+)
+
+@Serializable
+data class ClashConfigsReloadRequest(
+    val path: String = "",
+    val payload: String = "",
 )
