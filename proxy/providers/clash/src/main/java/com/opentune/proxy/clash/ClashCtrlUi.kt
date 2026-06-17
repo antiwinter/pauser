@@ -3,7 +3,6 @@ package com.opentune.proxy.clash
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,12 +24,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.core.form.TvOutlinedTextField
@@ -175,7 +176,7 @@ fun ClashCtrlUi(
         // Proxy line grid
         LazyVerticalGrid(
             columns = GridCells.Adaptive(160.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp),
+            contentPadding = PaddingValues(horizontal = 1.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth().weight(1f),
@@ -208,30 +209,37 @@ private fun ProxyLineChip(
     onClick: () -> Unit,
 ) {
     val latColor = latencyColor(latencyMs)
-    val bgColor = latColor.copy(alpha = 0.18f)
-    val borderColor = if (isActive) Color(0xFF1565C0) else Color.Transparent
+    val shape = RoundedCornerShape(2.dp)
 
     Button(
         onClick = onClick,
+        colors = ButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent,
+        ),
         modifier = Modifier
-            .height(40.dp)
+            .height(50.dp)
             .fillMaxWidth()
-            .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(6.dp))
-            .background(bgColor, RoundedCornerShape(6.dp)),
+            .shadow(if (isActive) 1.dp else 0.5.dp, shape)
+            .let { mod ->
+                if (isActive) mod.border(width = 1.5.dp, color = Color(0xFF1565C0), shape = shape)
+                else mod
+            },
     ) {
-        Box(modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp, vertical = 1.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
                 text = name,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 fontSize = 11.sp,
-                modifier = Modifier.align(Alignment.CenterStart),
             )
             Text(
                 text = latencyText(latencyMs),
                 color = latColor,
                 fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
     }
