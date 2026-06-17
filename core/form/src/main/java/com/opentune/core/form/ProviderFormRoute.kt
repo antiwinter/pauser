@@ -1,6 +1,7 @@
 package com.opentune.core.form
 
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +72,8 @@ fun ProviderFormRoute(
     onDone: () -> Unit,
     onDelete: (suspend () -> Unit)? = null,
 ) {
+    BackHandler(onBack = onDone)
+
     val sortedFields    = remember(fields) { fields.sortedBy { it.order } }
     val nonQrFields     = remember(sortedFields) { sortedFields.filter { it.kind != FormFieldKind.QrCode && it.kind != FormFieldKind.ProxySelector } }
     val qrFields        = remember(sortedFields) { sortedFields.filter { it.kind == FormFieldKind.QrCode } }

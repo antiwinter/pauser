@@ -24,7 +24,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 
 val navigationKeys = setOf(
     Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
-    Key.Tab, Key.Back,
+    Key.Tab,
 )
 
 fun isCharacterKey(key: Key): Boolean =
@@ -53,7 +53,10 @@ fun TvOutlinedTextField(
                 if (!it.isFocused) editing = false
             }
             .onPreviewKeyEvent { event ->
-                if (event.key in navigationKeys && event.type == KeyEventType.KeyDown) {
+                // Back: exit editing if active, otherwise let BackHandler / nav handle it
+                if (event.key == Key.Back && event.type == KeyEventType.KeyDown) {
+                    if (editing) { editing = false; true } else false
+                } else if (event.key in navigationKeys && event.type == KeyEventType.KeyDown) {
                     when (event.key) {
                         Key.DirectionUp    -> focusManager.moveFocus(FocusDirection.Up)
                         Key.DirectionDown  -> focusManager.moveFocus(FocusDirection.Down)
