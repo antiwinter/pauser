@@ -98,9 +98,10 @@ class PlayerController(
 
     fun play() {
         _isShown.value = true
-        launchResolve()
-        playbackSession.play()
-        _osdJob?.cancel()
+        launchResolve(onComplete = {
+            playbackSession.play()
+            _osdJob?.cancel()
+        })
         Log.d(LOG_TAG, "play: isShown=true")
     }
 
@@ -143,7 +144,7 @@ class PlayerController(
         }
     }
 
-    private fun launchResolve(withDelay: Boolean = false) {
+    private fun launchResolve(withDelay: Boolean = false, onComplete: (() -> Unit)? = null) {
         _debounceJob?.cancel()
         _debounceJob = viewModelScope.launch {
             try {
@@ -154,6 +155,7 @@ class PlayerController(
                 }
                 startPrebufferOsd(_pendingItemRef!!)
                 resolveAndPrepare()
+                onComplete?.invoke()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "launchResolve: failed", e)
