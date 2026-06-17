@@ -8,4 +8,6 @@
     <string name="player_settings_audio">Audio track</string>
     <string name="player_settings_speed">Playback speed</string>
     <string name="player_audio_auto">Auto</string>
+    <string name="player_settings_enable_hdr">Enable HDR</string>
+    <string name="player_settings_disable_hdr">Disable HDR</string>
 </resources>

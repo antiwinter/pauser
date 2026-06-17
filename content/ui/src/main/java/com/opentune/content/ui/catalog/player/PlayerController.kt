@@ -100,6 +100,7 @@ class PlayerController(
         _isShown.value = true
         launchResolve()
         playbackSession.play()
+        _osdJob?.cancel()
         Log.d(LOG_TAG, "play: isShown=true")
     }
 

@@ -141,10 +141,13 @@ private fun TvPlayerSurfaceContent(
     }
 
     val menu = rememberMenuOverlayState(
-        surface.subtitleCtrl.menuEntry,
-        surface.subtitleCtrl.adjustMenuEntry,
-        surface.audioCtrl.menuEntry,
-        surface.speedCtrl.menuEntry,
+        *buildList {
+            add(surface.subtitleCtrl.menuEntry)
+            add(surface.subtitleCtrl.adjustMenuEntry)
+            add(surface.audioCtrl.menuEntry)
+            add(surface.speedCtrl.menuEntry)
+            if (surface.hdrCtrl.shouldShow) add(surface.hdrCtrl.menuEntry)
+        }.toTypedArray()
     )
 
     val trackInfo: TrackInfo by surface.trackInfo
@@ -157,6 +160,8 @@ private fun TvPlayerSurfaceContent(
         audioMime = trackInfo.audioMime,
         audioDecoderStatus = trackInfo.audioDecoderStatus,
         mbpsState = surface.bandwidthMbps,
+        isHdrCapable = trackInfo.isHdrCapable,
+        isHdrEnabled = surface.hdrCtrl.isHdrEnabled,
     )
 
     if (controllerState != 0) infoOverlay.show() else infoOverlay.hide()
@@ -228,6 +233,7 @@ private fun TvPlayerSurfaceContent(
             },
             subtitleTranslationYPx = surface.subtitleCtrl.translationYPx,
             subtitleSizeScale = surface.subtitleCtrl.sizeScale,
+            useSurfaceView = surface.hdrCtrl.isHdrEnabled,
         )
 
         AnimatedVisibility(

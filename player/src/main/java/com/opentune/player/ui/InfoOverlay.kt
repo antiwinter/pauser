@@ -28,6 +28,8 @@ internal class InfoOverlayState(
     val videoDecoderStatus: String?,
     val audioMime: String?,
     val audioDecoderStatus: String?,
+    val isHdrCapable: Boolean,
+    val isHdrEnabled: Boolean,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -71,6 +73,13 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                     color = if (isTrackFailed(state.audioMime, state.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
+                if (state.isHdrCapable) {
+                    Text(
+                        text = "HDR",
+                        color = if (state.isHdrEnabled) Color(0xFF4CAF50) else Color.White,
+                        fontSize = 14.sp,
+                    )
+                }
                 state.displayInfo.bitrate?.takeIf { it > 0 }?.let { br ->
                     Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
@@ -125,9 +134,11 @@ internal fun rememberInfoOverlayState(
     audioMime: String?,
     audioDecoderStatus: String?,
     mbpsState: MutableFloatState,
+    isHdrCapable: Boolean = false,
+    isHdrEnabled: Boolean = false,
 ): InfoOverlayState {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, displayInfo, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus) {
+    return remember(instanceKey, displayInfo, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled) {
         InfoOverlayState(
             displayInfo = displayInfo,
             durationMs = exo.duration.coerceAtLeast(0L),
@@ -135,6 +146,8 @@ internal fun rememberInfoOverlayState(
             videoDecoderStatus = videoDecoderStatus,
             audioMime = audioMime,
             audioDecoderStatus = audioDecoderStatus,
+            isHdrCapable = isHdrCapable,
+            isHdrEnabled = isHdrEnabled,
             showState = showState,
             mbpsState = mbpsState,
         )

@@ -65,7 +65,7 @@ fun NavGraphBuilder.contentRoutes(
             onPollQr = if (hasQr) { token ->
                 qrClientRef[0]?.pollQr(token) ?: QrResult.Error("no client")
             } else null,
-            onDone = { nav.popBackStack() },
+            onDone = { nav.popBackStack(Routes.HOME, inclusive = false) },
             onDelete = if (!isAdd) {
                 { EndpointConfigRepository.removeEndpoint(endpointId) }
             } else null,

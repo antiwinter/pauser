@@ -1,13 +1,19 @@
 package com.opentune.player.engine
 
+import android.content.Context
+import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.util.Log
+import android.view.Display
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.C
+import androidx.media3.common.ColorInfo
+import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
@@ -19,6 +25,7 @@ internal data class TrackInfo(
     val videoDecoderStatus: String = "",
     val audioMime: String? = null,
     val audioDecoderStatus: String = "",
+    val isHdrCapable: Boolean = false,
 )
 
 // MIME types and availability come from onTracksChanged via lookFor().
@@ -45,6 +52,7 @@ internal fun rememberTrackInfo(
     instanceKey: String,
     mainHandler: Handler,
 ): State<TrackInfo> {
+    val context = LocalContext.current
     val state = remember(instanceKey) { mutableStateOf(TrackInfo()) }
 
     DisposableEffect(exo, instanceKey) {
@@ -64,8 +72,24 @@ internal fun rememberTrackInfo(
                     return mime to true
                 }
 
+                fun lookForFormat(trackType: @C.TrackType Int): Format? {
+                    for (group in tracks.groups) {
+                        if (group.type != trackType) continue
+                        for (i in 0 until group.length) {
+                            if (group.isTrackSelected(i))
+                                return group.getTrackFormat(i)
+                        }
+                    }
+                    return null
+                }
+
                 val (vm, vNA) = lookFor(C.TRACK_TYPE_VIDEO)
                 val (am, aNA) = lookFor(C.TRACK_TYPE_AUDIO)
+
+                val videoFormat = lookForFormat(C.TRACK_TYPE_VIDEO)
+                val hdrContent = videoFormat?.colorInfo != null && ColorInfo.isTransferHdr(videoFormat.colorInfo)
+                val displayHdr = isDisplayHdrCapable(context)
+                val hdrCapable = hdrContent && displayHdr
 
                 mainHandler.post {
                     val current = state.value
@@ -74,11 +98,13 @@ internal fun rememberTrackInfo(
                         videoDecoderStatus = if (vNA) "n/a" else current.videoDecoderStatus,
                         audioMime = am,
                         audioDecoderStatus = if (aNA) "n/a" else current.audioDecoderStatus,
+                        isHdrCapable = hdrCapable,
                     )
                     Log.d(
                         "TrackInfo",
                         "onTracksChanged videoMime=$vm audioMime=$am " +
-                            "vNA=$vNA aNA=$aNA stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
+                            "vNA=$vNA aNA=$aNA hdrContent=$hdrContent displayHdr=$displayHdr " +
+                            "stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
                     )
                     state.value = updated
                 }
@@ -131,4 +157,11 @@ internal fun rememberTrackInfo(
     }
 
     return state
+}
+
+/** Checks whether the device's primary display supports any HDR profile. */
+private fun isDisplayHdrCapable(context: Context): Boolean {
+    val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    val display = dm.getDisplay(Display.DEFAULT_DISPLAY)
+    return display.isHdr()
 }

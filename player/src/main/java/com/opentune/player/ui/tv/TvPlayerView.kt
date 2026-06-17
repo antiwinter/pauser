@@ -226,27 +226,33 @@ internal fun TvPlayerView(
     onKey: ((KeyEvent) -> Boolean)? = null,
     subtitleTranslationYPx: Float = 0f,
     subtitleSizeScale: Float = 1f,
+    useSurfaceView: Boolean = false,
 ) {
-    AndroidView(
-        factory = { context ->
-            val view = LayoutInflater.from(context)
-                .inflate(R.layout.opentune_player_view, null, false) as OpenTuneTvPlayerView
-            view.player = player
-            configurePlayerViewDefaults(view)
-            onPlayerViewBound(view)
-            view
-        },
-        update = { view ->
-            if (view.player !== player) view.player = player
-            view.session = session
-            view.openMenuCallback = onOpenMenu
-            view.onBack = onBack
-            view.onTransportKey = onTransportKey
-            view.onKey = onKey
-            applySubtitleStyle(view, subtitleTranslationYPx, subtitleSizeScale)
-        },
-        modifier = modifier
-            .fillMaxSize()
-            .background(ComposeColor.Black),
-    )
+    // Key on useSurfaceView so the AndroidView is recreated when HDR toggles.
+    // SurfaceView is required for HDR passthrough; TextureView forces SDR tone-mapping.
+    val layoutRes = if (useSurfaceView) R.layout.opentune_player_view_hdr else R.layout.opentune_player_view
+    androidx.compose.runtime.key(useSurfaceView) {
+        AndroidView(
+            factory = { context ->
+                val view = LayoutInflater.from(context)
+                    .inflate(layoutRes, null, false) as OpenTuneTvPlayerView
+                view.player = player
+                configurePlayerViewDefaults(view)
+                onPlayerViewBound(view)
+                view
+            },
+            update = { view ->
+                if (view.player !== player) view.player = player
+                view.session = session
+                view.openMenuCallback = onOpenMenu
+                view.onBack = onBack
+                view.onTransportKey = onTransportKey
+                view.onKey = onKey
+                applySubtitleStyle(view, subtitleTranslationYPx, subtitleSizeScale)
+            },
+            modifier = modifier
+                .fillMaxSize()
+                .background(ComposeColor.Black),
+        )
+    }
 }

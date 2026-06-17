@@ -14,9 +14,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.manager.AudioManager
+import com.opentune.player.manager.HdrManager
 import com.opentune.player.manager.SpeedManager
 import com.opentune.player.manager.SubtitleManager
 import com.opentune.player.manager.rememberAudioManager
+import com.opentune.player.manager.rememberHdrManager
 import com.opentune.player.manager.rememberSpeedManager
 import com.opentune.player.manager.rememberSubtitleManager
 import kotlinx.coroutines.delay
@@ -27,6 +29,7 @@ internal class PlaybackSurface(
     val subtitleCtrl: SubtitleManager,
     val audioCtrl: AudioManager,
     val speedCtrl: SpeedManager,
+    val hdrCtrl: HdrManager,
     val trackInfo: State<TrackInfo>,
     val bandwidthMbps: MutableFloatState,
     private val session: PlaybackSession,
@@ -50,6 +53,7 @@ internal fun rememberPlaybackSurface(
 
     val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
+    val hdrCtrl = rememberHdrManager(trackInfo)
     val subtitleCtrl = rememberSubtitleManager(
         exo = exo,
         spec = spec,
@@ -70,6 +74,7 @@ internal fun rememberPlaybackSurface(
             subtitleCtrl = subtitleCtrl,
             audioCtrl = audioCtrl,
             speedCtrl = speedCtrl,
+            hdrCtrl = hdrCtrl,
             trackInfo = trackInfo,
             bandwidthMbps = bandwidthMbps,
             session = session,
