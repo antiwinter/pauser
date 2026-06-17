@@ -90,6 +90,7 @@ fun OpenTuneNavHost() {
                     onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
                     onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
+                    onCtrlProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyCtrl(pt, id)) },
                 )
             }
             composable(Routes.ADD_ENDPOINT) {

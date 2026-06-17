@@ -25,26 +25,50 @@ class ClashProxyClient(private val values: Map<String, String>) : ProxyClient {
 
     private val controllerClient = OkHttpClient()
 
+    /** Proxy port resolved from Clash controller API (/configs). Null until fetched. */
+    private var resolvedProxyPort: Int? = null
+
+    private val host: String = runCatching {
+        java.net.URL(controllerUrl).host
+    }.getOrDefault("127.0.0.1")
+
     private fun baseRequest(path: String): Request.Builder =
         Request.Builder()
             .url("$controllerUrl$path")
             .apply { if (secret.isNotBlank()) header("Authorization", "Bearer $secret") }
 
+    /**
+     * Fetch the proxy port from the Clash controller API (/configs).
+     * Prefer mixedPort, then port (HTTP proxy), then socksPort.
+     * Falls back to 7890 if nothing is configured (Clash defaults).
+     */
+    private suspend fun resolveProxyPort(): Int = withContext(Dispatchers.IO) {
+        resolvedProxyPort ?: try {
+            val req = baseRequest("/configs").build()
+            val body = controllerClient.newCall(req).execute().use { it.body?.string() }
+            val configs = body?.let { json.decodeFromString<ClashConfigsResponse>(it) }
+            val port = configs?.mixedPort
+                ?: configs?.port
+                ?: configs?.socksPort
+                ?: 7890
+            resolvedProxyPort = port
+            port
+        } catch (_: Exception) {
+            7890
+        }
+    }
+
     override fun getHttpClient(): OkHttpClient {
-        // Clash default mixed-port proxy
-        val host = runCatching {
-            java.net.URL(controllerUrl).host
-        }.getOrDefault("127.0.0.1")
+        val proxyPort = resolvedProxyPort ?: 7890
         return OkHttpClient.Builder()
-            .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(host, 7890)))
+            .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(host, proxyPort)))
             .build()
     }
 
     override fun getConfig(): Map<String, String> = buildMap {
-        val host = runCatching { java.net.URL(controllerUrl).host }.getOrDefault("127.0.0.1")
         put("type", "clash")
         put("host", host)
-        put("port", "7890")
+        put("port", (resolvedProxyPort ?: 7890).toString())
         put("controllerUrl", controllerUrl)
         put("selectorName", selectorName)
     }
@@ -56,11 +80,13 @@ class ClashProxyClient(private val values: Map<String, String>) : ProxyClient {
             resp.use {
                 if (!it.isSuccessful) return@withContext ProxyValidationResult.Error("Controller responded ${it.code}")
             }
+            resolveProxyPort() // cache the proxy port for later use
             ProxyValidationResult.Success(
                 name = values["name"]?.ifBlank { null } ?: controllerUrl,
                 fields = mapOf(
                     "url" to controllerUrl,
                     "secret" to secret,
+                    "port" to (resolvedProxyPort ?: 7890).toString(),
                     "name" to (values["name"] ?: ""),
                 ),
             )
@@ -127,13 +153,13 @@ class ClashProxyClient(private val values: Map<String, String>) : ProxyClient {
         }
     }
 
-    override val ctrlUI: (@Composable (onNavigateToEdit: () -> Unit, onDismiss: () -> Unit) -> Unit)? =
-        { onNavigateToEdit, onDismiss ->
+    override val ctrlUI: (@Composable (onNavigateToEdit: () -> Unit, onBack: () -> Unit) -> Unit)? =
+        { onNavigateToEdit, onBack ->
             ClashCtrlUi(
                 proxyId = "",
                 client = this,
                 onNavigateToEdit = onNavigateToEdit,
-                onDismiss = onDismiss,
+                onBack = onBack,
             )
         }
 }

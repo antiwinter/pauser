@@ -28,3 +28,10 @@ data class ClashProxiesResponse(
 data class ClashDelayResponse(
     val delay: Int = 0,
 )
+
+@Serializable
+data class ClashConfigsResponse(
+    val mixedPort: Int? = null,
+    val port: Int? = null,
+    val socksPort: Int? = null,
+)

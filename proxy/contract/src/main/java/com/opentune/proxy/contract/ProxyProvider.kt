@@ -18,7 +18,7 @@ interface ProxyClient {
     fun getConfig(): Map<String, String>
     suspend fun test(): ProxyValidationResult
 
-    val ctrlUI: (@Composable (onNavigateToEdit: () -> Unit, onDismiss: () -> Unit) -> Unit)?
+    val ctrlUI: (@Composable (onNavigateToEdit: () -> Unit, onBack: () -> Unit) -> Unit)?
         get() = null
 }
 

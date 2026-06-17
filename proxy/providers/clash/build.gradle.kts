@@ -17,6 +17,7 @@ android {
 
 dependencies {
     api(project(":proxy:contract"))
+    implementation(project(":core:form"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

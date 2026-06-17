@@ -16,10 +16,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,28 +25,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import com.opentune.core.form.TvOutlinedTextField
 import kotlinx.coroutines.launch
-
-private val navigationKeys = setOf(
-    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
-    Key.Tab, Key.Back,
-)
 
 private fun latencyColor(ms: Long?): Color = when {
     ms == null || ms < 0 -> Color(0xFF808080)
@@ -65,17 +49,14 @@ fun ClashCtrlUi(
     proxyId: String,
     client: ClashProxyClient,
     onNavigateToEdit: () -> Unit,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var lines by remember { mutableStateOf<List<com.opentune.proxy.clash.ClashProxyLine>>(emptyList()) }
+    var lines by remember { mutableStateOf<List<ClashProxyLine>>(emptyList()) }
     var latencies by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var activeProxy by remember { mutableStateOf<String?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
     var subscriptionUrl by remember { mutableStateOf("") }
-    var urlEditing by remember { mutableStateOf(false) }
-    var urlFocused by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
 
     fun refresh() {
         if (isRefreshing) return
@@ -95,102 +76,64 @@ fun ClashCtrlUi(
 
     LaunchedEffect(Unit) { refresh() }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(24.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.material3.MaterialTheme.colorScheme.surface)
+            .padding(48.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        // Header row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Header row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Button(
-                        onClick = { refresh() },
-                        modifier = Modifier.width(100.dp),
-                    ) {
-                        Text(if (isRefreshing) "..." else "Refresh")
-                    }
+            Button(
+                onClick = { refresh() },
+                modifier = Modifier.width(100.dp),
+            ) {
+                Text(if (isRefreshing) "..." else "Refresh")
+            }
 
-                    // Two-stage subscription URL input
-                    OutlinedTextField(
-                        modifier = Modifier
-                            .weight(1f)
-                            .onFocusChanged {
-                                urlFocused = it.isFocused
-                                if (!it.isFocused) urlEditing = false
-                            }
-                            .onPreviewKeyEvent { event ->
-                                if (event.key in navigationKeys && event.type == KeyEventType.KeyDown) {
-                                    when (event.key) {
-                                        Key.DirectionUp -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
-                                        Key.DirectionDown -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-                                        else -> {}
-                                    }
-                                    true
-                                } else if (!urlEditing && event.type == KeyEventType.KeyDown &&
-                                    event.key !in navigationKeys &&
-                                    event.key != Key.DirectionCenter && event.key != Key.Enter
-                                ) {
-                                    urlEditing = true
-                                    false
-                                } else if (!urlEditing && event.type == KeyEventType.KeyUp &&
-                                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
-                                ) {
-                                    urlEditing = true
-                                    true
-                                } else false
-                            },
-                        value = subscriptionUrl,
-                        onValueChange = { if (urlEditing) subscriptionUrl = it },
-                        label = { Text("Subscription URL", fontSize = 12.sp) },
-                        singleLine = true,
-                        readOnly = !urlEditing,
-                        colors = if (urlFocused && !urlEditing)
-                            OutlinedTextFieldDefaults.colors(
-                                unfocusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                unfocusedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        else OutlinedTextFieldDefaults.colors(),
-                    )
+            TvOutlinedTextField(
+                value = subscriptionUrl,
+                onValueChange = { subscriptionUrl = it },
+                label = { Text("Subscription URL", fontSize = 12.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
 
-                    Button(
-                        onClick = onNavigateToEdit,
-                        modifier = Modifier.width(80.dp),
-                    ) {
-                        Text("⚙")
-                    }
-                }
+            Button(
+                onClick = onNavigateToEdit,
+                modifier = Modifier.width(80.dp),
+            ) {
+                Text("⚙")
+            }
+        }
 
-                // Proxy line grid
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(160.dp),
-                    contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                ) {
-                    items(lines, key = { it.name }) { line ->
-                        val latMs = latencies[line.name]
-                        val isActive = line.name == activeProxy
-                        ProxyLineChip(
-                            name = line.name,
-                            latencyMs = latMs,
-                            isActive = isActive,
-                            onClick = {
-                                scope.launch {
-                                    client.setActiveProxy(line.name)
-                                    activeProxy = line.name
-                                }
-                            },
-                        )
-                    }
-                }
+        // Proxy line grid
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(160.dp),
+            contentPadding = PaddingValues(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        ) {
+            items(lines, key = { it.name }) { line ->
+                val latMs = latencies[line.name]
+                val isActive = line.name == activeProxy
+                ProxyLineChip(
+                    name = line.name,
+                    latencyMs = latMs,
+                    isActive = isActive,
+                    onClick = {
+                        scope.launch {
+                            client.setActiveProxy(line.name)
+                            activeProxy = line.name
+                        }
+                    },
+                )
             }
         }
     }

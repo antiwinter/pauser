@@ -1,21 +1,34 @@
 package com.opentune.proxy.ui
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.ui.providers.ProxyRepository
 import com.opentune.core.form.ProviderFormRoute
+import com.opentune.proxy.contract.ProxyClient
 import com.opentune.proxy.contract.ProxyProviderRegistryHolder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 
 object ProxyRoutes {
     const val PROXY_EDIT = "proxy_edit/{proxyType}?proxyId={proxyId}"
+    const val PROXY_CTRL = "proxy_ctrl/{proxyType}?proxyId={proxyId}"
 
     fun proxyEdit(proxyType: String, proxyId: String? = null) =
         if (proxyId != null) "proxy_edit/$proxyType?proxyId=${URLEncoder.encode(proxyId, "UTF-8")}"
         else "proxy_edit/$proxyType"
+
+    fun proxyCtrl(proxyType: String, proxyId: String) =
+        "proxy_ctrl/$proxyType?proxyId=${URLEncoder.encode(proxyId, "UTF-8")}"
 }
 
 fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
@@ -44,5 +57,27 @@ fun NavGraphBuilder.proxyRoutes(nav: NavHostController) {
             } else null,
         )
     }
-}
 
+    composable(
+        ProxyRoutes.PROXY_CTRL,
+        listOf(
+            navArgument("proxyType") { type = NavType.StringType },
+            navArgument("proxyId") { type = NavType.StringType; nullable = true; defaultValue = null },
+        ),
+    ) {
+        val proxyType = it.arguments!!.getString("proxyType")!!
+        val proxyId   = it.arguments!!.getString("proxyId")!!
+        var client by remember { mutableStateOf<ProxyClient?>(null) }
+
+        LaunchedEffect(proxyId) {
+            client = withContext(Dispatchers.IO) {
+                EndpointClientRegistryHolder.get().getProxyClient(proxyId)
+            }
+        }
+
+        client?.ctrlUI?.invoke(
+            { nav.navigate(ProxyRoutes.proxyEdit(proxyType, proxyId)) },
+            { nav.popBackStack() },
+        )
+    }
+}

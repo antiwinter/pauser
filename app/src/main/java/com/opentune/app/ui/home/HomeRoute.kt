@@ -25,7 +25,6 @@ import com.opentune.app.R
 import com.opentune.core.osd.gOSD
 import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EndpointEntity
-import com.opentune.storage.ProxyEntity
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -39,6 +38,7 @@ fun HomeRoute(
     onOpenSettings: () -> Unit,
     onEditProvider: (String, String) -> Unit,
     onEditProxy: (String, String) -> Unit,
+    onCtrlProxy: (String, String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as OpenTuneApplication
     val scope = rememberCoroutineScope()
@@ -46,7 +46,6 @@ fun HomeRoute(
     var endpointsByType by remember { mutableStateOf<Map<String, List<EndpointEntity>>>(emptyMap()) }
     val proxies by app.storageBindings.proxyDao.observeAll().collectAsState(initial = emptyList())
     var proxyClients by remember { mutableStateOf<Map<String, ProxyClient>>(emptyMap()) }
-    var ctrlUiProxy by remember { mutableStateOf<ProxyEntity?>(null) }
 
     // Build all proxy clients on launch
     LaunchedEffect(app) {
@@ -90,7 +89,7 @@ fun HomeRoute(
                 Button(
                     onClick = {
                         if (client?.ctrlUI != null) {
-                            ctrlUiProxy = proxy
+                            onCtrlProxy(proxy.proxyType, proxy.id)
                         } else {
                             onEditProxy(proxy.proxyType, proxy.id)
                         }
@@ -117,15 +116,5 @@ fun HomeRoute(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
         )
-
-        ctrlUiProxy?.let { proxy ->
-            proxyClients[proxy.id]?.ctrlUI?.invoke(
-                {
-                    ctrlUiProxy = null
-                    onEditProxy(proxy.proxyType, proxy.id)
-                },
-                { ctrlUiProxy = null },
-            )
-        }
     }
 }
