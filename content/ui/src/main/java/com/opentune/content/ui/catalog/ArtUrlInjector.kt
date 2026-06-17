@@ -3,6 +3,8 @@ package com.opentune.content.ui.catalog
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
 import com.opentune.server.SERVER_PORT
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 enum class ArtType { Cover, Thumb }
 
@@ -22,7 +24,8 @@ object ArtUrlInjector {
         }
         return items.map { item ->
             if (item.cover == null) {
-                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$endpointId/${item.ref}")
+                val encodedRef = URLEncoder.encode(item.ref, StandardCharsets.UTF_8.toString())
+                item.copy(cover = "http://localhost:$SERVER_PORT/$prefix/$endpointId/$encodedRef")
             } else item
         }
     }

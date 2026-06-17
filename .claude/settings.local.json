@@ -23,7 +23,8 @@
       "Bash(npx rollup *)",
       "Skill(run)",
       "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\.claude\\\\plans')",
-      "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\code\\\\opentune\\\\.claude\\\\plans')"
+      "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\code\\\\opentune\\\\.claude\\\\plans')",
+      "WebFetch(domain:www.xn--sss604efuw.net)"
     ],
     "additionalDirectories": [
       "/Users/warits/src/fongmi",

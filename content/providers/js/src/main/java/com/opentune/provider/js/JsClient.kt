@@ -165,8 +165,9 @@ class JsClient(
         options: QueryOptions,
     ): EntryList {
         ensureReady()
+        val normalizedLocation = if (location.isNullOrEmpty()) null else location
         val args = buildJsonObject {
-            if (location != null) put("location", location) else put("location", JsonNull)
+            if (normalizedLocation != null) put("location", normalizedLocation) else put("location", JsonNull)
             put("startIndex", startIndex)
             put("limit", limit)
             put("options", buildJsonObject {
