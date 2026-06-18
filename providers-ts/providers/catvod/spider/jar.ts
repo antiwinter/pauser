@@ -6,8 +6,16 @@ import type {
   CatVodPlayResult,
   CatVodFilterExtend,
 } from './types.js';
-import type { SiteEntry } from '../config.js';
+import type { SiteEntry, CatVodConfig } from '../config.js';
 import { parseSpiderField, siteExt } from '../config.js';
+import {
+  normalizeHome,
+  normalizeCategory,
+  normalizeDetail,
+  normalizePlay,
+  normalizeSearch,
+  parseReflectResult,
+} from './normalize.js';
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
 
@@ -101,8 +109,8 @@ function createJarSpider(
       const raw = await host.jar.reflect({
         url: jarUrl, cls, method: 'homeContent', instance: handle, args: [filter ?? false],
       });
-      const data = JSON.parse(raw);
-      return { class: data.class ?? [], filters: data.filters };
+      const data = parseReflectResult(raw) as CatVodHomeResult;
+      return normalizeHome(data);
     },
 
     async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
@@ -111,14 +119,8 @@ function createJarSpider(
         url: jarUrl, cls, method: 'categoryContent',
         instance: handle, args: [tid, String(pg), filter ?? false, extend ?? {}],
       });
-      const data = JSON.parse(raw);
-      return {
-        list: data.list ?? [],
-        total: data.total ?? 0,
-        pagecount: data.pagecount,
-        filters: data.filters,
-        msg: data.msg,
-      };
+      const data = parseReflectResult(raw) as CatVodCategoryResult;
+      return normalizeCategory(data);
     },
 
     async detail(ids: string[]): Promise<CatVodDetailResult> {
@@ -127,8 +129,8 @@ function createJarSpider(
         url: jarUrl, cls, method: 'detailContent',
         instance: handle, args: [ids],
       });
-      const data = raw && raw !== 'null' ? JSON.parse(raw) : {};
-      return { list: data.list ?? [] };
+      const data = parseReflectResult(raw, true) as CatVodDetailResult;
+      return normalizeDetail(data);
     },
 
     async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
@@ -137,24 +139,8 @@ function createJarSpider(
         url: jarUrl, cls, method: 'playerContent',
         instance: handle, args: [flag, epUrl, vipFlags ?? []],
       });
-      const data = JSON.parse(raw);
-      return {
-        url: data.url,
-        play_url: data.play_url,
-        header: data.header,
-        type: data.type,
-        parse: data.parse,
-        jx: data.jx,
-        subs: data.subs,
-        danmaku: data.danmaku,
-        drm: data.drm,
-        flag: data.flag,
-        format: data.format,
-        desc: data.desc,
-        artwork: data.artwork,
-        click: data.click,
-        position: data.position,
-      };
+      const data = parseReflectResult(raw) as CatVodPlayResult;
+      return normalizePlay(data);
     },
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
@@ -163,12 +149,8 @@ function createJarSpider(
         url: jarUrl, cls, method: 'searchContent',
         instance: handle, args: [query, quick ?? false, String(pg)],
       });
-      const data = JSON.parse(raw);
-      return {
-        list: data.list ?? [],
-        total: data.list?.length ?? 0,
-        msg: data.msg,
-      };
+      const data = parseReflectResult(raw) as CatVodCategoryResult;
+      return normalizeSearch(data, { useListLength: true });
     },
   };
 }

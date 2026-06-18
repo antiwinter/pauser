@@ -35,9 +35,7 @@ fun BrowseRoute(
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
-    val restoreFocusRef = remember(endpointId, initialEntryInfo.ref) {
-        viewModel.lastFocusedItemRef.value
-    }
+    val restoreFocusRef by viewModel.lastFocusedItemRef.collectAsState()
 
     BackHandler { nav.popBackStack() }
 

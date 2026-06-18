@@ -183,6 +183,19 @@ export interface CatVodPlayResult {
   position?: number;
 }
 
+// ── IPTV Channel Types ────────────────────────────────────────────────────────
+// M3U/IPTV live channel data — used by IPTV spiders' channels() method
+
+export interface M3UChannel {
+  name: string;
+  url: string;
+  logo?: string;
+}
+
+export interface IptvChannelListResult {
+  channels: M3UChannel[];
+}
+
 // ── Unified CatVod Spider Interface ──────────────────────────────────────────
 // All handler types (cms, drpy, jar, iptv) implement this interface
 
@@ -244,5 +257,11 @@ export interface CatVodSpider {
    * Returns [statusCode, contentType, body] or null [standard] — Spider.proxy() / proxyLocal()
    */
   proxy?(params: Record<string, string>): Promise<[number, string, any] | null>;
+
+  /**
+   * Get live TV channels (IPTV/M3U) — optional, only IPTV spiders implement this
+   * Returns the parsed channel list from an M3U source
+   */
+  channels?(): Promise<IptvChannelListResult>;
 }
 

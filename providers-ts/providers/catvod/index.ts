@@ -3,6 +3,7 @@ import { fetchConfig, parseSpiderField } from './config.js';
 import { test, listEntry, search, getPlaybackSpec } from './client.js';
 import { resetSpiders as resetJarSpiders } from './spider/jar.js';
 import { resetSpiders as resetDrpySpiders } from './spider/drpy.js';
+import { initSpiders, getConfig } from './spider/index.js';
 import type { CatVodClientState } from './client.js';
 import type {
   ProviderFieldSpec,
@@ -35,7 +36,8 @@ let state: CatVodClientState | null = null;
     capabilities: PlatformCapabilities;
   }): Promise<void> {
     const config = await fetchConfig(args.credentials['config_url'] ?? '');
-    state = { rawCredentials: args.credentials, config };
+    await initSpiders(config);
+    state = { rawCredentials: args.credentials };
   },
 
   async listEntry(args: {
@@ -69,7 +71,8 @@ let state: CatVodClientState | null = null;
   }): Promise<void> {},
 
   async resetSpiders(): Promise<void> {
-    const jar = state ? parseSpiderField(state.config?.spider) : undefined;
+    const config = getConfig();
+    const jar = config.spider ? parseSpiderField(config.spider) : undefined;
     await resetJarSpiders(jar?.url, jar?.md5);
     resetDrpySpiders();
   },

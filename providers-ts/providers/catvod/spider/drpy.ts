@@ -8,6 +8,13 @@ import type {
 } from './types.js';
 import type { SiteEntry } from '../config.js';
 import { siteExt } from '../config.js';
+import {
+  normalizeHome,
+  normalizeCategory,
+  normalizeDetail,
+  normalizePlay,
+  normalizeSearch,
+} from './normalize.js';
 
 // ── Globals expected by drpy2 spiders ────────────────────────────────────────
 // Set once at module init — before any spider code is eval'd.
@@ -130,7 +137,7 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
       const data = await spiderCall<CatVodHomeResult>(
         spider, 'home', filter ?? false,
       );
-      return { class: data.class ?? [], filters: data.filters };
+      return normalizeHome(data);
     },
 
     async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
@@ -138,51 +145,25 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
       const data = await spiderCall<CatVodCategoryResult>(
         spider, 'category', tid, String(pg), filter ?? false, extend ?? {},
       );
-      return {
-        list: data.list ?? [],
-        total: data.total ?? data.pagecount ?? 0,
-        pagecount: data.pagecount,
-        filters: data.filters,
-        msg: data.msg,
-      };
+      return normalizeCategory(data, { totalFallback: data.pagecount });
     },
 
     async detail(ids: string[]): Promise<CatVodDetailResult> {
       const spider = await getSpider();
       const data = await spiderCall<CatVodDetailResult>(spider, 'detail', ids.join(','));
-      return { list: data.list ?? [] };
+      return normalizeDetail(data);
     },
 
     async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
       const spider = await getSpider();
       const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, vipFlags ?? []);
-      return {
-        url: data.url,
-        play_url: data.play_url,
-        header: data.header,
-        type: data.type,
-        parse: data.parse,
-        jx: data.jx,
-        subs: data.subs,
-        danmaku: data.danmaku,
-        drm: data.drm,
-        flag: data.flag,
-        format: data.format,
-        desc: data.desc,
-        artwork: data.artwork,
-        click: data.click,
-        position: data.position,
-      };
+      return normalizePlay(data);
     },
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
       const spider = await getSpider();
       const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, quick ?? false, String(pg));
-      return {
-        list: data.list ?? [],
-        total: data.list?.length ?? 0,
-        msg: data.msg,
-      };
+      return normalizeSearch(data, { useListLength: true });
     },
   };
 }

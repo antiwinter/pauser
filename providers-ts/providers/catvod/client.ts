@@ -4,8 +4,7 @@ import type {
   PlaybackSpec,
   ValidationResult,
 } from "../../utils/types.js";
-import type { CatVodConfig, SiteEntry } from "./config.js";
-import type { CatVodSpider } from "./spider/types.js";
+import type { SiteEntry, LiveEntry } from "./config.js";
 import { decodeRef, encodeRef } from "./ref.js";
 import {
   parseEpisodes,
@@ -14,100 +13,53 @@ import {
   liveChannelsToEntries,
   playResultToSpec,
 } from "./mapper.js";
-import cmsHandler from "./spider/cms.js";
-import jarHandler from "./spider/jar.js";
-import drpyHandler from "./spider/drpy.js";
-import { fetchLiveChannels } from "./iptv.js";
+import { initSpiders, getSpider, getConfig, canHandleSite } from "./spider/index.js";
+import { fetchConfig } from "./config.js";
 
-// ── Handler interface ─────────────────────────────────────────────────────────
-
-interface BaseSpiderHandler {
-  name: string;
-  type: number[];
-  createSpider: (site: SiteEntry) => CatVodSpider;
-}
-
-interface SpiderHandlerWithInit extends BaseSpiderHandler {
-  init: (state: CatVodClientState) => Promise<void>;
-  canHandle: (site: SiteEntry, state: CatVodClientState) => boolean;
-}
-
-type SpiderHandler = BaseSpiderHandler | SpiderHandlerWithInit;
+// ── Client State ──────────────────────────────────────────────────────────────
 
 export interface CatVodClientState {
-  rawCredentials: Record<string, string>;  // raw form values — available for test()
-  config: CatVodConfig;                    // always populated by init()
-  unsupportedSites?: Set<string>;
-  spiders?: Map<string, CatVodSpider>;     // Cache spider instances per siteKey
-  _siteMap?: Map<string, SiteEntry>;       // O(1) site lookup by key
+  rawCredentials: Record<string, string>;
 }
 
 // ── test() ───────────────────────────────────────────────────────────────────
 
 export async function test(state: CatVodClientState): Promise<ValidationResult> {
-  const cfg = state.config;
+  const configUrl = state.rawCredentials['config_url'];
+  if (!configUrl) {
+    return { success: false, error: 'config_url is required' };
+  }
+
+  const config = await fetchConfig(configUrl);
+  await initSpiders(config);
+
+  const siteCount = Object.keys(config.sites).length;
   return {
     success: true,
     fields: {
-      config_url: state.rawCredentials['config_url'] ?? '',
-      name: `CatVod (${cfg.sites.length} sources)`,
+      config_url: configUrl,
+      name: `CatVod (${siteCount} sources)`,
     },
   };
-}
-
-// ── Spider Handler Registry ──────────────────────────────────────────────────
-
-const SPIDER_HANDLERS: SpiderHandler[] = [cmsHandler, jarHandler, drpyHandler];
-
-// Index by site type for O(1) handler resolution
-const HANDLER_BY_TYPE = new Map<number, SpiderHandler>();
-for (const h of SPIDER_HANDLERS) {
-  for (const t of h.type) {
-    if (!HANDLER_BY_TYPE.has(t)) HANDLER_BY_TYPE.set(t, h);
-  }
-}
-
-// ── Spider Instance Management ───────────────────────────────────────────────
-
-/**
- * Get or create a spider instance for a site
- * Caches instances to preserve state (especially for drpy/jar)
- */
-function getSpider(site: SiteEntry, state: CatVodClientState): CatVodSpider {
-  if (!state.spiders) {
-    state.spiders = new Map();
-  }
-
-  const cached = state.spiders.get(site.key);
-  if (cached) return cached;
-
-  const handler = HANDLER_BY_TYPE.get(site.type);
-  if (!handler) {
-    throw new Error(`No available handler for site type ${site.type}`);
-  }
-
-  const spider = handler.createSpider(site);
-  state.spiders.set(site.key, spider);
-  return spider;
 }
 
 // ── listEntry ─────────────────────────────────────────────────────────────────
 
 export async function listEntry(
-  state: CatVodClientState,
+  _state: CatVodClientState,
   location: string | null,
   startIndex: number,
   limit: number,
 ): Promise<EntryList> {
-  if (location === null) return await listRoot(state);
+  if (location === null) return await listRoot();
   const ref = decodeRef(location);
+  if (ref.type === 'unsupported') return { items: [], totalCount: 0 };
   const pg = startIndex === 0 ? 1 : Math.floor(startIndex / limit) + 1;
+  const spider = getSpider(ref.key);
 
   if (ref.type === "site") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
     const result = await spider.home();
-    const all = categoryListToFolders(result.class ?? [], site.key);
+    const all = categoryListToFolders(result.class ?? [], ref.key);
     return {
       items: all.items.slice(startIndex, startIndex + limit),
       totalCount: all.totalCount,
@@ -115,32 +67,29 @@ export async function listEntry(
   }
 
   if (ref.type === "cat") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
     const result = await spider.category(ref.tid, pg);
     const entryList = vodListToEntries(
       result.list ?? [],
-      site.key,
+      ref.key,
+      ref.tid,
       result.total,
     );
     return entryList;
   }
 
   if (ref.type === "vod") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
-    // Episode list for multi-episode items
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) return { items: [], totalCount: 0 };
     const eps = parseEpisodes(detail);
-    const items = eps.map((ep) => ({
+    const items = eps.map((ep, epIndex) => ({
       ref: encodeRef({
         type: "ep",
         key: ref.key,
+        tid: ref.tid,
         id: ref.id,
-        flag: ep.flag,
-        epUrl: ep.url,
+        epIndex,
+        flagIndex: ep.flagIndex,
       }),
       title: eps.length > 1 ? ep.name : (detail.vod_name ?? ep.name),
       type: "Video" as const,
@@ -153,10 +102,9 @@ export async function listEntry(
   }
 
   if (ref.type === "live-source") {
-    const live = state.config.lives?.[ref.index];
-    if (!live) return { items: [], totalCount: 0 };
-    const result = await fetchLiveChannels(live);
-    const all = liveChannelsToEntries(result.channels);
+    if (!spider.channels) return { items: [], totalCount: 0 };
+    const result = await spider.channels();
+    const all = liveChannelsToEntries(result.channels, ref.key);
     return {
       items: all.items.slice(startIndex, startIndex + limit),
       totalCount: all.totalCount,
@@ -169,22 +117,24 @@ export async function listEntry(
 // ── search ────────────────────────────────────────────────────────────────────
 
 export async function search(
-  state: CatVodClientState,
+  _state: CatVodClientState,
   _scopeLocation: string,
   query: string,
 ): Promise<EntryInfo[]> {
+  const config = getConfig();
   const results: EntryInfo[] = [];
-  for (const site of state.config.sites) {
+  for (const [key, entry] of Object.entries(config.sites)) {
+    if (entry.type !== 'site') continue;
+    const site = entry as SiteEntry;
     if (site.searchable === 0) continue;
-    const handler = HANDLER_BY_TYPE.get(site.type);
-    if (!handler) continue;
     try {
-      const spider = getSpider(site, state);
+      const spider = getSpider(key);
       if (!spider.search) continue; // Skip if search not supported
       const result = await spider.search(query, 1);
       const entryList = vodListToEntries(
         result.list ?? [],
-        site.key,
+        key,
+        '', // No tid for search results
         result.total,
       );
       results.push(...entryList.items);
@@ -196,24 +146,29 @@ export async function search(
 // ── getPlaybackSpec ───────────────────────────────────────────────────────────
 
 export async function getPlaybackSpec(
-  state: CatVodClientState,
+  _state: CatVodClientState,
   itemRef: string,
   _startMs: number,
 ): Promise<PlaybackSpec> {
   const ref = decodeRef(itemRef);
+  if (ref.type === 'unsupported') throw new Error("Unsupported ref type");
 
-  // Direct episode ref → already has the URL
+  const spider = getSpider(ref.key);
+
+  // Direct episode ref → resolve flag and URL from vod detail
   if (ref.type === "ep") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
-    const result = await spider.play(ref.flag, ref.epUrl);
-    return playResultToSpec(result, ref.epUrl);
+    const detailResult = await spider.detail([ref.id]);
+    const detail = detailResult.list?.[0];
+    if (!detail) throw new Error("Vod not found");
+    const eps = parseEpisodes(detail);
+    const ep = eps[ref.epIndex];
+    if (!ep) throw new Error("Episode not found");
+    const result = await spider.play(ep.flag, ep.url);
+    return playResultToSpec(result, ep.url);
   }
 
   // Vod ref with single episode → resolve inline
   if (ref.type === "vod") {
-    const site = requireSite(state, ref.key);
-    const spider = getSpider(site, state);
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) throw new Error("No episodes found");
@@ -223,17 +178,14 @@ export async function getPlaybackSpec(
     return playResultToSpec(result, eps[0].url);
   }
 
-  // Live channel → direct URL
+  // Live channel → resolve via spider
   if (ref.type === "live") {
-    return {
-      url: ref.url,
-      headers: {},
-      mimeType: null,
-      subtitleTracks: [],
-      progressIntervalMs: 0,
-      state: {},
-      mediaCodecs: [],
-    } as PlaybackSpec;
+    if (!spider.channels) throw new Error("Live source has no channels");
+    const result = await spider.channels();
+    const channel = result.channels[ref.channelIndex];
+    if (!channel) throw new Error("Channel not found");
+    const playResult = await spider.play('', channel.url);
+    return playResultToSpec(playResult, channel.url);
   }
 
   throw new Error(
@@ -243,35 +195,36 @@ export async function getPlaybackSpec(
 
 // ── Dispatch helpers ──────────────────────────────────────────────────────────
 
-async function initHandlers(state: CatVodClientState): Promise<void> {
-  for (const handler of SPIDER_HANDLERS) {
-    if ("init" in handler) {
-      await (handler as SpiderHandlerWithInit).init(state).catch(() => {}); // Allow init to fail silently
-    }
-  }
-}
-
-async function listRoot(state: CatVodClientState): Promise<EntryList> {
-  await initHandlers(state);
-
-  const available: SiteEntry[] = [];
+async function listRoot(): Promise<EntryList> {
+  const config = getConfig();
+  const available: Array<[SiteEntry | LiveEntry, string]> = [];
   const unavailable: SiteEntry[] = [];
 
-  for (const site of state.config.sites) {
-    const handler = HANDLER_BY_TYPE.get(site.type);
-    if (handler && (!("canHandle" in handler) || (handler as SpiderHandlerWithInit).canHandle(site, state))) {
-      available.push(site);
-    } else {
-      unavailable.push(site);
+  for (const [key, entry] of Object.entries(config.sites)) {
+    if (canHandleSite(key)) {
+      available.push([entry, key]);
+    } else if (entry.type === 'site') {
+      unavailable.push(entry as SiteEntry);
     }
   }
 
-  const items: EntryList["items"] = available.map((site) => ({
-    ref: encodeRef({ type: "site", key: site.key }),
-    title: site.name,
-    type: "Folder" as const,
-    cover: null,
-  }));
+  const items: EntryList["items"] = available.map(([entry, key]) => {
+    if (entry.type === 'site') {
+      return {
+        ref: encodeRef({ type: "site", key }),
+        title: entry.name,
+        type: "Folder" as const,
+        cover: null,
+      };
+    } else {
+      return {
+        ref: encodeRef({ type: "live-source", key }),
+        title: entry.name,
+        type: "Folder" as const,
+        cover: null,
+      };
+    }
+  });
 
   if (unavailable.length > 0) {
     items.push({
@@ -282,29 +235,5 @@ async function listRoot(state: CatVodClientState): Promise<EntryList> {
     });
   }
 
-  if (state.config.lives?.length) {
-    for (let i = 0; i < state.config.lives.length; i++) {
-      items.push({
-        ref: encodeRef({ type: "live-source", index: i }),
-        title: state.config.lives[i].name,
-        type: "Folder" as const,
-        cover: null,
-      });
-    }
-  }
   return { items, totalCount: items.length };
 }
-
-function getSiteMap(state: CatVodClientState): Map<string, SiteEntry> {
-  if (!state._siteMap) {
-    state._siteMap = new Map(state.config.sites.map((s) => [s.key, s]));
-  }
-  return state._siteMap;
-}
-
-function requireSite(state: CatVodClientState, key: string): SiteEntry {
-  const site = getSiteMap(state).get(key);
-  if (!site) throw new Error(`Site not found: ${key}`);
-  return site;
-}
-

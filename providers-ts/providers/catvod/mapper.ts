@@ -1,6 +1,5 @@
 import type { EntryInfo, EntryList, PlaybackSpec, SubtitleTrack } from '../../utils/types.js';
-import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult } from './spider/types.js';
-import type { M3UChannel } from './iptv.js';
+import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
@@ -15,7 +14,7 @@ export function categoryListToFolders(
 ): EntryList {
   return {
     items: categories.map((c) => ({
-      ref: JSON.stringify({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
+      ref: `${siteKey}-${c.type_id}`,
       title: c.type_name ?? String(c.type_id),
       type: 'Folder' as const,
       cover: null,
@@ -30,10 +29,11 @@ export function categoryListToFolders(
 export function vodListToEntries(
   items: CatVodItem[],
   siteKey: string,
+  tid: string,
   totalCount?: number,
 ): EntryList {
   return {
-    items: items.map((item) => vodItemToEntry(item, siteKey)),
+    items: items.map((item) => vodItemToEntry(item, siteKey, tid)),
     totalCount: totalCount ?? items.length,
   };
 }
@@ -41,10 +41,10 @@ export function vodListToEntries(
 /**
  * Convert IPTV M3U channels to OpenTune entries
  */
-export function liveChannelsToEntries(channels: M3UChannel[]): EntryList {
+export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): EntryList {
   return {
-    items: channels.map((ch) => ({
-      ref: JSON.stringify({ type: 'live', name: ch.name, url: ch.url }),
+    items: channels.map((ch, channelIndex) => ({
+      ref: `${liveKey}-${channelIndex}`,
       title: ch.name,
       type: 'Video' as const,
       cover: ch.logo ?? null,
@@ -82,12 +82,12 @@ export function playResultToSpec(
 // ── Legacy Item-Level Converters ─────────────────────────────────────────────
 // These are still used by the list converters above
 
-export function vodItemToEntry(item: CatVodItem, siteKey: string): EntryInfo {
+export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo {
   const vodId = String(item.vod_id);
   // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
   const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
   return {
-    ref: JSON.stringify({ type: 'vod', key: siteKey, id: vodId }),
+    ref: `${siteKey}-${tid}-${vodId}`,
     title: item.vod_name ?? vodId,
     type,
     cover: item.vod_pic ?? null,
@@ -125,6 +125,7 @@ export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
 
 export interface ParsedEpisode {
   flag: string;
+  flagIndex: number;
   name: string;
   url: string;
 }
@@ -134,15 +135,15 @@ export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
   const urlGroups = splitField(item.vod_play_url);
   const episodes: ParsedEpisode[] = [];
 
-  for (let i = 0; i < sources.length; i++) {
-    const flag = sources[i];
-    for (const ep of (urlGroups[i] ?? '').split('#')) {
+  for (let flagIndex = 0; flagIndex < sources.length; flagIndex++) {
+    const flag = sources[flagIndex];
+    for (const ep of (urlGroups[flagIndex] ?? '').split('#')) {
       const trimmed = ep.trim();
       if (!trimmed) continue;
       const dollar = trimmed.indexOf('$');
       const name   = dollar >= 0 ? trimmed.slice(0, dollar) : trimmed;
       const url    = dollar >= 0 ? trimmed.slice(dollar + 1) : trimmed;
-      episodes.push({ flag, name, url });
+      episodes.push({ flag, flagIndex, name, url });
     }
   }
   return episodes;
