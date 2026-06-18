@@ -18,7 +18,7 @@ fi
 rm -rf dump
 mkdir dump
 
-TAR="$ROOT/emby_dump.tar.gz"
+TAR="$ROOT/dump.tar.gz"
 trap 'rm -f "$TAR"' EXIT
 
 run_adb() {
@@ -30,9 +30,9 @@ run_adb() {
 }
 
 run_adb exec-out \
-  "run-as com.opentune.app sh -c 'cd cache && tar cz emby_dump'" \
+  "run-as com.opentune.app sh -c 'cd cache && tar cz dump'" \
   > "$TAR"
 
-tar xzf "$TAR" -C dump
+tar xzf "$TAR" -C dump --strip-components=1
 
-echo "Extracted to $ROOT/dump/emby_dump/"
+echo "Extracted to $ROOT/dump/"

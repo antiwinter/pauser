@@ -53,7 +53,7 @@ function baseHeaders(accessToken?: string | null): Record<string, string> {
   return hdrs;
 }
 
-// ── Temp dump helper: saves parsed JSON responses to cache/emby_dump/ ────────
+// ── Temp dump helper: saves parsed JSON responses to cache/dump/emby/ ────────
 
 function dumpUrl(url: string): string {
   try {
@@ -72,7 +72,7 @@ function dumpUrl(url: string): string {
 async function dumpResponse(method: 'get' | 'post', url: string, body: string): Promise<void> {
   try {
     const slug = dumpUrl(url);
-    const path = `emby_dump/${method}-${slug}.json`;
+    const path = `dump/emby/${method}-${slug}.json`;
     const parsed = JSON.parse(body);
     await host.fs.write({
       path,

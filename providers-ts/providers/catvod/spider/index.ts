@@ -47,12 +47,12 @@ export async function initSpiders(config: CatVodConfig): Promise<void> {
 }
 
 // ── Response dump ─────────────────────────────────────────────────────────────
-// Saves parsed spider results to catvod_dump/ for debugging — mirrors emby_dump
+// Saves parsed spider results to dump/catvod/ for debugging — mirrors dump/emby
 
 async function dumpResult(key: string, method: string, result: unknown): Promise<void> {
   try {
     await host.fs.write({
-      path: `catvod_dump/${key}-${method}.json`,
+      path: `dump/catvod/${key}-${method}.json`,
       content: JSON.stringify(result, null, 2),
     });
   } catch { /* ignore dump failures */ }
