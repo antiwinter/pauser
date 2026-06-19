@@ -5,8 +5,8 @@ import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.opentune.content.contract.OpenTuneProviderRegistry
 import com.opentune.proxy.contract.ProxyProviderRegistry
-import com.opentune.content.contract.CachingEndpointClient
-import com.opentune.content.contract.EndpointCache
+import com.opentune.content.epcache.CachingEndpointClient
+import com.opentune.content.epcache.EndpointCache
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientAccess
 import com.opentune.proxy.contract.ProxyClient

@@ -50,7 +50,7 @@ abstract class EndpointClient {
         options: QueryOptions = QueryOptions(),
     ): EntryList
     abstract suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
-    abstract suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource>
+    open suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> = emptyList()
     abstract suspend fun getEntries(itemRefs: List<String>): EntryList
     open suspend fun getTaggedEntries(
         tag: EntryTag,

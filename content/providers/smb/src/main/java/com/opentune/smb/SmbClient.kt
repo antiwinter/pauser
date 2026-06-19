@@ -14,16 +14,10 @@ import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
-import com.opentune.player.PlaybackSource
-import com.opentune.player.EntryStateKeys
-import com.opentune.player.PlayingState
 import com.opentune.content.contract.ProviderStream
-import com.opentune.content.contract.StreamRegistrarHolder
-import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.EnumSet
-import java.util.concurrent.ConcurrentHashMap
 
 private const val SMB_LOG = "OpenTunePlayer"
 
@@ -31,7 +25,7 @@ class SmbClient(
     private val fields: SmbServerFieldsJson,
 ) : EndpointClient() {
 
-    private val activeTokenUrls = ConcurrentHashMap<String, List<String>>()
+    override val progressIntervalMs: Long = 0L
 
     private fun credentials() = SmbCredentials(
         host = fields.host,
@@ -76,7 +70,7 @@ class SmbClient(
                     else -> all.sortedBy { it.name }
                 }.let { if (options.sortOrder == SortOrder.Descending) it.reversed() else it }
                 val slice = sorted.drop(startIndex).take(limit)
-                EntryList(items = slice.map { mapEntry(it) }, totalCount = all.size)
+                EntryList(items = slice.map { mapEntry(it, location) }, totalCount = all.size)
             } finally {
                 session.close()
             }
@@ -91,7 +85,7 @@ class SmbClient(
                 val share = session.share
                 val all = share.listDirectory(scopeLocation)
                     .filterByName(query.term)
-                    .map { mapEntry(it) }
+                    .map { mapEntry(it, scopeLocation) }
                     .filter { it.type !in query.excludeTypes }
                 val sorted = when (query.sortBy) {
                     SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.title }
@@ -113,7 +107,7 @@ class SmbClient(
                 val share = session.share
                 val items = share.listDirectory("")
                     .filter { it.path in itemRefs }
-                    .map { mapEntry(it) }
+                    .map { mapEntry(it, null) }
                 EntryList(items = items, totalCount = items.size)
             } finally {
                 session.close()
@@ -121,57 +115,6 @@ class SmbClient(
         }
     }
 
-    override val progressIntervalMs: Long = 0L
-
-    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
-        return withContext(Dispatchers.IO) {
-            val pathWin = itemRef.replace('/', '\\')
-            val registrar = StreamRegistrarHolder.get()
-            val videoUrl = registrar.registerStream(this@SmbClient, pathWin)
-            Log.d(SMB_LOG, "[smb] registered video stream url=$videoUrl")
-
-            // Scan for sidecar subtitles using a short-lived session.
-            val subtitleTracks = runCatching {
-                val session = SmbSession.open(credentials())
-                try {
-                    val rawSubtitles = findSidecarSubtitles(session.share, itemRef)
-                    rawSubtitles.mapNotNull { track ->
-                        val smbPath = track.externalRef?.replace('/', '\\') ?: return@mapNotNull null
-                        val url = registrar.registerStream(this@SmbClient, smbPath)
-                        Log.d(SMB_LOG, "[smb] registered subtitle stream url=$url")
-                        track.copy(externalRef = url)
-                    }
-                } finally {
-                    session.close()
-                }
-            }.getOrElse { e ->
-                Log.w(SMB_LOG, "[smb] subtitle scan failed", e)
-                emptyList()
-            }
-
-            val allTokenUrls = listOf(videoUrl) + subtitleTracks.mapNotNull { it.externalRef }
-            activeTokenUrls[itemRef] = allTokenUrls
-
-            listOf(PlaybackSource(url = videoUrl, subtitleTracks = subtitleTracks))
-        }
-    }
-
-    override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
-        if (key == EntryStateKeys.PLAYING_STATE && value == PlayingState.STOPPED.name) {
-            revokeTokens(itemRef)
-        }
-    }
-
-    private fun revokeTokens(itemRef: String) {
-        val registrar = StreamRegistrarHolder.get()
-        activeTokenUrls.remove(itemRef)?.forEach { registrar.revokeToken(it) }
-    }
-
-    /**
-     * Opens a random-access stream for [itemRef].
-     * Called by [OpenTuneServer] for each incoming HTTP range request — each call opens
-     * its own SMB session and file handle.
-     */
     override suspend fun openStream(itemRef: String): ProviderStream {
         return withContext(Dispatchers.IO) {
             val session = SmbSession.open(credentials())
@@ -203,7 +146,7 @@ class SmbClient(
         }
     }
 
-    private fun mapEntry(e: SmbListEntry): EntryInfo {
+    private fun mapEntry(e: SmbListEntry, parentLocation: String?): EntryInfo {
         val kind = if (e.isDirectory) "Folder" else "Unknown"
         return EntryInfo(
             ref = e.path,
@@ -211,26 +154,7 @@ class SmbClient(
             type = kind,
             cover = null,
             filename = e.name,
+            parentRef = parentLocation ?: e.path.substringBeforeLast('\\'),
         )
-    }
-
-    private fun findSidecarSubtitles(
-        share: com.hierynomus.smbj.share.DiskShare,
-        itemRef: String,
-    ): List<SubtitleTrack> {
-        val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
-        val parentFolder = itemRef.substringBeforeLast('/', "")
-        return share.listDirectory(parentFolder)
-            .filter { !it.isDirectory && subtitleExts.any { ext -> it.name.lowercase().endsWith(ext) } }
-            .map { entry ->
-                SubtitleTrack(
-                    trackId = entry.path,
-                    label = entry.name,
-                    language = null,
-                    isDefault = false,
-                    isForced = false,
-                    externalRef = entry.path,
-                )
-            }
     }
 }

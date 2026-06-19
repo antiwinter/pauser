@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
-import com.opentune.content.contract.CachingEndpointClient
+import com.opentune.content.epcache.CachingEndpointClient
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.core.osd.gOSD
