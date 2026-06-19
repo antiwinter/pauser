@@ -6,6 +6,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import com.opentune.player.engine.flv.OpenTuneExtractorsFactory
 import com.opentune.player.PlaybackSpec
 import okhttp3.OkHttpClient
 
@@ -23,7 +24,7 @@ fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
         .apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
-    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, OpenTuneExtractorsFactory())
     val mediaItem = MediaItem.Builder()
         .setUri(Uri.parse(url))
         .apply { mimeType?.let { setMimeType(it) } }
