@@ -1,4 +1,4 @@
-import type { ProviderFieldSpec, ValidationResult, EntryList, PlaybackSpec, QueryOptions } from '../../utils/types.js';
+import type { ProviderFieldSpec, ValidationResult, EntryList, PlaybackSource, QueryOptions } from '../../utils/types.js';
 import { runBench } from './bench.js';
 
 (globalThis as unknown as Record<string, unknown>).opentuneProvider = {
@@ -37,7 +37,7 @@ import { runBench } from './bench.js';
     return [];
   },
 
-  async getPlaybackSpec(_args: { itemRef: string; startMs: number }): Promise<PlaybackSpec> {
+  async getPlaybackSources(_args: { itemRef: string }): Promise<PlaybackSource[]> {
     throw new Error('not supported');
   },
 

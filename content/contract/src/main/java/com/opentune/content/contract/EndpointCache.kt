@@ -1,5 +1,6 @@
 package com.opentune.content.contract
 
+import com.opentune.player.PlaybackSource
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlaybackState
@@ -191,7 +192,7 @@ object EndpointCache {
  * Decorator that wraps a real [EndpointClient] with transparent caching.
  *
  * Cached methods: listEntry, getEntries, getTaggedEntries, search
- * Non-cached (always go to network): getPlaybackSpec, test, openStream, getQr, pollQr
+ * Non-cached (always go to network): getPlaybackSources, test, openStream, getQr, pollQr
  * [updateEntryState]: local persist + cache patch, then delegate remote
  */
 class CachingEndpointClient(
@@ -264,13 +265,28 @@ class CachingEndpointClient(
         return mergeEntryList(list)
     }
 
-    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
-        val spec = delegate.getPlaybackSpec(itemRef, startMs)
+    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
+        return delegate.getPlaybackSources(itemRef)
+    }
+
+    suspend fun getPlaybackSpec(info: EntryInfo, startMs: Long): PlaybackSpec {
+        val sources = if (!info.sources.isNullOrEmpty()) {
+            info.sources
+        } else {
+            delegate.getPlaybackSources(info.ref)
+        }
+        return enrichSpec(sources, info, startMs)
+    }
+
+    private suspend fun enrichSpec(sources: List<PlaybackSource>, info: EntryInfo, startMs: Long): PlaybackSpec {
         val subtitlePrefs = StorageBindingsHolder.get().appConfigStore.loadSubtitlePrefs()
-        val info = EndpointCache.getCachedItem(endpointId, itemRef)
-            ?: EntryInfo(ref = itemRef, title = "", type = "Unknown")
+
+        val enrichedSources = sources.map { src ->
+            src.copy(mimeType = src.mimeType ?: PlaybackMimeTypes.fromUrl(src.url))
+        }
 
         val state = PlaybackState(
+            sourceIndex = getInheritedValue(info, "sourceIndex") as? Int ?: 0,
             positionMs = startMs,
             speed = getInheritedValue(info, "playbackSpeed") as? Float ?: 1f,
             subtitleTrackId = getInheritedValue(info, "selectedSubtitleTrackId") as? String,
@@ -279,9 +295,11 @@ class CachingEndpointClient(
             subtitleSizeScale = subtitlePrefs.sizeScale,
             playingState = PlayingState.STOPPED,
         )
-        return spec.copy(
-            mimeType = spec.mimeType ?: PlaybackMimeTypes.fromUrl(spec.url),
+        return PlaybackSpec(
+            sources = enrichedSources,
+            httpClient = proxyClient?.getHttpClient() ?: okhttp3.OkHttpClient(),
             state = state,
+            progressIntervalMs = delegate.progressIntervalMs,
             updateEntryState = { k, v -> updateEntryStateIntercepted(k, v, info) },
         )
     }

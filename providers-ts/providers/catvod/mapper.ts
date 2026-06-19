@@ -1,4 +1,4 @@
-import type { EntryInfo, EntryList, PlaybackSpec, SubtitleTrack } from '../../utils/types.js';
+import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../utils/types.js';
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
@@ -39,27 +39,57 @@ export function vodListToEntries(
 }
 
 /**
- * Convert IPTV M3U channels to OpenTune entries
+ * Convert IPTV M3U channels to OpenTune entries, merging duplicate names.
+ * Channels with the same name get merged into one entry with multiple sources.
+ * Logo: the URL that appears most frequently wins.
  */
 export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): EntryList {
-  return {
-    items: channels.map((ch, channelIndex) => ({
-      ref: `${liveKey}-${channelIndex}`,
-      title: ch.name,
+  const groups = new Map<string, { urls: string[]; logoCounts: Map<string, number>; firstIndex: number }>();
+
+  for (const [i, ch] of channels.entries()) {
+    let g = groups.get(ch.name);
+    if (!g) {
+      g = { urls: [], logoCounts: new Map(), firstIndex: i };
+      groups.set(ch.name, g);
+    }
+    if (!g.urls.includes(ch.url)) g.urls.push(ch.url);
+    if (ch.logo) {
+      g.logoCounts.set(ch.logo, (g.logoCounts.get(ch.logo) ?? 0) + 1);
+    }
+  }
+
+  const items: EntryInfo[] = [];
+  for (const [, g] of groups) {
+    const name = channels[g.firstIndex].name;
+    const bestLogo = [...g.logoCounts.entries()]
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    const sources: PlaybackSource[] = g.urls.map(url => ({
+      url,
+      headers: {},
+      mimeType: null,
+      subtitleTracks: [],
+      mediaCodecs: [],
+    }));
+
+    items.push({
+      ref: `${liveKey}-${g.firstIndex}`,
+      title: name,
       type: 'Video' as const,
-      cover: ch.logo ?? null,
-    })),
-    totalCount: channels.length,
-  };
+      cover: bestLogo,
+      sources: sources.length > 1 ? sources : undefined,
+    });
+  }
+
+  return { items, totalCount: items.length };
 }
 
 /**
- * Convert CatVod play result to OpenTune playback spec
+ * Convert CatVod play result to a single PlaybackSource
  */
-export function playResultToSpec(
+export function playResultToSource(
   result: CatVodPlayResult,
-  title: string = '',
-): PlaybackSpec {
+): PlaybackSource {
   const subtitleTracks: SubtitleTrack[] = (result.subs ?? []).map((sub: CatVodSub, i: number) => ({
     trackId: `catvod-sub-${i}`,
     label: sub.name ?? '',
@@ -69,12 +99,10 @@ export function playResultToSpec(
     externalRef: sub.url,
   }));
   return {
-    url: result.play_url ?? result.url ?? null,
+    url: result.play_url ?? result.url ?? '',
     headers: result.header ?? {},
     mimeType: result.type ?? null,
     subtitleTracks,
-    progressIntervalMs: 0,
-    state: {},
     mediaCodecs: [],
   };
 }

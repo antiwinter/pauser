@@ -29,8 +29,8 @@ fun ImageViewerRoute(
                 EndpointClientRegistryHolder.get().getOrCreate(endpointId)
             }
             withContext(Dispatchers.IO) {
-                val spec = client?.getPlaybackSpec(itemRef, 0)
-                specUrl = spec?.url
+                val sources = client?.getPlaybackSources(itemRef)
+                specUrl = sources?.firstOrNull()?.url
                 imageUrl = specUrl
             }
         }

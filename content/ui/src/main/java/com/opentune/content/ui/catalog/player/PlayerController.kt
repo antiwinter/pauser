@@ -5,15 +5,17 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
+import com.opentune.content.contract.CachingEndpointClient
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
 import com.opentune.core.osd.gOSD
 import com.opentune.player.MediaCodecInfo
 import com.opentune.player.PlaybackDisplayInfo
+import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlayerSurfaceController
 import com.opentune.player.engine.PlaybackSession
+import com.opentune.player.manager.SourceManager
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private const val LOG_TAG = "PlayerController"
 private const val DEBOUNCE_MS = 800L
@@ -34,7 +35,7 @@ class PlayerController(
 ) : AndroidViewModel(application), PlayerSurfaceController {
     override val playbackSession = PlaybackSession(application.applicationContext)
 
-    private var _client: EndpointClient? = null
+    private var _client: CachingEndpointClient? = null
 
     private val _isShown = MutableStateFlow(false)
     val isShownFlow: StateFlow<Boolean> = _isShown.asStateFlow()
@@ -56,11 +57,14 @@ class PlayerController(
     private var _debounceJob: Job? = null
     private var _osdJob: Job? = null
 
-    private var _pendingItemRef: String? = null
+    private var _pendingInfo: EntryInfo? = null
     private var _pendingStartMs: Long? = null
 
     private var _workingItemRef: String? = null
     private var _workingStartMs: Long? = null
+
+    private val _sourceManager = MutableStateFlow<SourceManager?>(null)
+    override val sourceManagerFlow: StateFlow<SourceManager?> = _sourceManager.asStateFlow()
 
     fun setNextVideoCallback(cb: (() -> Unit)?) {
         _nextVideoCallback = cb
@@ -77,7 +81,7 @@ class PlayerController(
     }
 
     fun setClient(client: EndpointClient) {
-        _client = client
+        _client = client as CachingEndpointClient
     }
 
     fun prepare(
@@ -88,8 +92,8 @@ class PlayerController(
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
-        _pendingItemRef = entryInfo.ref
         _pendingStartMs = startMs ?: entryInfo.userData?.positionMs ?: 0L
+        _pendingInfo = entryInfo
         Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
 
         setDisplayInfo(entryInfo)
@@ -117,10 +121,11 @@ class PlayerController(
         _debounceJob?.cancel()
         _osdJob?.cancel()
         playbackSession.stop()
-        _pendingItemRef = null
         _pendingStartMs = null
+        _pendingInfo = null
         _workingItemRef = null
         _workingStartMs = null
+        _sourceManager.value = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
@@ -149,11 +154,11 @@ class PlayerController(
         _debounceJob = viewModelScope.launch {
             try {
                 if (withDelay) delay(DEBOUNCE_MS)
-                if (_pendingItemRef == null) {
+                if (_pendingInfo == null) {
                     Log.w(LOG_TAG, "launchResolve: no pending item, ignoring")
                     return@launch
                 }
-                startPrebufferOsd(_pendingItemRef!!)
+                startPrebufferOsd(_pendingInfo!!.ref)
                 resolveAndPrepare()
                 onComplete?.invoke()
             } catch (_: CancellationException) {
@@ -165,19 +170,22 @@ class PlayerController(
 
     private suspend fun resolveAndPrepare() {
         val client = _client ?: return
-        if (_pendingItemRef == _workingItemRef && _pendingStartMs == _workingStartMs) {
+        val info = _pendingInfo ?: return
+        if (info.ref == _workingItemRef && _pendingStartMs == _workingStartMs) {
             Log.d(LOG_TAG, "launchResolve: pending spec matches working spec, ignoring")
             return
         }
 
-        val itemRef = _pendingItemRef!!
+        val itemRef = info.ref
         val startMs = _pendingStartMs ?: 0L
 
         Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$itemRef startMs=$startMs")
-        val spec = withContext(Dispatchers.IO) {
-            client.getPlaybackSpec(itemRef, startMs)
+        val spec = client.getPlaybackSpec(info, startMs)
+
+        _sourceManager.value = SourceManager(spec).also { mgr ->
+            mgr.onSourceSelected = { s -> viewModelScope.launch { playbackSession.prepare(s) } }
         }
-        _mediaCodecs.value = spec.mediaCodecs
+        _mediaCodecs.value = spec.sources[spec.state.sourceIndex].mediaCodecs
         _workingItemRef = itemRef
         _workingStartMs = startMs
 

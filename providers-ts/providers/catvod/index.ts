@@ -1,6 +1,6 @@
 import { getFieldsSpec } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
-import { test, listEntry, search, getPlaybackSpec } from './client.js';
+import { test, listEntry, search, getPlaybackSources } from './client.js';
 import { resetSpiders as resetJarSpiders } from './spider/jar.js';
 import { resetSpiders as resetDrpySpiders } from './spider/drpy.js';
 import { initSpiders, getConfig } from './spider/index.js';
@@ -10,7 +10,7 @@ import type {
   ValidationResult,
   EntryList,
   EntryInfo,
-  PlaybackSpec,
+  PlaybackSource,
   QueryOptions,
 } from '../../utils/types.js';
 
@@ -56,11 +56,10 @@ let state: CatVodClientState | null = null;
     return search(state!, args.scopeLocation, args.query);
   },
 
-  async getPlaybackSpec(args: {
+  async getPlaybackSources(args: {
     itemRef: string;
-    startMs: number;
-  }): Promise<PlaybackSpec> {
-    return getPlaybackSpec(state!, args.itemRef, args.startMs);
+  }): Promise<PlaybackSource[]> {
+    return getPlaybackSources(state!, args.itemRef);
   },
 
   async updateEntryState(_args: {

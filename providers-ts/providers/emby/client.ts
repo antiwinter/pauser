@@ -6,11 +6,11 @@ import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { DeviceProfile, QueryResultBaseItemDto } from './dto.js';
+import type { DeviceProfile, MediaSourceInfo, QueryResultBaseItemDto } from './dto.js';
 import type {
   EntryInfo,
   EntryList,
-  PlaybackSpec,
+  PlaybackSource,
   SubtitleTrack,
   PlatformInfo,
   ValidationResult,
@@ -193,20 +193,17 @@ const BITMAP_CODECS = new Set([
   'dvb_subtitle', 'xsub', 'microdvd',
 ]);
 
-export async function getPlaybackSpec(
+export async function getPlaybackSources(
   state: EmbyClientState,
   itemRef: string,
-  startMs: number,
-): Promise<PlaybackSpec> {
+): Promise<PlaybackSource[]> {
   const s = requireState(state); const credentials = s.credentials; const deviceProfile = s.deviceProfile; const capabilities = s.capabilities;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
-  const startTicks = startMs > 0 ? startMs * 10_000 : undefined;
   const info = await api.getPlaybackInfo(itemRef, {
     Id: itemRef,
     UserId: credentials.userId,
     MaxStreamingBitrate: 120_000_000,
-    StartTimeTicks: startTicks,
     DeviceProfile: deviceProfile,
     EnableDirectPlay: true,
     EnableDirectStream: true,
@@ -216,14 +213,37 @@ export async function getPlaybackSpec(
     AllowAudioStreamCopy: true,
   });
 
-  const source = info.MediaSources[0];
-  if (!source) throw new Error('No media sources');
+  const sources: PlaybackSource[] = (info.MediaSources ?? []).map((source) => {
+    const url = resolvePlaybackUrl(credentials.baseUrl, source);
+    const subtitleTracks = buildSubtitleTracks(source, credentials, itemRef, capabilities);
+    const mediaCodecs = (source.MediaStreams ?? [])
+      .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
+      .map((s) => ({
+        codec: (s.Codec ?? '').toLowerCase(),
+        bitDepth: s.BitDepth ?? null,
+      }))
+      .filter((s) => s.codec);
+    return {
+      url,
+      headers: { 'X-Emby-Token': credentials.accessToken },
+      mimeType: null,
+      subtitleTracks,
+      mediaCodecs,
+    };
+  });
 
-  const url = resolvePlaybackUrl(credentials.baseUrl, source);
-  const method = playMethod(source);
-  const headers = { 'X-Emby-Token': credentials.accessToken };
+  if (sources.length === 0) throw new Error('No media sources');
 
-  const subtitleTracks: SubtitleTrack[] = (source.MediaStreams ?? []).flatMap((stream) => {
+  return sources;
+}
+
+function buildSubtitleTracks(
+  source: MediaSourceInfo,
+  credentials: { baseUrl: string; accessToken: string },
+  itemRef: string,
+  capabilities: { subtitleFormats: string[] },
+): SubtitleTrack[] {
+  return (source.MediaStreams ?? []).flatMap((stream) => {
     const index = stream.Index;
     if (stream.Type !== 'Subtitle' || index == null) return [];
 
@@ -241,7 +261,7 @@ export async function getPlaybackSpec(
       if (capabilities.subtitleFormats.includes('ass')) {
         externalRef = `${credentials.baseUrl}/Videos/${itemRef}/Subtitles/${index}/Stream.ass`;
       } else {
-        return []; // skip bitmap-codec subtitles we can't render
+        return [];
       }
     }
 
@@ -254,34 +274,4 @@ export async function getPlaybackSpec(
       externalRef,
     }];
   });
-
-  const providerState = {
-    itemId: itemRef,
-    playMethod: method,
-    playSessionId: info.PlaySessionId ?? null,
-    mediaSourceId: source.Id ?? null,
-    liveStreamId: source.LiveStreamId ?? null,
-    baseUrl: credentials.baseUrl,
-    userId: credentials.userId,
-    accessToken: credentials.accessToken,
-    deviceProfile,
-  };
-
-  const mediaCodecs = (source.MediaStreams ?? [])
-    .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
-    .map((s) => ({
-      codec: (s.Codec ?? '').toLowerCase(),
-      bitDepth: s.BitDepth ?? null,
-    }))
-    .filter((s) => s.codec);
-
-  return {
-    url,
-    headers,
-    mimeType: null,
-    subtitleTracks,
-    progressIntervalMs: 10_000,
-    state: providerState,
-    mediaCodecs,
-  };
 }

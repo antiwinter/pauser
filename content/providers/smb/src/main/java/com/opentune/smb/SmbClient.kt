@@ -14,15 +14,14 @@ import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
+import com.opentune.player.PlaybackSource
 import com.opentune.player.EntryStateKeys
-import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlayingState
 import com.opentune.content.contract.ProviderStream
 import com.opentune.content.contract.StreamRegistrarHolder
 import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import java.util.EnumSet
 import java.util.concurrent.ConcurrentHashMap
 
@@ -122,7 +121,9 @@ class SmbClient(
         }
     }
 
-    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
+    override val progressIntervalMs: Long = 0L
+
+    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
         return withContext(Dispatchers.IO) {
             val pathWin = itemRef.replace('/', '\\')
             val registrar = StreamRegistrarHolder.get()
@@ -151,14 +152,7 @@ class SmbClient(
             val allTokenUrls = listOf(videoUrl) + subtitleTracks.mapNotNull { it.externalRef }
             activeTokenUrls[itemRef] = allTokenUrls
 
-            PlaybackSpec(
-                url = videoUrl,
-                headers = emptyMap(),
-                mimeType = null,
-                subtitleTracks = subtitleTracks,
-                httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
-                progressIntervalMs = 0L,
-            )
+            listOf(PlaybackSource(url = videoUrl, subtitleTracks = subtitleTracks))
         }
     }
 

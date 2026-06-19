@@ -49,7 +49,7 @@ internal fun rememberPlaybackSurface(
     val specState = rememberUpdatedState(spec)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val exo = session.exo
-    val instanceKey = spec.url
+    val instanceKey = spec.sources[spec.state.sourceIndex].url
 
     val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
     val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }

@@ -49,8 +49,9 @@ internal fun resolveSubtitlePreference(
     spec: PlaybackSpec,
 ): SubtitlePreference {
     if (savedId == null) return SubtitlePreference()
-    if (spec.subtitleTracks.isNotEmpty()) {
-        val track = spec.subtitleTracks.find { it.trackId == savedId }
+    val source = spec.sources[spec.state.sourceIndex]
+    if (source.subtitleTracks.isNotEmpty()) {
+        val track = source.subtitleTracks.find { it.trackId == savedId }
         if (track != null) {
             return if (track.externalRef != null) {
                 SubtitlePreference(externalUri = Uri.parse(track.externalRef!!), language = track.language)
@@ -70,6 +71,7 @@ internal fun prepareWithSidecar(
     mimeType: String,
     spec: PlaybackSpec,
 ) {
+    val source = spec.sources[spec.state.sourceIndex]
     val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
         .Builder(subtitleUri)
         .setMimeType(mimeType)
@@ -77,9 +79,9 @@ internal fun prepareWithSidecar(
     val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
         spec.httpClient.newBuilder()
             .apply {
-                if (spec.headers.isNotEmpty()) addInterceptor { chain ->
+                if (source.headers.isNotEmpty()) addInterceptor { chain ->
                     val req = chain.request().newBuilder().apply {
-                        spec.headers.forEach { (k, v) -> header(k, v) }
+                        source.headers.forEach { (k, v) -> header(k, v) }
                     }.build()
                     chain.proceed(req)
                 }
@@ -154,6 +156,7 @@ internal class SubtitleManager(
 
     private fun buildSubtitleChildren(): List<PlayerMenuEntry> {
         val spec = specState.value
+        val source = spec.sources[spec.state.sourceIndex]
         val tracks = currentTracksState.value
         val entries = mutableListOf<PlayerMenuEntry>()
 
@@ -171,8 +174,8 @@ internal class SubtitleManager(
             },
         )
 
-        if (spec.subtitleTracks.isNotEmpty()) {
-            spec.subtitleTracks.forEach { track ->
+        if (source.subtitleTracks.isNotEmpty()) {
+            source.subtitleTracks.forEach { track ->
                 val exoGroup = tracks.groups
                     .filter { it.type == C.TRACK_TYPE_TEXT }
                     .firstOrNull { it.mediaTrackGroup.id == track.trackId }
@@ -257,7 +260,7 @@ internal fun rememberSubtitleManager(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val specState = rememberUpdatedState(spec)
-    val instanceKey = spec.url
+    val instanceKey = spec.sources[spec.state.sourceIndex].url
 
     val activeTrackId = session.subtitleTrackIdFlow.collectAsState()
     val offsetFractionState = remember(instanceKey) {

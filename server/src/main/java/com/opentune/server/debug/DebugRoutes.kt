@@ -178,14 +178,15 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val ref = call.request.queryParameters["ref"] ?: return@get call.respond400("missing ref")
                 val startMs = call.request.queryParameters["startMs"]?.toLongOrNull() ?: 0L
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
-                val spec = runCatching { instance.getPlaybackSpec(ref, startMs) }.getOrElse {
-                    Log.e(LOG_TAG, "getPlaybackSpec error", it); return@get call.respond500(it.message)
+                val sources = runCatching { instance.getPlaybackSources(ref) }.getOrElse {
+                    Log.e(LOG_TAG, "getPlaybackSources error", it); return@get call.respond500(it.message)
                 }
+                val source = sources.firstOrNull() ?: return@get call.respond500("no sources")
                 val dto = PlaybackSpecDto(
-                    url = spec.url,
-                    mimeType = spec.mimeType,
-                    headers = spec.headers,
-                    mediaCodecs = spec.mediaCodecs.map { MediaCodecInfoDto(codec = it.codec, bitDepth = it.bitDepth) },
+                    url = source.url,
+                    mimeType = source.mimeType,
+                    headers = source.headers,
+                    mediaCodecs = source.mediaCodecs.map { MediaCodecInfoDto(codec = it.codec, bitDepth = it.bitDepth) },
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
             }

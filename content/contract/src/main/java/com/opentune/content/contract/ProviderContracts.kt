@@ -1,6 +1,6 @@
 package com.opentune.content.contract
 
-import com.opentune.player.PlaybackSpec
+import com.opentune.player.PlaybackSource
 import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.core.form.contract.QrResult
 import com.opentune.proxy.contract.ProxyClient
@@ -41,6 +41,7 @@ abstract class EndpointClient {
     open var proxyClient: ProxyClient? = null
     open var endpointId: String = ""
     open var protocol: String = ""
+    open val progressIntervalMs: Long = 10_000L
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
     abstract suspend fun listEntry(
         location: String?,
@@ -49,7 +50,7 @@ abstract class EndpointClient {
         options: QueryOptions = QueryOptions(),
     ): EntryList
     abstract suspend fun search(scopeLocation: String, query: SearchQuery): EntryList
-    abstract suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec
+    abstract suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource>
     abstract suspend fun getEntries(itemRefs: List<String>): EntryList
     open suspend fun getTaggedEntries(
         tag: EntryTag,

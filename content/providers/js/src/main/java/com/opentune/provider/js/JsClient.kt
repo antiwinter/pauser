@@ -11,9 +11,9 @@ import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointValidationResult
+import com.opentune.player.PlaybackSource
 import com.opentune.player.PlatformInfoData
 import com.opentune.core.form.contract.QrResult
-import com.opentune.player.PlaybackSpec
 import com.opentune.player.SubtitleTrack
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -266,15 +266,17 @@ class JsClient(
         runCatching { engine.callMethod("updateEntryState", args.toString()) }
     }
 
-    override suspend fun getPlaybackSpec(itemRef: String, startMs: Long): PlaybackSpec {
+    override val progressIntervalMs: Long = 0L
+
+    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
         ensureReady()
         val args = buildJsonObject {
             put("itemRef", itemRef)
-            put("startMs", startMs)
         }
-        val resultJson = engine.callMethod("getPlaybackSpec", args.toString())
-            ?: error("getPlaybackSpec returned null")
-        return parsePlaybackSpec(itemRef, json.parseToJsonElement(resultJson).jsonObject)
+        val resultJson = engine.callMethod("getPlaybackSources", args.toString())
+            ?: engine.callMethod("getPlaybackSpec", args.toString())
+            ?: error("getPlaybackSources returned null")
+        return parsePlaybackSources(itemRef, json.parseToJsonElement(resultJson).jsonObject)
     }
 
     // ── Parsers ────────────────────────────────────────────────────────────
@@ -319,21 +321,43 @@ class JsClient(
             height = obj["height"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             officialRating = obj["officialRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             filename = obj["filename"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            sources = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
+                ?.mapNotNull { el -> parseSource(el.jsonObject).takeIf { it.url.isNotEmpty() } },
         )
     }
 
-    private fun parsePlaybackSpec(itemRef: String, obj: JsonObject): PlaybackSpec {
-        val urlSpecObj = obj["urlSpec"]?.takeIf { it !is JsonNull }?.jsonObject
-        val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            ?: urlSpecObj?.get("url")?.jsonPrimitive?.content
-        val headers = obj["headers"]?.takeIf { it !is JsonNull }?.jsonObject
-            ?.mapValues { e -> e.value.jsonPrimitive.content }
-            ?: urlSpecObj?.get("headers")?.takeIf { it !is JsonNull }?.jsonObject
+    private fun parsePlaybackSources(itemRef: String, obj: JsonObject): List<PlaybackSource> {
+        val sourcesEl = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
+        val sources = if (sourcesEl != null) {
+            sourcesEl.map { parseSource(it.jsonObject) }
+        } else {
+            // Backward compat: legacy flat format with url/headers at top level
+            val urlSpecObj = obj["urlSpec"]?.takeIf { it !is JsonNull }?.jsonObject
+            val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                ?: urlSpecObj?.get("url")?.jsonPrimitive?.content
+                ?: error("JS provider returned null URL")
+            val headers = obj["headers"]?.takeIf { it !is JsonNull }?.jsonObject
                 ?.mapValues { e -> e.value.jsonPrimitive.content }
-            ?: emptyMap()
+                ?: urlSpecObj?.get("headers")?.takeIf { it !is JsonNull }?.jsonObject
+                    ?.mapValues { e -> e.value.jsonPrimitive.content }
+                ?: emptyMap()
+            val mimeType = obj["mimeType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                ?: urlSpecObj?.get("mimeType")?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+            listOf(PlaybackSource(url = url, headers = headers, mimeType = mimeType))
+        }
+
+        val stateJson = (obj["state"] ?: obj["hooksState"])?.toString() ?: "{}"
+        providerStates[itemRef] = stateJson
+
+        return sources
+    }
+
+    private fun parseSource(obj: JsonObject): PlaybackSource {
+        val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: ""
+        val headers = obj["headers"]?.takeIf { it !is JsonNull }?.jsonObject
+            ?.mapValues { e -> e.value.jsonPrimitive.content } ?: emptyMap()
         val mimeType = obj["mimeType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            ?: urlSpecObj?.get("mimeType")?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-        val subtitles = obj["subtitleTracks"]?.jsonArray?.mapNotNull { s ->
+        val subtitleTracks = obj["subtitleTracks"]?.jsonArray?.mapNotNull { s ->
             val so = s.jsonObject
             val trackId = so["trackId"]?.jsonPrimitive?.content ?: return@mapNotNull null
             SubtitleTrack(
@@ -345,12 +369,6 @@ class JsClient(
                 externalRef = so["externalRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             )
         } ?: emptyList()
-
-        val stateJson = (obj["state"] ?: obj["hooksState"])?.toString() ?: "{}"
-        providerStates[itemRef] = stateJson
-
-        val progressIntervalMs = obj["progressIntervalMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-
         val mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
             val so = s.jsonObject
             val codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: return@mapNotNull null
@@ -359,15 +377,6 @@ class JsClient(
                 bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             )
         } ?: emptyList()
-
-        return PlaybackSpec(
-            url = requireNotNull(url) { "JS provider returned null URL in getPlaybackSpec" },
-            headers = headers,
-            mimeType = mimeType,
-            subtitleTracks = subtitles,
-            httpClient = proxyClient?.getHttpClient() ?: OkHttpClient(),
-            mediaCodecs = mediaCodecs,
-            progressIntervalMs = progressIntervalMs,
-        )
+        return PlaybackSource(url = url, headers = headers, mimeType = mimeType, subtitleTracks = subtitleTracks, mediaCodecs = mediaCodecs)
     }
 }

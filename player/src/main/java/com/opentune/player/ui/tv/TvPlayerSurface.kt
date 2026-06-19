@@ -140,6 +140,7 @@ private fun TvPlayerSurfaceContent(
         }
     }
 
+    val sourceManager by controller.sourceManagerFlow.collectAsState()
     val menu = rememberMenuOverlayState(
         *buildList {
             add(surface.subtitleCtrl.menuEntry)
@@ -147,12 +148,15 @@ private fun TvPlayerSurfaceContent(
             add(surface.audioCtrl.menuEntry)
             add(surface.speedCtrl.menuEntry)
             if (surface.hdrCtrl.shouldShow) add(surface.hdrCtrl.menuEntry)
+            if (sourceManager != null && sourceManager!!.sourceCount > 1) {
+                add(sourceManager!!.menuEntry)
+            }
         }.toTypedArray()
     )
 
     val trackInfo: TrackInfo by surface.trackInfo
     val infoOverlay = rememberInfoOverlayState(
-        instanceKey = spec.url,
+        instanceKey = spec.sources[spec.state.sourceIndex].url,
         displayInfo = displayInfo,
         exo = exo,
         videoMime = trackInfo.videoMime,

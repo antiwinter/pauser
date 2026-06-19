@@ -1,7 +1,7 @@
 import type {
   EntryList,
   EntryInfo,
-  PlaybackSpec,
+  PlaybackSource,
   ValidationResult,
 } from "../../utils/types.js";
 import type { SiteEntry, LiveEntry } from "./config.js";
@@ -11,7 +11,7 @@ import {
   categoryListToFolders,
   vodListToEntries,
   liveChannelsToEntries,
-  playResultToSpec,
+  playResultToSource,
 } from "./mapper.js";
 import { initSpiders, getSpider, getConfig, canHandleSite } from "./spider/index.js";
 import { fetchConfig } from "./config.js";
@@ -143,13 +143,12 @@ export async function search(
   return results;
 }
 
-// ── getPlaybackSpec ───────────────────────────────────────────────────────────
+// ── getPlaybackSources ────────────────────────────────────────────────────────
 
-export async function getPlaybackSpec(
+export async function getPlaybackSources(
   _state: CatVodClientState,
   itemRef: string,
-  _startMs: number,
-): Promise<PlaybackSpec> {
+): Promise<PlaybackSource[]> {
   const ref = decodeRef(itemRef);
   if (ref.type === 'unsupported') throw new Error("Unsupported ref type");
 
@@ -164,7 +163,7 @@ export async function getPlaybackSpec(
     const ep = eps[ref.epIndex];
     if (!ep) throw new Error("Episode not found");
     const result = await spider.play(ep.flag, ep.url);
-    return playResultToSpec(result, ep.url);
+    return [playResultToSource(result)];
   }
 
   // Vod ref with single episode → resolve inline
@@ -175,7 +174,7 @@ export async function getPlaybackSpec(
     const eps = parseEpisodes(detail);
     if (eps.length === 0) throw new Error("No episodes found");
     const result = await spider.play(eps[0].flag, eps[0].url);
-    return playResultToSpec(result, eps[0].url);
+    return [playResultToSource(result)];
   }
 
   // Live channel → resolve via spider
@@ -185,11 +184,11 @@ export async function getPlaybackSpec(
     const channel = result.channels[ref.channelIndex];
     if (!channel) throw new Error("Channel not found");
     const playResult = await spider.play('', channel.url);
-    return playResultToSpec(playResult, channel.url);
+    return [playResultToSource(playResult)];
   }
 
   throw new Error(
-    `getPlaybackSpec: unsupported ref type ${(ref as { type: string }).type}`,
+    `getPlaybackSources: unsupported ref type ${(ref as { type: string }).type}`,
   );
 }
 

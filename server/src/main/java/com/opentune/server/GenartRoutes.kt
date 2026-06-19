@@ -37,21 +37,22 @@ fun Application.installGenartRoutes(ctx: AppContext) {
                 )
 
             val bytes = withContext(Dispatchers.IO) {
-                val spec = try {
-                    client.getPlaybackSpec(itemRef, 0)
+                val sources = try {
+                    client.getPlaybackSources(itemRef)
                 } catch (e: Exception) {
-                    Log.w(LOG_TAG, "getPlaybackSpec failed for $itemRef", e)
+                    Log.w(LOG_TAG, "getPlaybackSources failed for $itemRef", e)
                     null
                 }
 
                 try {
-                    if (spec != null) {
-                        GenArt.generateCover(spec.url, spec.headers)
+                    if (sources != null && sources.isNotEmpty()) {
+                        val source = sources.first()
+                        GenArt.generateCover(source.url, source.headers)
                     } else {
                         null
                     }
                 } finally {
-                    if (spec != null) {
+                    if (sources != null) {
                         client.updateEntryState(
                             itemRef,
                             EntryStateKeys.PLAYING_STATE,

@@ -1,5 +1,6 @@
 package com.opentune.content.contract
 
+import com.opentune.player.PlaybackSource
 import kotlinx.serialization.Serializable
 
 /** Entry type is a plain string. Common values: "Folder", "Movie", "Series", "Episode", "Image", "Digipak", "Season", "Video", "Audio", "Unknown". */
@@ -41,6 +42,7 @@ data class EntryInfo(
     val height: Int? = null,
     val officialRating: String? = null,
     val filename: String? = null,
+    val sources: List<PlaybackSource>? = null,
 )
 
 data class EntryList(

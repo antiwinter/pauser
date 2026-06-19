@@ -120,6 +120,7 @@ export interface EntryInfo {
   height?: number | null;
   officialRating?: string | null;
   filename?: string | null;
+  sources?: PlaybackSource[] | null;
 }
 
 export interface QueryOptions {
@@ -150,18 +151,16 @@ export interface SubtitleTrack {
 }
 
 /**
- * Opaque state blob returned by `getPlaybackSpec` and passed back into
+ * Opaque state blob used in JS provider hooks, passed back into
  * `updateEntryState`.
  */
 export type ProviderState = Record<string, unknown>;
 
-export interface PlaybackSpec {
-  url: string | null;
+export interface PlaybackSource {
+  url: string;
   headers: Record<string, string>;
   mimeType: string | null;
   subtitleTracks: SubtitleTrack[];
-  progressIntervalMs: number;
-  state: ProviderState;
   mediaCodecs: MediaCodecInfo[];
 }
 
@@ -216,10 +215,9 @@ export interface OpenTuneProviderBridge {
     query: string;
   }): Promise<EntryInfo[]>;
 
-  getPlaybackSpec(args: {
+  getPlaybackSources(args: {
     itemRef: string;
-    startMs: number;
-  }): Promise<PlaybackSpec>;
+  }): Promise<PlaybackSource[]>;
 
   updateEntryState(args: {
     itemRef: string;

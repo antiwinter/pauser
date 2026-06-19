@@ -11,22 +11,23 @@ import okhttp3.OkHttpClient
 
 @UnstableApi
 fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
+    val source = sources[state.sourceIndex]
     fun headersInterceptor() = okhttp3.Interceptor { chain ->
         val req = chain.request().newBuilder().apply {
-            headers.forEach { (k, v) -> header(k, v) }
+            source.headers.forEach { (k, v) -> header(k, v) }
         }.build()
         chain.proceed(req)
     }
     val okHttp = httpClient
         .newBuilder()
         .addInterceptor(BandwidthTracker.interceptor)
-        .apply { if (headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
+        .apply { if (source.headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
     val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     val mediaItem = MediaItem.Builder()
-        .setUri(Uri.parse(url))
-        .apply { mimeType?.let { setMimeType(it) } }
+        .setUri(Uri.parse(source.url))
+        .apply { source.mimeType?.let { setMimeType(it) } }
         .build()
     return mediaSourceFactory.createMediaSource(mediaItem)
 }
