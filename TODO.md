@@ -29,6 +29,7 @@
 - [ ] right most alphabet quick jump
 - [ ] recent
 - [ ] merge browse/search, use filter to distinguish
+- [ ] merge filename/type detector with mimedetector
 
 ## js providers
 - [x] remove sidecar meta

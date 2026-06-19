@@ -280,6 +280,7 @@ class CachingEndpointClient(
             playingState = PlayingState.STOPPED,
         )
         return spec.copy(
+            mimeType = spec.mimeType ?: PlaybackMimeTypes.fromUrl(spec.url),
             state = state,
             updateEntryState = { k, v -> updateEntryStateIntercepted(k, v, info) },
         )

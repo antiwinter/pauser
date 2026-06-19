@@ -5,7 +5,6 @@
 import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
-import { fmtToMime } from '../../utils/mimes.js';
 import { buildDeviceProfile } from './device-profile.js';
 import type { DeviceProfile, QueryResultBaseItemDto } from './dto.js';
 import type {
@@ -222,11 +221,6 @@ export async function getPlaybackSpec(
 
   const url = resolvePlaybackUrl(credentials.baseUrl, source);
   const method = playMethod(source);
-  const rawContainer =
-    (source.TranscodingContainer && source.TranscodingContainer.trim()) ||
-    (source.Container && source.Container.trim()) ||
-    '';
-  const mimeType = rawContainer ? fmtToMime(rawContainer) : null;
   const headers = { 'X-Emby-Token': credentials.accessToken };
 
   const subtitleTracks: SubtitleTrack[] = (source.MediaStreams ?? []).flatMap((stream) => {
@@ -284,7 +278,7 @@ export async function getPlaybackSpec(
   return {
     url,
     headers,
-    mimeType,
+    mimeType: null,
     subtitleTracks,
     progressIntervalMs: 10_000,
     state: providerState,
