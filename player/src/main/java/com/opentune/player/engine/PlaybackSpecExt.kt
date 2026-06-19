@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import com.opentune.player.PlaybackSpec
@@ -24,10 +25,15 @@ fun PlaybackSpec.toMediaSource(context: android.content.Context): MediaSource {
         .apply { if (source.headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
-    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     val mediaItem = MediaItem.Builder()
         .setUri(Uri.parse(source.url))
         .apply { source.mimeType?.let { setMimeType(it) } }
         .build()
+    val mimeType = source.mimeType
+    if (mimeType != null && mimeType == "application/vnd.apple.mpegurl") {
+        return HlsMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(mediaItem)
+    }
+    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     return mediaSourceFactory.createMediaSource(mediaItem)
 }

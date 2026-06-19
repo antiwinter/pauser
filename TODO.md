@@ -65,6 +65,7 @@
 - [ ] next episode
 - [ ] sprite
 - [ ] proxied buffering
+- [ ] live surface
 
 ## Roadmap
 - [ ] remove opentune naming
