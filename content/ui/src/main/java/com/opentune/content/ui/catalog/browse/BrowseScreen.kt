@@ -121,7 +121,7 @@ fun BrowseScreen(
                         fun resolveAction(type: String): (() -> Unit)? = when (type) {
                             "Folder", "Season" -> { -> onOpenBrowseLocation(item) }
                             "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
-                            "Episode", "Video" -> { -> onOpenPlayer(item) }
+                            "Episode", "Video", "LiveChannel" -> { -> onOpenPlayer(item) }
                             "Image" -> { -> onOpenImageViewer(item.ref) }
                             "Audio" -> { -> onOpenAudioUnsupported(item.ref) }
                             else -> null

@@ -75,7 +75,7 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): 
     items.push({
       ref: `${liveKey}-${g.firstIndex}`,
       title: name,
-      type: 'Video' as const,
+      type: 'LiveChannel' as const,
       cover: bestLogo,
       sources: sources.length > 1 ? sources : undefined,
     });

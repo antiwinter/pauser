@@ -276,7 +276,13 @@ class JsClient(
         val resultJson = engine.callMethod("getPlaybackSources", args.toString())
             ?: engine.callMethod("getPlaybackSpec", args.toString())
             ?: error("getPlaybackSources returned null")
-        return parsePlaybackSources(itemRef, json.parseToJsonElement(resultJson).jsonObject)
+        val resultEl = json.parseToJsonElement(resultJson)
+        val obj = if (resultEl is kotlinx.serialization.json.JsonArray) {
+            buildJsonObject { put("sources", resultEl) }
+        } else {
+            resultEl.jsonObject
+        }
+        return parsePlaybackSources(itemRef, obj)
     }
 
     // ── Parsers ────────────────────────────────────────────────────────────

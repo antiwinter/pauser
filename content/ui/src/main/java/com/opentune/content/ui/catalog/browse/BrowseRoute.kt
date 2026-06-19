@@ -81,7 +81,8 @@ fun BrowseRoute(
             },
             onOpenPlayer = { entry ->
                 playerController.setClient(client!!)
-                playerController.prepare(entry)
+                val startMs = if (entry.type == "LiveChannel") 0L else null
+                playerController.prepare(entry, startMs)
                 playerController.play()
             },
             onOpenImageViewer = { raw ->

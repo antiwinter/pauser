@@ -92,7 +92,7 @@ class PlayerController(
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
-        _pendingStartMs = startMs ?: entryInfo.userData?.positionMs ?: 0L
+        _pendingStartMs = (startMs ?: entryInfo.userData?.positionMs ?: 0L).coerceAtLeast(0L)
         _pendingInfo = entryInfo
         Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
 
