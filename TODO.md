@@ -3,7 +3,7 @@
 - [x] split contract into proxy/provider
 - [-] what is EndpointConfigRepository?
 - [-] StreamRegistrarHolder, PlatformInfoHolder
-- [ ] error osd
+- [x] error osd
 - [x] move add server/ProviderFieldSpec/ValidationResult to utils.register
 - [x] Storage naming unification
 - [x] Fix: smb gen cover
@@ -70,13 +70,13 @@
 
 ## Roadmap
 - [ ] remove opentune naming
-- [ ] HDR support
+- [x] HDR support
 - [-] release insomnia-x86_64-vx.x.x.apk
 - [ ] pro user decoration. ICON/badge
 
 ## Providers
-- [ ] clash controller
+- [x] clash controller
 - [ ] tg
 - [ ] xhs
 - [ ] aliyun
-- [ ] catvod
+- [x] catvod
