@@ -119,6 +119,15 @@ class JsProvider private constructor(
     crypto: ns('crypto'),
     jar:    ns('jar'),
     fs:     ns('fs'),
+    log:    ns('log'),
+  };
+  globalThis.console = {
+    log: function() {
+      host.log.d({ msg: Array.prototype.join.call(arguments, ' ') });
+    },
+    error: function() {
+      host.log.e({ msg: Array.prototype.join.call(arguments, ' ') });
+    },
   };
   Object.defineProperty(globalThis.host, 'proxyConfig', {
     get: function() { return globalThis.__proxyConfig || null; },

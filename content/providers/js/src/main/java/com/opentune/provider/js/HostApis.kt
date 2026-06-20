@@ -1,5 +1,6 @@
 package com.opentune.provider.js
 
+import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -115,6 +116,18 @@ class HostApis {
             }
             else -> throw IllegalArgumentException("Unknown crypto method: $name")
         }
+    }
+
+    // ── log ────────────────────────────────────────────────────────────────
+
+    fun handleLog(name: String, argsJson: String): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        val msg = args["msg"]?.jsonPrimitive?.content ?: argsJson
+        when (name) {
+            "e" -> Log.e("JsProvider", msg)
+            else -> Log.d("JsProvider", msg)
+        }
+        return null
     }
 
     // ── jar ────────────────────────────────────────────────────────────────

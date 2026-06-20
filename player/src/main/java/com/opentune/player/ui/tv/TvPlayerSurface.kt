@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -157,7 +158,6 @@ private fun TvPlayerSurfaceContent(
     val infoOverlay = rememberInfoOverlayState(
         instanceKey = spec.sources[spec.state.sourceIndex].url,
         displayInfo = displayInfo,
-        exo = exo,
         videoMime = trackInfo.videoMime,
         videoDecoderStatus = trackInfo.videoDecoderStatus,
         audioMime = trackInfo.audioMime,
@@ -262,18 +262,14 @@ private fun TvPlayerSurfaceContent(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
         ) {
-            Box(
+            Text(
+                text = "buffering...",
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "buffering...",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
+                    .background(Color(0x88000000), shape = RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
 
         AnimatedVisibility(

@@ -1,16 +1,12 @@
 package com.opentune.player.engine
 
-import android.content.Context
-import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.util.Log
-import android.view.Display
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.C
 import androidx.media3.common.ColorInfo
 import androidx.media3.common.Format
@@ -36,6 +32,10 @@ internal data class TrackInfo(
 //   "c2"    — decoder initialized                  → shows "codec[c2]"
 //   "n/a"   — track exists but not selected         → shows "codec[n/a]"
 //   "err"   — runtime decode error                  → shows "codec[err]"
+//
+// IMPORTANT: onTracksChanged can fire transiently (e.g. mid-track-switch) with no
+// selected track. The "n/a" assignment MUST be guarded by isEmpty() so a running
+// decoder's status is never overwritten. See git history for recurring bug pattern.
 
 /** Extracts decoder prefix (e.g., "c2", "OMX") from full decoder name. */
 private fun simplifyDecoderName(decoderName: String): String {
@@ -52,7 +52,6 @@ internal fun rememberTrackInfo(
     instanceKey: String,
     mainHandler: Handler,
 ): State<TrackInfo> {
-    val context = LocalContext.current
     val state = remember(instanceKey) { mutableStateOf(TrackInfo()) }
 
     DisposableEffect(exo, instanceKey) {
@@ -89,22 +88,20 @@ internal fun rememberTrackInfo(
                 val videoFormat = lookForFormat(C.TRACK_TYPE_VIDEO)
                 val hdrContent = videoFormat?.sampleMimeType == "video/dolby-vision"
                     || (videoFormat?.colorInfo != null && ColorInfo.isTransferHdr(videoFormat.colorInfo))
-                val displayHdr = isDisplayHdrCapable(context)
-                val hdrCapable = hdrContent && displayHdr
 
                 mainHandler.post {
                     val current = state.value
                     val updated = current.copy(
                         videoMime = vm,
-                        videoDecoderStatus = if (vNA) "n/a" else current.videoDecoderStatus,
+                        videoDecoderStatus = if (vNA && current.videoDecoderStatus.isEmpty()) "n/a" else current.videoDecoderStatus,
                         audioMime = am,
-                        audioDecoderStatus = if (aNA) "n/a" else current.audioDecoderStatus,
-                        isHdrCapable = hdrCapable,
+                        audioDecoderStatus = if (aNA && current.audioDecoderStatus.isEmpty()) "n/a" else current.audioDecoderStatus,
+                        isHdrCapable = hdrContent,
                     )
                     Log.d(
                         "TrackInfo",
                         "onTracksChanged videoMime=$vm audioMime=$am " +
-                            "vNA=$vNA aNA=$aNA hdrContent=$hdrContent displayHdr=$displayHdr " +
+                            "vNA=$vNA aNA=$aNA hdrContent=$hdrContent " +
                             "stored=${updated.videoMime}/${updated.audioMime} groups=${tracks.groups.size}"
                     )
                     state.value = updated
@@ -158,11 +155,4 @@ internal fun rememberTrackInfo(
     }
 
     return state
-}
-
-/** Checks whether the device's primary display supports any HDR profile. */
-private fun isDisplayHdrCapable(context: Context): Boolean {
-    val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-    val display = dm.getDisplay(Display.DEFAULT_DISPLAY)
-    return display.isHdr()
 }

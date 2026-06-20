@@ -156,18 +156,14 @@ class PlaybackSession(
     fun stop() {
         val spec = _spec.value
         stopInternal()
+        _spec.value = null
         if (spec != null) {
             scope.launch { emitTeardown(spec, PlayingState.STOPPED) }
         }
-        _spec.value = null
     }
 
     fun clear() {
-        val spec = _spec.value
         stopInternal()
-        if (spec != null) {
-            scope.launch { emitTeardown(spec, PlayingState.STOPPED) }
-        }
         _spec.value = null
         exo.release()
     }

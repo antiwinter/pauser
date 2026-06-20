@@ -29,8 +29,8 @@ object EndpointCache {
     /** L2: canonical entry by (endpointId, itemRef). */
     private val items = mutableMapOf<ItemKey, ItemEntry>()
 
-    private const val ITEM_TTL_MS = 5L * 60 * 1000
-    private const val QUERY_TTL_MS = 5L * 60 * 1000
+    private const val ITEM_TTL_MS = 5L * 60 * 60 * 1000
+    private const val QUERY_TTL_MS = 5L * 60 * 60 * 1000
 
     data class ItemKey(val endpointId: String, val itemRef: String)
 

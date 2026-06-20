@@ -55,7 +55,7 @@ internal fun rememberPlaybackSurface(
         val exo = session.exo
 
         val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
-        val bandwidthMbps = remember { mutableFloatStateOf(-1f) }
+        val bandwidthMbps = remember { mutableFloatStateOf(0f) }
 
         val hdrCtrl = rememberHdrManager(
             trackInfo = trackInfo,

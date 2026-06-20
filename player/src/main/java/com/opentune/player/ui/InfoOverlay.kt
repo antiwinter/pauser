@@ -18,12 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.PlaybackDisplayInfo
 
 internal class InfoOverlayState(
     val displayInfo: PlaybackDisplayInfo,
-    val durationMs: Long,
     val videoMime: String?,
     val videoDecoderStatus: String?,
     val audioMime: String?,
@@ -60,9 +58,6 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text = state.displayInfo.title, color = Color.White, fontSize = 14.sp)
-                if (state.durationMs > 0) {
-                    Text(text = formatDuration(state.durationMs), color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                }
                 Text(
                     text = trackLabel(state.videoMime, state.videoDecoderStatus),
                     color = if (isTrackFailed(state.videoMime, state.videoDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
@@ -83,13 +78,14 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                 state.displayInfo.bitrate?.takeIf { it > 0 }?.let { br ->
                     Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
-                if (mbps > 0f) {
-                    Text(
-                        text = "%.1f Mbps".format(mbps),
-                        color = Color(0xFFAAAAAA),
-                        fontSize = 14.sp,
-                    )
-                }
+            }
+            // Download speed on the right; hidden only before first measurement (-1 sentinel).
+            if (mbps >= 0f) {
+                Text(
+                    text = "%.1f Mbps".format(mbps),
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 14.sp,
+                )
             }
         }
     }
@@ -112,23 +108,10 @@ private fun isTrackFailed(mime: String?, decoderStatus: String?): Boolean {
     return mime != null && decoderStatus == "err"
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) {
-        "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
-    } else {
-        "$m:${s.toString().padStart(2, '0')}"
-    }
-}
-
 @Composable
 internal fun rememberInfoOverlayState(
     instanceKey: String,
     displayInfo: PlaybackDisplayInfo,
-    exo: ExoPlayer,
     videoMime: String?,
     videoDecoderStatus: String?,
     audioMime: String?,
@@ -138,10 +121,9 @@ internal fun rememberInfoOverlayState(
     isHdrEnabled: Boolean = false,
 ): InfoOverlayState {
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, displayInfo, exo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled) {
+    return remember(instanceKey, displayInfo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled) {
         InfoOverlayState(
             displayInfo = displayInfo,
-            durationMs = exo.duration.coerceAtLeast(0L),
             videoMime = videoMime,
             videoDecoderStatus = videoDecoderStatus,
             audioMime = audioMime,
