@@ -199,6 +199,17 @@ class ClashProxyClient(private val values: Map<String, String>) : ProxyClient {
         }
     }
 
+    suspend fun enableLan(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val req = baseRequest("/configs")
+                .patch("""{"allow-lan":true}""".toRequestBody("application/json".toMediaType()))
+                .build()
+            controllerClient.newCall(req).execute().use { it.isSuccessful }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun setActiveProxy(proxyName: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val encoded = java.net.URLEncoder.encode(selectorName, "UTF-8")

@@ -35,6 +35,7 @@ data class ClashConfigsResponse(
     val port: Int? = null,
     val socksPort: Int? = null,
     val path: String? = null,
+    val allowLan: Boolean? = null,
 )
 
 @Serializable

@@ -97,6 +97,7 @@ fun ClashCtrlUi(
         latencies = emptyMap()
         scope.launch {
             try {
+                client.enableLan()
                 val subscriptionOk = if (subscriptionUrl.isNotBlank()) {
                     client.refreshSubscription(subscriptionUrl)
                 } else true
