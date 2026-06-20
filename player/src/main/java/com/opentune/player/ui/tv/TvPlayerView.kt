@@ -83,7 +83,8 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        post { requestFocus() }
+        requestFocus()           // grab focus immediately; View may not be laid out yet
+        post { requestFocus() } // fallback: retry after first layout pass
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

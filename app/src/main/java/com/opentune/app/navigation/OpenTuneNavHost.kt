@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -79,7 +80,16 @@ fun OpenTuneNavHost() {
     val isShown by playerController.isShownFlow.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(navController = nav, startDestination = Routes.HOME) {
+        // When the player overlay is shown, block all Compose key events from reaching
+        // background screens. Without this, queued key events (e.g., the ACTION_UP of the
+        // CENTER press that started playback) can activate buttons like Search while the
+        // player is loading focus.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isShown) Modifier.onPreviewKeyEvent { true } else Modifier),
+        ) {
+            NavHost(navController = nav, startDestination = Routes.HOME) {
             composable(Routes.HOME) {
                 HomeRoute(
                     onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
@@ -108,6 +118,7 @@ fun OpenTuneNavHost() {
             composable(Routes.SETTINGS) {
                 SettingsScreen(onBack = { nav.popBackStack() })
             }
+        }
         }
 
         if (isShown) {
