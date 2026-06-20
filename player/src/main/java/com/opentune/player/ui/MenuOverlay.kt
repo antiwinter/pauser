@@ -30,6 +30,8 @@ import com.opentune.player.manager.PlayerMenuEntry
 
 private const val MENU_VISIBLE_ITEMS = 6
 private const val ITEM_HEIGHT_DP = 44
+private const val MENU_WIDTH_DP = 240
+private const val MENU_END_PADDING_DP = 32
 
 /**
  * Retained state for the two-level player settings menu.
@@ -83,7 +85,7 @@ class MenuOverlayState(initialEntries: List<PlayerMenuEntry>) {
                 val entry = entries.getOrNull(topIndex) ?: return
                 if (entry.children().isEmpty()) {
                     entry.onSelect()
-                    close()
+                    if (!entry.keepMenuOpen) close()
                 } else {
                     subIndex = 0
                     depth = 2
@@ -91,8 +93,9 @@ class MenuOverlayState(initialEntries: List<PlayerMenuEntry>) {
             }
             2 -> {
                 val children = entries.getOrNull(topIndex)?.children() ?: return
-                children.getOrNull(subIndex)?.onSelect()
-                close()
+                val entry = children.getOrNull(subIndex) ?: return
+                entry.onSelect()
+                if (!entry.keepMenuOpen) close()
             }
         }
     }
@@ -120,14 +123,13 @@ fun rememberMenuOverlayState(vararg entries: PlayerMenuEntry): MenuOverlayState 
 fun MenuOverlay(state: MenuOverlayState) {
     if (state.depth == 0) return
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.65f)),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.CenterEnd,
     ) {
         Column(
             modifier = Modifier
-                .width(340.dp)
+                .padding(end = MENU_END_PADDING_DP.dp)
+                .width(MENU_WIDTH_DP.dp)
                 .background(Color(0xFF1C1C1C), shape = RoundedCornerShape(12.dp))
                 .padding(vertical = 8.dp),
         ) {

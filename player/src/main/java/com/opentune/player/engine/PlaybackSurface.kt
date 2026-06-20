@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,54 +49,60 @@ internal fun rememberPlaybackSurface(
     val context = LocalContext.current
     val specState = rememberUpdatedState(spec)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    val exo = session.exo
     val instanceKey = spec.sources[spec.state.sourceIndex].url
 
-    val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
-    val bandwidthMbps = remember(instanceKey) { mutableFloatStateOf(-1f) }
-    val hdrCtrl = rememberHdrManager(trackInfo)
-    val subtitleCtrl = rememberSubtitleManager(
-        exo = exo,
-        spec = spec,
-        session = session,
-    )
-    val audioCtrl = rememberAudioManager(
-        exo = exo,
-        session = session,
-    )
-    val speedCtrl = rememberSpeedManager(
-        exo = exo,
-        session = session,
-    )
+    return key(instanceKey) {
+        val exo = session.exo
 
-    val engine = remember(instanceKey) {
-        PlaybackSurface(
-            exo = exo,
-            subtitleCtrl = subtitleCtrl,
-            audioCtrl = audioCtrl,
-            speedCtrl = speedCtrl,
-            hdrCtrl = hdrCtrl,
+        val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
+        val bandwidthMbps = remember { mutableFloatStateOf(-1f) }
+
+        val hdrCtrl = rememberHdrManager(
             trackInfo = trackInfo,
-            bandwidthMbps = bandwidthMbps,
+        )
+        val subtitleCtrl = rememberSubtitleManager(
+            exo = exo,
+            spec = spec,
             session = session,
         )
-    }
+        val audioCtrl = rememberAudioManager(
+            exo = exo,
+            session = session,
+        )
+        val speedCtrl = rememberSpeedManager(
+            exo = exo,
+            session = session,
+        )
 
-    LaunchedEffect(instanceKey) {
-        while (isActive) {
-            delay(1_000)
-            bandwidthMbps.floatValue = BandwidthTracker.mbps
+        val engine = remember {
+            PlaybackSurface(
+                exo = exo,
+                subtitleCtrl = subtitleCtrl,
+                audioCtrl = audioCtrl,
+                speedCtrl = speedCtrl,
+                hdrCtrl = hdrCtrl,
+                trackInfo = trackInfo,
+                bandwidthMbps = bandwidthMbps,
+                session = session,
+            )
         }
+
+        LaunchedEffect(Unit) {
+            while (isActive) {
+                delay(1_000)
+                bandwidthMbps.floatValue = BandwidthTracker.mbps
+            }
+        }
+
+        TrackFallbackEffect(
+            exo = exo,
+            instanceKey = instanceKey,
+            specState = specState,
+            trackInfoState = trackInfo,
+            mainHandler = mainHandler,
+            context = context,
+        )
+
+        engine
     }
-
-    TrackFallbackEffect(
-        exo = exo,
-        instanceKey = instanceKey,
-        specState = specState,
-        trackInfoState = trackInfo,
-        mainHandler = mainHandler,
-        context = context,
-    )
-
-    return engine
 }

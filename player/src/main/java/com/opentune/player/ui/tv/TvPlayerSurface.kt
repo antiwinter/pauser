@@ -141,14 +141,12 @@ private fun TvPlayerSurfaceContent(
     }
 
     val sourceManager by controller.sourceManagerFlow.collectAsState()
-    val hdrShouldShow = surface.hdrCtrl.shouldShow
     val menu = rememberMenuOverlayState(
         *buildList {
             add(surface.subtitleCtrl.menuEntry)
             add(surface.subtitleCtrl.adjustMenuEntry)
             add(surface.audioCtrl.menuEntry)
             add(surface.speedCtrl.menuEntry)
-            if (hdrShouldShow) add(surface.hdrCtrl.menuEntry)
             if (sourceManager != null && sourceManager!!.sourceCount > 1) {
                 add(sourceManager!!.menuEntry)
             }
@@ -238,7 +236,6 @@ private fun TvPlayerSurfaceContent(
             },
             subtitleTranslationYPx = surface.subtitleCtrl.translationYPx,
             subtitleSizeScale = surface.subtitleCtrl.sizeScale,
-            useSurfaceView = surface.hdrCtrl.isHdrEnabled,
         )
 
         AnimatedVisibility(

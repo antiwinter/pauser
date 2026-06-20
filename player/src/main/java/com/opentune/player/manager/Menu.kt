@@ -14,4 +14,5 @@ data class PlayerMenuEntry(
     val children: () -> List<PlayerMenuEntry>,
     val isSelected: @Composable () -> Boolean = { false },
     val onSelect: () -> Unit = {},
+    val keepMenuOpen: Boolean = false,
 )
