@@ -43,12 +43,10 @@ internal fun rememberHdrManager(
     trackInfo: State<TrackInfo>,
 ): HdrManager {
     val hdrEnabledState = remember { mutableStateOf(false) }
-    val isHdrCapable = remember { derivedStateOf { trackInfo.value.isHdrCapable } }
+    val isHdrCapable = remember(trackInfo) { derivedStateOf { trackInfo.value.isHdrCapable } }
 
-    // When content changes to non-HDR, reset HDR enabled state.
     if (!isHdrCapable.value && hdrEnabledState.value) {
         hdrEnabledState.value = false
-        Log.d(HDR_LOG_TAG, "Content no longer HDR-capable — HDR disabled")
     }
 
     return remember(isHdrCapable, hdrEnabledState) {

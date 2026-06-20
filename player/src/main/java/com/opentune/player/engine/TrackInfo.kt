@@ -87,7 +87,8 @@ internal fun rememberTrackInfo(
                 val (am, aNA) = lookFor(C.TRACK_TYPE_AUDIO)
 
                 val videoFormat = lookForFormat(C.TRACK_TYPE_VIDEO)
-                val hdrContent = videoFormat?.colorInfo != null && ColorInfo.isTransferHdr(videoFormat.colorInfo)
+                val hdrContent = videoFormat?.sampleMimeType == "video/dolby-vision"
+                    || (videoFormat?.colorInfo != null && ColorInfo.isTransferHdr(videoFormat.colorInfo))
                 val displayHdr = isDisplayHdrCapable(context)
                 val hdrCapable = hdrContent && displayHdr
 

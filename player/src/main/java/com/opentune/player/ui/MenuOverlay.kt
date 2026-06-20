@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,7 +37,9 @@ private const val ITEM_HEIGHT_DP = 44
  * Create via [rememberMenuOverlayState]. All Compose state is held as [mutableIntStateOf]
  * so reads inside composables trigger recomposition automatically.
  */
-class MenuOverlayState(internal val entries: List<PlayerMenuEntry>) {
+class MenuOverlayState(initialEntries: List<PlayerMenuEntry>) {
+
+    internal var entries by mutableStateOf(initialEntries)
 
     // 0 = closed, 1 = top-level, 2 = sub-menu
     internal var depth by mutableIntStateOf(0)
@@ -103,8 +106,15 @@ class MenuOverlayState(internal val entries: List<PlayerMenuEntry>) {
 }
 
 @Composable
-fun rememberMenuOverlayState(vararg entries: PlayerMenuEntry): MenuOverlayState =
-    remember(entries.toList()) { MenuOverlayState(entries.toList()) }
+fun rememberMenuOverlayState(vararg entries: PlayerMenuEntry): MenuOverlayState {
+    val state = remember { MenuOverlayState(entries.toList()) }
+    val newEntries = entries.toList()
+    if (state.entries != newEntries) {
+        state.topIndex = state.topIndex.coerceAtMost((newEntries.size - 1).coerceAtLeast(0))
+        state.entries = newEntries
+    }
+    return state
+}
 
 @Composable
 fun MenuOverlay(state: MenuOverlayState) {

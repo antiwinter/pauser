@@ -141,13 +141,14 @@ private fun TvPlayerSurfaceContent(
     }
 
     val sourceManager by controller.sourceManagerFlow.collectAsState()
+    val hdrShouldShow = surface.hdrCtrl.shouldShow
     val menu = rememberMenuOverlayState(
         *buildList {
             add(surface.subtitleCtrl.menuEntry)
             add(surface.subtitleCtrl.adjustMenuEntry)
             add(surface.audioCtrl.menuEntry)
             add(surface.speedCtrl.menuEntry)
-            if (surface.hdrCtrl.shouldShow) add(surface.hdrCtrl.menuEntry)
+            if (hdrShouldShow) add(surface.hdrCtrl.menuEntry)
             if (sourceManager != null && sourceManager!!.sourceCount > 1) {
                 add(sourceManager!!.menuEntry)
             }
