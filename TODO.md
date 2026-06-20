@@ -66,6 +66,7 @@
 - [ ] sprite
 - [ ] proxied buffering
 - [ ] live surface
+- [ ] external subtitle preload, system lang candidates, original lang reference line
 
 ## Roadmap
 - [ ] remove opentune naming

@@ -19,14 +19,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.exoplayer.source.SingleSampleMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.engine.toMediaSource
@@ -72,10 +72,6 @@ internal fun prepareWithSidecar(
     spec: PlaybackSpec,
 ) {
     val source = spec.sources[spec.state.sourceIndex]
-    val subtitleConfig = androidx.media3.common.MediaItem.SubtitleConfiguration
-        .Builder(subtitleUri)
-        .setMimeType(mimeType)
-        .build()
     val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
         spec.httpClient.newBuilder()
             .apply {
@@ -88,16 +84,22 @@ internal fun prepareWithSidecar(
             }
             .build()
     )
-    val subtitleSource = SingleSampleMediaSource
-        .Factory(DefaultDataSource.Factory(context, httpFactory))
-        .createMediaSource(subtitleConfig, C.TIME_UNSET)
-    val mergedSource = MergingMediaSource(spec.toMediaSource(context), subtitleSource)
+    val subtitleConfig = MediaItem.SubtitleConfiguration
+        .Builder(subtitleUri)
+        .setMimeType(mimeType)
+        .build()
+    val mediaItem = MediaItem.Builder()
+        .setUri(Uri.parse(source.url))
+        .apply { source.mimeType?.let { setMimeType(it) } }
+        .setSubtitleConfigurations(listOf(subtitleConfig))
+        .build()
+    val mediaSource = DefaultMediaSourceFactory(httpFactory).createMediaSource(mediaItem)
     exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
         .setSelectUndeterminedTextLanguage(true)
         .build()
-    exo.setMediaSource(mergedSource)
+    exo.setMediaSource(mediaSource)
     exo.playWhenReady = true
     exo.prepare()
 }
@@ -235,13 +237,31 @@ internal class SubtitleManager(
             Log.d(SUB_LOG_TAG, "select: FromSpec external trackId=${track.trackId}")
             scope.launch {
                 val pos = exo.currentPosition
-                exo.stop()
+                val spec = specState.value
+
+                // Recover by re-preparing with just the video source if sidecar fails.
+                val recoveryListener = object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        exo.removeListener(this)
+                        Log.w(SUB_LOG_TAG, "Subtitle sidecar failed (code=${error.errorCode}), replaying without it")
+                        exo.setMediaSource(spec.toMediaSource(context))
+                        exo.playWhenReady = true
+                        exo.prepare()
+                        exo.seekTo(pos)
+                        saveSubtitleTrack(null)
+                    }
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_READY) exo.removeListener(this)
+                    }
+                }
+                exo.addListener(recoveryListener)
+
                 prepareWithSidecar(
                     context = context,
                     exo = exo,
                     subtitleUri = Uri.parse(track.externalRef!!),
                     mimeType = subtitleMimeType(track.externalRef!!),
-                    spec = specState.value,
+                    spec = spec,
                 )
                 exo.seekTo(pos)
                 saveSubtitleTrack(track.trackId)
@@ -271,7 +291,7 @@ internal fun rememberSubtitleManager(
     }
     val isAdjustActiveState = remember { mutableStateOf(false) }
     val screenHeightPxState = remember { mutableStateOf(0f) }
-    val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
+    val currentTracksState = remember(instanceKey) { mutableStateOf(Tracks.EMPTY) }
 
     val screenHeightPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenHeightDp.dp.toPx()
