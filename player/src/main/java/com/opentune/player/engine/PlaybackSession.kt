@@ -3,11 +3,16 @@ package com.opentune.player.engine
 import android.content.Context
 import android.util.Log
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlayingState
@@ -41,6 +46,75 @@ class PlaybackSession(
 
     val exo: ExoPlayer = OpenTuneExoPlayer.createForBundledSources(appContext).player
 
+    // Track/decoder info, owned here so its listeners live for the whole ExoPlayer lifetime and
+    // never miss the one-shot decoder-init callbacks. Reset on prepare(). See TrackInfo.kt.
+    private val _trackInfo = MutableStateFlow(TrackInfo())
+    internal val trackInfoFlow: StateFlow<TrackInfo> = _trackInfo.asStateFlow()
+
+    init {
+        exo.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                val videoFormat = tracks.selectedFormat(C.TRACK_TYPE_VIDEO)
+                val audioFormat = tracks.selectedFormat(C.TRACK_TYPE_AUDIO)
+                _trackInfo.value = _trackInfo.value.copy(
+                    videoMime = videoFormat?.sampleMimeType,
+                    audioMime = audioFormat?.sampleMimeType,
+                    isHdrCapable = isHdrFormat(videoFormat),
+                    videoBitrate = formatBitrate(videoFormat),
+                )
+                Log.d(
+                    SESSION_LOG,
+                    "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} " +
+                        "hdr=${isHdrFormat(videoFormat)} bitrate=${formatBitrate(videoFormat)} groups=${tracks.groups.size}"
+                )
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                when {
+                    error.causeChainContains("MediaCodecVideoRenderer") ->
+                        _trackInfo.value = _trackInfo.value.copy(videoDecoderStatus = "err")
+                    error.causeChainContains("MediaCodecAudioRenderer", "AudioSink") ->
+                        _trackInfo.value = _trackInfo.value.copy(audioDecoderStatus = "err")
+                }
+            }
+        })
+
+        exo.addAnalyticsListener(object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                Log.d(SESSION_LOG, "videoDecoder=$decoderName")
+                _trackInfo.value = _trackInfo.value.copy(videoDecoderStatus = simplifyDecoderName(decoderName))
+            }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                Log.d(SESSION_LOG, "audioDecoder=$decoderName")
+                _trackInfo.value = _trackInfo.value.copy(audioDecoderStatus = simplifyDecoderName(decoderName))
+            }
+
+            // Fires for both decoded and passthrough audio. Passthrough never gets a decoder-init,
+            // so claim the field only while still unresolved ("n/a"); a real decoder-init wins either
+            // way (it overrides "passthrough", or this no-ops when it already ran).
+            override fun onAudioEnabled(
+                eventTime: AnalyticsListener.EventTime,
+                decoderCounters: DecoderCounters,
+            ) {
+                if (_trackInfo.value.audioDecoderStatus == "n/a") {
+                    _trackInfo.value = _trackInfo.value.copy(audioDecoderStatus = "passthrough")
+                }
+            }
+        })
+    }
+
+
     private val _spec = MutableStateFlow<PlaybackSpec?>(null)
     val currentSpec: PlaybackSpec? get() = _spec.value
     val currentSpecFlow: StateFlow<PlaybackSpec?> = _spec.asStateFlow()
@@ -70,6 +144,16 @@ class PlaybackSession(
         }
 
     val bufferedBytes: Long get() = BandwidthTracker.totalBytes
+
+    /**
+     * The sidecar config for the currently-selected external subtitle, or null. Derived from the
+     * saved track id (kept in [subtitleTrackIdFlow]) so any rebuild — decoder fallback, sidecar
+     * recovery — can reattach the active sidecar through the unified [toMediaSource] builder.
+     */
+    fun activeSidecarSubtitle(): MediaItem.SubtitleConfiguration? {
+        val spec = _spec.value ?: return null
+        return spec.savedSubtitleTrack(_subtitleTrackId.value)?.toSidecarConfig()
+    }
 
     fun updateSpeed(speed: Float) {
         _speed.value = speed
@@ -121,14 +205,32 @@ class PlaybackSession(
         withContext(Dispatchers.Main) {
             Log.d(SESSION_LOG, "prepare: load startMs=${seed.positionMs} (was state=${exo.playbackState})")
 
+            _trackInfo.value = TrackInfo()
             exo.stop()
             exo.playWhenReady = false
             exo.playbackParameters = PlaybackParameters(savedSpeed)
-            exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+
+            // Restore the saved subtitle through the same unified builder used everywhere else, so a
+            // first launch actually applies it instead of only showing it selected in the menu.
+            // External/bitmap track → build the source WITH the sidecar; embedded → select by
+            // preferred language once tracks load; none → disable text (the prior behaviour).
+            val savedTrack = spec.savedSubtitleTrack(seed.subtitleTrackId)
+            val sidecar = savedTrack?.toSidecarConfig()
+            val textParams = exo.trackSelectionParameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .build()
-            exo.setMediaSource(spec.toMediaSource(appContext), seed.positionMs)
+            when {
+                sidecar != null -> textParams
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setSelectUndeterminedTextLanguage(true)
+                savedTrack != null -> {
+                    textParams.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setSelectUndeterminedTextLanguage(true)
+                    savedTrack.language?.let { textParams.setPreferredTextLanguage(it) }
+                }
+                else -> textParams.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            }
+            exo.trackSelectionParameters = textParams.build()
+            exo.setMediaSource(spec.toMediaSource(appContext, sidecar), seed.positionMs)
             exo.prepare()
         }
     }

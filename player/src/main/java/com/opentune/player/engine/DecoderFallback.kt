@@ -46,6 +46,7 @@ internal fun TrackFallbackEffect(
     trackInfoState: State<TrackInfo>,
     mainHandler: Handler,
     context: Context,
+    session: PlaybackSession,
 ) {
     DisposableEffect(exo, instanceKey) {
         val videoFailed = AtomicBoolean(false)
@@ -71,7 +72,7 @@ internal fun TrackFallbackEffect(
                                 .buildUpon()
                                 .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
                                 .build()
-                            exo.setMediaSource(specState.value.toMediaSource(context))
+                            exo.setMediaSource(specState.value.toMediaSource(context, session.activeSidecarSubtitle()))
                             exo.playWhenReady = true
                             exo.prepare()
                         }
@@ -93,7 +94,7 @@ internal fun TrackFallbackEffect(
                                 .buildUpon()
                                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                                 .build()
-                            exo.setMediaSource(specState.value.toMediaSource(context))
+                            exo.setMediaSource(specState.value.toMediaSource(context, session.activeSidecarSubtitle()))
                             exo.playWhenReady = true
                             exo.prepare()
                         }

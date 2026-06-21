@@ -26,9 +26,9 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
+import com.opentune.player.engine.subtitleMimeType
 import com.opentune.player.engine.toMediaSource
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.SubtitleTrack
@@ -38,31 +38,6 @@ import kotlinx.coroutines.withContext
 
 private const val SUB_LOG_TAG = "OT_Subtitle"
 
-internal data class SubtitlePreference(
-    val externalUri: Uri? = null,
-    val language: String? = null,
-)
-
-@UnstableApi
-internal fun resolveSubtitlePreference(
-    savedId: String?,
-    spec: PlaybackSpec,
-): SubtitlePreference {
-    if (savedId == null) return SubtitlePreference()
-    val source = spec.sources[spec.state.sourceIndex]
-    if (source.subtitleTracks.isNotEmpty()) {
-        val track = source.subtitleTracks.find { it.trackId == savedId }
-        if (track != null) {
-            return if (track.externalRef != null) {
-                SubtitlePreference(externalUri = Uri.parse(track.externalRef!!), language = track.language)
-            } else {
-                SubtitlePreference(language = track.language)
-            }
-        }
-    }
-    return SubtitlePreference()
-}
-
 @UnstableApi
 internal fun prepareWithSidecar(
     context: Context,
@@ -71,35 +46,17 @@ internal fun prepareWithSidecar(
     mimeType: String,
     spec: PlaybackSpec,
 ) {
-    val source = spec.sources[spec.state.sourceIndex]
-    val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-        spec.httpClient.newBuilder()
-            .apply {
-                if (source.headers.isNotEmpty()) addInterceptor { chain ->
-                    val req = chain.request().newBuilder().apply {
-                        source.headers.forEach { (k, v) -> header(k, v) }
-                    }.build()
-                    chain.proceed(req)
-                }
-            }
-            .build()
-    )
+    Log.d(SUB_LOG_TAG, "prepareWithSidecar: rebuilding video source for sidecar sub uri=$subtitleUri")
     val subtitleConfig = MediaItem.SubtitleConfiguration
         .Builder(subtitleUri)
         .setMimeType(mimeType)
         .build()
-    val mediaItem = MediaItem.Builder()
-        .setUri(Uri.parse(source.url))
-        .apply { source.mimeType?.let { setMimeType(it) } }
-        .setSubtitleConfigurations(listOf(subtitleConfig))
-        .build()
-    val mediaSource = DefaultMediaSourceFactory(httpFactory).createMediaSource(mediaItem)
     exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
         .setSelectUndeterminedTextLanguage(true)
         .build()
-    exo.setMediaSource(mediaSource)
+    exo.setMediaSource(spec.toMediaSource(context, subtitleConfig))
     exo.playWhenReady = true
     exo.prepare()
 }

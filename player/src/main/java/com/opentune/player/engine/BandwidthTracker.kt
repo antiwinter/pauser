@@ -5,18 +5,18 @@ import okhttp3.ResponseBody
 import okio.BufferedSource
 import okio.ForwardingSource
 import okio.buffer
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 
 internal object BandwidthTracker {
 
-    private data class Entry(val bytes: Long, val second: Long)
-    private val entries = ConcurrentLinkedQueue<Entry>()
-    private val totalBytesCounter = AtomicLong(0L)
+    private const val WINDOW_MS = 3000L
+    private const val BUCKET_MS = 250L
 
+    // Bytes are coalesced into time buckets so a fast download doesn't create one entry per read.
+    private class Bucket(val tMs: Long, var bytes: Long)
+    private val buckets = ArrayDeque<Bucket>()
+    private val totalBytesCounter = AtomicLong(0L)
     private val lock = Any()
-    private var pendingBytes = 0L
-    private var lastSecond = 0L
 
     val interceptor: Interceptor = Interceptor { chain ->
         val response = chain.proceed(chain.request())
@@ -29,24 +29,29 @@ internal object BandwidthTracker {
 
     fun reset() = synchronized(lock) {
         totalBytesCounter.set(0L)
-        pendingBytes = 0L
-        lastSecond = 0L
-        entries.clear()
+        buckets.clear()
     }
 
+    private fun record(bytes: Long) {
+        totalBytesCounter.addAndGet(bytes)
+        synchronized(lock) {
+            val now = System.currentTimeMillis()
+            val bucketT = now - (now % BUCKET_MS)
+            val last = buckets.lastOrNull()
+            if (last != null && last.tMs == bucketT) last.bytes += bytes
+            else buckets.addLast(Bucket(bucketT, bytes))
+            val cutoff = now - WINDOW_MS
+            while (buckets.isNotEmpty() && buckets.first().tMs < cutoff) buckets.removeFirst()
+        }
+    }
+
+    /** Rolling download rate over the last [WINDOW_MS]; 0 when nothing is being downloaded. */
     val mbps: Float
-        get() {
-            val cutoff = (System.currentTimeMillis() / 1000) - 5
+        get() = synchronized(lock) {
+            val cutoff = System.currentTimeMillis() - WINDOW_MS
             var total = 0L
-            var count = 0
-            for (e in entries) {
-                if (e.second >= cutoff) {
-                    total += e.bytes
-                    count++
-                }
-            }
-            if (count == 0) return 0f
-            return (total.toFloat() / count * 8) / 1_000_000f
+            for (b in buckets) if (b.tMs >= cutoff) total += b.bytes
+            (total * 8f) / (WINDOW_MS / 1000f) / 1_000_000f
         }
 
     private class CountingResponseBody(private val delegate: ResponseBody) : ResponseBody() {
@@ -58,23 +63,7 @@ internal object BandwidthTracker {
                 object : ForwardingSource(src) {
                     override fun read(sink: okio.Buffer, byteCount: Long): Long {
                         val read = super.read(sink, byteCount)
-                        if (read > 0) synchronized(lock) {
-                            totalBytesCounter.addAndGet(read)
-                            val now = System.currentTimeMillis() / 1000
-                            if (now > lastSecond) {
-                                entries.add(Entry(pendingBytes, lastSecond))
-                                pendingBytes = 0L
-                                lastSecond = now
-                                // Prune stale entries to bound memory
-                                val cutoff = now - 5
-                                val it = entries.iterator()
-                                while (it.hasNext()) {
-                                    if (it.next().second < cutoff) it.remove()
-                                    else break
-                                }
-                            }
-                            pendingBytes += read
-                        }
+                        if (read > 0) record(read)
                         return read
                     }
                 }.buffer()

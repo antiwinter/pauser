@@ -223,12 +223,18 @@ export async function getPlaybackSources(
         bitDepth: s.BitDepth ?? null,
       }))
       .filter((s) => s.codec);
+    // Prefer the source's overall bitrate; fall back to summing the video+audio stream bitrates.
+    const streamBitrate = (source.MediaStreams ?? [])
+      .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
+      .reduce((sum, s) => sum + (s.Bitrate ?? 0), 0);
+    const bitrate = source.Bitrate ?? (streamBitrate > 0 ? streamBitrate : null);
     return {
       url,
       headers: { 'X-Emby-Token': credentials.accessToken },
       mimeType: null,
       subtitleTracks,
       mediaCodecs,
+      bitrate,
     };
   });
 

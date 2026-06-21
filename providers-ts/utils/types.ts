@@ -162,6 +162,7 @@ export interface PlaybackSource {
   mimeType: string | null;
   subtitleTracks: SubtitleTrack[];
   mediaCodecs: MediaCodecInfo[];
+  bitrate?: number | null;
 }
 
 export interface ProfileLevel {

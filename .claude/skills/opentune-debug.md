@@ -174,6 +174,48 @@ curl -X POST http://localhost:7920/debug/media-state/audio-track \
   -d '{"endpointId":"<id>","itemRef":"<ref>","trackId":"<id>"}'
 ```
 
+## Driving playback with remote keys (seek / menu / subtitle)
+
+The debug API has no live seek/subtitle-select endpoint. Drive the on-screen player with adb
+key events (the TV `OpenTuneTvPlayerView` owns these keycodes):
+
+| Action | keyevent | adb command |
+| --- | --- | --- |
+| Seek +15s | 22 (DPAD_RIGHT) | `adb shell input keyevent 22` |
+| Seek −15s | 21 (DPAD_LEFT) | `adb shell input keyevent 21` |
+| Open menu | 82 (MENU) | `adb shell input keyevent 82` |
+| Navigate up/down | 19 / 20 | `adb shell input keyevent 20` |
+| Select / enter | 23 (DPAD_CENTER) | `adb shell input keyevent 23` |
+| Play/pause | 85 | `adb shell input keyevent 85` |
+
+Menu order is: **Subtitles → Adjust position & size → Audio track → Playback speed**. To pick a
+subtitle: `82` (open) → `23` (enter Subtitles) → `20`×N (down to the track) → `23` (select).
+Verify focus with a screenshot before selecting — read it back as a Windows path, not `/tmp`:
+
+```sh
+adb -s <serial> exec-out screencap -p > "C:/Users/warits/code/opentune/_shot.png"   # then Read it; delete when done
+```
+
+## Bandwidth / playback throughput diagnosis
+
+`BandwidthTracker` (player module) counts bytes via an OkHttp interceptor. `PlaybackSurface`'s
+1 Hz poll logs a per-second timeline under tag **`OT_BW`** (debug builds):
+
+```sh
+adb -s <serial> logcat -c                       # clear first
+adb -s <serial> logcat OT_BW:I OT_Subtitle:D OpenTuneTvPlayerKeys:D PlaybackSession:D '*:S'
+# each line: mbps=.. deltaKB=.. totalMB=.. pos=..ms buffered=..ms state=..
+#   state: 1=IDLE  2=BUFFERING  3=READY/playing  4=ENDED
+```
+
+Reading the timeline:
+- `totalMB` frozen while `state=3` and playback advances → bytes flowing through an **untracked**
+  OkHttp client (interceptor missing on that source path), not a real stall.
+- `deltaKB=0` with `state=2` → a **real** stall (origin seek latency or server throttle).
+- `buffered` shrinking while `state=3` → download rate is below the content bitrate; a stall is coming.
+- `state=1` after a seek → check `logcat … ExoPlayer:E` for a `Source error` (e.g. MatroskaExtractor
+  `ArrayIndexOutOfBoundsException` on backward/deep seeks over a flaky range server).
+
 ## Typical debug workflow
 
 1. `adb forward tcp:7920 tcp:7920`

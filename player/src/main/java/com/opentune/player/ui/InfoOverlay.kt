@@ -28,6 +28,7 @@ internal class InfoOverlayState(
     val audioDecoderStatus: String?,
     val isHdrCapable: Boolean,
     val isHdrEnabled: Boolean,
+    val bitrate: Int?,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -75,7 +76,7 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                         fontSize = 14.sp,
                     )
                 }
-                state.displayInfo.bitrate?.takeIf { it > 0 }?.let { br ->
+                state.bitrate?.takeIf { it > 0 }?.let { br ->
                     Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
             }
@@ -91,16 +92,11 @@ internal fun InfoOverlay(state: InfoOverlayState) {
     }
 }
 
-/** Returns format, format[c2], format[n/a], or format[err]. */
+/** "codec[status]", or bare "codec" when status is passthrough/empty (no decoder in the path). */
 private fun trackLabel(mime: String?, decoderStatus: String?): String {
     if (mime == null) return ""
     val codec = mime.replace(Regex("^(?:video|audio)/"), "")
-    return when {
-        decoderStatus == "n/a" -> "$codec[n/a]"
-        decoderStatus == "err" -> "$codec[err]"
-        !decoderStatus.isNullOrEmpty() -> "$codec[$decoderStatus]"
-        else -> codec
-    }
+    return if (decoderStatus.isNullOrEmpty() || decoderStatus == "passthrough") codec else "$codec[$decoderStatus]"
 }
 
 /** Returns true if the track has a decode error. */
@@ -119,9 +115,12 @@ internal fun rememberInfoOverlayState(
     mbpsState: MutableFloatState,
     isHdrCapable: Boolean = false,
     isHdrEnabled: Boolean = false,
+    videoBitrate: Int? = null,
 ): InfoOverlayState {
+    // Prefer provider metadata bitrate; fall back to the bitrate parsed from the stream Format.
+    val bitrate = displayInfo.bitrate ?: videoBitrate
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, displayInfo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled) {
+    return remember(instanceKey, displayInfo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled, bitrate) {
         InfoOverlayState(
             displayInfo = displayInfo,
             videoMime = videoMime,
@@ -130,6 +129,7 @@ internal fun rememberInfoOverlayState(
             audioDecoderStatus = audioDecoderStatus,
             isHdrCapable = isHdrCapable,
             isHdrEnabled = isHdrEnabled,
+            bitrate = bitrate,
             showState = showState,
             mbpsState = mbpsState,
         )

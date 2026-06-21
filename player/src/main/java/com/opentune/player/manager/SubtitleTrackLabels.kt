@@ -1,6 +1,5 @@
 package com.opentune.player.manager
 
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.SubtitleTrack
@@ -45,14 +44,5 @@ internal fun buildExoTrackLabel(group: Tracks.Group, fallbackIndex: Int): String
         !fmt.label.isNullOrBlank() -> fmt.label!!
         !fmt.language.isNullOrBlank() -> fmt.language!!
         else -> "Track ${fallbackIndex + 1}"
-    }
-}
-
-internal fun subtitleMimeType(ref: String): String {
-    val path = ref.substringBefore('?')
-    return when (path.substringAfterLast('.', "").lowercase()) {
-        "ass", "ssa" -> MimeTypes.TEXT_SSA
-        "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-        else -> MimeTypes.APPLICATION_SUBRIP
     }
 }

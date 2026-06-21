@@ -165,6 +165,7 @@ private fun TvPlayerSurfaceContent(
         mbpsState = surface.bandwidthMbps,
         isHdrCapable = trackInfo.isHdrCapable,
         isHdrEnabled = surface.hdrCtrl.isHdrEnabled,
+        videoBitrate = trackInfo.videoBitrate ?: spec.sources[spec.state.sourceIndex].bitrate,
     )
 
     if (controllerState != 0) infoOverlay.show() else infoOverlay.hide()

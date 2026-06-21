@@ -22,6 +22,7 @@ data class PlaybackSource(
     val mimeType: String? = null,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val mediaCodecs: List<MediaCodecInfo> = emptyList(),
+    val bitrate: Int? = null,
 )
 
 @Serializable

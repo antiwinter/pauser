@@ -2,10 +2,12 @@ package com.opentune.player.engine
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +56,9 @@ internal fun rememberPlaybackSurface(
     return key(instanceKey) {
         val exo = session.exo
 
-        val trackInfo = rememberTrackInfo(exo, instanceKey, mainHandler)
+        // Track/decoder info is owned by the session (listeners anchored to the player lifetime),
+        // so it survives this key() block resetting on URL change and never misses a one-shot.
+        val trackInfo = session.trackInfoFlow.collectAsState()
         val bandwidthMbps = remember { mutableFloatStateOf(0f) }
 
         val hdrCtrl = rememberHdrManager(
@@ -88,9 +92,22 @@ internal fun rememberPlaybackSurface(
         }
 
         LaunchedEffect(Unit) {
+            var lastTotal = 0L
             while (isActive) {
                 delay(1_000)
-                bandwidthMbps.floatValue = BandwidthTracker.mbps
+                val mbps = BandwidthTracker.mbps
+                bandwidthMbps.floatValue = mbps
+                // OT_BW: per-second throughput timeline for play/seek/subtitle diagnosis.
+                val total = BandwidthTracker.totalBytes
+                val deltaKB = (total - lastTotal) / 1024
+                lastTotal = total
+                Log.i(
+                    "OT_BW",
+                    "mbps=%.2f deltaKB=%d totalMB=%.1f pos=%dms buffered=%dms state=%d".format(
+                        mbps, deltaKB, total / 1_048_576f,
+                        exo.currentPosition, exo.totalBufferedDuration, exo.playbackState,
+                    ),
+                )
             }
         }
 
@@ -101,6 +118,7 @@ internal fun rememberPlaybackSurface(
             trackInfoState = trackInfo,
             mainHandler = mainHandler,
             context = context,
+            session = session,
         )
 
         engine

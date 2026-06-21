@@ -383,6 +383,7 @@ class JsClient(
                 bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             )
         } ?: emptyList()
-        return PlaybackSource(url = url, headers = headers, mimeType = mimeType, subtitleTracks = subtitleTracks, mediaCodecs = mediaCodecs)
+        val bitrate = obj["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull()
+        return PlaybackSource(url = url, headers = headers, mimeType = mimeType, subtitleTracks = subtitleTracks, mediaCodecs = mediaCodecs, bitrate = bitrate)
     }
 }
