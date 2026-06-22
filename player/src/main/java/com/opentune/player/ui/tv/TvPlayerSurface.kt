@@ -36,7 +36,7 @@ import com.opentune.player.ui.PlaybackHostEffects
 import com.opentune.player.ui.SubtitleAdjustOverlay
 import com.opentune.player.ui.rememberInfoOverlayState
 import com.opentune.player.ui.rememberMenuOverlayState
-import com.opentune.player.engine.TrackInfo
+import com.opentune.player.manager.track.TrackInfo
 import com.opentune.player.engine.rememberPlaybackSurface
 import kotlinx.coroutines.delay
 
@@ -165,7 +165,8 @@ private fun TvPlayerSurfaceContent(
         mbpsState = surface.bandwidthMbps,
         isHdrCapable = trackInfo.isHdrCapable,
         isHdrEnabled = surface.hdrCtrl.isHdrEnabled,
-        videoBitrate = trackInfo.videoBitrate ?: spec.sources[spec.state.sourceIndex].bitrate,
+        videoBitrate = trackInfo.videoBitrate
+            ?: spec.sources[spec.state.sourceIndex].mediaCodecs.firstOrNull()?.bitrate,
     )
 
     if (controllerState != 0) infoOverlay.show() else infoOverlay.hide()

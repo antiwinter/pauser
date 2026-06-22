@@ -139,6 +139,7 @@ export interface MediaCodecInfo {
   codec: string;
   bitDepth?: number | null;
   profile?: string | null;
+  bitrate?: number | null;
 }
 
 export interface SubtitleTrack {
@@ -162,7 +163,6 @@ export interface PlaybackSource {
   mimeType: string | null;
   subtitleTracks: SubtitleTrack[];
   mediaCodecs: MediaCodecInfo[];
-  bitrate?: number | null;
 }
 
 export interface ProfileLevel {

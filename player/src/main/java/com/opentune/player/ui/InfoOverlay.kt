@@ -117,8 +117,7 @@ internal fun rememberInfoOverlayState(
     isHdrEnabled: Boolean = false,
     videoBitrate: Int? = null,
 ): InfoOverlayState {
-    // Prefer provider metadata bitrate; fall back to the bitrate parsed from the stream Format.
-    val bitrate = displayInfo.bitrate ?: videoBitrate
+    val bitrate = videoBitrate
     val showState = remember(instanceKey) { mutableStateOf(false) }
     return remember(instanceKey, displayInfo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled, bitrate) {
         InfoOverlayState(

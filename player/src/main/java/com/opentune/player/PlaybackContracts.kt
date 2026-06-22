@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
  */
 data class PlaybackDisplayInfo(
     val title: String = "",
-    val bitrate: Int? = null,
 )
 
 @Serializable
@@ -22,7 +21,6 @@ data class PlaybackSource(
     val mimeType: String? = null,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val mediaCodecs: List<MediaCodecInfo> = emptyList(),
-    val bitrate: Int? = null,
 )
 
 @Serializable
@@ -40,6 +38,8 @@ data class MediaCodecInfo(
     val codec: String,
     val bitDepth: Int? = null,
     val profile: String? = null,
+    // Video bitrate lives on the video codec entry (mediaCodecs[0]); the InfoOverlay reads it there.
+    val bitrate: Int? = null,
 )
 
 enum class PlayingState {

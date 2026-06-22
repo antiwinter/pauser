@@ -72,8 +72,8 @@ class PlayerController(
     }
 
     fun setDisplayInfo(info: EntryInfo) {
-        Log.d(LOG_TAG, "setDisplayInfo: title=${info.title} bitrate=${info.bitrate}")
-        _displayInfo.value = PlaybackDisplayInfo(info.title, info.bitrate)
+        Log.d(LOG_TAG, "setDisplayInfo: title=${info.title}")
+        _displayInfo.value = PlaybackDisplayInfo(info.title)
     }
 
     override fun requestNextVideo() {
