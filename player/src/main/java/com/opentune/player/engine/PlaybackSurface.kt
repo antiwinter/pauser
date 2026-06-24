@@ -39,7 +39,7 @@ internal fun rememberPlaybackSurface(
     spec: PlaybackSpec,
     session: PlaybackSession,
 ): PlaybackSurface {
-    val instanceKey = spec.sources[spec.state.sourceIndex].url
+    val instanceKey = spec.sources.getOrNull(spec.state.sourceIndex)?.url ?: ""
 
     // Feed the session-owned SubtitleManager the current screen height for offset math.
     val screenHeightPx = with(LocalDensity.current) {

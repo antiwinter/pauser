@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.player.PlaybackDisplayInfo
 import com.opentune.player.PlaybackSpec
+import com.opentune.player.formatBitrate
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.manager.TrackInfo
 
@@ -85,13 +86,13 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                     )
                 }
                 state.bitrate?.takeIf { it > 0 }?.let { br ->
-                    Text(text = "%.1f Mbps".format(br / 1_000_000f), color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                    Text(text = formatBitrate(br.toFloat()), color = Color(0xFFAAAAAA), fontSize = 14.sp)
                 }
             }
             // Download speed on the right; hidden only before first measurement (-1 sentinel).
             if (mbps >= 0f) {
                 Text(
-                    text = "%.1f Mbps".format(mbps),
+                    text = formatBitrate(mbps * 1_000_000f),
                     color = Color(0xFFAAAAAA),
                     fontSize = 14.sp,
                 )
@@ -130,7 +131,7 @@ internal fun rememberInfoOverlayState(
     val context = LocalContext.current
     val displaySupportsHdr = remember { displaySupportsHdr(context) }
     val bitrate = trackInfo.videoBitrate
-        ?: spec.sources[spec.state.sourceIndex].mediaCodecs.firstOrNull()?.bitrate
+        ?: spec.sources.getOrNull(spec.state.sourceIndex)?.mediaCodecs?.firstOrNull()?.bitrate
     val showState = remember(instanceKey) { mutableStateOf(false) }
     return remember(instanceKey, displayInfo, trackInfo, displaySupportsHdr, bitrate) {
         InfoOverlayState(

@@ -38,6 +38,7 @@ internal fun PadPlayerView(
         },
         update = { view ->
             if (view.player !== player) view.player = player
+            session.onViewUpdate()
         },
         onRelease = { view ->
             view.player = null

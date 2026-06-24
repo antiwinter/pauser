@@ -83,7 +83,7 @@ data class PlaybackSpec(
     val updateEntryState: suspend (key: String, value: String?) -> Unit = { _, _ -> },
 ) {
     fun withSourceIndex(index: Int): PlaybackSpec =
-        copy(state = state.copy(sourceIndex = index.coerceIn(0, sources.size - 1)))
+        copy(state = state.copy(sourceIndex = index.coerceIn(0, maxOf(0, sources.size - 1))))
 }
 
 /**

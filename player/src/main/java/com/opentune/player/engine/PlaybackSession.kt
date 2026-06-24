@@ -118,6 +118,8 @@ class PlaybackSession(
 
     private var heartbeatJob: Job? = null
 
+    private val released = java.util.concurrent.atomic.AtomicBoolean(false)
+
     val bufferedMs: Long
         get() {
             val pos = exo.currentPosition
@@ -189,6 +191,12 @@ class PlaybackSession(
         exo.seekTo(positionMs)
     }
 
+    /** Forwarded from the surface's AndroidView `update` block; lets managers re-apply
+     *  view-derived state each recomposition (see [PlaybackManager.onViewUpdate]). */
+    internal fun onViewUpdate() {
+        managers.forEach { it.onViewUpdate() }
+    }
+
     fun play() {
         exo.playWhenReady = true
         notifyEntryState(EntryStateKeys.PLAYING_STATE, PlayingState.PLAYING.name)
@@ -215,6 +223,7 @@ class PlaybackSession(
     }
 
     fun clear() {
+        if (!released.compareAndSet(false, true)) return
         stopInternal()
         exo.release()
     }

@@ -34,7 +34,7 @@ internal class SpeedManager(
             PlayerMenuEntry(
                 label = @Composable { SPEED_LABELS[index] },
                 children = { emptyList() },
-                isSelected = { session.exo.playbackParameters.speed == speed },
+                isSelected = { kotlin.math.abs(session.exo.playbackParameters.speed - speed) < 1e-3f },
                 onSelect = {
                     session.exo.playbackParameters = PlaybackParameters(speed)
                 },

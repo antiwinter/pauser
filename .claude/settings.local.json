@@ -24,7 +24,9 @@
       "Skill(run)",
       "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\.claude\\\\plans')",
       "Bash(mkdir -p 'C:\\\\Users\\\\warits\\\\code\\\\opentune\\\\.claude\\\\plans')",
-      "WebFetch(domain:www.xn--sss604efuw.net)"
+      "WebFetch(domain:www.xn--sss604efuw.net)",
+      "Skill(code-review)",
+      "Skill(code-review:*)"
     ],
     "additionalDirectories": [
       "/Users/warits/src/fongmi",

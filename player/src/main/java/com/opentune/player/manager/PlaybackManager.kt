@@ -23,6 +23,11 @@ internal interface PlaybackManager {
     /** Called in [PlaybackSession.stopInternal] for cleanup. */
     fun onDispose() {}
 
+    /** Called from the surface's AndroidView `update` block on each recomposition, after the
+     *  PlayerView is bound to the session. Use to re-apply view-derived state (e.g. subtitle
+     *  style) that is lost when the view is recreated. */
+    fun onViewUpdate() {}
+
     /** Menu entries contributed by this manager to the player settings menu. */
     val menuEntries: List<PlayerMenuEntry> get() = emptyList()
 }

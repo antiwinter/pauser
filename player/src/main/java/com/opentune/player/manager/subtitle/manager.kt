@@ -122,6 +122,12 @@ internal class SubtitleManager(
         session.exo.trackSelectionParameters = session.applyTextParams(state?.subtitleTrackId)
     }
 
+    /** Re-apply subtitle offset/scale/style now that the PlayerView is attached. The reset during
+     *  [onPrepare] may race view inflation, so the surface re-applies on each `update`. */
+    override fun onViewUpdate() {
+        adjust.applyStyle()
+    }
+
     override val menuEntries = listOf(
         PlayerMenuEntry(
             label = @Composable { stringResource(R.string.player_settings_subtitles) },
@@ -139,7 +145,7 @@ internal class SubtitleManager(
 
     private fun buildSubtitleChildren(): List<PlayerMenuEntry> {
         val spec = session.currentSpec ?: return emptyList()
-        val source = spec.sources[spec.state.sourceIndex]
+        val source = spec.sources.getOrNull(spec.state.sourceIndex) ?: return emptyList()
         val tracks = session.tracksFlow.value
         val activeId = spec.state.subtitleTrackId
         val entries = mutableListOf<PlayerMenuEntry>()

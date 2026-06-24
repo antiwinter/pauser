@@ -67,7 +67,7 @@ internal fun isHdrFormat(videoFormat: Format?): Boolean =
         (videoFormat?.colorInfo != null && ColorInfo.isTransferHdr(videoFormat.colorInfo))
 
 /** Encoded bitrate from a Format, preferring peak then average; null if unknown. */
-internal fun formatBitrate(format: Format?): Int? {
+internal fun bitrateOf(format: Format?): Int? {
     if (format == null) return null
     return format.peakBitrate.takeIf { it > 0 } ?: format.averageBitrate.takeIf { it > 0 }
 }
@@ -105,13 +105,13 @@ internal class TrackManager(
                     videoMime = videoFormat?.sampleMimeType,
                     audioMime = audioFormat?.sampleMimeType,
                     isHdrCapable = isHdrFormat(videoFormat),
-                    videoBitrate = formatBitrate(videoFormat),
+                    videoBitrate = bitrateOf(videoFormat),
                 )
             }
             Log.d(
                 TRACK_LOG,
                 "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} " +
-                    "hdr=${isHdrFormat(videoFormat)} bitrate=${formatBitrate(videoFormat)} groups=${tracks.groups.size}"
+                    "hdr=${isHdrFormat(videoFormat)} bitrate=${bitrateOf(videoFormat)} groups=${tracks.groups.size}"
             )
         }
 

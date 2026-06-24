@@ -250,6 +250,7 @@ internal fun TvPlayerView(
             view.onBack = onBack
             view.onTransportKey = onTransportKey
             view.onKey = onKey
+            session.onViewUpdate()
         },
         onRelease = { view ->
             view.player = null

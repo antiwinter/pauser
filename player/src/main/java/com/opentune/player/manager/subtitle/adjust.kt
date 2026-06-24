@@ -60,7 +60,7 @@ internal class SubtitleAdjust(
         applyStyle()
     }
 
-    private fun applyStyle() {
+    internal fun applyStyle() {
         session.view?.let { applySubtitleStyle(it, translationYPx, sizeScaleValue) }
     }
 
