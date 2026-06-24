@@ -1,5 +1,8 @@
 package com.opentune.player.ui
 
+import android.content.Context
+import android.hardware.display.DisplayManager
+import android.view.Display
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,14 +14,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opentune.player.PlaybackDisplayInfo
+import com.opentune.player.PlaybackSpec
+import com.opentune.player.engine.PlaybackSession
+import com.opentune.player.manager.TrackInfo
 
 internal class InfoOverlayState(
     val displayInfo: PlaybackDisplayInfo,
@@ -26,7 +35,6 @@ internal class InfoOverlayState(
     val videoDecoderStatus: String?,
     val audioMime: String?,
     val audioDecoderStatus: String?,
-    val isHdrCapable: Boolean,
     val isHdrEnabled: Boolean,
     val bitrate: Int?,
     private val showState: MutableState<Boolean>,
@@ -69,10 +77,10 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                     color = if (isTrackFailed(state.audioMime, state.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
-                if (state.isHdrCapable) {
+                if (state.isHdrEnabled) {
                     Text(
                         text = "HDR",
-                        color = if (state.isHdrEnabled) Color(0xFF4CAF50) else Color.White,
+                        color = Color(0xFF4CAF50),
                         fontSize = 14.sp,
                     )
                 }
@@ -104,33 +112,37 @@ private fun isTrackFailed(mime: String?, decoderStatus: String?): Boolean {
     return mime != null && decoderStatus == "err"
 }
 
+/** One-time check: does the default display support any HDR type? */
+private fun displaySupportsHdr(context: Context): Boolean {
+    val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    return dm.getDisplay(Display.DEFAULT_DISPLAY)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true
+}
+
 @Composable
 internal fun rememberInfoOverlayState(
     instanceKey: String,
     displayInfo: PlaybackDisplayInfo,
-    videoMime: String?,
-    videoDecoderStatus: String?,
-    audioMime: String?,
-    audioDecoderStatus: String?,
-    mbpsState: MutableFloatState,
-    isHdrCapable: Boolean = false,
-    isHdrEnabled: Boolean = false,
-    videoBitrate: Int? = null,
+    session: PlaybackSession,
+    spec: PlaybackSpec,
+    bandwidthMbps: MutableFloatState,
 ): InfoOverlayState {
-    val bitrate = videoBitrate
+    val trackInfo by session.trackInfoFlow.collectAsState()
+    val context = LocalContext.current
+    val displaySupportsHdr = remember { displaySupportsHdr(context) }
+    val bitrate = trackInfo.videoBitrate
+        ?: spec.sources[spec.state.sourceIndex].mediaCodecs.firstOrNull()?.bitrate
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, displayInfo, videoMime, videoDecoderStatus, audioMime, audioDecoderStatus, isHdrCapable, isHdrEnabled, bitrate) {
+    return remember(instanceKey, displayInfo, trackInfo, displaySupportsHdr, bitrate) {
         InfoOverlayState(
             displayInfo = displayInfo,
-            videoMime = videoMime,
-            videoDecoderStatus = videoDecoderStatus,
-            audioMime = audioMime,
-            audioDecoderStatus = audioDecoderStatus,
-            isHdrCapable = isHdrCapable,
-            isHdrEnabled = isHdrEnabled,
+            videoMime = trackInfo.videoMime,
+            videoDecoderStatus = trackInfo.videoDecoderStatus,
+            audioMime = trackInfo.audioMime,
+            audioDecoderStatus = trackInfo.audioDecoderStatus,
+            isHdrEnabled = trackInfo.isHdrCapable && displaySupportsHdr,
             bitrate = bitrate,
             showState = showState,
-            mbpsState = mbpsState,
+            mbpsState = bandwidthMbps,
         )
     }
 }

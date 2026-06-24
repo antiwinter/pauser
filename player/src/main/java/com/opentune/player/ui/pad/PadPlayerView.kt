@@ -11,7 +11,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.opentune.player.ui.applySubtitleStyle
 import com.opentune.player.ui.configurePlayerViewDefaults
 
 /** Minimal [PlayerView] subclass for the Pad platform. No custom key dispatch needed — the
@@ -27,19 +26,22 @@ class OpenTunePadPlayerView @JvmOverloads constructor(
 @Composable
 internal fun PadPlayerView(
     player: ExoPlayer,
-    subtitleTranslationYPx: Float = 0f,
-    subtitleSizeScale: Float = 1f,
+    session: com.opentune.player.engine.PlaybackSession,
     modifier: Modifier = Modifier,
 ) {
     AndroidView(
         factory = { context ->
             OpenTunePadPlayerView(context).also { view ->
                 configurePlayerViewDefaults(view)
+                session.view = view
             }
         },
         update = { view ->
             if (view.player !== player) view.player = player
-            applySubtitleStyle(view, subtitleTranslationYPx, subtitleSizeScale)
+        },
+        onRelease = { view ->
+            view.player = null
+            session.view = null
         },
         modifier = modifier
             .fillMaxSize()

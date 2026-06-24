@@ -33,10 +33,9 @@ import com.opentune.player.ui.InfoOverlay
 import com.opentune.player.ui.MenuOverlay
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
-import com.opentune.player.ui.SubtitleAdjustOverlay
+import com.opentune.player.manager.subtitle.SubtitleAdjustOverlay
 import com.opentune.player.ui.rememberInfoOverlayState
 import com.opentune.player.ui.rememberMenuOverlayState
-import com.opentune.player.manager.track.TrackInfo
 import com.opentune.player.engine.rememberPlaybackSurface
 import kotlinx.coroutines.delay
 
@@ -144,29 +143,19 @@ private fun TvPlayerSurfaceContent(
     val sourceManager by controller.sourceManagerFlow.collectAsState()
     val menu = rememberMenuOverlayState(
         *buildList {
-            add(surface.subtitleCtrl.menuEntry)
-            add(surface.subtitleCtrl.adjustMenuEntry)
-            add(surface.audioCtrl.menuEntry)
-            add(surface.speedCtrl.menuEntry)
+            addAll(surface.menuEntries)
             if (sourceManager != null && sourceManager!!.sourceCount > 1) {
                 add(sourceManager!!.menuEntry)
             }
         }.toTypedArray()
     )
 
-    val trackInfo: TrackInfo by surface.trackInfo
     val infoOverlay = rememberInfoOverlayState(
         instanceKey = spec.sources[spec.state.sourceIndex].url,
         displayInfo = displayInfo,
-        videoMime = trackInfo.videoMime,
-        videoDecoderStatus = trackInfo.videoDecoderStatus,
-        audioMime = trackInfo.audioMime,
-        audioDecoderStatus = trackInfo.audioDecoderStatus,
-        mbpsState = surface.bandwidthMbps,
-        isHdrCapable = trackInfo.isHdrCapable,
-        isHdrEnabled = surface.hdrCtrl.isHdrEnabled,
-        videoBitrate = trackInfo.videoBitrate
-            ?: spec.sources[spec.state.sourceIndex].mediaCodecs.firstOrNull()?.bitrate,
+        session = session,
+        spec = spec,
+        bandwidthMbps = surface.bandwidthMbps,
     )
 
     if (controllerState != 0) infoOverlay.show() else infoOverlay.hide()
@@ -174,7 +163,7 @@ private fun TvPlayerSurfaceContent(
     BackHandler {
         when {
             menu.isOpen -> menu.back()
-            surface.subtitleCtrl.isAdjustActive -> surface.subtitleCtrl.confirmAdjust()
+            surface.subtitleManager.adjust.isActive -> surface.subtitleManager.adjust.confirm()
             controllerState != 0 -> controllerState = 0
             else -> { surface.leaveSurface(); onBack() }
         }
@@ -218,26 +207,13 @@ private fun TvPlayerSurfaceContent(
                         menuConsumedDown = false
                         true
                     }
-                    surface.subtitleCtrl.isAdjustActive -> {
-                        if (event.action == KeyEvent.ACTION_DOWN) {
-                            when (event.keyCode) {
-                                KeyEvent.KEYCODE_DPAD_UP -> surface.subtitleCtrl.adjustOffsetUp()
-                                KeyEvent.KEYCODE_DPAD_DOWN -> surface.subtitleCtrl.adjustOffsetDown()
-                                KeyEvent.KEYCODE_DPAD_LEFT -> surface.subtitleCtrl.adjustScaleDown()
-                                KeyEvent.KEYCODE_DPAD_RIGHT -> surface.subtitleCtrl.adjustScaleUp()
-                                KeyEvent.KEYCODE_DPAD_CENTER,
-                                KeyEvent.KEYCODE_ENTER,
-                                KeyEvent.KEYCODE_NUMPAD_ENTER,
-                                KeyEvent.KEYCODE_BACK -> surface.subtitleCtrl.confirmAdjust()
-                            }
-                        }
+                    surface.subtitleManager.adjust.isActive -> {
+                        surface.subtitleManager.adjust.onKeyEvent(event)
                         true
                     }
                     else -> { menuConsumedDown = false; false }
                 }
             },
-            subtitleTranslationYPx = surface.subtitleCtrl.translationYPx,
-            subtitleSizeScale = surface.subtitleCtrl.sizeScale,
         )
 
         AnimatedVisibility(
@@ -288,11 +264,7 @@ private fun TvPlayerSurfaceContent(
         }
 
         MenuOverlay(menu)
-        SubtitleAdjustOverlay(
-            isActive = surface.subtitleCtrl.isAdjustActive,
-            translationYPx = surface.subtitleCtrl.translationYPx,
-            sizeScale = surface.subtitleCtrl.sizeScale,
-        )
+        SubtitleAdjustOverlay(surface.subtitleManager.adjust)
         InfoOverlay(infoOverlay)
     }
 }

@@ -8,6 +8,8 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import com.opentune.player.PlaybackSpec
+import com.opentune.player.manager.subtitle.savedSubtitleTrack
+import com.opentune.player.manager.subtitle.toSidecarConfig
 import okhttp3.OkHttpClient
 
 /**
@@ -15,15 +17,16 @@ import okhttp3.OkHttpClient
  * load, sidecar reselect, decoder fallback, recovery) routes through here so the bandwidth meter
  * and per-source headers can never be forgotten on a rebuilt client.
  *
- * Pass [sidecarSubtitle] to attach an external subtitle; the source is then built with
+ * The active external subtitle is derived from the spec's saved track id ([state] is the single
+ * source of truth, kept current by [PlaybackSession]); when present it is attached via
  * [DefaultMediaSourceFactory], which merges the text track into the video source.
  */
 @UnstableApi
 fun PlaybackSpec.toMediaSource(
     context: android.content.Context,
-    sidecarSubtitle: MediaItem.SubtitleConfiguration? = null,
 ): MediaSource {
     val source = sources[state.sourceIndex]
+    val sidecarSubtitle = savedSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
     fun headersInterceptor() = okhttp3.Interceptor { chain ->
         val req = chain.request().newBuilder().apply {
             source.headers.forEach { (k, v) -> header(k, v) }

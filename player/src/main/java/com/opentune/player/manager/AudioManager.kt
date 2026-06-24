@@ -2,26 +2,60 @@ package com.opentune.player.manager
 
 import android.util.Log
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.C
+import com.opentune.player.EntryStateKeys
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
-import kotlinx.coroutines.CoroutineScope
 
 private const val AUDIO_LOG_TAG = "OT_Audio"
+
+// ---------------------------------------------------------------------------
+// Session extensions: applyAudioParams, updateAudioTrackId, selectAudio
+// ---------------------------------------------------------------------------
+
+/** Persists the audio track id into the spec's state and entry state. */
+@UnstableApi
+internal fun PlaybackSession.updateAudioTrackId(trackId: String?) {
+    updateState { it.copy(audioTrackId = trackId) }
+    notifyEntryState(EntryStateKeys.AUDIO_TRACK_ID, trackId)
+}
+
+/**
+ * Applies audio track selection for [trackId] onto the current [TrackSelectionParameters] via
+ * [buildUpon], preserving text/video overrides. null = auto (clear override), else the group
+ * behind [trackId] ("audio_<id>"). Shared by [selectAudio] (runtime) and [prepare] (initial load).
+ */
+@UnstableApi
+fun PlaybackSession.applyAudioParams(trackId: String?): TrackSelectionParameters {
+    val b = exo.trackSelectionParameters.buildUpon()
+        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+    if (trackId != null) {
+        val groupId = trackId.removePrefix("audio_")
+        tracksFlow.value.groups
+            .filter { it.type == C.TRACK_TYPE_AUDIO }
+            .firstOrNull { it.mediaTrackGroup.id == groupId }
+            ?.let { b.setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0)) }
+    }
+    return b.build()
+}
+
+/** Selects audio: null = auto (clear override), else the group behind [trackId] ("audio_<id>"). */
+@UnstableApi
+fun PlaybackSession.selectAudio(trackId: String?) {
+    Log.d(AUDIO_LOG_TAG, "selectAudio: trackId=$trackId")
+    exo.trackSelectionParameters = applyAudioParams(trackId)
+    updateAudioTrackId(trackId)
+}
+
+// ---------------------------------------------------------------------------
+// Track label builder
+// ---------------------------------------------------------------------------
 
 @UnstableApi
 internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
@@ -35,35 +69,46 @@ internal fun buildAudioGroupLabel(group: Tracks.Group, index: Int): String {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Session-owned manager: audio track selection + menu
+// ---------------------------------------------------------------------------
+
 @UnstableApi
 internal class AudioManager(
-    private val currentTracksState: MutableState<Tracks>,
-    private val activeTrackId: State<String?>,
-    private val scope: CoroutineScope,
     private val session: PlaybackSession,
-    private val exo: ExoPlayer,
-) {
-    val menuEntry: PlayerMenuEntry = PlayerMenuEntry(
-        label = @Composable { stringResource(R.string.player_settings_audio) },
-        children = ::buildAudioChildren,
-        isSelected = { false },
-        onSelect = {},
+) : PlaybackManager {
+
+    // Apply the saved audio override whenever tracks change. At prepare time tracks are empty so
+    // this only clears stale overrides; once tracks load it resolves the group and sets the override.
+    // Idempotent against the saved id (the user's last choice), so re-applying on every callback is safe.
+    override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            val id = session.currentSpec?.state?.audioTrackId ?: return
+            session.exo.trackSelectionParameters = session.applyAudioParams(id)
+        }
+    })
+
+    override val menuEntries: List<PlayerMenuEntry> = listOf(
+        PlayerMenuEntry(
+            label = @Composable { stringResource(R.string.player_settings_audio) },
+            children = ::buildAudioChildren,
+            isSelected = { false },
+            onSelect = {},
+        )
     )
 
     private fun buildAudioChildren(): List<PlayerMenuEntry> {
-        val audioGroups = currentTracksState.value.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        val activeId = session.currentSpec?.state?.audioTrackId
+        val audioGroups = session.tracksFlow.value.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
         val entries = mutableListOf<PlayerMenuEntry>()
 
         entries += PlayerMenuEntry(
             label = @Composable { stringResource(R.string.player_audio_auto) },
             children = { emptyList() },
-            isSelected = { activeTrackId.value == null },
+            isSelected = { activeId == null },
             onSelect = {
-                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                    .build()
                 Log.d(AUDIO_LOG_TAG, "select audio: Auto")
-                session.updateAudioTrackId(null)
+                session.selectAudio(null)
             },
         )
 
@@ -73,50 +118,14 @@ internal class AudioManager(
             entries += PlayerMenuEntry(
                 label = @Composable { label },
                 children = { emptyList() },
-                isSelected = { activeTrackId.value == gid },
+                isSelected = { activeId == gid },
                 onSelect = {
-                    exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                        .build()
                     Log.d(AUDIO_LOG_TAG, "select audio: gid=$gid")
-                    session.updateAudioTrackId(gid)
+                    session.selectAudio(gid)
                 },
             )
         }
 
         return entries
-    }
-}
-
-@UnstableApi
-@Composable
-internal fun rememberAudioManager(
-    exo: ExoPlayer,
-    session: PlaybackSession,
-): AudioManager {
-    val scope = rememberCoroutineScope()
-    val currentTracksState = remember { mutableStateOf(Tracks.EMPTY) }
-    val activeTrackId = session.audioTrackIdFlow.collectAsState()
-
-    DisposableEffect(exo) {
-        val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) {
-                currentTracksState.value = tracks
-            }
-        }
-        exo.addListener(listener)
-        currentTracksState.value = exo.currentTracks
-        onDispose { exo.removeListener(listener) }
-    }
-
-    return remember(exo, session) {
-        AudioManager(
-            currentTracksState = currentTracksState,
-            activeTrackId = activeTrackId,
-            scope = scope,
-            session = session,
-            exo = exo,
-        )
     }
 }

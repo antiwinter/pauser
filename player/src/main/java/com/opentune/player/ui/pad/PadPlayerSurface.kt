@@ -121,8 +121,7 @@ private fun PadPlayerSurfaceContent(
     ) {
         PadPlayerView(
             player = exo,
-            subtitleTranslationYPx = engine.subtitleCtrl.translationYPx,
-            subtitleSizeScale = engine.subtitleCtrl.sizeScale,
+            session = controller.playbackSession,
         )
 
         AnimatedVisibility(

@@ -19,7 +19,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.opentune.player.engine.PlaybackSession
 import androidx.media3.ui.PlayerView
 import com.opentune.player.R
-import com.opentune.player.ui.applySubtitleStyle
 import com.opentune.player.ui.configurePlayerViewDefaults
 
 /** Hide controller after this many ms without input. Driven via LaunchedEffect so
@@ -233,8 +232,6 @@ internal fun TvPlayerView(
     onBack: () -> Unit = {},
     onTransportKey: (isResume: Boolean) -> Unit = {},
     onKey: ((KeyEvent) -> Boolean)? = null,
-    subtitleTranslationYPx: Float = 0f,
-    subtitleSizeScale: Float = 1f,
 ) {
     AndroidView(
         factory = { context ->
@@ -242,6 +239,7 @@ internal fun TvPlayerView(
                 .inflate(R.layout.opentune_player_view, null, false) as OpenTuneTvPlayerView
             view.player = player
             configurePlayerViewDefaults(view)
+            session.view = view
             onPlayerViewBound(view)
             view
         },
@@ -252,9 +250,11 @@ internal fun TvPlayerView(
             view.onBack = onBack
             view.onTransportKey = onTransportKey
             view.onKey = onKey
-            applySubtitleStyle(view, subtitleTranslationYPx, subtitleSizeScale)
         },
-        onRelease = { view -> view.player = null },
+        onRelease = { view ->
+            view.player = null
+            session.view = null
+        },
         modifier = modifier
             .fillMaxSize()
             .background(ComposeColor.Black),
