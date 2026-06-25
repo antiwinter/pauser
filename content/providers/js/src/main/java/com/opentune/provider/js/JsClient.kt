@@ -45,7 +45,7 @@ class JsClient(
     private val deviceInfo: PlatformInfoData,
 ) : EndpointClient() {
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true; encodeDefaults = true }
 
     private lateinit var engine: QuickJsEngine
     private var initialized = false
@@ -143,7 +143,7 @@ class JsClient(
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
 
-            val deviceInfoJson = Json.encodeToString(
+            val deviceInfoJson = json.encodeToString(
                 com.opentune.player.PlatformInfoData.serializer(), deviceInfo,
             )
             val proxyConfigJson = proxyClient?.getConfig()

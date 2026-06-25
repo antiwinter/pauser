@@ -101,7 +101,6 @@ object PlatformInfo {
             clientVersion = clientVersion,
             videoCodecs = videoCodecs,
             audioCodecs = audioCodecs,
-            subtitleFormats = listOf("srt", "ass", "ssa", "vtt", "webvtt"),
         )
     }
 
@@ -227,5 +226,12 @@ data class PlatformInfoData(
     val clientVersion: String,
     val videoCodecs: List<VideoCodecInfo>,
     val audioCodecs: List<AudioCodecInfo>,
-    val subtitleFormats: List<String> = listOf("srt", "ass", "ssa", "vtt"),
+    // Single source of truth for the player's subtitle capability profile, sent to Emby as
+    // SubtitleProfile (Method=Embed). Matches the parsers media3-extractor 1.5.0 actually ships:
+    // subrip→srt, ssa→ass/ssa, webvtt→vtt/webvtt, ttml, tx3g, pgs→pgssub, dvb→dvbsub. Formats
+    // media3 has no parser for (dvd_subtitle, xsub, microdvd) are intentionally absent — the
+    // provider transcodes those to ass via Stream.ass.
+    val subtitleFormats: List<String> = listOf(
+        "srt", "ass", "ssa", "vtt", "webvtt", "ttml", "tx3g", "pgssub", "dvbsub",
+    ),
 )

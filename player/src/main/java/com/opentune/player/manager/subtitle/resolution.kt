@@ -19,9 +19,9 @@ internal fun subtitleMimeType(ref: String): String {
 }
 
 /** The saved subtitle track for [savedId] within the active source, or null if none/unmatched. */
-internal fun PlaybackSpec.savedSubtitleTrack(savedId: String?): SubtitleTrack? {
+internal fun PlaybackSpec.findSubtitleTrack(savedId: String?): SubtitleTrack? {
     if (savedId == null) return null
-    return sources[state.sourceIndex].subtitleTracks.find { it.trackId == savedId }
+    return sources.getOrNull(state.sourceIndex)?.subtitleTracks?.find { it.trackId == savedId }
 }
 
 /**
@@ -36,45 +36,72 @@ internal fun SubtitleTrack.toSidecarConfig(): MediaItem.SubtitleConfiguration? {
         .build()
 }
 
-internal fun buildTrackLabel(
-    track: SubtitleTrack,
-    exoLabel: String? = null,
-    exoLang: String? = null,
-): String {
-    val base = exoLabel?.takeIf { it.isNotBlank() } ?: track.label
-    val langTag = languageDisplayName(exoLang ?: track.language)
-    val flags = buildString {
-        if (track.isDefault) append(" ●")
-        if (track.isForced) append(" (Forced)")
+/**
+ * Unified subtitle entry name: `longlang [script] [(complementary…)]`.
+ *
+ * `longlang` is the full language name derived from [lang]. The raw [rawLabel] (the Emby
+ * `Title` for external tracks, or the exo `Format.label` for embedded ones) is split on `&`/
+ * whitespace; each token is looked up in [LANG_MAP]. A script-bearing entry (`chs`/`cht`)
+ * becomes the script modifier, an entry naming the primary language is dropped as redundant,
+ * any other language entry contributes its short code, and tokens absent from the map
+ * (`bd`, `hk`, `commentary`…) are folded in verbatim as the complementary list.
+ *
+ *   chs&eng / zh  -> "Chinese simplified (en)"
+ *   BD cht HK / zh -> "Chinese traditional (bd, hk)"
+ *   eng / en      -> "English"
+ */
+internal fun buildSubtitleName(rawLabel: String?, lang: String?): String {
+    val primary = LANG_MAP[lang?.lowercase().orEmpty()]
+    val longLang = when {
+        primary != null -> primary.long
+        lang.isNullOrBlank() || lang.equals("und", ignoreCase = true) -> "Unknown"
+        else -> lang
     }
-    return "[$langTag] ${track.trackId} $base$flags"
+    var script: String? = primary?.script
+    val complementary = mutableListOf<String>()
+    rawLabel?.split(Regex("[&\\s]+"))
+        ?.filter { it.isNotBlank() }
+        ?.forEach { raw ->
+            val entry = LANG_MAP[raw.lowercase()]
+            when {
+                entry == null -> complementary += raw.lowercase()
+                entry.script != null -> script = entry.script
+                primary != null && entry.short == primary.short -> Unit // redundant with longLang
+                else -> complementary += entry.short
+            }
+        }
+    val base = if (script != null) "$longLang $script" else longLang
+    return if (complementary.isEmpty()) base else "$base (${complementary.joinToString(", ")})"
 }
 
-internal fun languageDisplayName(lang: String?): String = when (lang?.lowercase()?.take(3)) {
-    "zh", "chi", "zho" -> "Chinese"
-    "en", "eng" -> "English"
-    "ja", "jpn" -> "Japanese"
-    "ko", "kor" -> "Korean"
-    "fr", "fre", "fra" -> "French"
-    "de", "ger", "deu" -> "German"
-    "es", "spa" -> "Spanish"
-    "it", "ita" -> "Italian"
-    "pt", "por" -> "Portuguese"
-    "ru", "rus" -> "Russian"
-    "ar", "ara" -> "Arabic"
-    "th", "tha" -> "Thai"
-    "vi", "vie" -> "Vietnamese"
-    null, "und", "" -> "Unknown"
-    else -> lang ?: "Unknown"
-}
+private data class LangEntry(val short: String, val long: String, val script: String? = null)
 
-@UnstableApi
-internal fun buildExoTrackLabel(group: Tracks.Group, fallbackIndex: Int): String {
-    if (group.length == 0) return "Track ${fallbackIndex + 1}"
-    val fmt = group.getTrackFormat(0)
-    return when {
-        !fmt.label.isNullOrBlank() -> fmt.label!!
-        !fmt.language.isNullOrBlank() -> fmt.language!!
-        else -> "Track ${fallbackIndex + 1}"
+/**
+ * Token → language lookup. Keys cover ISO 639-1/2/T codes plus the script-qualified variants
+ * (`chs`/`cht`) and full English names. `short` is the canonical 2-letter code used for the
+ * complementary list; `script` is non-null only for script variants of a language.
+ */
+private val LANG_MAP: Map<String, LangEntry> = buildMap {
+    fun lang(short: String, long: String, vararg aliases: String) {
+        put(short, LangEntry(short, long))
+        for (a in aliases) put(a, LangEntry(short, long))
     }
+    fun variant(canonical: String, long: String, script: String, vararg keys: String) {
+        for (k in keys) put(k, LangEntry(canonical, long, script))
+    }
+    lang("zh", "Chinese", "chi", "zho", "chinese")
+    variant("zh", "Chinese", "simplified", "chs", "simplified")
+    variant("zh", "Chinese", "traditional", "cht", "traditional")
+    lang("en", "English", "eng", "english")
+    lang("ja", "Japanese", "jpn", "japanese")
+    lang("ko", "Korean", "kor", "korean")
+    lang("fr", "French", "fre", "fra", "french")
+    lang("de", "German", "ger", "deu", "german")
+    lang("es", "Spanish", "spa", "spanish")
+    lang("it", "Italian", "ita", "italian")
+    lang("pt", "Portuguese", "por", "portuguese")
+    lang("ru", "Russian", "rus", "russian")
+    lang("ar", "Arabic", "ara", "arabic")
+    lang("th", "Thai", "tha", "thai")
+    lang("vi", "Vietnamese", "vie", "vietnamese")
 }

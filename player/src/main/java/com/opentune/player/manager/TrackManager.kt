@@ -92,12 +92,13 @@ internal class TrackManager(
 ) : PlaybackManager {
 
     override fun onPrepare() {
+        session.tracks = Tracks.EMPTY
         session.updateTrackInfo { TrackInfo() }
     }
 
     override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
-            session.updateTracks(tracks)
+            session.tracks = tracks
             val videoFormat = tracks.selectedFormat(C.TRACK_TYPE_VIDEO)
             val audioFormat = tracks.selectedFormat(C.TRACK_TYPE_AUDIO)
             session.updateTrackInfo {

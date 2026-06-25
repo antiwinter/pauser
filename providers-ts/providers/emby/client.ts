@@ -188,10 +188,23 @@ export async function search(
   return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[];
 }
 
-const BITMAP_CODECS = new Set([
-  'pgssub', 'hdmv_pgs_subtitle', 'dvd_subtitle', 'dvbsub',
-  'dvb_subtitle', 'xsub', 'microdvd',
-]);
+// Emby's stream.Codec values don't always match the canonical tokens in the player's
+// subtitleFormats profile (e.g. `hdmv_pgs_subtitle` vs `pgssub`). Normalize before comparing
+// so the transcode decision is driven solely by profile membership — no separate codec list.
+const SUBTITLE_CODEC_ALIASES: Record<string, string> = {
+  'hdmv_pgs_subtitle': 'pgssub',
+  'pgs_subtitle': 'pgssub',
+  'pgs': 'pgssub',
+  'pgssub': 'pgssub',
+  'dvb_subtitle': 'dvbsub',
+  'dvbsub': 'dvbsub',
+  'subrip': 'srt',
+};
+
+function normalizeSubtitleCodec(raw: string): string {
+  const c = raw.toLowerCase();
+  return SUBTITLE_CODEC_ALIASES[c] ?? c;
+}
 
 export async function getPlaybackSources(
   state: EmbyClientState,
@@ -248,9 +261,11 @@ function buildSubtitleTracks(
     const index = stream.Index;
     if (stream.Type !== 'Subtitle' || index == null) return [];
 
-    const label = stream.DisplayTitle ?? stream.Language ?? `Subtitle ${index}`;
+    const label = stream.Title ?? stream.DisplayTitle ?? stream.Language ?? `Subtitle ${index}`;
     const codec = stream.Codec?.toLowerCase() ?? '';
-    const isBitmapCodec = BITMAP_CODECS.has(codec);
+    // The profile is the single source of truth: a codec not in subtitleFormats is one media3
+    // can't decode in-container, so fetch Emby's Stream.ass sidecar instead.
+    const supported = capabilities.subtitleFormats.includes(normalizeSubtitleCodec(codec));
     const ext = codec === 'ass' || codec === 'ssa' ? 'ass'
               : codec === 'vtt' || codec === 'webvtt' ? 'vtt'
               : 'srt';
@@ -258,7 +273,7 @@ function buildSubtitleTracks(
     let externalRef: string | null = null;
     if (stream.IsExternal) {
       externalRef = `${credentials.baseUrl}/Videos/${itemRef}/Subtitles/${index}/Stream.${ext}`;
-    } else if (isBitmapCodec) {
+    } else if (!supported) {
       if (capabilities.subtitleFormats.includes('ass')) {
         externalRef = `${credentials.baseUrl}/Videos/${itemRef}/Subtitles/${index}/Stream.ass`;
       } else {

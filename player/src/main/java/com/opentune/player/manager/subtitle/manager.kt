@@ -7,6 +7,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.compose.ui.res.stringResource
 import com.opentune.player.EntryStateKeys
@@ -14,91 +15,67 @@ import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.manager.PlaybackManager
 import com.opentune.player.manager.PlayerMenuEntry
+import java.util.Locale
 
 private const val SUB_LOG_TAG = "OT_Subtitle"
 
-// ---------------------------------------------------------------------------
-// Session extensions: selectSubtitle, applyTextParams, updateSubtitleTrackId, armSidecarRecovery
-// ---------------------------------------------------------------------------
+/** Sentinel for [SubtitleManager.appliedSubtitleId] meaning "not yet applied this entry",
+ *  distinct from `null` (the auto subtitle id). */
+private object NotAppliedYet
 
-/** Persists the subtitle track id into the spec's state and entry state. */
-@UnstableApi
-internal fun PlaybackSession.updateSubtitleTrackId(trackId: String?) {
-    updateState { it.copy(subtitleTrackId = trackId) }
-    notifyEntryState(EntryStateKeys.SUBTITLE_TRACK_ID, trackId)
-}
+// ---------------------------------------------------------------------------
+// Session extension: applyTextParams (the unified subtitle selector)
+// ---------------------------------------------------------------------------
 
 /**
- * Selects a subtitle: null = off, an external track → attach its sidecar and rebuild, an embedded
- * track → a parameter-only selection. Text overrides are applied via [buildUpon] so audio/video
- * selections in the same [TrackSelectionParameters] are preserved.
- */
-@UnstableApi
-fun PlaybackSession.selectSubtitle(trackId: String?) {
-    updateSubtitleTrackId(trackId)
-    exo.trackSelectionParameters = applyTextParams(trackId)
-    Log.d(SUB_LOG_TAG, "selectSubtitle: trackId=$trackId")
-    if (currentSpec?.savedSubtitleTrack(trackId)?.externalRef != null) {
-        armSidecarRecovery()
-        rebuildKeepingPosition()
-    }
-}
-
-/**
- * Applies text track selection for [trackId] onto the current [TrackSelectionParameters] via
- * [buildUpon], preserving audio/video overrides. Shared by [selectSubtitle] (runtime) and
- * [prepare] (initial load, before tracks are known). Always resets text overrides / preferred
- * language / undetermined-selection first so no stale selection leaks between entries or between
- * successive subtitle picks.
- *   null            → text disabled
- *   external sidecar → undetermined-language auto-select (the merged sidecar is the only text track)
- *   embedded, group resolved → explicit override
- *   embedded, group not yet loaded → preferred language (if known) + undetermined
+ * The single entry point for subtitle selection. Builds text [TrackSelectionParameters] for
+ * [trackId], persists it into spec state + entry state, and — for an external sidecar picked at
+ * runtime — rebuilds the media source to attach it.
+ *
+ * trackId conventions:
+ *   null          → "auto": follow device locale (preferred language + undetermined)
+ *   "off"         → text track disabled
+ *   "exo_<gid>"   → embedded: explicit override on the resolved text group
+ *   <other>       → external sidecar (looked up via [PlaybackSpec.findSubtitleTrack])
+ *
+ * [rebuild] gates the external-rebuild path: the initial restore ([onPrepare]) and the
+ * [onTracksChanged] embedded re-apply pass `rebuild = false` since the media source already carries
+ * the sidecar / only a parameter change is needed. Runtime menu selection uses the default `true`.
  */
 @UnstableApi
 internal fun PlaybackSession.applyTextParams(trackId: String?): TrackSelectionParameters {
     val b = exo.trackSelectionParameters.buildUpon()
         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
         .setPreferredTextLanguage(null)
-        .setSelectUndeterminedTextLanguage(false)
-    if (trackId == null) {
-        return b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
-    }
-    b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-    val saved = currentSpec?.savedSubtitleTrack(trackId)
-    if (saved?.externalRef != null) {
-        return b.setSelectUndeterminedTextLanguage(true).build()
-    }
-    val groupId = trackId.removePrefix("exo_")
-    val group = tracksFlow.value.groups
-        .filter { it.type == C.TRACK_TYPE_TEXT }
-        .firstOrNull { it.mediaTrackGroup.id == groupId }
-    if (group != null) {
-        return b.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0)).build()
-    }
-    saved?.language?.let { b.setPreferredTextLanguage(it) }
-    return b.setSelectUndeterminedTextLanguage(true).build()
-}
+        .setSelectUndeterminedTextLanguage(true)
+        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
 
-/**
- * After an external subtitle is selected, a sidecar load failure surfaces as a player error.
- * Drop the saved track, re-derive video-only text params, and rebuild without the sidecar.
- */
-@UnstableApi
-private fun PlaybackSession.armSidecarRecovery() {
-    val listener = object : Player.Listener {
-        override fun onPlayerError(error: PlaybackException) {
-            exo.removeListener(this)
-            Log.w(SUB_LOG_TAG, "Subtitle sidecar failed (code=${error.errorCode}), replaying without it")
-            updateSubtitleTrackId(null)
-            exo.trackSelectionParameters = applyTextParams(null)
-            rebuildKeepingPosition()
+    when {
+        trackId == null -> {
+            // auto: prefer device locale, allow undetermined fallback
+            b.setPreferredTextLanguage(Locale.getDefault().language)
         }
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) exo.removeListener(this)
+        trackId == "off" -> {
+            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        }
+        trackId.startsWith("exo_") -> {
+            val groupId = trackId.removePrefix("exo_")
+            val group = tracksFlow.value.groups
+                .filter { it.type == C.TRACK_TYPE_TEXT }
+                .firstOrNull { it.mediaTrackGroup.id == groupId }
+            if (group != null) {
+                b.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+            }
+        }
+        else -> {
+           // nothing
         }
     }
-    exo.addListener(listener)
+
+    // Persist before any rebuild so toMediaSource() sees the new subtitleTrackId.
+    updateState { it.copy(subtitleTrackId = trackId) }
+    notifyEntryState(EntryStateKeys.SUBTITLE_TRACK_ID, trackId)
+    return b.build()
 }
 
 // ---------------------------------------------------------------------------
@@ -106,9 +83,16 @@ private fun PlaybackSession.armSidecarRecovery() {
 // ---------------------------------------------------------------------------
 
 /**
- * Session-owned manager for subtitle track selection + the subtitle/adjust menus. Composes a
- * [SubtitleAdjust] for adjust-mode state and key handling. Lives in [PlaybackSession.managers] so
- * [onPrepare] restores the saved text track and resets adjust state per entry.
+ * Session-owned manager for subtitle track selection + the subtitle/adjust menus.
+ *
+ * The saved subtitle selection is applied from the player lifecycle, not the Compose layer:
+ *   - [onPrepare] applies auto/off/external (the sidecar is already in the initial media source,
+ *     so no rebuild).
+ *   - [onTracksChanged] applies an embedded ("exo_") override once the text group has loaded.
+ *
+ * Sidecar-failure recovery is a permanent [Player.Listener] that, when a sidecar is active and the
+ * error is a parsing failure, drops the subtitle and rebuilds without it. Renderer errors are left
+ * to [com.opentune.player.manager.FallbackManager].
  */
 @UnstableApi
 internal class SubtitleManager(
@@ -116,10 +100,16 @@ internal class SubtitleManager(
 ) : PlaybackManager {
     val adjust = SubtitleAdjust(session)
 
+    /** Last subtitleTrackId applied via [onTracksChanged]; skip re-apply when unchanged to avoid
+     *  re-persisting on every track change. [NotAppliedYet] distinguishes "not yet applied this
+     *  entry" from null (the auto id). Reset in [onPrepare]. */
+    private var appliedSubtitleId: Any? = NotAppliedYet
+
     override fun onPrepare() {
         val state = session.currentSpec?.state
         adjust.reset(state)
-        session.exo.trackSelectionParameters = session.applyTextParams(state?.subtitleTrackId)
+        appliedSubtitleId = NotAppliedYet
+        // sidecar restoration already handled in initial toMediaSource() build
     }
 
     /** Re-apply subtitle offset/scale/style now that the PlayerView is attached. The reset during
@@ -128,74 +118,128 @@ internal class SubtitleManager(
         adjust.applyStyle()
     }
 
-    override val menuEntries = listOf(
-        PlayerMenuEntry(
-            label = @Composable { stringResource(R.string.player_settings_subtitles) },
-            children = ::buildSubtitleChildren,
-            isSelected = { false },
-            onSelect = {},
-        ),
-        PlayerMenuEntry(
-            label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
-            children = { emptyList() },
-            isSelected = { adjust.isActive },
-            onSelect = { adjust.activate() },
-        ),
-    )
+    override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            val id = session.currentSpec?.state?.subtitleTrackId ?: return
+            if (id == appliedSubtitleId) return
+            buildMenuEntries()
+            session.exo.trackSelectionParameters = session.applyTextParams(id)
+            appliedSubtitleId = id
+        }
 
-    private fun buildSubtitleChildren(): List<PlayerMenuEntry> {
-        val spec = session.currentSpec ?: return emptyList()
-        val source = spec.sources.getOrNull(spec.state.sourceIndex) ?: return emptyList()
+        override fun onPlayerError(error: PlaybackException) {
+            // Only when a sidecar subtitle is currently active and the failure is a parse error.
+            if (!error.isParsingError()) return
+
+            val spec = session.currentSpec ?: return
+            val id = spec.state.subtitleTrackId
+            if (spec.findSubtitleTrack(id)?.externalRef == null) return
+
+            Log.w(SUB_LOG_TAG, "Subtitle sidecar failed (code=${error.errorCode}), replaying without it")
+            session.exo.trackSelectionParameters = session.applyTextParams(null)
+            session.rebuildKeepingPosition()
+        }
+    })
+
+    /** Hidden entirely when the entry has no subtitle tracks (only the implicit "Off" would show). */
+    override val menuEntries: List<PlayerMenuEntry>
+        get() {
+            if (session.currentSpec == null) return emptyList()
+            if (_menuEntries.size < 2) return emptyList()
+            return listOf(
+                PlayerMenuEntry(
+                    label = @Composable { stringResource(R.string.player_settings_subtitles) },
+                    children = { _menuEntries },
+                    isSelected = { false },
+                    onSelect = {},
+                ),
+                PlayerMenuEntry(
+                    label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
+                    children = { emptyList() },
+                    isSelected = { adjust.isActive },
+                    onSelect = { adjust.activate() },
+                ),
+            )
+        }
+
+    /**
+     * The subtitle submenu contents. Rebuilt by [buildMenuEntries] from lifecycle hooks
+     * ([onPrepare] for the initial/external-only state, [Player.Listener.onTracksChanged] once
+     * exo reports text groups) and otherwise returned as-is by the entry's `children` lambda —
+     * so opening/navigating the menu never rebuilds. [isSelected] lambdas read `subtitleTrackId`
+     * live, so the `●` indicator updates without a rebuild.
+     */
+    private var _menuEntries: List<PlayerMenuEntry> = emptyList()
+
+    private fun buildMenuEntries(): List<PlayerMenuEntry> {
+        val spec = session.currentSpec ?: run { _menuEntries = emptyList(); return emptyList() }
+        val source = spec.sources.getOrNull(spec.state.sourceIndex) ?: run {
+            _menuEntries = emptyList(); return emptyList()
+        }
         val tracks = session.tracksFlow.value
-        val activeId = spec.state.subtitleTrackId
+
+        val externalTracks = source.subtitleTracks.filter {
+            Log.d(SUB_LOG_TAG, it.toString())
+            it.externalRef != null }
+
         val entries = mutableListOf<PlayerMenuEntry>()
 
         entries += PlayerMenuEntry(
             label = @Composable { stringResource(R.string.subtitle_track_none) },
             children = { emptyList() },
-            isSelected = { activeId == null },
+            isSelected = { session.currentSpec?.state?.subtitleTrackId == "off" },
             onSelect = {
-                Log.d(SUB_LOG_TAG, "select: Off")
-                session.selectSubtitle(null)
+                session.exo.trackSelectionParameters = session.applyTextParams("off")
             },
         )
 
-        if (source.subtitleTracks.isNotEmpty()) {
-            source.subtitleTracks.forEach { track ->
-                val exoGroup = tracks.groups
-                    .filter { it.type == C.TRACK_TYPE_TEXT }
-                    .firstOrNull { it.mediaTrackGroup.id == track.trackId }
-                val exoLabel = if (exoGroup != null && exoGroup.length > 0) exoGroup.getTrackFormat(0).label else null
-                val exoLang = if (exoGroup != null && exoGroup.length > 0) exoGroup.getTrackFormat(0).language else null
-                val label = buildTrackLabel(track, exoLabel, exoLang)
+        // embedded — keep only tracks a renderer can decode. Emby transcodes unsupported formats
+        // (e.g. PGS, which exo has no decoder for) to ASS sidecars exposed as external entries;
+        // filtering those groups here avoids duplicates without relying on id-format heuristics.
+        tracks.groups
+            .filter { it.type == C.TRACK_TYPE_TEXT && it.isTrackSupported(0) }
+            .forEach { group ->
+                val fmt = group.getTrackFormat(0)
+                Log.w(SUB_LOG_TAG, "embedded subtitle group ${group.mediaTrackGroup.id} label=${fmt.label} lang=${fmt.language} mime=${fmt.sampleMimeType} supported=${group.isTrackSupported(0)}")
+                val gid = "exo_${group.mediaTrackGroup.id}"
+                val label = buildSubtitleName(fmt.label, fmt.language)
                 entries += PlayerMenuEntry(
                     label = @Composable { label },
                     children = { emptyList() },
-                    isSelected = { activeId == track.trackId },
+                    isSelected = { session.currentSpec?.state?.subtitleTrackId == gid },
                     onSelect = {
-                        Log.d(SUB_LOG_TAG, "select: FromSpec trackId=${track.trackId}")
-                        session.selectSubtitle(track.trackId)
+                        session.exo.trackSelectionParameters = session.applyTextParams(gid)
                     },
                 )
             }
-        } else {
-            tracks.groups
-                .filter { it.type == C.TRACK_TYPE_TEXT }
-                .forEachIndexed { idx, group ->
-                    val label = buildExoTrackLabel(group, idx)
-                    val gid = "exo_${group.mediaTrackGroup.id}"
-                    entries += PlayerMenuEntry(
-                        label = @Composable { label },
-                        children = { emptyList() },
-                        isSelected = { activeId == gid },
-                        onSelect = {
-                            Log.d(SUB_LOG_TAG, "select: ExoNative gid=$gid")
-                            session.selectSubtitle(gid)
-                        },
-                    )
-                }
+
+        // external (sidecar) — only tracks with an externalRef are selectable here
+        externalTracks.forEach { track ->
+            val label = buildSubtitleName(track.label, track.language)
+            entries += PlayerMenuEntry(
+                label = @Composable { label },
+                children = { emptyList() },
+                isSelected = { session.currentSpec?.state?.subtitleTrackId == track.trackId },
+                onSelect = {
+                    session.exo.trackSelectionParameters = session.applyTextParams(track.trackId)
+                    session.rebuildKeepingPosition()
+                },
+            )
         }
 
-        return entries
+        // Hide the submenu when only "Off" is available.
+        val result = if (entries.size < 2) emptyList() else entries
+        _menuEntries = result
+        return result
     }
+}
+
+/** True for parse-stage failures (the category a sidecar subtitle load/parse error falls into). */
+private fun PlaybackException.isParsingError(): Boolean = when (errorCode) {
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+    -> true
+    else -> false
 }

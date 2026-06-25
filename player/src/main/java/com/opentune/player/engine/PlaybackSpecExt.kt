@@ -8,7 +8,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import com.opentune.player.PlaybackSpec
-import com.opentune.player.manager.subtitle.savedSubtitleTrack
+import com.opentune.player.manager.subtitle.findSubtitleTrack
 import com.opentune.player.manager.subtitle.toSidecarConfig
 import okhttp3.OkHttpClient
 
@@ -26,7 +26,7 @@ fun PlaybackSpec.toMediaSource(
     context: android.content.Context,
 ): MediaSource {
     val source = sources[state.sourceIndex]
-    val sidecarSubtitle = savedSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
+    val sidecarSubtitle = findSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
     fun headersInterceptor() = okhttp3.Interceptor { chain ->
         val req = chain.request().newBuilder().apply {
             source.headers.forEach { (k, v) -> header(k, v) }

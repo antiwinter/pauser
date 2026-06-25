@@ -89,13 +89,15 @@ class PlaybackSession(
     private val _tracks = MutableStateFlow(Tracks.EMPTY)
     val tracksFlow: StateFlow<Tracks> = _tracks.asStateFlow()
 
+    /** Direct mutator for [_tracks]; TrackManager writes here from onTracksChanged/onPrepare. */
+    internal var tracks: Tracks
+        get() = _tracks.value
+        set(value) { _tracks.value = value }
+
     /** Mutator for [trackInfoFlow]; used by TrackManager and FallbackManager ('err'). */
     internal fun updateTrackInfo(transform: (TrackInfo) -> TrackInfo) {
         _trackInfo.value = transform(_trackInfo.value)
     }
-
-    /** Mutator for [tracksFlow]; used by TrackManager on onTracksChanged. */
-    internal fun updateTracks(tracks: Tracks) { _tracks.value = tracks }
 
     // ---------------------------------------------------------------------------
     // Playback state (single source of truth derived from [_spec])
@@ -174,7 +176,6 @@ class PlaybackSession(
         withContext(Dispatchers.Main) {
             Log.d(SESSION_LOG, "prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
 
-            updateTracks(Tracks.EMPTY)
             managers.forEach { it.onPrepare() }
             BandwidthTracker.reset()
 

@@ -44,6 +44,7 @@ export interface ExternalUrlDto {
 export interface MediaStream {
   Codec?: string | null;
   Language?: string | null;
+  Title?: string | null;
   DisplayTitle?: string | null;
   IsInterlaced?: boolean | null;
   IsDefault?: boolean | null;
