@@ -229,12 +229,14 @@ export async function getPlaybackSources(
   const sources: PlaybackSource[] = (info.MediaSources ?? []).map((source) => {
     const url = resolvePlaybackUrl(credentials.baseUrl, source);
     const subtitleTracks = buildSubtitleTracks(source, credentials, itemRef, capabilities);
+    // Per-stream Bitrate is often null for direct-play MKV; use the MediaSource-level overall
+    // bitrate on the video codec entry (the InfoOverlay reads it there).
     const mediaCodecs = (source.MediaStreams ?? [])
       .filter((s) => s.Type === 'Video' || s.Type === 'Audio')
       .map((s) => ({
         codec: (s.Codec ?? '').toLowerCase(),
         bitDepth: s.BitDepth ?? null,
-        bitrate: s.Bitrate ?? null,
+        bitrate: s.Type === 'Video' ? (s.Bitrate ?? source.Bitrate ?? null) : (s.Bitrate ?? null),
       }))
       .filter((s) => s.codec);
     return {

@@ -186,7 +186,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     url = source.url,
                     mimeType = source.mimeType,
                     headers = source.headers,
-                    mediaCodecs = source.mediaCodecs.map { MediaCodecInfoDto(codec = it.codec, bitDepth = it.bitDepth) },
+                    mediaCodecs = source.mediaCodecs.map { MediaCodecInfoDto(codec = it.codec, bitDepth = it.bitDepth, bitrate = it.bitrate) },
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
             }

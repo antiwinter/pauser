@@ -57,6 +57,7 @@ data class EntryListDto(
 data class MediaCodecInfoDto(
     val codec: String,
     val bitDepth: Int? = null,
+    val bitrate: Int? = null,
 )
 
 @Serializable

@@ -50,15 +50,21 @@ internal fun simplifyDecoderName(decoderName: String): String = when {
     else -> decoderName.substringBefore('.').takeIf { it.isNotEmpty() } ?: decoderName
 }
 
-/** The Format of the currently selected track of [trackType], or null if none is selected. */
-internal fun Tracks.selectedFormat(trackType: @C.TrackType Int): Format? {
+/** The Format of the selected track of [trackType], or the first track of that type if none is
+ *  selected. Falling back to the first track keeps the codec visible when the renderer has been
+ *  disabled (e.g. a decoder error) and no track is selected — the container still advertises the
+ *  codec, and the overlay should keep showing it rather than blanking out. */
+internal fun Tracks.detectFormat(trackType: @C.TrackType Int): Format? {
+    var firstOfKind: Format? = null
     for (group in groups) {
         if (group.type != trackType) continue
         for (i in 0 until group.length) {
-            if (group.isTrackSelected(i)) return group.getTrackFormat(i)
+            val fmt = group.getTrackFormat(i)
+            if (firstOfKind == null) firstOfKind = fmt
+            if (group.isTrackSelected(i)) return fmt
         }
     }
-    return null
+    return firstOfKind
 }
 
 /** True when the video Format carries HDR (Dolby Vision or an HDR transfer function). */
@@ -99,8 +105,8 @@ internal class TrackManager(
     override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
             session.tracks = tracks
-            val videoFormat = tracks.selectedFormat(C.TRACK_TYPE_VIDEO)
-            val audioFormat = tracks.selectedFormat(C.TRACK_TYPE_AUDIO)
+            val videoFormat = tracks.detectFormat(C.TRACK_TYPE_VIDEO)
+            val audioFormat = tracks.detectFormat(C.TRACK_TYPE_AUDIO)
             session.updateTrackInfo {
                 it.copy(
                     videoMime = videoFormat?.sampleMimeType,
@@ -109,10 +115,12 @@ internal class TrackManager(
                     videoBitrate = bitrateOf(videoFormat),
                 )
             }
+            val selected = tracks.groups.count { g -> (0 until g.length).any { g.isTrackSelected(it) } }
             Log.d(
                 TRACK_LOG,
                 "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} " +
-                    "hdr=${isHdrFormat(videoFormat)} bitrate=${bitrateOf(videoFormat)} groups=${tracks.groups.size}"
+                    "hdr=${isHdrFormat(videoFormat)} bitrate=${bitrateOf(videoFormat)} " +
+                    "groups=${tracks.groups.size} selectedGroups=$selected"
             )
         }
 

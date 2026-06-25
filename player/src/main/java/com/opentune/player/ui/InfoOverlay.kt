@@ -2,6 +2,7 @@ package com.opentune.player.ui
 
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.util.Log
 import android.view.Display
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +52,11 @@ internal class InfoOverlayState(
 internal fun InfoOverlay(state: InfoOverlayState) {
     if (!state.isVisible) return
     val mbps = state.mbpsState.floatValue
+    Log.d(
+        "InfoOverlay",
+        "render title='${state.displayInfo.title}' vMime=${state.videoMime} vDec=${state.videoDecoderStatus} " +
+            "aMime=${state.audioMime} aDec=${state.audioDecoderStatus} bitrate=${state.bitrate} mbps=$mbps"
+    )
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter,
