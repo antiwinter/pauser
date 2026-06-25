@@ -86,7 +86,7 @@ async function httpGet<T>(url: string, accessToken?: string | null): Promise<T> 
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`HTTP ${resp.status} GET ${url}: ${resp.body.slice(0, 200)}`);
   }
-  await dumpResponse('get', url, resp.body);
+  // await dumpResponse('get', url, resp.body);
   return JSON.parse(resp.body) as T;
 }
 
@@ -101,7 +101,7 @@ async function httpPost<T>(url: string, body: unknown, accessToken?: string | nu
     throw new Error(`HTTP ${resp.status} POST ${url}: ${resp.body.slice(0, 200)}`);
   }
   if (!resp.body || resp.body.trim() === '') return undefined as unknown as T;
-  await dumpResponse('post', url, resp.body);
+  // await dumpResponse('post', url, resp.body);
   return JSON.parse(resp.body) as T;
 }
 

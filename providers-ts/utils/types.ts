@@ -218,7 +218,7 @@ export interface OpenTuneProviderBridge {
 
   getPlaybackSources(args: {
     itemRef: string;
-  }): Promise<PlaybackSource[]>;
+  }): Promise<PlaybackSource[] | { sources: PlaybackSource[]; state: ProviderState }>;
 
   updateEntryState(args: {
     itemRef: string;

@@ -6,6 +6,7 @@ import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
+import type { EmbyHooksState } from './hooks.js';
 import type { DeviceProfile, MediaSourceInfo, QueryResultBaseItemDto } from './dto.js';
 import type {
   EntryInfo,
@@ -209,7 +210,7 @@ function normalizeSubtitleCodec(raw: string): string {
 export async function getPlaybackSources(
   state: EmbyClientState,
   itemRef: string,
-): Promise<PlaybackSource[]> {
+): Promise<{ sources: PlaybackSource[]; state: EmbyHooksState }> {
   const s = requireState(state); const credentials = s.credentials; const deviceProfile = s.deviceProfile; const capabilities = s.capabilities;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
@@ -225,6 +226,8 @@ export async function getPlaybackSources(
     AllowVideoStreamCopy: true,
     AllowAudioStreamCopy: true,
   });
+
+  const firstSource = (info.MediaSources ?? [])[0];
 
   const sources: PlaybackSource[] = (info.MediaSources ?? []).map((source) => {
     const url = resolvePlaybackUrl(credentials.baseUrl, source);
@@ -250,7 +253,22 @@ export async function getPlaybackSources(
 
   if (sources.length === 0) throw new Error('No media sources');
 
-  return sources;
+  // hooksState is threaded back into updateEntryState on every heartbeat so the emby
+  // server receives Sessions/Playing/{,Progress,Stopped} keep-alives. Uses the first
+  // MediaSource (matches legacy getPlaybackSpec); playSessionId is shared across sources.
+  const hooksState: EmbyHooksState = {
+    itemId: itemRef,
+    playMethod: firstSource ? playMethod(firstSource) : 'DirectPlay',
+    playSessionId: info.PlaySessionId ?? null,
+    mediaSourceId: firstSource?.Id ?? null,
+    liveStreamId: firstSource?.LiveStreamId ?? null,
+    baseUrl: credentials.baseUrl,
+    userId: credentials.userId,
+    accessToken: credentials.accessToken,
+    deviceProfile,
+  };
+
+  return { sources, state: hooksState };
 }
 
 function buildSubtitleTracks(
