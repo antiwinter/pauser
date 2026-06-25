@@ -120,9 +120,11 @@ internal class SubtitleManager(
 
     override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
+            buildMenuEntries()
             val id = session.currentSpec?.state?.subtitleTrackId ?: return
             if (id == appliedSubtitleId) return
-            buildMenuEntries()
+            if (id.startsWith("exo_") && // no text yet
+                !tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) return            
             session.exo.trackSelectionParameters = session.applyTextParams(id)
             appliedSubtitleId = id
         }

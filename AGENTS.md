@@ -29,6 +29,16 @@ Name functions and types for **what they do**, not **who calls them** or **when*
 
 ---
 
+## Comments
+
+Write **only essential** comments. No boilerplate restating what the code does.
+
+- A comment is justified when it captures a **why** the reader can't get from the code: a non-obvious invariant, a subtle ordering constraint, a workaround for a specific bug, behavior that would surprise a reader.
+- Do **not** narrate the "what" — well-named identifiers already say that. Do **not** write multi-paragraph docstrings or multi-line comment blocks where one line (or none) suffices.
+- If removing the comment wouldn't confuse a future reader, don't write it.
+
+---
+
 ## Module graph
 
 ```

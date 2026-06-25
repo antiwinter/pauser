@@ -65,7 +65,7 @@ class PlaybackSession(
     internal val subtitleManager = SubtitleManager(this)
 
     internal val managers: List<PlaybackManager> = listOf(
-        TrackManager(this),
+        TrackManager(this), // tracks go first !important
         FallbackManager(this),
         subtitleManager,
         AudioManager(this),
