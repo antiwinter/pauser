@@ -173,6 +173,7 @@ class PlaybackSession(
         emitTeardown(PlayingState.STOPPED)
         val state = spec.state
         _spec.value = spec
+        _spec.value?.updateEntryState(EntryStateKeys.SOURCE_INDEX, state.sourceIndex.toString())
         withContext(Dispatchers.Main) {
             Log.d(SESSION_LOG, "prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
 

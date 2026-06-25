@@ -6,7 +6,7 @@ import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { EmbyHooksCtx } from './hooks.js';
+import type { EmbyHooksCtx, EmbyMediaSourceCtx } from './hooks.js';
 import type { DeviceProfile, MediaSourceInfo, QueryResultBaseItemDto } from './dto.js';
 import type {
   EntryInfo,
@@ -227,9 +227,10 @@ export async function getPlaybackSources(
     AllowAudioStreamCopy: true,
   });
 
-  const firstSource = (info.MediaSources ?? [])[0];
-
-  const sources: PlaybackSource[] = (info.MediaSources ?? []).map((source) => {
+  // Build sources and per-source ctx entries in one pass, filtering out empty-URL
+  // entries so the arrays stay index-aligned with Kotlin's parsePlaybackSources
+  // (which drops sources whose url is empty).
+  const built = (info.MediaSources ?? []).map((source) => {
     const url = resolvePlaybackUrl(credentials.baseUrl, source);
     const subtitleTracks = buildSubtitleTracks(source, credentials, itemRef, capabilities);
     // Per-stream Bitrate is often null for direct-play MKV; use the MediaSource-level overall
@@ -243,25 +244,33 @@ export async function getPlaybackSources(
       }))
       .filter((s) => s.codec);
     return {
-      url,
-      headers: { 'X-Emby-Token': credentials.accessToken },
-      mimeType: null,
-      subtitleTracks,
-      mediaCodecs,
+      source: {
+        url,
+        headers: { 'X-Emby-Token': credentials.accessToken },
+        mimeType: null,
+        subtitleTracks,
+        mediaCodecs,
+      } satisfies PlaybackSource,
+      mediaSourceCtx: {
+        mediaSourceId: source.Id ?? null,
+        liveStreamId: source.LiveStreamId ?? null,
+        playMethod: playMethod(source),
+      } satisfies EmbyMediaSourceCtx,
     };
-  });
+  }).filter((b) => b.source.url.length > 0);
 
-  if (sources.length === 0) throw new Error('No media sources');
+  if (built.length === 0) throw new Error('No media sources');
+
+  const sources = built.map((b) => b.source);
 
   // hooksCtx is threaded back into updateEntryState on every heartbeat so the emby
-  // server receives Sessions/Playing/{,Progress,Stopped} keep-alives. Uses the first
-  // MediaSource (matches legacy getPlaybackSpec); playSessionId is shared across sources.
+  // server receives Sessions/Playing/{,Progress,Stopped} keep-alives. mediaSources is
+  // one entry per PlaybackSource (same order); the active entry is selected by
+  // SessionMeta.sourceIndex, reported from PlaybackSession.prepare on source switch.
   const hooksCtx: EmbyHooksCtx = {
     itemId: itemRef,
-    playMethod: firstSource ? playMethod(firstSource) : 'DirectPlay',
     playSessionId: info.PlaySessionId ?? null,
-    mediaSourceId: firstSource?.Id ?? null,
-    liveStreamId: firstSource?.LiveStreamId ?? null,
+    mediaSources: built.map((b) => b.mediaSourceCtx),
     baseUrl: credentials.baseUrl,
     userId: credentials.userId,
     accessToken: credentials.accessToken,
