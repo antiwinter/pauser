@@ -6,7 +6,7 @@ import type { DeviceProfile } from './dto.js';
 
 export { setGlobalAuth as setDeviceAuth };
 
-export interface EmbyHooksState {
+export interface EmbyHooksCtx {
   itemId: string;
   playMethod: string;
   playSessionId: string | null;
@@ -26,12 +26,12 @@ type SessionMeta = {
 
 const sessionMeta = new Map<string, SessionMeta>();
 
-function metaKey(state: EmbyHooksState): string {
-  return state.playSessionId ?? state.itemId;
+function metaKey(ctx: EmbyHooksCtx): string {
+  return ctx.playSessionId ?? ctx.itemId;
 }
 
-function getMeta(state: EmbyHooksState): SessionMeta {
-  const key = metaKey(state);
+function getMeta(ctx: EmbyHooksCtx): SessionMeta {
+  const key = metaKey(ctx);
   let meta = sessionMeta.get(key);
   if (!meta) {
     meta = { hasReportedPlaying: false, positionMs: 0, playbackRate: 1 };
@@ -41,11 +41,11 @@ function getMeta(state: EmbyHooksState): SessionMeta {
 }
 
 export async function updateEntryState(
-  state: EmbyHooksState,
+  ctx: EmbyHooksCtx,
   key: string,
   value: string | null,
 ): Promise<void> {
-  const meta = getMeta(state);
+  const meta = getMeta(ctx);
   switch (key) {
     case 'positionMs':
       meta.positionMs = Number(value ?? 0);
@@ -56,16 +56,16 @@ export async function updateEntryState(
     case 'playingState':
       if (value === 'PLAYING') {
         if (!meta.hasReportedPlaying) {
-          await reportPlaying(state, meta.positionMs, meta.playbackRate);
+          await reportPlaying(ctx, meta.positionMs, meta.playbackRate);
           meta.hasReportedPlaying = true;
         } else {
-          await reportProgress(state, meta.positionMs, meta.playbackRate, false);
+          await reportProgress(ctx, meta.positionMs, meta.playbackRate, false);
         }
       } else if (value === 'PAUSED') {
-        await reportProgress(state, meta.positionMs, meta.playbackRate, true);
+        await reportProgress(ctx, meta.positionMs, meta.playbackRate, true);
       } else if (value === 'STOPPED') {
-        await reportStopped(state, meta.positionMs);
-        sessionMeta.delete(metaKey(state));
+        await reportStopped(ctx, meta.positionMs);
+        sessionMeta.delete(metaKey(ctx));
       }
       return;
     case 'favorite':
@@ -77,37 +77,37 @@ export async function updateEntryState(
 }
 
 async function reportPlaying(
-  state: EmbyHooksState,
+  ctx: EmbyHooksCtx,
   positionMs: number,
   playbackRate: number,
 ): Promise<void> {
-  const api = new EmbyApi(state.baseUrl, state.accessToken, state.userId);
+  const api = new EmbyApi(ctx.baseUrl, ctx.accessToken, ctx.userId);
   const ticks = positionMs * 10_000;
   await api.reportPlaying({
-    ItemId:        state.itemId,
-    MediaSourceId: state.mediaSourceId,
-    PlaySessionId: state.playSessionId,
-    LiveStreamId:  state.liveStreamId,
-    PlayMethod:    state.playMethod,
+    ItemId:        ctx.itemId,
+    MediaSourceId: ctx.mediaSourceId,
+    PlaySessionId: ctx.playSessionId,
+    LiveStreamId:  ctx.liveStreamId,
+    PlayMethod:    ctx.playMethod,
     PositionTicks: ticks,
     PlaybackRate:  playbackRate,
   });
 }
 
 async function reportProgress(
-  state: EmbyHooksState,
+  ctx: EmbyHooksCtx,
   positionMs: number,
   playbackRate: number,
   isPaused: boolean,
 ): Promise<void> {
-  const api = new EmbyApi(state.baseUrl, state.accessToken, state.userId);
+  const api = new EmbyApi(ctx.baseUrl, ctx.accessToken, ctx.userId);
   const ticks = positionMs * 10_000;
   await api.reportProgress({
-    ItemId:        state.itemId,
-    MediaSourceId: state.mediaSourceId,
-    PlaySessionId: state.playSessionId,
-    LiveStreamId:  state.liveStreamId,
-    PlayMethod:    state.playMethod,
+    ItemId:        ctx.itemId,
+    MediaSourceId: ctx.mediaSourceId,
+    PlaySessionId: ctx.playSessionId,
+    LiveStreamId:  ctx.liveStreamId,
+    PlayMethod:    ctx.playMethod,
     PositionTicks: ticks,
     PlaybackRate:  playbackRate,
     IsPaused:      isPaused,
@@ -115,16 +115,16 @@ async function reportProgress(
 }
 
 async function reportStopped(
-  state: EmbyHooksState,
+  ctx: EmbyHooksCtx,
   positionMs: number,
 ): Promise<void> {
-  const api = new EmbyApi(state.baseUrl, state.accessToken, state.userId);
+  const api = new EmbyApi(ctx.baseUrl, ctx.accessToken, ctx.userId);
   const ticks = positionMs * 10_000;
   await api.reportStopped({
-    ItemId:        state.itemId,
-    MediaSourceId: state.mediaSourceId,
-    PlaySessionId: state.playSessionId,
-    LiveStreamId:  state.liveStreamId,
+    ItemId:        ctx.itemId,
+    MediaSourceId: ctx.mediaSourceId,
+    PlaySessionId: ctx.playSessionId,
+    LiveStreamId:  ctx.liveStreamId,
     PositionTicks: ticks,
   });
 }

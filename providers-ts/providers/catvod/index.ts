@@ -66,7 +66,7 @@ let state: CatVodClientState | null = null;
     itemRef: string;
     key: string;
     value: string | null;
-    state?: Record<string, unknown>;
+    ctx?: Record<string, unknown>;
   }): Promise<void> {},
 
   async resetSpiders(): Promise<void> {

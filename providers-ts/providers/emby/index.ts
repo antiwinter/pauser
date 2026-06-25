@@ -7,7 +7,7 @@
 import { getFieldsSpec, makeClientState } from './provider.js';
 import { listEntry, search, getPlaybackSources, test, getEntries } from './client.js';
 import { updateEntryState, setDeviceAuth } from './hooks.js';
-import type { EmbyHooksState } from './hooks.js';
+import type { EmbyHooksCtx } from './hooks.js';
 import type { EmbyClientState } from './client.js';
 import type {
   ProviderFieldSpec,
@@ -85,7 +85,7 @@ let state: EmbyClientState | null = null;
 
   async getPlaybackSources(args: {
     itemRef: string;
-  }): Promise<{ sources: PlaybackSource[]; state: EmbyHooksState }> {
+  }): Promise<{ sources: PlaybackSource[]; ctx: EmbyHooksCtx }> {
     return getPlaybackSources(state!, args.itemRef);
   },
 
@@ -93,10 +93,10 @@ let state: EmbyClientState | null = null;
     itemRef: string;
     key: string;
     value: string | null;
-    state?: EmbyHooksState;
+    ctx?: EmbyHooksCtx;
   }): Promise<void> {
-    const hookState = args.state;
-    if (!hookState) return;
-    await updateEntryState(hookState, args.key, args.value);
+    const ctx = args.ctx;
+    if (!ctx) return;
+    await updateEntryState(ctx, args.key, args.value);
   },
 };

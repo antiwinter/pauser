@@ -152,10 +152,10 @@ export interface SubtitleTrack {
 }
 
 /**
- * Opaque state blob used in JS provider hooks, passed back into
+ * Opaque context blob used in JS provider hooks, passed back into
  * `updateEntryState`.
  */
-export type ProviderState = Record<string, unknown>;
+export type ProviderCtx = Record<string, unknown>;
 
 export interface PlaybackSource {
   url: string;
@@ -218,12 +218,12 @@ export interface OpenTuneProviderBridge {
 
   getPlaybackSources(args: {
     itemRef: string;
-  }): Promise<PlaybackSource[] | { sources: PlaybackSource[]; state: ProviderState }>;
+  }): Promise<PlaybackSource[] | { sources: PlaybackSource[]; ctx: ProviderCtx }>;
 
   updateEntryState(args: {
     itemRef: string;
     key: string;
     value: string | null;
-    state?: ProviderState;
+    ctx?: ProviderCtx;
   }): Promise<void>;
 }

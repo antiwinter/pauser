@@ -1,5 +1,6 @@
 package com.opentune.provider.js
 
+import android.util.Log
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.EntryTag
@@ -50,7 +51,7 @@ class JsClient(
     private lateinit var engine: QuickJsEngine
     private var initialized = false
     private val initMutex = Mutex()
-    private val providerStates = ConcurrentHashMap<String, String>()
+    private val providerCtxs = ConcurrentHashMap<String, String>()
 
     // ── Validation ─────────────────────────────────────────────────────────
 
@@ -256,14 +257,18 @@ class JsClient(
 
     override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
         ensureReady()
-        val stateJson = providerStates[itemRef] ?: "{}"
+        val ctxJson = providerCtxs[itemRef] ?: "null"
         val args = buildJsonObject {
             put("itemRef", itemRef)
             put("key", key)
             if (value != null) put("value", value) else put("value", JsonNull)
-            put("state", json.parseToJsonElement(stateJson))
+            put("ctx", json.parseToJsonElement(ctxJson))
         }
-        runCatching { engine.callMethod("updateEntryState", args.toString()) }
+        try {
+            engine.callMethod("updateEntryState", args.toString())
+        } catch (e: Throwable) {
+            Log.w("JsClient", "updateEntryState failed itemRef=$itemRef key=$key: ${e.message}", e)
+        }
     }
 
     override val progressIntervalMs: Long = 0L
@@ -352,8 +357,8 @@ class JsClient(
             listOf(PlaybackSource(url = url, headers = headers, mimeType = mimeType))
         }
 
-        val stateJson = (obj["state"] ?: obj["hooksState"])?.toString() ?: "{}"
-        providerStates[itemRef] = stateJson
+        val ctxEl = obj["ctx"] ?: obj["hooksCtx"]
+        if (ctxEl != null && ctxEl !is JsonNull) providerCtxs[itemRef] = ctxEl.toString()
 
         return sources
     }

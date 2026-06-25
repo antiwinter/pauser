@@ -6,7 +6,7 @@ import { EmbyApi, BROWSE_FIELDS_STR } from './api.js';
 import { toListItem } from './mapper.js';
 import { resolvePlaybackUrl, playMethod, normalizeBaseUrl } from './urls.js';
 import { buildDeviceProfile } from './device-profile.js';
-import type { EmbyHooksState } from './hooks.js';
+import type { EmbyHooksCtx } from './hooks.js';
 import type { DeviceProfile, MediaSourceInfo, QueryResultBaseItemDto } from './dto.js';
 import type {
   EntryInfo,
@@ -210,7 +210,7 @@ function normalizeSubtitleCodec(raw: string): string {
 export async function getPlaybackSources(
   state: EmbyClientState,
   itemRef: string,
-): Promise<{ sources: PlaybackSource[]; state: EmbyHooksState }> {
+): Promise<{ sources: PlaybackSource[]; ctx: EmbyHooksCtx }> {
   const s = requireState(state); const credentials = s.credentials; const deviceProfile = s.deviceProfile; const capabilities = s.capabilities;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
@@ -253,10 +253,10 @@ export async function getPlaybackSources(
 
   if (sources.length === 0) throw new Error('No media sources');
 
-  // hooksState is threaded back into updateEntryState on every heartbeat so the emby
+  // hooksCtx is threaded back into updateEntryState on every heartbeat so the emby
   // server receives Sessions/Playing/{,Progress,Stopped} keep-alives. Uses the first
   // MediaSource (matches legacy getPlaybackSpec); playSessionId is shared across sources.
-  const hooksState: EmbyHooksState = {
+  const hooksCtx: EmbyHooksCtx = {
     itemId: itemRef,
     playMethod: firstSource ? playMethod(firstSource) : 'DirectPlay',
     playSessionId: info.PlaySessionId ?? null,
@@ -268,7 +268,7 @@ export async function getPlaybackSources(
     deviceProfile,
   };
 
-  return { sources, state: hooksState };
+  return { sources, ctx: hooksCtx };
 }
 
 function buildSubtitleTracks(
