@@ -165,11 +165,11 @@ let jarConfig: { url: string; md5?: string } | null = null;
 let jarInitialized = false;
 let jarFailed = false;
 
-async function init(state: { config: { spider?: string } }): Promise<void> {
+async function init(config: { spider?: string }): Promise<void> {
   if (jarInitialized) return;
   jarInitialized = true;
 
-  jarConfig = parseSpiderField(state.config.spider);
+  jarConfig = parseSpiderField(config.spider);
   if (!jarConfig) {
     jarFailed = true;
     return;
