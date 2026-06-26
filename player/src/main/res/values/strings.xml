@@ -2,7 +2,6 @@
 <resources>
     <string name="subtitle_track_none">Off</string>
     <string name="subtitle_adjust_sample">↑↓ Position   ←→ Size   (OK to confirm)</string>
-    <string name="subtitle_adjust_hint">Adjusting subtitle position &amp; size</string>
     <string name="subtitle_adjust_mode_label">Adjust position &amp; size…</string>
     <string name="player_settings_subtitles">Subtitles</string>
     <string name="player_settings_audio">Audio track</string>

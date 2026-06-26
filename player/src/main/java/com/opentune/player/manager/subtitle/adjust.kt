@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -17,8 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
@@ -68,12 +69,12 @@ internal class SubtitleAdjust(
         if (screenHeight > 0f) 20f / screenHeight else 0f
 
     fun adjustOffsetUp() {
-        offsetFraction -= offsetStep
+        offsetFraction += offsetStep
         applyStyle()
     }
 
     fun adjustOffsetDown() {
-        offsetFraction += offsetStep
+        offsetFraction -= offsetStep
         applyStyle()
     }
 
@@ -116,28 +117,26 @@ internal class SubtitleAdjust(
 @Composable
 internal fun SubtitleAdjustOverlay(adjust: SubtitleAdjust) {
     if (!adjust.isActive) return
-    val previewBottomDp = with(LocalDensity.current) { adjust.translationYPx.toDp() }
     Box(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.subtitle_adjust_sample),
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = (previewBottomDp + 48.dp).coerceAtLeast(48.dp))
-                .graphicsLayer { scaleX = adjust.sizeScale; scaleY = adjust.sizeScale }
+                .graphicsLayer {
+                    translationY = -adjust.translationYPx
+                    scaleX = adjust.sizeScale
+                    scaleY = adjust.sizeScale
+                }
+                .height(48.dp)
                 .background(Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp))
-                .padding(horizontal = 28.dp, vertical = 10.dp),
-            color = Color.White,
-            fontSize = 20.sp,
-        )
-        Text(
-            text = stringResource(R.string.subtitle_adjust_hint),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-                .background(Color.Black.copy(alpha = 0.72f), shape = RoundedCornerShape(6.dp))
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            color = Color(0xFFAAAAAA),
-            fontSize = 13.sp,
-        )
+                .padding(horizontal = 28.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(R.string.subtitle_adjust_sample),
+                color = Color.White,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

@@ -24,6 +24,7 @@ internal data class TrackInfo(
     val audioDecoderStatus: String = "n/a",
     val isHdrCapable: Boolean = false,
     val videoBitrate: Int? = null,
+    val textMime: String? = null,
 )
 
 // TrackInfo is owned and populated by PlaybackSession, whose listeners are registered once for the
@@ -50,21 +51,19 @@ internal fun simplifyDecoderName(decoderName: String): String = when {
     else -> decoderName.substringBefore('.').takeIf { it.isNotEmpty() } ?: decoderName
 }
 
-/** The Format of the selected track of [trackType], or the first track of that type if none is
- *  selected. Falling back to the first track keeps the codec visible when the renderer has been
- *  disabled (e.g. a decoder error) and no track is selected — the container still advertises the
- *  codec, and the overlay should keep showing it rather than blanking out. */
+/** The Format of the selected track of [trackType], or null when none is selected. Returning
+ *  null (rather than falling back to the first track) is intentional: the InfoOverlay compensates
+ *  by listing every advertised mime of that type, so the codecs stay visible when the renderer
+ *  has been disabled (e.g. a decoder error) and no track is selected. */
 internal fun Tracks.detectFormat(trackType: @C.TrackType Int): Format? {
-    var firstOfKind: Format? = null
     for (group in groups) {
         if (group.type != trackType) continue
         for (i in 0 until group.length) {
-            val fmt = group.getTrackFormat(i)
-            if (firstOfKind == null) firstOfKind = fmt
-            if (group.isTrackSelected(i)) return fmt
+            if (group.isTrackSelected(i))
+                return group.getTrackFormat(i)
         }
     }
-    return firstOfKind
+    return null
 }
 
 /** True when the video Format carries HDR (Dolby Vision or an HDR transfer function). */
@@ -107,10 +106,12 @@ internal class TrackManager(
             session.tracks = tracks
             val videoFormat = tracks.detectFormat(C.TRACK_TYPE_VIDEO)
             val audioFormat = tracks.detectFormat(C.TRACK_TYPE_AUDIO)
+            val textFormat = tracks.detectFormat(C.TRACK_TYPE_TEXT)
             session.updateTrackInfo {
                 it.copy(
                     videoMime = videoFormat?.sampleMimeType,
                     audioMime = audioFormat?.sampleMimeType,
+                    textMime = textFormat?.sampleMimeType,
                     isHdrCapable = isHdrFormat(videoFormat),
                     videoBitrate = bitrateOf(videoFormat),
                 )
@@ -118,7 +119,7 @@ internal class TrackManager(
             val selected = tracks.groups.count { g -> (0 until g.length).any { g.isTrackSelected(it) } }
             Log.d(
                 TRACK_LOG,
-                "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} " +
+                "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} t=${textFormat?.sampleMimeType} " +
                     "hdr=${isHdrFormat(videoFormat)} bitrate=${bitrateOf(videoFormat)} " +
                     "groups=${tracks.groups.size} selectedGroups=$selected"
             )

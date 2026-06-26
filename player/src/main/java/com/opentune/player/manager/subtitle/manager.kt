@@ -143,25 +143,30 @@ internal class SubtitleManager(
         }
     })
 
-    /** Hidden entirely when the entry has no subtitle tracks (only the implicit "Off" would show). */
+    /** Hidden entirely when the entry has no subtitle tracks (only the implicit "Off" would show).
+     *  The Adjust entry is additionally hidden for image (PGS/VobSub/DVB) and ASS tracks, where a
+     *  global offset/scale either can't apply (bitmap cues) or fights author-controlled positioning. */
     override val menuEntries: List<PlayerMenuEntry>
         get() {
             if (session.currentSpec == null) return emptyList()
             if (_menuEntries.size < 2) return emptyList()
-            return listOf(
+            val entries = mutableListOf(
                 PlayerMenuEntry(
                     label = @Composable { stringResource(R.string.player_settings_subtitles) },
                     children = { _menuEntries },
                     isSelected = { false },
                     onSelect = {},
                 ),
-                PlayerMenuEntry(
+            )
+            if (session.isSubtitleAdjustable()) {
+                entries += PlayerMenuEntry(
                     label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
                     children = { emptyList() },
                     isSelected = { adjust.isActive },
                     onSelect = { adjust.activate() },
-                ),
-            )
+                )
+            }
+            return entries
         }
 
     /**
@@ -195,9 +200,7 @@ internal class SubtitleManager(
             },
         )
 
-        // embedded — keep only tracks a renderer can decode. Emby transcodes unsupported formats
-        // (e.g. PGS, which exo has no decoder for) to ASS sidecars exposed as external entries;
-        // filtering those groups here avoids duplicates without relying on id-format heuristics.
+        // embedded — keep only tracks a renderer can decode.
         tracks.groups
             .filter { it.type == C.TRACK_TYPE_TEXT && it.isTrackSupported(0) }
             .forEach { group ->

@@ -25,19 +25,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.C
+import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
 import com.opentune.player.PlaybackDisplayInfo
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.formatBitrate
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.manager.TrackInfo
 
+@UnstableApi
 internal class InfoOverlayState(
     val displayInfo: PlaybackDisplayInfo,
-    val videoMime: String?,
-    val videoDecoderStatus: String?,
-    val audioMime: String?,
-    val audioDecoderStatus: String?,
-    val isHdrEnabled: Boolean,
+    val trackInfo: TrackInfo,
+    val tracks: Tracks,
+    val displaySupportsHdr: Boolean,
     val bitrate: Int?,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
@@ -48,14 +50,21 @@ internal class InfoOverlayState(
     fun hide() { showState.value = false }
 }
 
+@UnstableApi
 @Composable
 internal fun InfoOverlay(state: InfoOverlayState) {
     if (!state.isVisible) return
+    val ti = state.trackInfo
+    // When no track of a type is selected (e.g. renderer disabled by a decode error), fall back to
+    // every advertised mime of that type so the user still sees which formats the container carries.
+    val videoMime = ti.videoMime ?: state.tracks.allMimes(C.TRACK_TYPE_VIDEO)
+    val audioMime = ti.audioMime ?: state.tracks.allMimes(C.TRACK_TYPE_AUDIO)
+    val isHdrEnabled = ti.isHdrCapable && state.displaySupportsHdr
     val mbps = state.mbpsState.floatValue
     Log.d(
         "InfoOverlay",
-        "render title='${state.displayInfo.title}' vMime=${state.videoMime} vDec=${state.videoDecoderStatus} " +
-            "aMime=${state.audioMime} aDec=${state.audioDecoderStatus} bitrate=${state.bitrate} mbps=$mbps"
+        "render title='${state.displayInfo.title}' vMime=$videoMime vDec=${ti.videoDecoderStatus} " +
+            "aMime=$audioMime aDec=${ti.audioDecoderStatus} bitrate=${state.bitrate} mbps=$mbps"
     )
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -75,16 +84,16 @@ internal fun InfoOverlay(state: InfoOverlayState) {
             ) {
                 Text(text = state.displayInfo.title, color = Color.White, fontSize = 14.sp)
                 Text(
-                    text = trackLabel(state.videoMime, state.videoDecoderStatus),
-                    color = if (isTrackFailed(state.videoMime, state.videoDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
+                    text = trackLabel(videoMime, ti.videoDecoderStatus),
+                    color = if (isTrackFailed(videoMime, ti.videoDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
                 Text(
-                    text = trackLabel(state.audioMime, state.audioDecoderStatus),
-                    color = if (isTrackFailed(state.audioMime, state.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
+                    text = trackLabel(audioMime, ti.audioDecoderStatus),
+                    color = if (isTrackFailed(audioMime, ti.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
                     fontSize = 14.sp,
                 )
-                if (state.isHdrEnabled) {
+                if (isHdrEnabled) {
                     Text(
                         text = "HDR",
                         color = Color(0xFF4CAF50),
@@ -107,11 +116,28 @@ internal fun InfoOverlay(state: InfoOverlayState) {
     }
 }
 
-/** "codec[status]", or bare "codec" when status is passthrough/empty (no decoder in the path). */
+/** All distinct mimes advertised for [type] across every group, or null when none exist. */
+@UnstableApi
+private fun Tracks.allMimes(type: Int): String? {
+    val mimes = groups.filter { it.type == type }
+        .flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).sampleMimeType } }
+        .filterNotNull()
+        .distinct()
+    return mimes.takeIf { it.isNotEmpty() }?.joinToString(",")
+}
+
+/** "codec[status]", or bare "codec" when status is passthrough/empty (no decoder in the path).
+ *  Accepts a comma-separated mime list (the all-mimes fallback); each is stripped of its
+ *  video/audio prefix and deduped. */
 private fun trackLabel(mime: String?, decoderStatus: String?): String {
-    if (mime == null) return ""
-    val codec = mime.replace(Regex("^(?:video|audio)/"), "")
-    return if (decoderStatus.isNullOrEmpty() || decoderStatus == "passthrough") codec else "$codec[$decoderStatus]"
+    if (mime.isNullOrEmpty()) return ""
+    val codecs = mime.split(',')
+        .map { it.replace(Regex("^(?:video|audio)/"), "") }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .joinToString(",")
+    if (codecs.isEmpty()) return ""
+    return if (decoderStatus.isNullOrEmpty() || decoderStatus == "passthrough") codecs else "$codecs[$decoderStatus]"
 }
 
 /** Returns true if the track has a decode error. */
@@ -125,6 +151,7 @@ private fun displaySupportsHdr(context: Context): Boolean {
     return dm.getDisplay(Display.DEFAULT_DISPLAY)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true
 }
 
+@UnstableApi
 @Composable
 internal fun rememberInfoOverlayState(
     instanceKey: String,
@@ -134,19 +161,18 @@ internal fun rememberInfoOverlayState(
     bandwidthMbps: MutableFloatState,
 ): InfoOverlayState {
     val trackInfo by session.trackInfoFlow.collectAsState()
+    val tracks by session.tracksFlow.collectAsState()
     val context = LocalContext.current
     val displaySupportsHdr = remember { displaySupportsHdr(context) }
     val bitrate = trackInfo.videoBitrate
         ?: spec.sources.getOrNull(spec.state.sourceIndex)?.mediaCodecs?.firstOrNull()?.bitrate
     val showState = remember(instanceKey) { mutableStateOf(false) }
-    return remember(instanceKey, displayInfo, trackInfo, displaySupportsHdr, bitrate) {
+    return remember(instanceKey, displayInfo, trackInfo, tracks, displaySupportsHdr, bitrate) {
         InfoOverlayState(
             displayInfo = displayInfo,
-            videoMime = trackInfo.videoMime,
-            videoDecoderStatus = trackInfo.videoDecoderStatus,
-            audioMime = trackInfo.audioMime,
-            audioDecoderStatus = trackInfo.audioDecoderStatus,
-            isHdrEnabled = trackInfo.isHdrCapable && displaySupportsHdr,
+            trackInfo = trackInfo,
+            tracks = tracks,
+            displaySupportsHdr = displaySupportsHdr,
             bitrate = bitrate,
             showState = showState,
             mbpsState = bandwidthMbps,

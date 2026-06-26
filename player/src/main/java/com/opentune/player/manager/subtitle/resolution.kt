@@ -1,12 +1,14 @@
 package com.opentune.player.manager.subtitle
 
 import android.net.Uri
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.SubtitleTrack
+import com.opentune.player.engine.PlaybackSession
 
 /** Maps an external subtitle ref (URL/path) to a media3 MIME type by file extension. */
 internal fun subtitleMimeType(ref: String): String {
@@ -22,6 +24,23 @@ internal fun subtitleMimeType(ref: String): String {
 internal fun PlaybackSpec.findSubtitleTrack(savedId: String?): SubtitleTrack? {
     if (savedId == null) return null
     return sources.getOrNull(state.sourceIndex)?.subtitleTracks?.find { it.trackId == savedId }
+}
+
+/** Resolves the MIME of the currently active subtitle track, or null when none is resolvable
+ *  (auto with no selected text track yet, or subtitles off). */
+@UnstableApi
+internal fun PlaybackSession.isSubtitleAdjustable(): Boolean {
+    val spec = currentSpec ?: return false
+    val id = spec.state.subtitleTrackId
+    val mime = trackInfoFlow.value.textMime
+        ?: spec.findSubtitleTrack(id)?.externalRef?.let { subtitleMimeType(it) }
+    return when (mime) {
+        MimeTypes.APPLICATION_PGS,
+        MimeTypes.APPLICATION_VOBSUB,
+        MimeTypes.APPLICATION_DVBSUBS,
+        MimeTypes.TEXT_SSA -> false
+        else -> true
+    }
 }
 
 /**

@@ -34,7 +34,7 @@ internal fun applySubtitleStyle(view: PlayerView, translationYPx: Float, sizeSca
     // the text renders above the target position.
     val layoutParams = sv.layoutParams
     if (layoutParams is android.view.ViewGroup.MarginLayoutParams) {
-        layoutParams.bottomMargin = translationYPx.toInt()
+        layoutParams.bottomMargin = translationYPx.toInt().coerceAtLeast(0)
     }
     sv.requestLayout()
     sv.invalidate()
