@@ -77,7 +77,7 @@ fun SeriesDetailScreen(
     LaunchedEffect(episodeIndex) {
         val idx = episodeIndex ?: return@LaunchedEffect
         val e = episodes[idx] ?: return@LaunchedEffect
-        playerController?.prepare(e, 0L)
+        playerController?.prepare(e, e.userData?.positionMs)
         if (pendingAutoPlay) {
             playEpisode()
             pendingAutoPlay = false

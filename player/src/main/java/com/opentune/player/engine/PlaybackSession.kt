@@ -3,6 +3,7 @@ package com.opentune.player.engine
 import android.content.Context
 import android.util.Log
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -170,13 +171,15 @@ class PlaybackSession(
     }
 
     suspend fun prepare(spec: PlaybackSpec) {
-        emitTeardown(PlayingState.STOPPED)
+        syncEntryState(PlayingState.STOPPED)
         val state = spec.state
         _spec.value = spec
         _spec.value?.updateEntryState(EntryStateKeys.SOURCE_INDEX, state.sourceIndex.toString())
         withContext(Dispatchers.Main) {
             Log.d(SESSION_LOG, "prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
 
+            // trackSelectionParameters persists across items; reset so a prior entry's flags don't leak.
+            exo.trackSelectionParameters = TrackSelectionParameters.getDefaults(appContext)
             managers.forEach { it.onPrepare() }
             BandwidthTracker.reset()
 
@@ -206,7 +209,17 @@ class PlaybackSession(
 
     fun pause() {
         exo.playWhenReady = false
-        notifyEntryState(EntryStateKeys.PLAYING_STATE, PlayingState.PAUSED.name)
+        syncEntryState(PlayingState.PAUSED)
+    }
+
+    // Capture spec + pos before suspending: clear()/stopInternal() can race this call.
+    private fun syncEntryState(playingState: PlayingState) {
+        val spec = _spec.value ?: return
+        val pos = exo.currentPosition
+        scope.launch {
+            spec.updateEntryState(EntryStateKeys.POSITION_MS, pos.toString())
+            spec.updateEntryState(EntryStateKeys.PLAYING_STATE, playingState.name)
+        }
     }
 
     private fun stopInternal() {
@@ -218,21 +231,14 @@ class PlaybackSession(
     }
 
     fun stop() {
-        scope.launch {
-            emitTeardown(PlayingState.STOPPED)
-            stopInternal()
-        }
+        syncEntryState(PlayingState.STOPPED)
+        stopInternal()
     }
 
     fun clear() {
         if (!released.compareAndSet(false, true)) return
         stopInternal()
         exo.release()
-    }
-
-    private suspend fun emitTeardown(playingState: PlayingState) {
-        _spec.value?.updateEntryState(EntryStateKeys.POSITION_MS, exo.currentPosition.toString())
-        _spec.value?.updateEntryState(EntryStateKeys.PLAYING_STATE, playingState.name)
     }
 
     private fun currentPlayingState(): PlayingState =
