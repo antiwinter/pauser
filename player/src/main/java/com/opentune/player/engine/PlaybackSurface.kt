@@ -45,7 +45,7 @@ internal fun rememberPlaybackSurface(
     val screenHeightPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenHeightDp.dp.toPx()
     }
-    session.subtitleManager.adjust.setScreenHeightPx(screenHeightPx)
+    session.subtitleManager.cc.setScreenHeightPx(screenHeightPx)
 
     return key(instanceKey) {
         val exo = session.exo

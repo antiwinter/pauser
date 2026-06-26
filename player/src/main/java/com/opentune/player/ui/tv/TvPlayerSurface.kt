@@ -33,7 +33,7 @@ import com.opentune.player.ui.InfoOverlay
 import com.opentune.player.ui.MenuOverlay
 import com.opentune.player.ui.PlaybackControllerBar
 import com.opentune.player.ui.PlaybackHostEffects
-import com.opentune.player.manager.subtitle.SubtitleAdjustOverlay
+import com.opentune.player.manager.subtitle.CCOverlay
 import com.opentune.player.ui.rememberInfoOverlayState
 import com.opentune.player.ui.rememberMenuOverlayState
 import com.opentune.player.engine.rememberPlaybackSurface
@@ -163,7 +163,7 @@ private fun TvPlayerSurfaceContent(
     BackHandler {
         when {
             menu.isOpen -> menu.back()
-            surface.subtitleManager.adjust.isActive -> surface.subtitleManager.adjust.confirm()
+            !surface.subtitleManager.cc.isLocked -> surface.subtitleManager.cc.confirm()
             controllerState != 0 -> controllerState = 0
             else -> { surface.leaveSurface(); onBack() }
         }
@@ -207,8 +207,8 @@ private fun TvPlayerSurfaceContent(
                         menuConsumedDown = false
                         true
                     }
-                    surface.subtitleManager.adjust.isActive -> {
-                        surface.subtitleManager.adjust.onKeyEvent(event)
+                    !surface.subtitleManager.cc.isLocked -> {
+                        surface.subtitleManager.cc.onKeyEvent(event)
                         true
                     }
                     else -> { menuConsumedDown = false; false }
@@ -264,7 +264,7 @@ private fun TvPlayerSurfaceContent(
         }
 
         MenuOverlay(menu)
-        SubtitleAdjustOverlay(surface.subtitleManager.adjust)
+        CCOverlay(surface.subtitleManager.cc)
         InfoOverlay(infoOverlay)
     }
 }

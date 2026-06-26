@@ -1,8 +1,10 @@
 package com.opentune.player.manager.subtitle
 
+import android.text.SpannableStringBuilder
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.media3.common.C
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -99,7 +101,7 @@ internal fun PlaybackSession.applyTextParams(trackId: String?): TrackSelectionPa
 internal class SubtitleManager(
     private val session: PlaybackSession,
 ) : PlaybackManager {
-    val adjust = SubtitleAdjust(session)
+    val cc = CC(session)
 
     /** Last subtitleTrackId applied via [onTracksChanged]; skip re-apply when unchanged to avoid
      *  re-persisting on every track change. [NotAppliedYet] distinguishes "not yet applied this
@@ -108,21 +110,21 @@ internal class SubtitleManager(
 
     override fun onPrepare() {
         val state = session.currentSpec?.state
-        adjust.reset(state)
+        cc.reset(state)
         appliedSubtitleId = NotAppliedYet
         // sidecar restoration already handled in initial toMediaSource() build
     }
 
-    /** Re-apply subtitle offset/scale/style now that the PlayerView is attached. The reset during
-     *  [onPrepare] may race view inflation, so the surface re-applies on each `update`. */
+    /** Re-apply the SubtitleView visibility toggle now that the PlayerView is attached. The reset
+     *  during [onPrepare] may race view inflation, so the surface re-applies on each `update`. */
     override fun onViewUpdate() {
-        adjust.applyStyle()
+        cc.refresh()
     }
 
     override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
-            adjust.adjustable = tracks.detectFormat(C.TRACK_TYPE_TEXT).isAdjustableSubtitle()
-            adjust.applyStyle()
+            cc.isActive = tracks.detectFormat(C.TRACK_TYPE_TEXT).isAdjustableSubtitle()
+            cc.refresh()
             buildMenuEntries()
             val id = session.currentSpec?.state?.subtitleTrackId ?: return
             if (id == appliedSubtitleId) return
@@ -130,6 +132,21 @@ internal class SubtitleManager(
                 !tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) return
             session.exo.trackSelectionParameters = session.applyTextParams(id)
             appliedSubtitleId = id
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            // Join every non-blank text cue so nothing is dropped. A SpannableStringBuilder
+            // preserves each cue's spans (italic/bold/color) across the '\n' join; the common
+            // single-cue case passes the original Spanned through untouched.
+            val texts = cueGroup.cues.mapNotNull { it.text }.filter { it.isNotBlank() }
+            val combined: CharSequence? = when {
+                texts.isEmpty() -> null
+                texts.size == 1 -> texts[0]
+                else -> SpannableStringBuilder().apply {
+                    texts.forEachIndexed { i, t -> if (i > 0) append("\n"); append(t) }
+                }
+            }
+            cc.setCueText(combined)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -161,12 +178,12 @@ internal class SubtitleManager(
                     onSelect = {},
                 ),
             )
-            if (adjust.adjustable) {
+            if (cc.isActive) {
                 entries += PlayerMenuEntry(
                     label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
                     children = { emptyList() },
-                    isSelected = { adjust.isActive },
-                    onSelect = { adjust.activate() },
+                    isSelected = { !cc.isLocked },
+                    onSelect = { cc.unlock() },
                 )
             }
             return entries
