@@ -73,7 +73,7 @@ internal class CC(
 
     /** Restores saved offset/scale from the entry state, clears the cue, re-locks, and refreshes
      *  the SubtitleView visibility toggle. */
-    fun reset(state: PlaybackState?) {
+    fun reset(state: PlaybackState? = null) {
         offsetFraction = state?.subtitleOffsetFraction ?: 0f
         sizeScaleValue = state?.subtitleSizeScale ?: 1f
         locked = true

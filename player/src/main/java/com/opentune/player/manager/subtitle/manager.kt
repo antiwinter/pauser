@@ -115,6 +115,10 @@ internal class SubtitleManager(
         // sidecar restoration already handled in initial toMediaSource() build
     }
 
+    override fun onDispose() {
+        cc.reset()
+    }
+
     /** Re-apply the SubtitleView visibility toggle now that the PlayerView is attached. The reset
      *  during [onPrepare] may race view inflation, so the surface re-applies on each `update`. */
     override fun onViewUpdate() {
