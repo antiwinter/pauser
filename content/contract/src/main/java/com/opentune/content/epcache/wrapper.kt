@@ -14,6 +14,7 @@ import com.opentune.content.contract.UserDataMerge
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSource
 import com.opentune.player.PlayingState
+import com.opentune.proxy.contract.HttpClients
 import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
@@ -117,7 +118,7 @@ class CachingEndpointClient(
         }
         return enrichSpec(
             sources, info, startMs, endpointId,
-            proxyClient?.getHttpClient() ?: okhttp3.OkHttpClient(),
+            proxyClient?.getHttpClient() ?: HttpClients.noProxy,
             delegate.progressIntervalMs,
             updateEntryState = { k, v -> updateEntryStateIntercepted(k, v, info) },
         )

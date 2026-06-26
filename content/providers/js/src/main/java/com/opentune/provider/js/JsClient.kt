@@ -16,6 +16,7 @@ import com.opentune.player.PlaybackSource
 import com.opentune.player.PlatformInfoData
 import com.opentune.core.form.contract.QrResult
 import com.opentune.player.SubtitleTrack
+import com.opentune.proxy.contract.HttpClients
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.MapSerializer
@@ -80,7 +81,7 @@ class JsClient(
 
     override suspend fun getQr(): QrResult.QrReady? {
         return try {
-            val resultJson = withEngine(proxyClient?.getHttpClient() ?: OkHttpClient()) { engine ->
+            val resultJson = withEngine(proxyClient?.getHttpClient() ?: HttpClients.noProxy) { engine ->
                 engine.callMethod("getQr", "{}")
             } ?: return null
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -99,7 +100,7 @@ class JsClient(
                 return QrResult.Confirmed(tokenEl.mapValues { (_, v) -> v.jsonPrimitive.content })
             }
             val args = buildJsonObject { put("token", token) }.toString()
-            val resultJson = withEngine(proxyClient?.getHttpClient() ?: OkHttpClient()) { engine ->
+            val resultJson = withEngine(proxyClient?.getHttpClient() ?: HttpClients.noProxy) { engine ->
                 engine.callMethod("pollQr", args)
             } ?: return QrResult.Error("null response")
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -138,7 +139,7 @@ class JsClient(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            val effectiveHttpClient = proxyClient?.getHttpClient() ?: OkHttpClient()
+            val effectiveHttpClient = proxyClient?.getHttpClient() ?: HttpClients.noProxy
             engine = QuickJsEngine(hostApis, effectiveHttpClient)
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)

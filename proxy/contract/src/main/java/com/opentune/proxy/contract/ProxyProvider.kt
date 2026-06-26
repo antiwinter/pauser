@@ -27,3 +27,12 @@ interface ProxyProvider {
     fun getFieldsSpec(): List<FormFieldSpec>
     fun createClient(values: Map<String, String>): ProxyClient
 }
+
+/**
+ * Shared no-proxy OkHttpClient for the fallback path when no [ProxyClient] is configured.
+ * One pool shared across stream + JS-engine clients (matches the proxy-configured path,
+ * where [ProxyClient.getHttpClient] returns a single cached client).
+ */
+object HttpClients {
+    val noProxy: OkHttpClient by lazy { OkHttpClient() }
+}
