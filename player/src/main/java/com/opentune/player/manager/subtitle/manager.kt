@@ -15,6 +15,7 @@ import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.manager.PlaybackManager
 import com.opentune.player.manager.PlayerMenuEntry
+import com.opentune.player.manager.detectFormat
 import java.util.Locale
 
 private const val SUB_LOG_TAG = "OT_Subtitle"
@@ -120,11 +121,13 @@ internal class SubtitleManager(
 
     override val listeners: List<Player.Listener> = listOf(object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
+            adjust.adjustable = tracks.detectFormat(C.TRACK_TYPE_TEXT).isAdjustableSubtitle()
+            adjust.applyStyle()
             buildMenuEntries()
             val id = session.currentSpec?.state?.subtitleTrackId ?: return
             if (id == appliedSubtitleId) return
             if (id.startsWith("exo_") && // no text yet
-                !tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) return            
+                !tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) return
             session.exo.trackSelectionParameters = session.applyTextParams(id)
             appliedSubtitleId = id
         }
@@ -158,7 +161,7 @@ internal class SubtitleManager(
                     onSelect = {},
                 ),
             )
-            if (session.isSubtitleAdjustable()) {
+            if (adjust.adjustable) {
                 entries += PlayerMenuEntry(
                     label = @Composable { stringResource(R.string.subtitle_adjust_mode_label) },
                     children = { emptyList() },
@@ -205,7 +208,7 @@ internal class SubtitleManager(
             .filter { it.type == C.TRACK_TYPE_TEXT && it.isTrackSupported(0) }
             .forEach { group ->
                 val fmt = group.getTrackFormat(0)
-                Log.w(SUB_LOG_TAG, "embedded subtitle group ${group.mediaTrackGroup.id} label=${fmt.label} lang=${fmt.language} mime=${fmt.sampleMimeType} supported=${group.isTrackSupported(0)}")
+                Log.w(SUB_LOG_TAG, "embedded subtitle group ${group.mediaTrackGroup.id} label=${fmt.label} lang=${fmt.language} mime=${fmt.sampleMimeType} codecs=${fmt.codecs} w=${fmt.width} h=${fmt.height} container=${fmt.containerMimeType} roleFlags=${fmt.roleFlags} supported=${group.isTrackSupported(0)} fmt=${fmt}")
                 val gid = "exo_${group.mediaTrackGroup.id}"
                 val label = buildSubtitleName(fmt.label, fmt.language)
                 entries += PlayerMenuEntry(

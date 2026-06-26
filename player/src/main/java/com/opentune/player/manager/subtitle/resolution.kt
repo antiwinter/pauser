@@ -1,16 +1,12 @@
 package com.opentune.player.manager.subtitle
 
 import android.net.Uri
-import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.SubtitleTrack
-import com.opentune.player.engine.PlaybackSession
 
-/** Maps an external subtitle ref (URL/path) to a media3 MIME type by file extension. */
 internal fun subtitleMimeType(ref: String): String {
     val path = ref.substringBefore('?')
     return when (path.substringAfterLast('.', "").lowercase()) {
@@ -20,34 +16,27 @@ internal fun subtitleMimeType(ref: String): String {
     }
 }
 
-/** The saved subtitle track for [savedId] within the active source, or null if none/unmatched. */
+private val ABSPOS_SUBTITLES = setOf(
+    MimeTypes.APPLICATION_PGS,
+    MimeTypes.APPLICATION_VOBSUB,
+    MimeTypes.APPLICATION_DVBSUBS,
+    MimeTypes.TEXT_SSA
+)
+
+// Servers deliver PGS tracks as `application/x-media3-cues` in sampleMimeType; the real format
+// (`application/pgs`) is only in codecs — so both fields must be checked.
+internal fun Format?.isAdjustableSubtitle(): Boolean {
+    if (this == null) return false
+    return sampleMimeType !in ABSPOS_SUBTITLES &&
+        codecs !in ABSPOS_SUBTITLES
+}
+
 internal fun PlaybackSpec.findSubtitleTrack(savedId: String?): SubtitleTrack? {
     if (savedId == null) return null
     return sources.getOrNull(state.sourceIndex)?.subtitleTracks?.find { it.trackId == savedId }
 }
 
-/** Resolves the MIME of the currently active subtitle track, or null when none is resolvable
- *  (auto with no selected text track yet, or subtitles off). */
-@UnstableApi
-internal fun PlaybackSession.isSubtitleAdjustable(): Boolean {
-    val spec = currentSpec ?: return false
-    val id = spec.state.subtitleTrackId
-    val mime = trackInfoFlow.value.textMime
-        ?: spec.findSubtitleTrack(id)?.externalRef?.let { subtitleMimeType(it) }
-    return when (mime) {
-        MimeTypes.APPLICATION_PGS,
-        MimeTypes.APPLICATION_VOBSUB,
-        MimeTypes.APPLICATION_DVBSUBS,
-        MimeTypes.TEXT_SSA -> false
-        else -> true
-    }
-}
-
-/**
- * Builds a sidecar [MediaItem.SubtitleConfiguration] for an external subtitle track, or null for an
- * embedded track. Language is intentionally left undetermined so the player auto-selects the track
- * via `setSelectUndeterminedTextLanguage(true)` — the same selection the sidecar reselect path uses.
- */
+// Language left undetermined so setSelectUndeterminedTextLanguage auto-selects it (matches the reselect path).
 internal fun SubtitleTrack.toSidecarConfig(): MediaItem.SubtitleConfiguration? {
     val ref = externalRef ?: return null
     return MediaItem.SubtitleConfiguration.Builder(Uri.parse(ref))
@@ -55,20 +44,7 @@ internal fun SubtitleTrack.toSidecarConfig(): MediaItem.SubtitleConfiguration? {
         .build()
 }
 
-/**
- * Unified subtitle entry name: `longlang [script] [(complementary…)]`.
- *
- * `longlang` is the full language name derived from [lang]. The raw [rawLabel] (the Emby
- * `Title` for external tracks, or the exo `Format.label` for embedded ones) is split on `&`/
- * whitespace; each token is looked up in [LANG_MAP]. A script-bearing entry (`chs`/`cht`)
- * becomes the script modifier, an entry naming the primary language is dropped as redundant,
- * any other language entry contributes its short code, and tokens absent from the map
- * (`bd`, `hk`, `commentary`…) are folded in verbatim as the complementary list.
- *
- *   chs&eng / zh  -> "Chinese simplified (en)"
- *   BD cht HK / zh -> "Chinese traditional (bd, hk)"
- *   eng / en      -> "English"
- */
+// "longlang [script] [(complementary…)]", e.g. chs&eng/zh -> "Chinese simplified (en)".
 internal fun buildSubtitleName(rawLabel: String?, lang: String?): String {
     val primary = LANG_MAP[lang?.lowercase().orEmpty()]
     val longLang = when {
@@ -95,11 +71,6 @@ internal fun buildSubtitleName(rawLabel: String?, lang: String?): String {
 
 private data class LangEntry(val short: String, val long: String, val script: String? = null)
 
-/**
- * Token → language lookup. Keys cover ISO 639-1/2/T codes plus the script-qualified variants
- * (`chs`/`cht`) and full English names. `short` is the canonical 2-letter code used for the
- * complementary list; `script` is non-null only for script variants of a language.
- */
 private val LANG_MAP: Map<String, LangEntry> = buildMap {
     fun lang(short: String, long: String, vararg aliases: String) {
         put(short, LangEntry(short, long))

@@ -48,6 +48,10 @@ internal class SubtitleAdjust(
     val sizeScale: Float get() = sizeScaleValue
     val isActive: Boolean get() = active
 
+    // Whether the active subtitle is a text track this adjust applies to. Compose state so the
+    // Subtitles menu's Adjust entry recomposes when it flips; set by SubtitleManager.onTracksChanged.
+    internal var adjustable by mutableStateOf(false)
+
     /** Fed by the surface from the current screen metrics; drives [translationYPx] and [offsetStep]. */
     fun setScreenHeightPx(px: Float) { screenHeight = px }
 
@@ -62,7 +66,8 @@ internal class SubtitleAdjust(
     }
 
     internal fun applyStyle() {
-        session.view?.let { applySubtitleStyle(it, translationYPx, sizeScaleValue) }
+        val view = session.view ?: return
+        if (adjustable) applySubtitleStyle(view, translationYPx, sizeScaleValue) else resetSubtitleStyle(view)
     }
 
     private val offsetStep: Float get() =
