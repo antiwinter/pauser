@@ -111,7 +111,15 @@ async function loadSpider(api: string, ext: string, siteKey: string): Promise<Sp
 async function spiderCall<T>(spider: SpiderObject, method: keyof SpiderObject, ...args: unknown[]): Promise<T> {
   const fn = spider[method] as (...a: unknown[]) => unknown;
   const raw = await Promise.resolve(fn.apply(spider, args));
-  return (typeof raw === 'string' ? JSON.parse(raw) : raw) as T;
+  if (raw === '' || raw === null || raw === undefined) return {} as T;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw) as T;
+    } catch (e) {
+      throw new Error(`drpy ${String(method)} bad JSON: ${raw.slice(0, 100)}`);
+    }
+  }
+  return raw as T;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

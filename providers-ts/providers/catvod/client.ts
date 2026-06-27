@@ -140,7 +140,11 @@ export async function search(
         result.total,
       );
       results.push(...entryList.items);
-    } catch (_) {}
+    } catch (_) {
+      // Silently skip sites that fail to search — the JAR can throw for
+      // individual items (missing config, dead upstream, etc.) and we don't
+      // want one bad site to block results from the others.
+    }
   }
   return results;
 }

@@ -66,6 +66,10 @@ class PlayerController(
     private val _sourceManager = MutableStateFlow<SourceManager?>(null)
     override val sourceManagerFlow: StateFlow<SourceManager?> = _sourceManager.asStateFlow()
 
+    private val _resolveError = MutableStateFlow<String?>(null)
+    /** Latest error from resolving the playback spec. Cleared on the next [prepare]. */
+    override val resolveErrorFlow: StateFlow<String?> = _resolveError.asStateFlow()
+
     fun setNextVideoCallback(cb: (() -> Unit)?) {
         _nextVideoCallback = cb
         _hasNextVideo.value = cb != null
@@ -126,6 +130,7 @@ class PlayerController(
         _workingItemRef = null
         _workingStartMs = null
         _sourceManager.value = null
+        _resolveError.value = null
         _nextVideoCallback = null
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
@@ -158,12 +163,15 @@ class PlayerController(
                     Log.w(LOG_TAG, "launchResolve: no pending item, ignoring")
                     return@launch
                 }
+                _resolveError.value = null
                 startPrebufferOsd(_pendingInfo!!.ref)
                 resolveAndPrepare()
                 onComplete?.invoke()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "launchResolve: failed", e)
+                _resolveError.value = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+                _osdJob?.cancel()
             }
         }
     }

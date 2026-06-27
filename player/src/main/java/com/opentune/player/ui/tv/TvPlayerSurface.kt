@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,31 +50,44 @@ fun TvPlayerSurface(
 ) {
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
-    val specValue = spec ?: run {
-        PlayerLoadingOverlay(onBack = onBack)
+    val resolveError by controller.resolveErrorFlow.collectAsState()
+    if (spec == null) {
+        PlayerLoadingOverlay(onBack = onBack, errorMessage = resolveError)
         return
     }
 
     TvPlayerSurfaceContent(
         controller = controller,
-        spec = specValue,
+        spec = spec!!,
         onBack = onBack,
     )
 }
 
 @Composable
-private fun PlayerLoadingOverlay(onBack: () -> Unit) {
+private fun PlayerLoadingOverlay(onBack: () -> Unit, errorMessage: String? = null) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = "Loading spec...",
-            color = Color.White,
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (errorMessage != null) "Playback failed" else "Loading spec...",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
     }
     BackHandler { onBack() }
 }

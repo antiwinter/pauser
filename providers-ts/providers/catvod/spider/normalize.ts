@@ -51,10 +51,20 @@ export function normalizeSearch(
 // ── JSON Parsing Helpers ──────────────────────────────────────────────────────
 
 export function parseResponseBody(body: string): unknown {
-  return JSON.parse(body);
+  if (!body || body.length === 0) return {};
+  try {
+    return JSON.parse(body);
+  } catch (e) {
+    throw new Error(`Bad JSON response: ${body.slice(0, 100)}`);
+  }
 }
 
 export function parseReflectResult(raw: string, allowNull?: boolean): unknown {
   if (allowNull && (!raw || raw === 'null')) return {};
-  return JSON.parse(raw);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`Bad JAR response: ${raw.slice(0, 100)}`);
+  }
 }

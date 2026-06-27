@@ -145,9 +145,16 @@ function createJarSpider(
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
       const handle = await getHandle();
+      // FongMi parity: pass only (query, quick) for the first page. The third-party
+      // JAR's 2-arg searchContent often returns the full result set (no pagination
+      // applied), while the 3-arg form may impose `pg`-based slicing that drops
+      // results on page 1.
+      const args = pg === 1
+        ? [query, quick ?? false]
+        : [query, quick ?? false, String(pg)];
       const raw = await host.jar.reflect({
         url: jarUrl, cls, method: 'searchContent',
-        instance: handle, args: [query, quick ?? false, String(pg)],
+        instance: handle, args,
       });
       const data = parseReflectResult(raw) as CatVodCategoryResult;
       return normalizeSearch(data, { useListLength: true });

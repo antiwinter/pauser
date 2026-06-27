@@ -95,5 +95,7 @@ interface PlayerSurfaceController {
     val hasNextVideoFlow: StateFlow<Boolean>
     val displayInfoFlow: StateFlow<PlaybackDisplayInfo>
     val sourceManagerFlow: StateFlow<SourceManager?> get() = MutableStateFlow(null)
+    /** Latest error from resolving the playback spec, or null when resolving or succeeded. */
+    val resolveErrorFlow: StateFlow<String?> get() = MutableStateFlow(null)
     fun requestNextVideo()
 }

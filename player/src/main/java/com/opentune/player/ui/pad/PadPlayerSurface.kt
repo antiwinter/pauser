@@ -4,11 +4,16 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,13 +46,46 @@ fun PadPlayerSurface(
 ) {
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
-    val specValue = spec ?: return
+    val resolveError by controller.resolveErrorFlow.collectAsState()
+    if (spec == null) {
+        PlayerLoadingOverlay(onBack = onBack, errorMessage = resolveError)
+        return
+    }
 
     PadPlayerSurfaceContent(
         controller = controller,
-        spec = specValue,
+        spec = spec!!,
         onBack = onBack,
     )
+}
+
+@Composable
+private fun PlayerLoadingOverlay(onBack: () -> Unit, errorMessage: String? = null) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = if (errorMessage != null) "Playback failed" else "Loading spec...",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+    BackHandler { onBack() }
 }
 
 @UnstableApi

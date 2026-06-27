@@ -1,9 +1,36 @@
 import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../utils/types.js';
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
+import { encodeRef } from './ref.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
 // convert them to OpenTune types
+
+// ── Per-site series-tid cache ─────────────────────────────────────────────────
+// Populated lazily from each site's home() result. CatVod sources do not tag
+// items in category listings with a type_name, so the only reliable signal for
+// "this category contains series" is the category name returned by home().
+//
+// Classification is purely by Chinese/English category-name match — sources are
+// free to use whatever naming convention they want, so we match the common
+// variants for drama / anime / variety content. Without this, items like 电视剧
+// (tid=12 on 文采) come back as Movie and the wrong detail screen renders.
+
+const SERIES_NAME_RE = /剧|集|动|漫|综艺|连续|番剧/i;
+const seriesTidsBySite = new Map<string, Set<string>>();
+
+function recordSeriesTids(siteKey: string, categories: CatVodCategory[]): void {
+  const series = new Set<string>();
+  for (const c of categories) {
+    const name = c.type_name ?? '';
+    if (SERIES_NAME_RE.test(name)) series.add(String(c.type_id));
+  }
+  seriesTidsBySite.set(siteKey, series);
+}
+
+export function isSeriesTid(siteKey: string, tid: string): boolean {
+  return seriesTidsBySite.get(siteKey)?.has(tid) ?? false;
+}
 
 /**
  * Convert CatVod category list (home screen) to OpenTune folder entries
@@ -12,9 +39,10 @@ export function categoryListToFolders(
   categories: CatVodCategory[],
   siteKey: string,
 ): EntryList {
+  recordSeriesTids(siteKey, categories);
   return {
     items: categories.map((c) => ({
-      ref: `${siteKey}-${c.type_id}`,
+      ref: encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
       title: c.type_name ?? String(c.type_id),
       type: 'Folder' as const,
       cover: null,
@@ -24,7 +52,9 @@ export function categoryListToFolders(
 }
 
 /**
- * Convert CatVod item list to OpenTune entries
+ * Convert CatVod item list to OpenTune entries. msearch meta-search launchers
+ * (CatVod convention with no matching implementation in this codebase) are
+ * filtered out so they don't reach the UI.
  */
 export function vodListToEntries(
   items: CatVodItem[],
@@ -32,9 +62,12 @@ export function vodListToEntries(
   tid: string,
   totalCount?: number,
 ): EntryList {
+  const entries = items
+    .map((item) => vodItemToEntry(item, siteKey, tid))
+    .filter((e): e is EntryInfo => e !== null);
   return {
-    items: items.map((item) => vodItemToEntry(item, siteKey, tid)),
-    totalCount: totalCount ?? items.length,
+    items: entries,
+    totalCount: totalCount ?? entries.length,
   };
 }
 
@@ -116,14 +149,23 @@ export function playResultToSource(
 // ── Legacy Item-Level Converters ─────────────────────────────────────────────
 // These are still used by the list converters above
 
-export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo {
+export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo | null {
   const vodId = String(item.vod_id);
-  // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
-  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
+  // msearch: IDs are meta-search launchers (CatVod convention — should search the
+  // title across all sources and show merged results). No such feature exists in
+  // this codebase, so we filter them out at the call site rather than surfacing
+  // entries that lead to empty detail pages.
+  if (vodId.startsWith('msearch:')) return null;
+  // Series detection: sources don't tag items with a type, so we rely on the
+  // current category's tid matching a pre-computed set of series-category tids
+  // (populated by categoryListToFolders from the site's home() result). Search
+  // results pass an empty tid and fall through to Movie — the detail screen
+  // discovers episode structure from the detail() payload regardless.
+  const isSeries = tid !== '' && isSeriesTid(siteKey, tid);
   return {
-    ref: `${siteKey}-${tid}-${vodId}`,
+    ref: encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
     title: item.vod_name ?? vodId,
-    type,
+    type: isSeries ? 'Series' : 'Movie',
     cover: item.vod_pic ?? null,
     overview: item.vod_blurb ?? item.vod_content ?? null,
     communityRating: item.vod_score ? parseFloat(item.vod_score) : null,
