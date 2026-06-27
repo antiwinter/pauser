@@ -42,8 +42,12 @@ export function vodListToEntries(
  * Convert IPTV M3U channels to OpenTune entries, merging duplicate names.
  * Channels with the same name get merged into one entry with multiple sources.
  * Logo: the URL that appears most frequently wins.
+ *
+ * If [ua] is supplied it is applied to every merged source — matches the header that
+ * [iptv.play] would attach, so callers using EntryInfo.sources get the same behaviour
+ * as callers going through getPlaybackSources → spider.play.
  */
-export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): EntryList {
+export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string, ua?: string): EntryList {
   const groups = new Map<string, { urls: string[]; logoCounts: Map<string, number>; firstIndex: number }>();
 
   for (const [i, ch] of channels.entries()) {
@@ -58,6 +62,8 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): 
     }
   }
 
+  const headers: Record<string, string> = ua ? { 'User-Agent': ua } : {};
+
   const items: EntryInfo[] = [];
   for (const [, g] of groups) {
     const name = channels[g.firstIndex].name;
@@ -66,7 +72,7 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string): 
 
     const sources: PlaybackSource[] = g.urls.map(url => ({
       url,
-      headers: {},
+      headers,
       mimeType: null,
       subtitleTracks: [],
       mediaCodecs: [],

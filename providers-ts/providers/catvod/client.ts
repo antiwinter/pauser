@@ -104,7 +104,9 @@ export async function listEntry(
   if (ref.type === "live-source") {
     if (!spider.channels) return { items: [], totalCount: 0 };
     const result = await spider.channels();
-    const all = liveChannelsToEntries(result.channels, ref.key);
+    const liveEntry = getConfig().sites[ref.key];
+    const ua = liveEntry && liveEntry.type === 'live' ? liveEntry.ua : undefined;
+    const all = liveChannelsToEntries(result.channels, ref.key, ua);
     return {
       items: all.items.slice(startIndex, startIndex + limit),
       totalCount: all.totalCount,
