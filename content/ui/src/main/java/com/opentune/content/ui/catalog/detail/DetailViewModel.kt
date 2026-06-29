@@ -213,6 +213,17 @@ class DetailViewModel(
         }
     }
 
+    /** Flat advance for single-level detail screens (e.g. Digipak): next child, no seasons. */
+    fun nextSubEntry() {
+        val idx = _subEntryIndex.value ?: 0
+        val entries = _subEntries.value
+        if (idx + 1 in entries.indices) {
+            setSubEntry(idx + 1)
+        } else {
+            Timber.d("nextSubEntry: end of children")
+        }
+    }
+
     private suspend fun fetchEpisodePage(seasonIdx: Int, start: Int, mergePages: Boolean = true) {
         val c = _client.value ?: return
         val subEntry = _subEntries.value.getOrNull(seasonIdx) ?: return

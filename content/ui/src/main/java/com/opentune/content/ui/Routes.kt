@@ -1,7 +1,7 @@
 package com.opentune.content.ui
 
+import android.net.Uri
 import com.opentune.content.contract.EntryInfo
-import java.net.URLEncoder
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -12,8 +12,10 @@ fun EntryInfo.toJson(): String = navJson.encodeToString(this)
 fun decodeEntryInfo(json: String): EntryInfo? =
     runCatching { navJson.decodeFromString<EntryInfo>(json) }.getOrNull()
 
+// androidx.navigation decodes path arguments with Uri.decode, which only
+// interprets %xx escapes — it leaves '+' literal. URLEncoder.encode would
+// emit '+' for spaces, so use Uri.encode (which emits %20) to round-trip.
 object Routes {
-    private const val UrlCharset = "UTF-8"
     const val HOME = "home"
     const val ADD_ENDPOINT = "add_endpoint"
     const val BROWSE = "browse/{endpointId}/{ref}"
@@ -25,14 +27,14 @@ object Routes {
     const val AUDIO_UNSUPPORTED = "audio_unsupported"
 
     fun providerEdit(protocol: String, endpointId: String? = null) =
-        if (endpointId != null) "provider_edit/$protocol?endpointId=${URLEncoder.encode(endpointId, UrlCharset)}"
+        if (endpointId != null) "provider_edit/$protocol?endpointId=${Uri.encode(endpointId)}"
         else "provider_edit/$protocol"
     fun browse(endpointId: String, entry: EntryInfo) =
-        "browse/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.ref, UrlCharset)}"
+        "browse/${Uri.encode(endpointId)}/${Uri.encode(entry.ref)}"
     fun detail(endpointId: String, entry: EntryInfo) =
-        "detail/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(entry.ref, UrlCharset)}"
+        "detail/${Uri.encode(endpointId)}/${Uri.encode(entry.ref)}"
     fun search(endpointId: String, scopeLocationRaw: String) =
-        "search/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(scopeLocationRaw, UrlCharset)}"
+        "search/${Uri.encode(endpointId)}/${Uri.encode(scopeLocationRaw)}"
     fun imageViewer(endpointId: String, itemRef: String) =
-        "image_viewer/${URLEncoder.encode(endpointId, UrlCharset)}/${URLEncoder.encode(itemRef, UrlCharset)}"
+        "image_viewer/${Uri.encode(endpointId)}/${Uri.encode(itemRef)}"
 }

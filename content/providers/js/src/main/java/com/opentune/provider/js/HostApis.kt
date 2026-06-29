@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaType
 import timber.log.Timber
 import okhttp3.OkHttpClient
@@ -125,9 +126,24 @@ class HostApis {
         val msg = args["msg"]?.jsonPrimitive?.content ?: argsJson
         when (name) {
             "e" -> Timber.e(msg)
+            "w" -> Timber.w(msg)
             else -> Timber.d(msg)
         }
         return null
+    }
+
+    // ── timer ───────────────────────────────────────────────────────────────
+
+    suspend fun handleTimer(name: String, argsJson: String): String? {
+        val args = json.parseToJsonElement(argsJson).jsonObject
+        return when (name) {
+            "sleep" -> {
+                val ms = args["ms"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                delay(ms)
+                null
+            }
+            else -> throw IllegalArgumentException("Unknown timer method: $name")
+        }
     }
 
     // ── jar ────────────────────────────────────────────────────────────────

@@ -50,11 +50,27 @@ export function normalizeSearch(
 
 // ── JSON Parsing Helpers ──────────────────────────────────────────────────────
 
+// Parse a value that may be null, non-string, empty, or non-JSON without throwing;
+// collapses such input to {} (non-strings pass through) so downstream normalizers
+// default missing fields to [].
+export function safeJsonParse(raw: unknown, ...prefix: unknown[]): unknown {
+  if (raw == null) return {};
+  if (typeof raw !== 'string') return raw;
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    console.warn(...prefix, trimmed.slice(0, 200));
+    return {};
+  }
+}
+
 export function parseResponseBody(body: string): unknown {
-  return JSON.parse(body);
+  return safeJsonParse(body, 'cms', 'parse', 'non-JSON body:');
 }
 
 export function parseReflectResult(raw: string, allowNull?: boolean): unknown {
   if (allowNull && (!raw || raw === 'null')) return {};
-  return JSON.parse(raw);
+  return safeJsonParse(raw, 'reflect', 'parse', 'non-JSON:');
 }

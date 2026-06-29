@@ -14,6 +14,7 @@ import {
   normalizeDetail,
   normalizePlay,
   normalizeSearch,
+  safeJsonParse,
 } from './normalize.js';
 
 // ── Globals expected by drpy2 spiders ────────────────────────────────────────
@@ -24,16 +25,18 @@ const _g = globalThis as Record<string, any>;
 const _dispatchSync = _g['__hostDispatchSync'] as
   (ns: string, name: string, argsJson: string) => { status: number; body: string; headers: Record<string, string> };
 
-// Per-spider local storage — flat namespace keyed by "siteKey:field" to avoid cross-site leakage
+// Per-spider local storage — flat namespace keyed by "siteKey:field".
+// `local` is a single global shared by every drpy spider in this context; it
+// routes by [_currentSite], which is set under the drpy lock (withDrpyLock)
+// so the active site is always correct. drpy calls are serialized by that lock
+// because the spiders share mutable globals (local) and cannot interleave.
 const _localStore: Record<string, unknown> = {};
-function _initLocal(siteKey: string): void {
-  const ns = `${siteKey}:`;
-  (_g as Record<string, unknown>)['local'] = {
-    get:    (k: string) => _localStore[ns + k] !== undefined ? _localStore[ns + k] : null,
-    set:    (k: string, v: unknown) => { _localStore[ns + k] = v; },
-    delete: (k: string) => { delete _localStore[ns + k]; },
-  };
-}
+let _currentSite = '';
+_g['local'] = {
+  get:    (k: string) => { const v = _localStore[_currentSite + ':' + k]; return v !== undefined ? v : null; },
+  set:    (k: string, v: unknown) => { _localStore[_currentSite + ':' + k] = v; },
+  delete: (k: string) => { delete _localStore[_currentSite + ':' + k]; },
+};
 _g['_http'] = (url: string, opts: Record<string, unknown> = {}) => {
   const method = String(opts['method'] || 'GET').toLowerCase() === 'post' ? 'post' : 'get';
   const result = _dispatchSync('http', method, JSON.stringify({
@@ -79,9 +82,6 @@ async function loadSpider(api: string, ext: string, siteKey: string): Promise<Sp
   const cached = spiders.get(siteKey);
   if (cached) return cached;
 
-  // Set up per-site namespace for `local` before eval
-  _initLocal(siteKey);
-
   // Fetch the spider script and strip ES module syntax so it runs as a classic script
   const code = (await host.http.get({ url: api })).body
     .replace(/^export\s+default\s+/gm, 'var __default_export__ = ')
@@ -108,10 +108,31 @@ async function loadSpider(api: string, ext: string, siteKey: string): Promise<Sp
 }
 
 // Calls a spider method; handles both sync (string/object) and async (Promise) returns.
+// drpy spiders occasionally swallow internal HTTP errors and return null/undefined or an
+// empty/non-JSON string; downstream normalizers already default missing fields to [],
+// so collapse any of those into an empty object instead of letting JSON.parse throw.
 async function spiderCall<T>(spider: SpiderObject, method: keyof SpiderObject, ...args: unknown[]): Promise<T> {
   const fn = spider[method] as (...a: unknown[]) => unknown;
   const raw = await Promise.resolve(fn.apply(spider, args));
-  return (typeof raw === 'string' ? JSON.parse(raw) : raw) as T;
+  return safeJsonParse(raw, 'drpy', method, 'returned non-JSON:') as T;
+}
+
+// ── drpy serialization ────────────────────────────────────────────────────────
+// All drpy spiders share one QuickJS context and its mutable globals (notably
+// `local`, which routes by _currentSite). Serialize every drpy call so the
+// active site can't be clobbered mid-call by another drpy site's call — which
+// also fixes the previous last-load-wins `local` bug. JAR/CMS spiders don't
+// touch these globals and aren't gated, so search can still parallelize them.
+let _drpyLock: Promise<unknown> = Promise.resolve();
+function withDrpyLock<T>(siteKey: string, fn: () => Promise<T>): Promise<T> {
+  const run = _drpyLock.then(async () => {
+    const prev = _currentSite;
+    _currentSite = siteKey;
+    try { return await fn(); }
+    finally { _currentSite = prev; }
+  });
+  _drpyLock = run.catch(() => undefined);
+  return run as Promise<T>;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -133,37 +154,47 @@ function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpid
 
   return {
     async home(filter?: boolean): Promise<CatVodHomeResult> {
-      const spider = await getSpider();
-      const data = await spiderCall<CatVodHomeResult>(
-        spider, 'home', filter ?? false,
-      );
-      return normalizeHome(data);
+      return withDrpyLock(siteKey, async () => {
+        const spider = await getSpider();
+        const data = await spiderCall<CatVodHomeResult>(
+          spider, 'home', filter ?? false,
+        );
+        return normalizeHome(data);
+      });
     },
 
     async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
-      const spider = await getSpider();
-      const data = await spiderCall<CatVodCategoryResult>(
-        spider, 'category', tid, String(pg), filter ?? false, extend ?? {},
-      );
-      return normalizeCategory(data, { totalFallback: data.pagecount });
+      return withDrpyLock(siteKey, async () => {
+        const spider = await getSpider();
+        const data = await spiderCall<CatVodCategoryResult>(
+          spider, 'category', tid, String(pg), filter ?? false, extend ?? {},
+        );
+        return normalizeCategory(data, { totalFallback: data.pagecount });
+      });
     },
 
     async detail(ids: string[]): Promise<CatVodDetailResult> {
-      const spider = await getSpider();
-      const data = await spiderCall<CatVodDetailResult>(spider, 'detail', ids.join(','));
-      return normalizeDetail(data);
+      return withDrpyLock(siteKey, async () => {
+        const spider = await getSpider();
+        const data = await spiderCall<CatVodDetailResult>(spider, 'detail', ids.join(','));
+        return normalizeDetail(data);
+      });
     },
 
     async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
-      const spider = await getSpider();
-      const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, vipFlags ?? []);
-      return normalizePlay(data);
+      return withDrpyLock(siteKey, async () => {
+        const spider = await getSpider();
+        const data = await spiderCall<CatVodPlayResult>(spider, 'play', flag, epUrl, vipFlags ?? []);
+        return normalizePlay(data);
+      });
     },
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
-      const spider = await getSpider();
-      const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, quick ?? false, String(pg));
-      return normalizeSearch(data, { useListLength: true });
+      return withDrpyLock(siteKey, async () => {
+        const spider = await getSpider();
+        const data = await spiderCall<CatVodCategoryResult>(spider, 'search', query, quick ?? false, String(pg));
+        return normalizeSearch(data, { useListLength: true });
+      });
     },
   };
 }

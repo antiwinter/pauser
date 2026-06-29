@@ -30,6 +30,7 @@
 - [ ] recent
 - [ ] merge browse/search, use filter to distinguish
 - [ ] merge filename/type detector with mimedetector
+- [ ] progressive search, don't wait for full result, show partial result
 
 ## js providers
 - [x] remove sidecar meta

@@ -27,16 +27,22 @@ fun PlaybackSpec.toMediaSource(
 ): MediaSource {
     val source = sources[state.sourceIndex]
     val sidecarSubtitle = findSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
+    // Always send a User-Agent: some hosts reject the okhttp default UA that
+    // OkHttpDataSource would otherwise send. Provider-supplied headers still win.
+    val defaultUa = androidx.media3.common.util.Util.getUserAgent(context, context.packageName)
     fun headersInterceptor() = okhttp3.Interceptor { chain ->
         val req = chain.request().newBuilder().apply {
             source.headers.forEach { (k, v) -> header(k, v) }
+            if (source.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+                header("User-Agent", defaultUa)
+            }
         }.build()
         chain.proceed(req)
     }
     val okHttp = httpClient
         .newBuilder()
         .addInterceptor(BandwidthTracker.interceptor)
-        .apply { if (source.headers.isNotEmpty()) addInterceptor(headersInterceptor()) }
+        .addInterceptor(headersInterceptor())
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
     val mediaItem = MediaItem.Builder()

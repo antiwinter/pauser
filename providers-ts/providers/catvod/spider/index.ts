@@ -97,7 +97,10 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
   }
   if (inner.search) {
     spider.search = async (query, pg, quick?) => {
+      const t0 = Date.now();
       const result = await inner.search!(query, pg, quick);
+      const listLen = result?.list?.length ?? 0;
+      console.warn(`[search] site=${key} q="${query}" pg=${pg} list=${listLen} ttl=${Date.now() - t0}ms`);
       await dumpResult(key, `search-${query}-${pg}`, result);
       return result;
     };

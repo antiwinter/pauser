@@ -1,6 +1,6 @@
 import { getFieldsSpec } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
-import { test, listEntry, search, getPlaybackSources } from './client.js';
+import { test, listEntry, search, getEntries, getPlaybackSources } from './client.js';
 import { resetSpiders as resetJarSpiders } from './spider/jar.js';
 import { resetSpiders as resetDrpySpiders } from './spider/drpy.js';
 import { initSpiders, getConfig } from './spider/index.js';
@@ -54,6 +54,12 @@ let state: CatVodClientState | null = null;
     query: string;
   }): Promise<EntryInfo[]> {
     return search(state!, args.scopeLocation, args.query);
+  },
+
+  async getEntries(args: {
+    itemRefs: string[];
+  }): Promise<EntryInfo[]> {
+    return getEntries(state!, args.itemRefs);
   },
 
   async getPlaybackSources(args: {

@@ -50,6 +50,10 @@ export interface HostAPI {
     clear(args?: null): Promise<void>;
     clearInstances(args?: null): Promise<void>;
   };
+  timer: {
+    /** Resolves after [ms] milliseconds. Backed by a host-side coroutine delay. */
+    sleep(args: { ms: number }): Promise<void>;
+  };
 }
 
 export interface PlatformInfo {
@@ -63,6 +67,11 @@ declare global {
   const host: HostAPI;
   function atob(data: string): string;
   function btoa(data: string): string;
+  const console: {
+    log(...args: unknown[]): void;
+    warn(...args: unknown[]): void;
+    error(...args: unknown[]): void;
+  };
 }
 
 // ── Provider contracts ────────────────────────────────────────────────────────

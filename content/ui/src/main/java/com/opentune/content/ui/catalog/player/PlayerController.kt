@@ -163,6 +163,8 @@ class PlayerController(
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 Timber.e(e, "launchResolve: failed")
+                _osdJob?.cancel()
+                gOSD.msg("resolve playback failed: ${e.message ?: "unknown"}")
             }
         }
     }

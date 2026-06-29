@@ -1,5 +1,6 @@
 import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../utils/types.js';
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
+import { encodeRef } from './ref.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
@@ -14,7 +15,7 @@ export function categoryListToFolders(
 ): EntryList {
   return {
     items: categories.map((c) => ({
-      ref: `${siteKey}-${c.type_id}`,
+      ref: encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
       title: c.type_name ?? String(c.type_id),
       type: 'Folder' as const,
       cover: null,
@@ -79,7 +80,7 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string, u
     }));
 
     items.push({
-      ref: `${liveKey}-${g.firstIndex}`,
+      ref: encodeRef({ type: 'live', key: liveKey, channelIndex: g.firstIndex }),
       title: name,
       type: 'LiveChannel' as const,
       cover: bestLogo,
@@ -93,6 +94,13 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string, u
 /**
  * Convert CatVod play result to a single PlaybackSource
  */
+
+// Browser UA used when a source returns no User-Agent of its own. Hides the
+// player's real identity from hotlink-protecting CDNs that reject non-browser
+// UAs; source-supplied UAs always take precedence.
+const FALLBACK_UA =
+  'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
 export function playResultToSource(
   result: CatVodPlayResult,
 ): PlaybackSource {
@@ -104,9 +112,13 @@ export function playResultToSource(
     isForced: false,
     externalRef: sub.url,
   }));
+  const headers: Record<string, string> = { ...result.header };
+  if (!headers['User-Agent'] && !headers['user-agent']) {
+    headers['User-Agent'] = FALLBACK_UA;
+  }
   return {
     url: result.play_url ?? result.url ?? '',
-    headers: result.header ?? {},
+    headers,
     mimeType: result.type ?? null,
     subtitleTracks,
     mediaCodecs: [],
@@ -118,10 +130,13 @@ export function playResultToSource(
 
 export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo {
   const vodId = String(item.vod_id);
-  // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
-  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
+  // msearch: IDs are Douban placeholders — browsing them fans out to a
+  // cross-source search in listEntry, so they stay Folders. Every other vod
+  // is a Digipak: listEntry resolves it via spider.detail into a flat episode
+  // list, so a movie is just a single-episode Digipak and a series has N.
+  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Digipak';
   return {
-    ref: `${siteKey}-${tid}-${vodId}`,
+    ref: encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
     title: item.vod_name ?? vodId,
     type,
     cover: item.vod_pic ?? null,
@@ -132,8 +147,7 @@ export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): 
 }
 
 export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
-  const sources   = splitField(item.vod_play_from);
-  const urlGroups = splitField(item.vod_play_url);
+  const { sources, urlGroups } = alignPlayFields(item);
 
   const episodeCount = sources.flatMap((src, i) =>
     (urlGroups[i] ?? '').split('#')
@@ -165,8 +179,7 @@ export interface ParsedEpisode {
 }
 
 export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
-  const sources   = splitField(item.vod_play_from);
-  const urlGroups = splitField(item.vod_play_url);
+  const { sources, urlGroups } = alignPlayFields(item);
   const episodes: ParsedEpisode[] = [];
 
   for (let flagIndex = 0; flagIndex < sources.length; flagIndex++) {
@@ -187,4 +200,15 @@ export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
 
 function splitField(s?: string): string[] {
   return (s ?? '').split('$$$').map((p) => p.trim()).filter(Boolean);
+}
+
+// Splits vod_play_from / vod_play_url into aligned per-flag groups. Many sites
+// omit vod_play_from entirely when there is a single play source, so a literal
+// split would yield zero sources and drop every episode — pad with empty-flag
+// entries to match the url groups in that case.
+function alignPlayFields(item: CatVodDetail): { sources: string[]; urlGroups: string[] } {
+  const sources   = splitField(item.vod_play_from);
+  const urlGroups = splitField(item.vod_play_url);
+  while (sources.length < urlGroups.length) sources.push('');
+  return { sources, urlGroups };
 }
