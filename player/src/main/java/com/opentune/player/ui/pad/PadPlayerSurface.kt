@@ -41,7 +41,22 @@ fun PadPlayerSurface(
 ) {
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
-    val specValue = spec ?: return
+    val playbackError by controller.playbackErrorFlow.collectAsState()
+    val specValue = spec ?: run {
+        if (playbackError != null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Text(
+                    text = "无法加载播放: $playbackError",
+                    color = Color.White,
+                )
+            }
+            BackHandler { onBack() }
+        }
+        return
+    }
 
     PadPlayerSurfaceContent(
         controller = controller,

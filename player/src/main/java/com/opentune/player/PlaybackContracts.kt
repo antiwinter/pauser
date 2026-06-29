@@ -95,5 +95,14 @@ interface PlayerSurfaceController {
     val hasNextVideoFlow: StateFlow<Boolean>
     val displayInfoFlow: StateFlow<PlaybackDisplayInfo>
     val sourceManagerFlow: StateFlow<SourceManager?> get() = MutableStateFlow(null)
+
+    /**
+     * Last error surfaced by the spec resolution pipeline, or null while loading / when a
+     * spec has been successfully prepared. Surfaces let the player UI render an error overlay
+     * (with a back affordance) instead of hanging on "Loading spec..." when the underlying
+     * provider throws asynchronously.
+     */
+    val playbackErrorFlow: StateFlow<String?> get() = MutableStateFlow(null)
+
     fun requestNextVideo()
 }

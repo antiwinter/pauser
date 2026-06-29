@@ -125,6 +125,9 @@ class JsProvider private constructor(
     log: function() {
       host.log.d({ msg: Array.prototype.join.call(arguments, ' ') });
     },
+    warn: function() {
+      host.log.w({ msg: Array.prototype.join.call(arguments, ' ') });
+    },
     error: function() {
       host.log.e({ msg: Array.prototype.join.call(arguments, ' ') });
     },

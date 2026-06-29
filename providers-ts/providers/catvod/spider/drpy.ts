@@ -108,10 +108,22 @@ async function loadSpider(api: string, ext: string, siteKey: string): Promise<Sp
 }
 
 // Calls a spider method; handles both sync (string/object) and async (Promise) returns.
+// drpy spiders occasionally swallow internal HTTP errors and return null/undefined or an
+// empty/non-JSON string; downstream normalizers already default missing fields to [],
+// so collapse any of those into an empty object instead of letting JSON.parse throw.
 async function spiderCall<T>(spider: SpiderObject, method: keyof SpiderObject, ...args: unknown[]): Promise<T> {
   const fn = spider[method] as (...a: unknown[]) => unknown;
   const raw = await Promise.resolve(fn.apply(spider, args));
-  return (typeof raw === 'string' ? JSON.parse(raw) : raw) as T;
+  if (raw == null) return {} as T;
+  if (typeof raw !== 'string') return raw as T;
+  const trimmed = raw.trim();
+  if (!trimmed) return {} as T;
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    console.warn('drpy', method, 'returned non-JSON:', trimmed.slice(0, 200));
+    return {} as T;
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

@@ -125,6 +125,7 @@ class HostApis {
         val msg = args["msg"]?.jsonPrimitive?.content ?: argsJson
         when (name) {
             "e" -> Log.e("JsProvider", msg)
+            "w" -> Log.w("JsProvider", msg)
             else -> Log.d("JsProvider", msg)
         }
         return null

@@ -13,7 +13,7 @@ import {
   liveChannelsToEntries,
   playResultToSource,
 } from "./mapper.js";
-import { initSpiders, getSpider, getConfig, canHandleSite } from "./spider/index.js";
+import { initSpiders, getSpider, getConfig, canHandleSite, categoryTypeNameAsync } from "./spider/index.js";
 import { fetchConfig } from "./config.js";
 
 // ── Client State ──────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export async function test(state: CatVodClientState): Promise<ValidationResult> 
 // ── listEntry ─────────────────────────────────────────────────────────────────
 
 export async function listEntry(
-  _state: CatVodClientState,
+  state: CatVodClientState,
   location: string | null,
   startIndex: number,
   limit: number,
@@ -68,16 +68,29 @@ export async function listEntry(
 
   if (ref.type === "cat") {
     const result = await spider.category(ref.tid, pg);
+    const categoryName = await categoryTypeNameAsync(ref.key, ref.tid);
     const entryList = vodListToEntries(
       result.list ?? [],
       ref.key,
       ref.tid,
       result.total,
+      categoryName,
     );
     return entryList;
   }
 
   if (ref.type === "vod") {
+    // msearch: vod_ids are Douban-side placeholders whose real resolution is a
+    // cross-site search by title (mirrors fongmi's detailEmpty → search fallback).
+    if (ref.id.startsWith('msearch:')) {
+      const title = ref.id.split('###')[1] ?? '';
+      if (!title) return { items: [], totalCount: 0 };
+      const results = await search(state, '', title);
+      return {
+        items: results.slice(startIndex, startIndex + limit),
+        totalCount: results.length,
+      };
+    }
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) return { items: [], totalCount: 0 };
@@ -118,6 +131,18 @@ export async function listEntry(
 
 // ── search ────────────────────────────────────────────────────────────────────
 
+// Sites run serially — drpy spiders share mutable globals in our single JS
+// context, so Promise.all races them. Fongmi gives each site its own QuickJS
+// context and can parallelize; we cannot. Cap each site so a slow spider
+// doesn't stall the whole search.
+const SEARCH_SITE_TIMEOUT_MS = 6_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>(resolve => { timer = setTimeout(() => resolve(fallback), ms); });
+  return Promise.race([p, timeout]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
 export async function search(
   _state: CatVodClientState,
   _scopeLocation: string,
@@ -131,16 +156,15 @@ export async function search(
     if (site.searchable === 0) continue;
     try {
       const spider = getSpider(key);
-      if (!spider.search) continue; // Skip if search not supported
-      const result = await spider.search(query, 1);
-      const entryList = vodListToEntries(
-        result.list ?? [],
-        key,
-        '', // No tid for search results
-        result.total,
+      if (!spider.search) continue;
+      const result = await withTimeout(
+        spider.search(query, 1),
+        SEARCH_SITE_TIMEOUT_MS,
+        { list: [], total: 0 } as Awaited<ReturnType<CatVodSpider['search']>>,
       );
+      const entryList = vodListToEntries(result.list ?? [], key, '', result.total);
       results.push(...entryList.items);
-    } catch (_) {}
+    } catch (_) { /* site failed or timed out — skip */ }
   }
   return results;
 }

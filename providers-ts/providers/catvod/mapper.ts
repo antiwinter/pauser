@@ -1,5 +1,6 @@
 import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../utils/types.js';
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
+import { encodeRef } from './ref.js';
 
 // ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
@@ -14,7 +15,7 @@ export function categoryListToFolders(
 ): EntryList {
   return {
     items: categories.map((c) => ({
-      ref: `${siteKey}-${c.type_id}`,
+      ref: encodeRef({ type: 'cat', key: siteKey, tid: String(c.type_id) }),
       title: c.type_name ?? String(c.type_id),
       type: 'Folder' as const,
       cover: null,
@@ -31,9 +32,10 @@ export function vodListToEntries(
   siteKey: string,
   tid: string,
   totalCount?: number,
+  categoryName?: string,
 ): EntryList {
   return {
-    items: items.map((item) => vodItemToEntry(item, siteKey, tid)),
+    items: items.map((item) => vodItemToEntry(item, siteKey, tid, categoryName)),
     totalCount: totalCount ?? items.length,
   };
 }
@@ -79,7 +81,7 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string, u
     }));
 
     items.push({
-      ref: `${liveKey}-${g.firstIndex}`,
+      ref: encodeRef({ type: 'live', key: liveKey, channelIndex: g.firstIndex }),
       title: name,
       type: 'LiveChannel' as const,
       cover: bestLogo,
@@ -116,18 +118,37 @@ export function playResultToSource(
 // ── Legacy Item-Level Converters ─────────────────────────────────────────────
 // These are still used by the list converters above
 
-export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo {
+// ── Legacy Item-Level Converters ─────────────────────────────────────────────
+// These are still used by the list converters above
+
+const SERIES_RE = /剧|劇|综艺|綜藝|动漫|動漫|番剧|番劇|动画|動畫/;
+const MOVIE_RE  = /电影|電影/;
+
+function classifyVodType(vodId: string, typeName: string | undefined): 'Folder' | 'Series' | 'Movie' {
+  // msearch: IDs are meta-search launchers — clicking them fans out to a
+  // cross-source search in listEntry; presented as a Folder.
+  if (vodId.startsWith('msearch:')) return 'Folder';
+  const t = (typeName ?? '').trim();
+  if (SERIES_RE.test(t)) return 'Series';
+  if (MOVIE_RE.test(t))  return 'Movie';
+  return 'Movie';
+}
+
+export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string, categoryName?: string): EntryInfo {
   const vodId = String(item.vod_id);
-  // msearch: IDs are meta-search launchers — browsing them yields episodes, so treat as Folder
-  const type = vodId.startsWith('msearch:') ? 'Folder' : 'Movie';
+  // Prefer per-item type_name; fall back to the owning category's name (most
+  // CMS sites omit type_name in category responses, so the home class cache
+  // is the reliable signal that an item from category 2 is a TV series).
+  const typeNameForClass = item.type_name ?? categoryName;
+  const type = classifyVodType(vodId, typeNameForClass);
   return {
-    ref: `${siteKey}-${tid}-${vodId}`,
+    ref: encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
     title: item.vod_name ?? vodId,
     type,
     cover: item.vod_pic ?? null,
     overview: item.vod_blurb ?? item.vod_content ?? null,
     communityRating: item.vod_score ? parseFloat(item.vod_score) : null,
-    genres: item.type_name ? [item.type_name] : null,
+    genres: typeNameForClass ? [typeNameForClass] : null,
   };
 }
 

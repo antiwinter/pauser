@@ -51,10 +51,24 @@ export function normalizeSearch(
 // ── JSON Parsing Helpers ──────────────────────────────────────────────────────
 
 export function parseResponseBody(body: string): unknown {
-  return JSON.parse(body);
+  const trimmed = (body ?? '').trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    console.warn('cms', 'parse', 'non-JSON body:', trimmed.slice(0, 200));
+    return {};
+  }
 }
 
 export function parseReflectResult(raw: string, allowNull?: boolean): unknown {
   if (allowNull && (!raw || raw === 'null')) return {};
-  return JSON.parse(raw);
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    console.warn('reflect', 'parse', 'non-JSON:', trimmed.slice(0, 200));
+    return {};
+  }
 }

@@ -66,6 +66,15 @@ class PlayerController(
     private val _sourceManager = MutableStateFlow<SourceManager?>(null)
     override val sourceManagerFlow: StateFlow<SourceManager?> = _sourceManager.asStateFlow()
 
+    /**
+     * Last error surfaced by the spec resolution pipeline. Cleared on every new [prepare] / [play].
+     * Consumed by the player surface to render an error overlay instead of an indefinite
+     * "Loading spec..." when the provider's spider throws (e.g. some catvod jar spiders
+     * abort detailContent with IllegalArgumentException("name is empty") on certain items).
+     */
+    private val _playbackError = MutableStateFlow<String?>(null)
+    override val playbackErrorFlow: StateFlow<String?> = _playbackError.asStateFlow()
+
     fun setNextVideoCallback(cb: (() -> Unit)?) {
         _nextVideoCallback = cb
         _hasNextVideo.value = cb != null
@@ -92,6 +101,7 @@ class PlayerController(
             Log.w(LOG_TAG, "prepare: no client set, ignoring")
             return
         }
+        _playbackError.value = null
         _pendingStartMs = (startMs ?: entryInfo.userData?.positionMs ?: 0L).coerceAtLeast(0L)
         _pendingInfo = entryInfo
         Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
@@ -102,6 +112,7 @@ class PlayerController(
 
     fun play() {
         _isShown.value = true
+        _playbackError.value = null
         launchResolve(onComplete = {
             playbackSession.play()
             _osdJob?.cancel()
@@ -164,6 +175,7 @@ class PlayerController(
             } catch (_: CancellationException) {
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "launchResolve: failed", e)
+                _playbackError.value = e.message ?: "Unable to load playback"
             }
         }
     }

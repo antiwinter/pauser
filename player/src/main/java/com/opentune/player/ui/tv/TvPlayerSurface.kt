@@ -49,8 +49,13 @@ fun TvPlayerSurface(
 ) {
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
+    val playbackError by controller.playbackErrorFlow.collectAsState()
     val specValue = spec ?: run {
-        PlayerLoadingOverlay(onBack = onBack)
+        if (playbackError != null) {
+            PlayerErrorOverlay(message = playbackError!!, onBack = onBack)
+        } else {
+            PlayerLoadingOverlay(onBack = onBack)
+        }
         return
     }
 
@@ -71,6 +76,23 @@ private fun PlayerLoadingOverlay(onBack: () -> Unit) {
     ) {
         Text(
             text = "Loading spec...",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+    BackHandler { onBack() }
+}
+
+@Composable
+private fun PlayerErrorOverlay(message: String, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "无法加载播放: $message",
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
         )

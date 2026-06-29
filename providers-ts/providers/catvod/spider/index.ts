@@ -35,15 +35,37 @@ for (const h of SPIDER_HANDLERS) {
 let globalConfig: CatVodConfig | null = null;
 let spiderCache: Map<string, CatVodSpider> | null = null;
 
+// Per-site cached home categories (type_id → type_name) so list-items carry
+// their owning category's name even when the spider's category response omits
+// per-item type_name. Populated lazily by wrapSpider().home().
+const homeClassCache = new Map<string, Map<string, string>>();
+
 export async function initSpiders(config: CatVodConfig): Promise<void> {
   globalConfig = config;
   spiderCache = new Map();
+  homeClassCache.clear();
 
   for (const handler of SPIDER_HANDLERS) {
     if ("init" in handler) {
       await (handler as SpiderHandlerWithInit).init(config).catch(() => {});
     }
   }
+}
+
+/** Look up the type_name of a tid on this site, using the cached home class list. */
+export function categoryTypeName(siteKey: string, tid: string): string | undefined {
+  return homeClassCache.get(siteKey)?.get(String(tid));
+}
+
+/** Same as [categoryTypeName] but loads the home result first if missing. */
+export async function categoryTypeNameAsync(siteKey: string, tid: string): Promise<string | undefined> {
+  const cached = homeClassCache.get(siteKey)?.get(String(tid));
+  if (cached) return cached;
+  // Lazy fallback — supports direct category navigation without a prior home browse.
+  try {
+    await getSpider(siteKey).home(false);
+  } catch { /* ignore home failure — fall through to undefined */ }
+  return homeClassCache.get(siteKey)?.get(String(tid));
 }
 
 // ── Response dump ─────────────────────────────────────────────────────────────
@@ -65,6 +87,13 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
   const spider: CatVodSpider = {
     async home(filter?: boolean) {
       const result = await inner.home(filter);
+      if (result.class) {
+        const map = new Map<string, string>();
+        for (const c of result.class) {
+          if (c.type_name) map.set(String(c.type_id), c.type_name);
+        }
+        homeClassCache.set(key, map);
+      }
       await dumpResult(key, 'home', result);
       return result;
     },
@@ -97,7 +126,10 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
   }
   if (inner.search) {
     spider.search = async (query, pg, quick?) => {
+      const t0 = Date.now();
       const result = await inner.search!(query, pg, quick);
+      const listLen = result?.list?.length ?? 0;
+      console.warn(`[search] site=${key} q="${query}" pg=${pg} list=${listLen} ttl=${Date.now() - t0}ms`);
       await dumpResult(key, `search-${query}-${pg}`, result);
       return result;
     };
