@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.detail
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +21,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.opentune.content.ui.catalog.player.PlayerController
-
-private const val LOG_TAG = "OT_MovieDetail"
+import timber.log.Timber
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -36,7 +34,7 @@ fun MovieDetailScreen(
     val resumeMs = info.userData?.positionMs ?: 0L
 
     LaunchedEffect(info.ref) {
-        Log.d(LOG_TAG, "initial: ref=${info.ref} resumeMs=$resumeMs")
+        Timber.d("initial: ref=${info.ref} resumeMs=$resumeMs")
         playerController?.prepare(info)
     }
 

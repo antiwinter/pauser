@@ -1,7 +1,6 @@
 package com.opentune.player.manager.subtitle
 
 import android.text.SpannableStringBuilder
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.media3.common.C
 import androidx.media3.common.text.CueGroup
@@ -19,8 +18,7 @@ import com.opentune.player.manager.PlaybackManager
 import com.opentune.player.manager.PlayerMenuEntry
 import com.opentune.player.manager.detectFormat
 import java.util.Locale
-
-private const val SUB_LOG_TAG = "OT_Subtitle"
+import timber.log.Timber
 
 /** Sentinel for [SubtitleManager.appliedSubtitleId] meaning "not yet applied this entry",
  *  distinct from `null` (the auto subtitle id). */
@@ -161,7 +159,7 @@ internal class SubtitleManager(
             val id = spec.state.subtitleTrackId
             if (spec.findSubtitleTrack(id)?.externalRef == null) return
 
-            Log.w(SUB_LOG_TAG, "Subtitle sidecar failed (code=${error.errorCode}), replaying without it")
+            Timber.w("Subtitle sidecar failed (code=${error.errorCode}), replaying without it")
             session.exo.trackSelectionParameters = session.applyTextParams(null)
             session.rebuildKeepingPosition()
         }
@@ -210,7 +208,7 @@ internal class SubtitleManager(
         val tracks = session.tracksFlow.value
 
         val externalTracks = source.subtitleTracks.filter {
-            Log.d(SUB_LOG_TAG, it.toString())
+            Timber.d(it.toString())
             it.externalRef != null }
 
         val entries = mutableListOf<PlayerMenuEntry>()
@@ -229,7 +227,7 @@ internal class SubtitleManager(
             .filter { it.type == C.TRACK_TYPE_TEXT && it.isTrackSupported(0) }
             .forEach { group ->
                 val fmt = group.getTrackFormat(0)
-                Log.w(SUB_LOG_TAG, "embedded subtitle group ${group.mediaTrackGroup.id} label=${fmt.label} lang=${fmt.language} mime=${fmt.sampleMimeType} codecs=${fmt.codecs} w=${fmt.width} h=${fmt.height} container=${fmt.containerMimeType} roleFlags=${fmt.roleFlags} supported=${group.isTrackSupported(0)} fmt=${fmt}")
+                Timber.w("embedded subtitle group ${group.mediaTrackGroup.id} label=${fmt.label} lang=${fmt.language} mime=${fmt.sampleMimeType} codecs=${fmt.codecs} w=${fmt.width} h=${fmt.height} container=${fmt.containerMimeType} roleFlags=${fmt.roleFlags} supported=${group.isTrackSupported(0)} fmt=${fmt}")
                 val gid = "exo_${group.mediaTrackGroup.id}"
                 val label = buildSubtitleName(fmt.label, fmt.language)
                 entries += PlayerMenuEntry(

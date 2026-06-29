@@ -35,6 +35,7 @@ dependencies {
     api(project(":content:contract"))
     implementation(project(":player"))
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.timber)
     implementation(libs.okhttp)
     implementation(libs.coil.core)
     implementation(libs.kotlinx.serialization.json)

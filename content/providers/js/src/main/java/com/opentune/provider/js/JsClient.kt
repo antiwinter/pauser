@@ -1,6 +1,5 @@
 package com.opentune.provider.js
 
-import android.util.Log
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.EntryList
 import com.opentune.content.contract.EntryTag
@@ -31,6 +30,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
+import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -268,7 +268,7 @@ class JsClient(
         try {
             engine.callMethod("updateEntryState", args.toString())
         } catch (e: Throwable) {
-            Log.w("JsClient", "updateEntryState failed itemRef=$itemRef key=$key: ${e.message}", e)
+            Timber.w(e, "updateEntryState failed itemRef=$itemRef key=$key: ${e.message}")
         }
     }
 

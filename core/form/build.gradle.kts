@@ -19,6 +19,7 @@ dependencies {
     implementation(project(":content:contract"))
     implementation(project(":storage"))
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.timber)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)

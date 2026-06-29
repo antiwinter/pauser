@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.browse
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -17,8 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val LOG_TAG = "BrowseViewModel"
+import timber.log.Timber
 
 /**
  * Per-back-stack-entry ViewModel for BrowseRoute.
@@ -72,7 +70,7 @@ class BrowseViewModel(
                 _client.value = c
                 load()
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "initialize failed for endpointId=$endpointId", e)
+                Timber.e(e, "initialize failed for endpointId=$endpointId")
                 _error.value = e.message ?: "Unknown error"
             }
         }
@@ -80,11 +78,11 @@ class BrowseViewModel(
 
     fun load() {
         if (_items.value.isNotEmpty()) {
-            Log.d(LOG_TAG, "load() skipped — items already present for location=$location")
+            Timber.d("load() skipped — items already present for location=$location")
             return
         }
         if (_client.value == null) return
-        Log.d(LOG_TAG, "load() fetching for location=$location")
+        Timber.d("load() fetching for location=$location")
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
@@ -94,11 +92,11 @@ class BrowseViewModel(
                 onSuccess = { result ->
                     _items.value = result.items
                     _totalCount.value = result.totalCount
-                    Log.d(LOG_TAG, "load() complete: ${result.items.size}/${result.totalCount}")
+                    Timber.d("load() complete: ${result.items.size}/${result.totalCount}")
                 },
                 onFailure = { e ->
                     _error.value = e.message ?: "Unknown error"
-                    Log.e(LOG_TAG, "load() failed", e)
+                    Timber.e(e, "load() failed")
                 },
             )
             _loading.value = false
@@ -124,9 +122,9 @@ class BrowseViewModel(
             }.onSuccess { result ->
                 _items.value = result.items
                 _totalCount.value = result.totalCount
-                Log.d(LOG_TAG, "refresh() complete: ${result.items.size}/${result.totalCount}")
+                Timber.d("refresh() complete: ${result.items.size}/${result.totalCount}")
             }.onFailure { e ->
-                Log.e(LOG_TAG, "refresh() failed", e)
+                Timber.e(e, "refresh() failed")
             }
         }
     }

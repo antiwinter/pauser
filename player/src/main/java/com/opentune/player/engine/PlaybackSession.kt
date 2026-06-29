@@ -1,7 +1,6 @@
 package com.opentune.player.engine
 
 import android.content.Context
-import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
@@ -32,8 +31,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
-private const val SESSION_LOG = "PlaybackSession"
 private const val DEFAULT_PROGRESS_INTERVAL_MS = 10_000L
 
 /**
@@ -176,7 +175,7 @@ class PlaybackSession(
         _spec.value = spec
         _spec.value?.updateEntryState(EntryStateKeys.SOURCE_INDEX, state.sourceIndex.toString())
         withContext(Dispatchers.Main) {
-            Log.d(SESSION_LOG, "prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
+            Timber.d("prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
 
             // trackSelectionParameters persists across items; reset so a prior entry's flags don't leak.
             exo.trackSelectionParameters = TrackSelectionParameters.getDefaults(appContext)

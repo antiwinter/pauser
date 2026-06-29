@@ -1,7 +1,6 @@
 package com.opentune.content.ui.catalog.player
 
 import android.app.Application
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -25,8 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
-private const val LOG_TAG = "PlayerController"
 private const val DEBOUNCE_MS = 800L
 
 @UnstableApi
@@ -72,7 +71,7 @@ class PlayerController(
     }
 
     fun setDisplayInfo(info: EntryInfo) {
-        Log.d(LOG_TAG, "setDisplayInfo: title=${info.title}")
+        Timber.d( "setDisplayInfo: title=${info.title}")
         _displayInfo.value = PlaybackDisplayInfo(info.title)
     }
 
@@ -89,12 +88,12 @@ class PlayerController(
         startMs: Long? = null,
     ) {
         if (_client == null) {
-            Log.w(LOG_TAG, "prepare: no client set, ignoring")
+            Timber.w( "prepare: no client set, ignoring")
             return
         }
         _pendingStartMs = (startMs ?: entryInfo.userData?.positionMs ?: 0L).coerceAtLeast(0L)
         _pendingInfo = entryInfo
-        Log.d(LOG_TAG, "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
+        Timber.d( "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
 
         setDisplayInfo(entryInfo)
         launchResolve(withDelay = _debounceJob?.isActive == true)
@@ -106,14 +105,14 @@ class PlayerController(
             playbackSession.play()
             _osdJob?.cancel()
         })
-        Log.d(LOG_TAG, "play: isShown=true")
+        Timber.d( "play: isShown=true")
     }
 
     fun stop() {
         _isShown.value = false
         playbackSession.pause()
         _stopEvents.tryEmit(Unit)
-        Log.d(LOG_TAG, "stop")
+        Timber.d( "stop")
     }
 
     fun reset() {
@@ -130,7 +129,7 @@ class PlayerController(
         _hasNextVideo.value = false
         _mediaCodecs.value = emptyList()
         _displayInfo.value = PlaybackDisplayInfo()
-        Log.d(LOG_TAG, "controller states cleared")
+        Timber.d( "controller states cleared")
     }
 
     private fun startPrebufferOsd(itemRef: String) {
@@ -155,7 +154,7 @@ class PlayerController(
             try {
                 if (withDelay) delay(DEBOUNCE_MS)
                 if (_pendingInfo == null) {
-                    Log.w(LOG_TAG, "launchResolve: no pending item, ignoring")
+                    Timber.w( "launchResolve: no pending item, ignoring")
                     return@launch
                 }
                 startPrebufferOsd(_pendingInfo!!.ref)
@@ -163,7 +162,7 @@ class PlayerController(
                 onComplete?.invoke()
             } catch (_: CancellationException) {
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "launchResolve: failed", e)
+                Timber.e(e, "launchResolve: failed")
             }
         }
     }
@@ -172,14 +171,14 @@ class PlayerController(
         val client = _client ?: return
         val info = _pendingInfo ?: return
         if (info.ref == _workingItemRef && _pendingStartMs == _workingStartMs) {
-            Log.d(LOG_TAG, "launchResolve: pending spec matches working spec, ignoring")
+            Timber.d( "launchResolve: pending spec matches working spec, ignoring")
             return
         }
 
         val itemRef = info.ref
         val startMs = _pendingStartMs ?: 0L
 
-        Log.d(LOG_TAG, "resolveAndPrepare: itemRef=$itemRef startMs=$startMs")
+        Timber.d( "resolveAndPrepare: itemRef=$itemRef startMs=$startMs")
         val spec = client.getPlaybackSpec(info, startMs)
 
         _sourceManager.value = SourceManager(spec).also { mgr ->
@@ -195,6 +194,6 @@ class PlayerController(
     override fun onCleared() {
         super.onCleared()
         playbackSession.clear()
-        Log.d(LOG_TAG, "onCleared")
+        Timber.d( "onCleared")
     }
 }

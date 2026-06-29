@@ -1,6 +1,5 @@
 package com.opentune.player.engine
 
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
@@ -16,6 +15,7 @@ import com.opentune.player.PlaybackSpec
 import com.opentune.player.manager.PlayerMenuEntry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import timber.log.Timber
 
 internal class PlaybackSurface(
     val exo: ExoPlayer,
@@ -69,8 +69,7 @@ internal fun rememberPlaybackSurface(
                 val total = BandwidthTracker.totalBytes
                 val deltaKB = (total - lastTotal) / 1024
                 lastTotal = total
-                Log.i(
-                    "OT_BW",
+                Timber.i(
                     "mbps=%.2f deltaKB=%d totalMB=%.1f pos=%dms buffered=%dms state=%d".format(
                         mbps, deltaKB, total / 1_048_576f,
                         exo.currentPosition, exo.totalBufferedDuration, exo.playbackState,

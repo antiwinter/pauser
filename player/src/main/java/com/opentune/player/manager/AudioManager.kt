@@ -1,6 +1,5 @@
 package com.opentune.player.manager
 
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.media3.common.C
@@ -12,8 +11,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
-
-private const val AUDIO_LOG_TAG = "OT_Audio"
+import timber.log.Timber
 
 // ---------------------------------------------------------------------------
 // Session extensions: applyAudioParams, updateAudioTrackId, selectAudio
@@ -48,7 +46,7 @@ fun PlaybackSession.applyAudioParams(trackId: String?): TrackSelectionParameters
 /** Selects audio: null = auto (clear override), else the group behind [trackId] ("audio_<id>"). */
 @UnstableApi
 fun PlaybackSession.selectAudio(trackId: String?) {
-    Log.d(AUDIO_LOG_TAG, "selectAudio: trackId=$trackId")
+    Timber.d( "selectAudio: trackId=$trackId")
     exo.trackSelectionParameters = applyAudioParams(trackId)
     updateAudioTrackId(trackId)
 }
@@ -107,7 +105,7 @@ internal class AudioManager(
             children = { emptyList() },
             isSelected = { activeId == null },
             onSelect = {
-                Log.d(AUDIO_LOG_TAG, "select audio: Auto")
+                Timber.d( "select audio: Auto")
                 session.selectAudio(null)
             },
         )
@@ -120,7 +118,7 @@ internal class AudioManager(
                 children = { emptyList() },
                 isSelected = { activeId == gid },
                 onSelect = {
-                    Log.d(AUDIO_LOG_TAG, "select audio: gid=$gid")
+                    Timber.d( "select audio: gid=$gid")
                     session.selectAudio(gid)
                 },
             )

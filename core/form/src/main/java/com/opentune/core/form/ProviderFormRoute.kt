@@ -1,6 +1,6 @@
 package com.opentune.core.form
 
-import android.util.Log
+import timber.log.Timber
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,8 +46,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val LOG_TAG = "ProviderFormRoute"
 
 private sealed class QrUiState {
     data object Idle : QrUiState()
@@ -202,7 +200,7 @@ fun ProviderFormRoute(
                                     onDone()
                                 }
                                 is SubmitResult.Error -> {
-                                    Log.e(LOG_TAG, "submit failed: ${result.message}")
+                                    Timber.e("submit failed: ${result.message}")
                                     error = result.message
                                 }
                             }

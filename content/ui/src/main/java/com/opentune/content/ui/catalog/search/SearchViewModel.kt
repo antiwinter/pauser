@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.search
 
-import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,8 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val LOG_TAG = "SearchViewModel"
+import timber.log.Timber
 
 class SearchViewModel : ViewModel() {
 
@@ -63,7 +61,7 @@ class SearchViewModel : ViewModel() {
                     results.clear()
                     results.addAll(fetched)
                 } catch (e: Exception) {
-                    Log.e(LOG_TAG, "search", e)
+                    Timber.e(e, "search")
                     results.clear()
                 } finally {
                     _searching.value = false
@@ -86,7 +84,7 @@ class SearchViewModel : ViewModel() {
                 }
                 initializedKey = key
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "initialize failed for endpointId=$endpointId", e)
+                Timber.e(e, "initialize failed for endpointId=$endpointId")
                 _initError.value = e.message ?: "Unknown error"
             }
         }
@@ -111,7 +109,7 @@ class SearchViewModel : ViewModel() {
                 results.clear()
                 results.addAll(fetched)
             }.onFailure { e ->
-                Log.e(LOG_TAG, "refresh() failed", e)
+                Timber.e(e, "refresh() failed")
             }
         }
     }

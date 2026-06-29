@@ -1,6 +1,5 @@
 package com.opentune.player.manager.subtitle
 
-import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -29,8 +28,7 @@ import androidx.media3.common.util.UnstableApi
 import com.opentune.player.PlaybackState
 import com.opentune.player.R
 import com.opentune.player.engine.PlaybackSession
-
-private const val SUB_LOG_TAG = "OT_Subtitle"
+import timber.log.Timber
 
 /**
  * Owns the live subtitle-adjust display state (vertical offset, scale, lock flag, current cue
@@ -104,7 +102,7 @@ internal class CC(
 
     fun confirm() {
         locked = true
-        Log.d(SUB_LOG_TAG, "confirmAdjust: offset=$offsetFraction scale=$sizeScaleValue")
+        Timber.d("confirmAdjust: offset=$offsetFraction scale=$sizeScaleValue")
         session.updateSubtitlePrefs(offsetFraction, sizeScaleValue)
     }
 

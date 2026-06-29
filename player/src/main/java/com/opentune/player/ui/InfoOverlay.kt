@@ -2,7 +2,6 @@ package com.opentune.player.ui
 
 import android.content.Context
 import android.hardware.display.DisplayManager
-import android.util.Log
 import android.view.Display
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +32,7 @@ import com.opentune.player.PlaybackSpec
 import com.opentune.player.formatBitrate
 import com.opentune.player.engine.PlaybackSession
 import com.opentune.player.manager.TrackInfo
+import timber.log.Timber
 
 @UnstableApi
 internal class InfoOverlayState(
@@ -61,8 +61,7 @@ internal fun InfoOverlay(state: InfoOverlayState) {
     val audioMime = ti.audioMime ?: state.tracks.allMimes(C.TRACK_TYPE_AUDIO)
     val isHdrEnabled = ti.isHdrCapable && state.displaySupportsHdr
     val mbps = state.mbpsState.floatValue
-    Log.d(
-        "InfoOverlay",
+    Timber.d(
         "render title='${state.displayInfo.title}' vMime=$videoMime vDec=${ti.videoDecoderStatus} " +
             "aMime=$audioMime aDec=${ti.audioDecoderStatus} bitrate=${state.bitrate} mbps=$mbps"
     )

@@ -1,6 +1,5 @@
 package com.opentune.provider.js
 
-import android.util.Log
 import androidx.annotation.Keep
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -12,6 +11,7 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import timber.log.Timber
 
 /**
  * QuickJS context wrapper.
@@ -144,7 +144,7 @@ class QuickJsEngine(
             }
             is EngineTask.SettleHost -> {
                 val err = nativeSettleHostCall(ctx, task.hostKey, task.result, task.isError)
-                if (err != null) Log.e(TAG, "settleHostCall error: $err")
+                if (err != null) Timber.e("settleHostCall error: $err")
             }
             is EngineTask.EvalSnippet -> {
                 val error = nativeEvalSnippet(ctx, task.code)
@@ -172,7 +172,7 @@ class QuickJsEngine(
     @Keep
     fun resolveCallback(key: Long, value: String?) {
         val deferred = pendingCalls.remove(key) ?: run {
-            Log.w(TAG, "resolveCallback: no deferred for key=$key")
+            Timber.w("resolveCallback: no deferred for key=$key")
             return
         }
         deferred.complete(value)
@@ -181,7 +181,7 @@ class QuickJsEngine(
     @Keep
     fun rejectCallback(key: Long, message: String) {
         val deferred = pendingCalls.remove(key) ?: run {
-            Log.w(TAG, "rejectCallback: no deferred for key=$key")
+            Timber.w("rejectCallback: no deferred for key=$key")
             return
         }
         deferred.completeExceptionally(RuntimeException(message))
@@ -200,7 +200,7 @@ class QuickJsEngine(
                 val result = dispatchHost(namespace, name, argsJson)
                 taskChannel.trySend(EngineTask.SettleHost(key, result, false))
             } catch (e: Throwable) {
-                Log.e(TAG, "host async failed: $namespace.$name", e)
+                Timber.e(e, "host async failed: $namespace.$name")
                 taskChannel.trySend(EngineTask.SettleHost(key, e.message ?: "host error", true))
             }
         }
@@ -242,8 +242,6 @@ class QuickJsEngine(
     private external fun nativeSettleHostCall(ctxPtr: Long, key: Long, payload: String?, isError: Boolean): String?
 
     companion object {
-        private const val TAG = "QuickJsEngine"
-
         init {
             System.loadLibrary("quickjs_engine")
         }

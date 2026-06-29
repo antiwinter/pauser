@@ -1,6 +1,5 @@
 package com.opentune.server
 
-import android.util.Log
 import com.opentune.genart.GenArt
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlayingState
@@ -11,8 +10,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private const val LOG_TAG = "GenartRoutes"
+import timber.log.Timber
 
 fun Application.installGenartRoutes(ctx: AppContext) {
     routing {
@@ -40,7 +38,7 @@ fun Application.installGenartRoutes(ctx: AppContext) {
                 val sources = try {
                     client.getPlaybackSources(itemRef)
                 } catch (e: Exception) {
-                    Log.w(LOG_TAG, "getPlaybackSources failed for $itemRef", e)
+                    Timber.w(e, "getPlaybackSources failed for $itemRef")
                     null
                 }
 

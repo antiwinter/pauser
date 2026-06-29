@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import timber.log.Timber
 import java.io.File
 
 class OpenTuneApplication : Application() {
@@ -70,6 +71,7 @@ class OpenTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Timber.plant(OpentuneDebugTree())
         SingletonImageLoader.setSafe { imageLoader }
         database = Room.databaseBuilder<OpenTuneDatabase>(
             context = this,

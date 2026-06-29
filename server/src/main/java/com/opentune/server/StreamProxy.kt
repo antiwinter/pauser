@@ -1,6 +1,5 @@
 package com.opentune.server
 
-import android.util.Log
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.ProviderStream
 import com.opentune.content.contract.StreamRegistrar
@@ -18,8 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import timber.log.Timber
 
-private const val LOG_TAG = "OpenTuneServer"
 private const val PUMP_CHUNK_SIZE = 128 * 1024
 
 /**
@@ -48,7 +47,7 @@ class StreamProxy : StreamRegistrar {
     override fun revokeToken(url: String) {
         val token = url.substringAfterLast('/')
         registry.remove(token)
-        Log.d(LOG_TAG, "revoked token=$token registry.size=${registry.size}")
+        Timber.d( "revoked token=$token registry.size=${registry.size}")
     }
 
     internal fun Application.installRoutes() {
@@ -76,14 +75,14 @@ class StreamProxy : StreamRegistrar {
                         val (start, end) = parseRange(rangeHeader, totalSize)
                         val length = end - start + 1
                         call.response.header(HttpHeaders.ContentRange, "bytes $start-$end/$totalSize")
-                        Log.d(LOG_TAG, "stream token=$token range=$start-$end/$totalSize")
+                        Timber.d( "stream token=$token range=$start-$end/$totalSize")
                         call.respondBytesWriter(
                             contentType = ContentType.Application.OctetStream,
                             status = HttpStatusCode.PartialContent,
                             contentLength = length,
                         ) { pump(stream, start, length) }
                     } else {
-                        Log.d(LOG_TAG, "stream token=$token full size=$totalSize")
+                        Timber.d( "stream token=$token full size=$totalSize")
                         call.respondBytesWriter(
                             contentType = ContentType.Application.OctetStream,
                             status = HttpStatusCode.OK,

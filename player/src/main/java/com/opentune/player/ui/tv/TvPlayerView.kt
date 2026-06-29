@@ -2,7 +2,6 @@ package com.opentune.player.ui.tv
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -20,6 +19,7 @@ import com.opentune.player.engine.PlaybackSession
 import androidx.media3.ui.PlayerView
 import com.opentune.player.R
 import com.opentune.player.ui.configurePlayerViewDefaults
+import timber.log.Timber
 
 /** Hide controller after this many ms without input. Driven via LaunchedEffect so
  * [PlayerView.hideController] fires immediately with no shrink animation. */
@@ -96,13 +96,10 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val p = player
-        if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
-            Log.v(
-                LOG_TAG,
-                "dispatchKeyEvent keyCode=${event.keyCode} action=${event.action} " +
-                    "hasPlayer=${p != null} playing=${p?.isPlaying}",
-            )
-        }
+        Timber.v(
+            "dispatchKeyEvent keyCode=${event.keyCode} action=${event.action} " +
+                "hasPlayer=${p != null} playing=${p?.isPlaying}",
+        )
         if (p != null &&
             p.isCommandAvailable(Player.COMMAND_GET_CURRENT_MEDIA_ITEM) &&
             p.isPlayingAd
@@ -137,14 +134,14 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     val pos = p?.currentPosition?.minus(SEEK_MS)?.coerceAtLeast(0L) ?: 0L
                     session?.seekTo(pos)
-                    Log.d(LOG_TAG, "seek -${SEEK_MS}ms → ${p?.currentPosition}")
+                    Timber.d( "seek -${SEEK_MS}ms → ${p?.currentPosition}")
                     onTransportKey?.invoke(false)
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     val dur = p?.duration ?: C.TIME_UNSET
                     val to = (p?.currentPosition ?: 0L) + SEEK_MS
                     session?.seekTo(if (dur > 0) to.coerceAtMost(dur) else to)
-                    Log.d(LOG_TAG, "seek +${SEEK_MS}ms → ${p?.currentPosition}")
+                    Timber.d( "seek +${SEEK_MS}ms → ${p?.currentPosition}")
                     onTransportKey?.invoke(false)
                 }
 
@@ -159,7 +156,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                     if (p != null) {
                         val wasPlayWhenReady = p.playWhenReady
                         if (wasPlayWhenReady) session?.pause() else session?.play()
-                        Log.d(LOG_TAG, "toggle play/pause playWhenReady=$wasPlayWhenReady")
+                        Timber.d( "toggle play/pause playWhenReady=$wasPlayWhenReady")
                         onTransportKey?.invoke(!wasPlayWhenReady)
                     }
                 }
@@ -167,7 +164,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 // MEDIA_PLAY → play (no OSD)
                 KeyEvent.KEYCODE_MEDIA_PLAY -> {
                     session?.play()
-                    Log.d(LOG_TAG, "media play")
+                    Timber.d( "media play")
                 }
 
                 // MEDIA_PAUSE / MEDIA_STOP → pause; show controller bar
@@ -175,7 +172,7 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_MEDIA_STOP,
                 -> {
                     session?.pause()
-                    Log.d(LOG_TAG, "media pause/stop")
+                    Timber.d( "media pause/stop")
                     onTransportKey?.invoke(false)
                 }
             }
@@ -185,14 +182,11 @@ class OpenTuneTvPlayerView @JvmOverloads constructor(
         if (event.keyCode in OWNED_KEYS) return true
 
         val consumed = super.dispatchKeyEvent(event)
-        if (Log.isLoggable(LOG_TAG, Log.VERBOSE)) {
-            Log.v(LOG_TAG, "super.dispatchKeyEvent → $consumed")
-        }
+        Timber.v("super.dispatchKeyEvent → $consumed")
         return consumed
     }
 
     private companion object {
-        private const val LOG_TAG = "OpenTuneTvPlayerKeys"
         private const val SEEK_MS = 15_000L
 
         private val OWNED_KEYS = intArrayOf(

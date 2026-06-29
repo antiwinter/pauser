@@ -1,13 +1,12 @@
 package com.opentune.server
 
-import android.util.Log
 import com.opentune.content.contract.StreamRegistrar
 import com.opentune.server.debug.installDebugRoutes
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import timber.log.Timber
 
 const val SERVER_PORT = 7920
-private const val LOG_TAG = "OpenTuneServer"
 
 /**
  * Embedded HTTP server for the app's lifetime. Binds to all interfaces on fixed port [SERVER_PORT].
@@ -34,7 +33,7 @@ class OpenTuneServer private constructor(
 
     fun start() {
         engine.start(wait = false)
-        Log.i(LOG_TAG, "OpenTuneServer started on port $SERVER_PORT")
+        Timber.i("OpenTuneServer started on port $SERVER_PORT")
     }
 
     fun stop() {

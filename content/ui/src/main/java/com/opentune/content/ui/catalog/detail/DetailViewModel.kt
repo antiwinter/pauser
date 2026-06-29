@@ -1,6 +1,5 @@
 package com.opentune.content.ui.catalog.detail
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -22,8 +21,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 
-private const val LOG_TAG = "DetailViewModel"
 private const val LOADER_PAGE_SIZE = 100
 
 private val episodeListOptions = QueryOptions(
@@ -92,11 +91,11 @@ class DetailViewModel(
                 _client.value = c
                 if (initialInfo != null && _entryInfo.value == null) {
                     _entryInfo.value = initialInfo
-                    Log.d(LOG_TAG, "Using cached EntryInfo: type=${initialInfo.type}")
+                    Timber.d("Using cached EntryInfo: type=${initialInfo.type}")
                 }
                 loadSubEntries(c)
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "initialize failed for endpointId=$endpointId", e)
+                Timber.e(e, "initialize failed for endpointId=$endpointId")
             }
         }
     }
@@ -112,7 +111,7 @@ class DetailViewModel(
                     refresh(DetailRefreshScope.Header)
                 }
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "updateEntryState failed: key=$key", e)
+                Timber.e(e, "updateEntryState failed: key=$key")
             }
         }
     }
@@ -134,9 +133,9 @@ class DetailViewModel(
                         refreshLists(c)
                     }
                 }
-                Log.d(LOG_TAG, "refresh($scope) complete")
+                Timber.d("refresh($scope) complete")
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "refresh($scope) failed", e)
+                Timber.e(e, "refresh($scope) failed")
             }
         }
     }
@@ -164,14 +163,14 @@ class DetailViewModel(
         if (_subEntries.value.isNotEmpty()) return
         val result = c.listEntry(itemRef, 0, 500)
         _subEntries.value = result.items
-        Log.d(LOG_TAG, "loadSubEntries: ${result.items.size} items")
+        Timber.d("loadSubEntries: ${result.items.size} items")
     }
 
     fun setSubEntry(index: Int) {
         val entries = _subEntries.value
         if (entries.isEmpty() || index !in entries.indices) return
         _subEntryIndex.value = index
-        Log.d(LOG_TAG, "setSubEntry: index=$index ref=${entries[index].ref}")
+        Timber.d("setSubEntry: index=$index ref=${entries[index].ref}")
     }
 
     fun setEpisode(subEntryIdx: Int, episodeIdx: Int) {
@@ -210,7 +209,7 @@ class DetailViewModel(
         when {
             total > 0 && episodeIdx + 1 < total -> setEpisode(subIdx, episodeIdx + 1)
             subIdx + 1 < subEntries.size -> setEpisode(subIdx + 1, 0)
-            else -> Log.d(LOG_TAG, "nextEpisode: end of series")
+            else -> Timber.d("nextEpisode: end of series")
         }
     }
 
@@ -237,7 +236,7 @@ class DetailViewModel(
         items.forEachIndexed { i, item -> episodeMap[start + i] = item }
         _episodes.value = episodeMap
 
-        Log.d(LOG_TAG, "fetchEpisodePage: season=$seasonIdx start=$start count=${items.size} total=${result.totalCount}")
+        Timber.d("fetchEpisodePage: season=$seasonIdx start=$start count=${items.size} total=${result.totalCount}")
     }
 
     private fun pageStart(episodeIdx: Int): Int =

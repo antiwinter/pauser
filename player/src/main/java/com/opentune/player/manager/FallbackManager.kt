@@ -1,11 +1,11 @@
 package com.opentune.player.manager
 
-import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.opentune.player.engine.PlaybackSession
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 
 // ---------------------------------------------------------------------------
@@ -46,8 +46,6 @@ fun PlaybackSession.setTrackEnabled(trackType: Int, enabled: Boolean) {
 // FallbackManager class
 // ---------------------------------------------------------------------------
 
-private const val FALLBACK_LOG = "TrackFallback"
-
 /**
  * Track-level fallback: video fails → audio-only, audio fails → video-only.
  * A permanent [Player.Listener] that classifies decoder errors and triggers the appropriate
@@ -84,7 +82,7 @@ internal class FallbackManager(
                     mime = ti.audioMime,
                 )
                 else -> {
-                    Log.e(FALLBACK_LOG, "unhandled player error: code=${error.errorCode} msg=${error.message}", error)
+                    Timber.e(error, "unhandled player error: code=${error.errorCode} msg=${error.message}")
                 }
             }
         }
@@ -106,14 +104,14 @@ internal class FallbackManager(
     ) {
         markErr()
         if (!failed.compareAndSet(false, true)) {
-            Log.w(FALLBACK_LOG, "$keyword already failed; propagating error")
+            Timber.w("$keyword already failed; propagating error")
             return
         }
         if (otherFailed.get()) {
-            Log.w(FALLBACK_LOG, "both renderers failed; propagating error")
+            Timber.w("both renderers failed; propagating error")
             return
         }
-        Log.w(FALLBACK_LOG, "$keyword decode failed — disabling track type $trackType. mime=$mime")
+        Timber.w("$keyword decode failed — disabling track type $trackType. mime=$mime")
         session.setTrackEnabled(trackType, false)
     }
 }

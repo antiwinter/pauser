@@ -1,6 +1,5 @@
 package com.opentune.provider.js
 
-import android.util.Log
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -13,6 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
+import timber.log.Timber
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -124,8 +124,8 @@ class HostApis {
         val args = json.parseToJsonElement(argsJson).jsonObject
         val msg = args["msg"]?.jsonPrimitive?.content ?: argsJson
         when (name) {
-            "e" -> Log.e("JsProvider", msg)
-            else -> Log.d("JsProvider", msg)
+            "e" -> Timber.e(msg)
+            else -> Timber.d(msg)
         }
         return null
     }

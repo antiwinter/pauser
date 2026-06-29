@@ -1,6 +1,5 @@
 package com.opentune.server.debug
 
-import android.util.Log
 import com.opentune.server.AppContext
 import com.opentune.content.contract.SearchQuery
 import com.opentune.core.form.contract.QrResult
@@ -20,8 +19,8 @@ import io.ktor.server.routing.routing
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import timber.log.Timber
 
-private const val LOG_TAG = "OT_DebugRoutes"
 private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 fun Application.installDebugRoutes(ctx: AppContext) {
@@ -83,7 +82,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     return@post
                 }
                 val result = runCatching { client.test() }.getOrElse {
-                    Log.e(LOG_TAG, "client.test failed", it)
+                    Timber.e(it, "client.test failed")
                     com.opentune.content.contract.EndpointValidationResult.Error(it.message ?: "validation failed")
                 }
                 when (result) {
@@ -112,10 +111,10 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                             updatedAtEpochMs = now,
                         )
                         runCatching { ctx.endpointDao.insert(entity) }.onFailure {
-                            Log.w(LOG_TAG, "insert failed (may already exist): ${it.message}")
+                            Timber.w("insert failed (may already exist): ${it.message}")
                         }
                         ctx.registerClient(endpointId, entity)
-                        Log.i(LOG_TAG, "added server $endpointId ($displayName)")
+                        Timber.i("added server $endpointId ($displayName)")
                         call.respondText(
                             json.encodeToString(AddServerResponse(endpointId = endpointId, displayName = displayName)),
                             ContentType.Application.Json,
@@ -145,10 +144,10 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
 
-                Log.d(LOG_TAG, "[debug browse] location=$location")
+                Timber.d("[debug browse] location=$location")
 
                 val result = runCatching { instance.listEntry(location, start, limit) }.getOrElse {
-                    Log.e(LOG_TAG, "listEntry error", it); return@get call.respond500(it.message)
+                    Timber.e(it, "listEntry error"); return@get call.respond500(it.message)
                 }
                 val dto = EntryListDto(
                     items = result.items.map { e ->
@@ -165,7 +164,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val query = call.request.queryParameters["q"] ?: return@get call.respond400("missing q")
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val results = runCatching { instance.search(scope, SearchQuery(term = query)).items }.getOrElse {
-                    Log.e(LOG_TAG, "search error", it); return@get call.respond500(it.message)
+                    Timber.e(it, "search error"); return@get call.respond500(it.message)
                 }
                 val dtos = results.map { e ->
                     EntryInfoDto(ref = e.ref, title = e.title, type = e.type, cover = e.cover)
@@ -179,7 +178,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val startMs = call.request.queryParameters["startMs"]?.toLongOrNull() ?: 0L
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val sources = runCatching { instance.getPlaybackSources(ref) }.getOrElse {
-                    Log.e(LOG_TAG, "getPlaybackSources error", it); return@get call.respond500(it.message)
+                    Timber.e(it, "getPlaybackSources error"); return@get call.respond500(it.message)
                 }
                 val source = sources.firstOrNull() ?: return@get call.respond500("no sources")
                 val dto = PlaybackSpecDto(
@@ -195,10 +194,10 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
                 val ready = runCatching { instance.getQr() }.getOrElse {
-                    Log.e(LOG_TAG, "getQr error", it); return@get call.respond500(it.message)
+                    Timber.e(it, "getQr error"); return@get call.respond500(it.message)
                 } ?: return@get call.respond404("provider does not support QR")
                 val poll = runCatching { instance.pollQr(ready.token) }.getOrElse {
-                    Log.e(LOG_TAG, "pollQr error", it); return@get call.respond500(it.message)
+                    Timber.e(it, "pollQr error"); return@get call.respond500(it.message)
                 }
                 val fields = (poll as? QrResult.Confirmed)?.fields ?: emptyMap()
                 call.respondText(
@@ -242,7 +241,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }
             NavigationBridge.commands.trySend(cmd)
-            Log.i(LOG_TAG, "navigate command sent: $cmd")
+            Timber.i("navigate command sent: $cmd")
             call.respondText(json.encodeToString(OkResponse()), ContentType.Application.Json)
         }
 
@@ -255,7 +254,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     call.respond400("invalid request body"); return@post
                 }
                 val result = runCatching { ctx.jarBridge.dispatch(body.name, body.args) }.getOrElse {
-                    Log.e(LOG_TAG, "jar.${body.name} error", it)
+                    Timber.e(it, "jar.${body.name} error")
                     call.respondText(
                         json.encodeToString(JarResponse(error = it.message ?: "jar error")),
                         ContentType.Application.Json,

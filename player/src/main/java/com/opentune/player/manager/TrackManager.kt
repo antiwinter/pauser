@@ -1,6 +1,5 @@
 package com.opentune.player.manager
 
-import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.ColorInfo
 import androidx.media3.common.Format
@@ -12,6 +11,7 @@ import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import com.opentune.player.engine.PlaybackSession
+import timber.log.Timber
 
 // ---------------------------------------------------------------------------
 // TrackInfo data + helpers
@@ -81,8 +81,6 @@ internal fun bitrateOf(format: Format?): Int? {
 // TrackManager class
 // ---------------------------------------------------------------------------
 
-private const val TRACK_LOG = "TrackInfo"
-
 /**
  * Owns the [TrackInfo] flow and the ExoPlayer listeners that populate it. Anchored to the player
  * lifetime — attach once and never re-attach — so it never misses the one-shot decoder-init
@@ -117,8 +115,7 @@ internal class TrackManager(
                 )
             }
             val selected = tracks.groups.count { g -> (0 until g.length).any { g.isTrackSelected(it) } }
-            Log.d(
-                TRACK_LOG,
+            Timber.d(
                 "tracks v=${videoFormat?.sampleMimeType} a=${audioFormat?.sampleMimeType} t=${textFormat?.sampleMimeType} " +
                     "hdr=${isHdrFormat(videoFormat)} bitrate=${bitrateOf(videoFormat)} " +
                     "groups=${tracks.groups.size} selectedGroups=$selected"
@@ -139,7 +136,7 @@ internal class TrackManager(
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
-            Log.d(TRACK_LOG, "videoDecoder=$decoderName")
+            Timber.d( "videoDecoder=$decoderName")
             session.updateTrackInfo { it.copy(videoDecoderStatus = simplifyDecoderName(decoderName)) }
         }
 
@@ -149,7 +146,7 @@ internal class TrackManager(
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
-            Log.d(TRACK_LOG, "audioDecoder=$decoderName")
+            Timber.d( "audioDecoder=$decoderName")
             session.updateTrackInfo { it.copy(audioDecoderStatus = simplifyDecoderName(decoderName)) }
         }
 
