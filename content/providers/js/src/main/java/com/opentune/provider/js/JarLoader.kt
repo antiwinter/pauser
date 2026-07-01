@@ -1,6 +1,10 @@
 package com.opentune.provider.js
 
+import com.opentune.content.contract.ByteSink
+import com.opentune.content.contract.StreamRelayResult
 import dalvik.system.DexClassLoader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -18,6 +22,8 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
+
+private const val PUMP_CHUNK_SIZE = 128 * 1024
 
 /**
  * Downloads and caches Android JARs, then reflectively invokes methods on their classes.
@@ -209,18 +215,17 @@ class JarLoader(private val httpClient: OkHttpClient) {
     }
 
     /**
-     * Generic reflective invoke for streaming proxy results. Invokes the (typically static)
-     * [method] on [cls] with a `Map<String,String>` built from [params], and unpacks the
-     * `Object[]{status, mime, InputStream, headers}` result directly into a [com.opentune.content.contract.StreamRelayResult] —
-     * bypassing the JSON-handle funnel in [reflect] so the InputStream can be streamed verbatim.
-     *
-     * Tries each loaded loader; returns the first non-null result, or null if none can serve.
+     * Reflectively invokes [method] on [cls] with [params] and unpacks the spider's
+     * `Object[]{status, mime, InputStream, headers}` into a [StreamRelayResult]. The pump wraps
+     * the blocking `InputStream.read` in `withContext(IO)` — the bridge belongs here, since a
+     * Java `InputStream` is genuinely blocking (the file-relay side needs no such bridge).
+     * Tries each loaded loader; returns the first non-null result.
      */
     fun invokeStreaming(
         cls: String,
         method: String,
         params: Map<String, String>,
-    ): com.opentune.content.contract.StreamRelayResult? {
+    ): StreamRelayResult? {
         val rawArgs = JsonArray(listOf(
             buildJsonObject { params.forEach { (k, v) -> put(k, v) } }
         ))
@@ -240,7 +245,19 @@ class JarLoader(private val httpClient: OkHttpClient) {
             val mime = arr.getOrNull(1) as? String
             val stream = arr.getOrNull(2) as? java.io.InputStream ?: continue
             val headers = (arr.getOrNull(3) as? Map<String, String>) ?: emptyMap()
-            return com.opentune.content.contract.StreamRelayResult(status, mime, stream, headers, null)
+            val pump: suspend (ByteSink) -> Unit = { sink ->
+                val buf = ByteArray(PUMP_CHUNK_SIZE)
+                try {
+                    while (true) {
+                        val read = withContext(Dispatchers.IO) { stream.read(buf) }
+                        if (read <= 0) break
+                        sink.write(buf, 0, read)
+                    }
+                } finally {
+                    withContext(Dispatchers.IO) { runCatching { stream.close() } }
+                }
+            }
+            return StreamRelayResult(status, mime, headers, null, pump)
         }
         return null
     }

@@ -1,10 +1,13 @@
 package com.opentune.content.epcache
 
+import android.net.Uri
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EntryInfo
+import com.opentune.content.contract.FileRelay
+import com.opentune.content.contract.FileRelayRecipe
 import com.opentune.content.contract.PlaybackMimeTypes
 import com.opentune.content.contract.QueryOptions
-import com.opentune.content.contract.StreamRegistrarHolder
+import com.opentune.content.contract.SERVER_PORT
 import com.opentune.player.PlaybackSource
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlaybackState
@@ -14,6 +17,18 @@ import com.opentune.storage.EntryStateStore
 import com.opentune.storage.StorageBindingsHolder
 
 private val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
+
+/**
+ * Deterministic file-service relay URL (`fs` recipe, token `"fs"`). `ep`/`ref` params carry
+ * `endpointId`/`itemRef` — no per-URL registration — so CacheDataSource keys are stable across
+ * seeks/sessions.
+ *
+ * `Uri.encode` (not `URLEncoder.encode`): Ktor's query decoding, like `Uri.decode`, only
+ * interprets `%xx` and leaves `+` literal, so `URLEncoder`'s `+`-for-space would break SMB
+ * paths with spaces (see content/ui/.../Routes.kt:15-17).
+ */
+private fun streamUrl(endpointId: String, itemRef: String): String =
+    "http://127.0.0.1:${SERVER_PORT}/relay/fs?ep=" + Uri.encode(endpointId) + "&ref=" + Uri.encode(itemRef)
 
 internal suspend fun enrichSpec(
     sources: List<PlaybackSource>,
@@ -52,13 +67,17 @@ internal suspend fun enrichSpec(
 internal suspend fun constructStreamSources(
     delegate: EndpointClient,
     info: EntryInfo,
-    activeStreamUrls: java.util.concurrent.ConcurrentHashMap<String, List<String>>,
+    activeStreamRefs: java.util.concurrent.ConcurrentHashMap<String, List<String>>,
 ): List<PlaybackSource> {
-    val registrar = StreamRegistrarHolder.get()
-    val videoUrl = registrar.registerStream(delegate, info.ref)
+    // Probe before advertising a URL: only endpoints that actually provide a ProviderStream get a relay address.
+    FileRelayRecipe.ensureRegistered()
+    if (!FileRelay.ensureOpen(delegate.endpointId, info.ref) { delegate.openStream(info.ref) }) {
+        return emptyList()
+    }
+    val videoUrl = streamUrl(delegate.endpointId, info.ref)
     val subtitleTracks = scanSidecarSubtitles(delegate, info)
 
-    activeStreamUrls[info.ref] = listOf(videoUrl) + subtitleTracks.mapNotNull { it.externalRef }
+    activeStreamRefs[info.ref] = listOf(info.ref) + subtitleTracks.map { it.trackId }
     return listOf(PlaybackSource(url = videoUrl, subtitleTracks = subtitleTracks))
 }
 
@@ -77,7 +96,6 @@ internal suspend fun scanSidecarSubtitles(
 
     val videoStem = info.filename?.substringBeforeLast('.')
         ?: info.ref.substringAfterLast('/').substringBeforeLast('.')
-    val registrar = StreamRegistrarHolder.get()
 
     return siblings.items.filter { sibling ->
         sibling.filename?.lowercase()?.let { name ->
@@ -86,14 +104,14 @@ internal suspend fun scanSidecarSubtitles(
     }.mapNotNull { sibling ->
         val stem = sibling.filename?.substringBeforeLast('.') ?: return@mapNotNull null
         if (stem != videoStem) return@mapNotNull null
-        val streamUrl = registrar.registerStream(delegate, sibling.ref)
+        val url = streamUrl(delegate.endpointId, sibling.ref)
         SubtitleTrack(
             trackId = sibling.ref,
             label = sibling.filename ?: sibling.ref,
             language = null,
             isDefault = false,
             isForced = false,
-            externalRef = streamUrl,
+            externalRef = url,
         )
     }
 }

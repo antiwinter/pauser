@@ -13,7 +13,6 @@ import com.opentune.server.AppContext
 import com.opentune.server.OpenTuneServer
 import com.opentune.storage.EndpointEntity
 
-import com.opentune.content.contract.StreamRegistrarHolder
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
 import com.opentune.proxy.contract.ProxyProviderRegistryHolder
@@ -98,19 +97,17 @@ class OpenTuneApplication : Application() {
         EndpointClientRegistryHolder.set(endpointClientRegistry)
         OpenTuneProviderRegistryHolder.set(providerRegistry)
         ProxyProviderRegistryHolder.set(proxyProviderRegistry)
-        openTuneServer = OpenTuneServer(
-            appContext = object : AppContext {
-                override fun getProviders() = providerRegistry.providersFlow.value
-                override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
-                override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
-                override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
-                override val endpointDao get() = storageBindings.endpointDao
-                override val entryStateStore get() = storageBindings.entryStateStore
-                override val appConfigStore get() = storageBindings.appConfigStore
-                override val jarBridge get() = debugJarBridge
-            },
-        )
-        StreamRegistrarHolder.set(openTuneServer)
+        val appContext = object : AppContext {
+            override fun getProviders() = providerRegistry.providersFlow.value
+            override fun getProvider(protocol: String) = runCatching { providerRegistry.provider(protocol) }.getOrNull()
+            override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
+            override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
+            override val endpointDao get() = storageBindings.endpointDao
+            override val entryStateStore get() = storageBindings.entryStateStore
+            override val appConfigStore get() = storageBindings.appConfigStore
+            override val jarBridge get() = debugJarBridge
+        }
+        openTuneServer = OpenTuneServer(appContext = appContext)
         appScope.launch(Dispatchers.IO) { openTuneServer.start() }
         appScope.launch { providerRegistry.discoverAsync() }
     }

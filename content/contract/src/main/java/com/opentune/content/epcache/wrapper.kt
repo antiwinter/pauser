@@ -9,7 +9,7 @@ import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SearchQuery
 import com.opentune.content.contract.SortField
 import com.opentune.content.contract.SortOrder
-import com.opentune.content.contract.StreamRegistrarHolder
+import com.opentune.content.contract.FileRelay
 import com.opentune.content.contract.UserDataMerge
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSource
@@ -38,7 +38,7 @@ class CachingEndpointClient(
         EntryStateKeys.AUDIO_TRACK_ID,
     )
 
-    private val activeStreamUrls = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+    private val activeStreamRefs = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
 
     override var imageLoader: coil3.ImageLoader?
         get() = delegate.imageLoader
@@ -112,7 +112,7 @@ class CachingEndpointClient(
             if (delegateSources.isNotEmpty()) {
                 delegateSources
             } else {
-                constructStreamSources(delegate, info, activeStreamUrls)
+                constructStreamSources(delegate, info, activeStreamRefs)
             }
         }
         return enrichSpec(
@@ -155,6 +155,7 @@ class CachingEndpointClient(
                 val positionMs = value?.toLongOrNull() ?: return
                 store.upsertPosition(entryKey, positionMs)
                 EndpointCache.patchEntryUserData(endpointId, itemRef, positionMs)
+                FileRelay.touch(endpointId, itemRef)
             }
             EntryStateKeys.SPEED -> {
                 val speed = value?.toFloatOrNull() ?: return
@@ -185,7 +186,7 @@ class CachingEndpointClient(
             }
             EntryStateKeys.PLAYING_STATE -> {
                 if (value == PlayingState.STOPPED.name) {
-                    revokeStreamUrls(itemRef)
+                    evictStreamRefs(itemRef)
                 }
             }
         }
@@ -210,8 +211,9 @@ class CachingEndpointClient(
 
     override suspend fun pollQr(token: String) = delegate.pollQr(token)
 
-    private fun revokeStreamUrls(itemRef: String) {
-        val registrar = StreamRegistrarHolder.get()
-        activeStreamUrls.remove(itemRef)?.forEach { registrar.revokeToken(it) }
+    private fun evictStreamRefs(itemRef: String) {
+        activeStreamRefs.remove(itemRef)?.forEach { ref ->
+            FileRelay.evict(endpointId, ref)
+        }
     }
 }
