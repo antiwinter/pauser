@@ -4,6 +4,7 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.EndpointValidationResult
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
+import com.opentune.proxy.contract.WrappedProxyClient
 import com.opentune.storage.EndpointEntity
 import com.opentune.core.form.SubmitResult
 import com.opentune.storage.StorageBindingsHolder
@@ -57,7 +58,7 @@ object EndpointConfigRepository {
 
     private suspend fun buildClient(protocol: String, values: Map<String, String>, proxyId: String?): EndpointClient {
         val provider = OpenTuneProviderRegistryHolder.get().provider(protocol)
-        val proxyClient = EndpointClientRegistryHolder.get().buildProxyClient(proxyId)
+        val proxyClient = WrappedProxyClient(EndpointClientRegistryHolder.get().buildProxyClient(proxyId))
         return provider.createClient(values)
             .also { it.proxyClient = proxyClient }
     }

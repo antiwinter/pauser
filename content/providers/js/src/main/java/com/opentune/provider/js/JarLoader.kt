@@ -7,8 +7,10 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -204,6 +206,43 @@ class JarLoader(private val httpClient: OkHttpClient) {
                 JsonPrimitive(handle).toString()
             }
         }
+    }
+
+    /**
+     * Generic reflective invoke for streaming proxy results. Invokes the (typically static)
+     * [method] on [cls] with a `Map<String,String>` built from [params], and unpacks the
+     * `Object[]{status, mime, InputStream, headers}` result directly into a [com.opentune.content.contract.StreamRelayResult] —
+     * bypassing the JSON-handle funnel in [reflect] so the InputStream can be streamed verbatim.
+     *
+     * Tries each loaded loader; returns the first non-null result, or null if none can serve.
+     */
+    fun invokeStreaming(
+        cls: String,
+        method: String,
+        params: Map<String, String>,
+    ): com.opentune.content.contract.StreamRelayResult? {
+        val rawArgs = JsonArray(listOf(
+            buildJsonObject { params.forEach { (k, v) -> put(k, v) } }
+        ))
+        for ((_, loader) in loaders) {
+            val clz = tryLoadClass(loader, cls) ?: continue
+            val jvmArgs = try { buildArgs(clz, method, rawArgs) } catch (_: Throwable) { continue }
+            val m = resolveMethod(clz, method, jvmArgs.size) ?: continue
+            m.isAccessible = true
+            val result = try {
+                m.invoke(null, *jvmArgs)
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                null // spider threw (e.g. upstream unreachable) — try next loader
+            } catch (_: Throwable) { null } ?: continue
+            @Suppress("UNCHECKED_CAST")
+            val arr = result as? Array<Any?> ?: continue
+            val status = (arr.getOrNull(0) as? Int) ?: 200
+            val mime = arr.getOrNull(1) as? String
+            val stream = arr.getOrNull(2) as? java.io.InputStream ?: continue
+            val headers = (arr.getOrNull(3) as? Map<String, String>) ?: emptyMap()
+            return com.opentune.content.contract.StreamRelayResult(status, mime, stream, headers, null)
+        }
+        return null
     }
 
     private fun buildArgs(clz: Class<*>, method: String, raw: JsonArray): Array<Any?> {

@@ -4,6 +4,7 @@ import com.opentune.player.PlaybackSource
 import com.opentune.core.form.contract.FormFieldSpec
 import com.opentune.core.form.contract.QrResult
 import com.opentune.proxy.contract.ProxyClient
+import com.opentune.proxy.contract.WrappedProxyClient
 
 // --- Endpoint-level validation result (extends core with domain fields) ---
 
@@ -38,7 +39,7 @@ interface OpenTuneProviderLoader {
 
 abstract class EndpointClient {
     open var imageLoader: coil3.ImageLoader? = null
-    open var proxyClient: ProxyClient? = null
+    open var proxyClient: ProxyClient = WrappedProxyClient(null)
     open var endpointId: String = ""
     open var protocol: String = ""
     open val progressIntervalMs: Long = 10_000L

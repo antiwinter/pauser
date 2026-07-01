@@ -19,6 +19,10 @@ import {
 // Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
 const spiderHandles = new Map<string, string>();
 
+// Stream-relay base URL registered with the host for this endpoint's spider `Proxy.proxy` method.
+// The spider hardcodes `http://127.0.0.1:9978/proxy?…` URLs; we rewrite them to this base.
+let relayBaseUrl: string | null = null;
+
 export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void> {
   spiderHandles.clear();
   // Use clearInstances rather than clear() — Guard JARs rely on native state set up by
@@ -48,6 +52,26 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
     dexNativeClass: CATVOD_DEX_NATIVE,
     initOriginClass: CATVOD_INIT_ORIGIN,
   });
+  // Register the spider's static Proxy.proxy(Map) as a pure pass-through stream relay on the host.
+  // The class/method names are catvod-specific (here); the host server is agnostic and
+  // streams bytes through untouched.
+  const reg = await host.relay.register({
+    cls: 'com.github.catvod.spider.Proxy',
+    method: 'proxy',
+  });
+  relayBaseUrl = reg.baseUrl;
+}
+
+/**
+ * Rewrite a spider-embedded `http://127.0.0.1:9978/proxy?…` (or localhost:9978) URL to the
+ * host-registered stream-relay base, preserving the query string. Passes through other URLs.
+ */
+function rewriteProxyUrl(url: string | undefined): string | undefined {
+  if (!url || !relayBaseUrl) return url;
+  const m = url.match(/^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/proxy\b(.*)$/i);
+  if (!m) return url;
+  const query = m[1].startsWith('?') ? m[1] : (m[1] || '');
+  return relayBaseUrl + query;
 }
 
 // ── Spider instance lifecycle ─────────────────────────────────────────────────
@@ -139,8 +163,12 @@ function createJarSpider(
         url: jarUrl, cls, method: 'playerContent',
         instance: handle, args: [flag, epUrl, vipFlags ?? []],
       });
-      const data = parseReflectResult(raw) as CatVodPlayResult;
-      return normalizePlay(data);
+      const data = normalizePlay(parseReflectResult(raw) as CatVodPlayResult);
+      if (data) {
+        data.url = rewriteProxyUrl(data.url);
+        data.play_url = rewriteProxyUrl(data.play_url);
+      }
+      return data;
     },
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {

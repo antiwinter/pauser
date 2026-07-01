@@ -29,10 +29,37 @@ interface ProxyProvider {
 }
 
 /**
- * Shared no-proxy OkHttpClient for the fallback path when no [ProxyClient] is configured.
- * One pool shared across stream + JS-engine clients (matches the proxy-configured path,
- * where [ProxyClient.getHttpClient] returns a single cached client).
+ * Per-endpoint wrapper around a [ProxyClient] delegate. Always present on an endpoint — when
+ * no proxy is configured, [delegate] is null and a plain shared [OkHttpClient] is used.
+ *
+ * Owns a [HostRemapDns] installed via `newBuilder()` on the delegate's client, so runtime
+ * `host.dns.remap` calls reach this endpoint's engine + media fetches. The wrapper is built
+ * fresh per endpoint, so the Dns is per-endpoint — remaps never leak across endpoints, and no
+ * `clearDns()` is needed (the Dns dies with the endpoint). `newBuilder()` shares the delegate's
+ * connection pool and dispatcher, so there is no per-endpoint pool cost.
  */
-object HttpClients {
-    val noProxy: OkHttpClient by lazy { OkHttpClient() }
+class WrappedProxyClient(private val delegate: ProxyClient?) : ProxyClient {
+
+    private val dns = HostRemapDns()
+
+    private val client: OkHttpClient by lazy {
+        (delegate?.getHttpClient() ?: PLAIN).newBuilder().dns(dns).build()
+    }
+
+    override fun getHttpClient(): OkHttpClient = client
+
+    /** Register a DNS host remap on this endpoint's client. */
+    fun remapDns(from: String, to: String) = dns.remap(from, to)
+
+    override fun getConfig(): Map<String, String> = delegate?.getConfig() ?: emptyMap()
+
+    override suspend fun test(): ProxyValidationResult =
+        delegate?.test() ?: ProxyValidationResult.Success("none", emptyMap())
+
+    override val ctrlUI
+        get() = delegate?.ctrlUI
+
+    private companion object {
+        val PLAIN: OkHttpClient by lazy { OkHttpClient() }
+    }
 }

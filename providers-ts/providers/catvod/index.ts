@@ -36,6 +36,15 @@ let state: CatVodClientState | null = null;
     capabilities: PlatformCapabilities;
   }): Promise<void> {
     const config = await fetchConfig(args.credentials['config_url'] ?? '');
+    // Apply DNS host remaps (a=b) to this endpoint's HTTP client. Catvod-specific parsing
+    // here; the host just stores from→to on the current endpoint's Dns.
+    for (const entry of config.hosts ?? []) {
+      const eq = entry.indexOf('=');
+      if (eq <= 0) continue;
+      const from = entry.slice(0, eq).trim();
+      const to = entry.slice(eq + 1).trim();
+      if (from && to) await host.dns.remap({ from, to });
+    }
     await initSpiders(config);
     state = { rawCredentials: args.credentials };
   },

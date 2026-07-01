@@ -5,7 +5,7 @@ import type {
   ValidationResult,
 } from "../../utils/types.js";
 import type { SiteEntry, LiveEntry } from "./config.js";
-import type { CatVodCategoryResult } from "./spider/types.js";
+import type { CatVodCategoryResult, CatVodPlayResult } from "./spider/types.js";
 import { decodeRef, encodeRef } from "./ref.js";
 import {
   parseEpisodes,
@@ -15,6 +15,7 @@ import {
   playResultToSource,
 } from "./mapper.js";
 import { initSpiders, getSpider, getConfig, canHandleSite } from "./spider/index.js";
+import { needsSniff, sniffPlayUrl } from "./spider/sniffer.js";
 import { fetchConfig } from "./config.js";
 
 // ── Client State ──────────────────────────────────────────────────────────────
@@ -211,6 +212,25 @@ export async function getEntries(
 
 // ── getPlaybackSources ────────────────────────────────────────────────────────
 
+// Resolve a spider play result into a PlaybackSource, sniffing the webpage URL through a
+// headless WebView first when the spider flags parse=1 (url is a page, not a media stream).
+async function resolvePlaySource(result: CatVodPlayResult): Promise<PlaybackSource> {
+  if (needsSniff(result) && result.url) {
+    const sniffed = await sniffPlayUrl(result.url, result.header, result.click);
+    if (sniffed) {
+      return playResultToSource({
+        ...result,
+        url: sniffed.url,
+        play_url: sniffed.url,
+        parse: 0,
+        header: { ...result.header, ...sniffed.headers },
+      });
+    }
+    // Sniff failed — fall through to the raw result so the player at least gets the page URL.
+  }
+  return playResultToSource(result);
+}
+
 export async function getPlaybackSources(
   _state: CatVodClientState,
   itemRef: string,
@@ -229,7 +249,7 @@ export async function getPlaybackSources(
     const ep = eps[ref.epIndex];
     if (!ep) throw new Error("Episode not found");
     const result = await spider.play(ep.flag, ep.url);
-    return [playResultToSource(result)];
+    return [await resolvePlaySource(result)];
   }
 
   // Vod ref with single episode → resolve inline
@@ -240,7 +260,7 @@ export async function getPlaybackSources(
     const eps = parseEpisodes(detail);
     if (eps.length === 0) throw new Error("No episodes found");
     const result = await spider.play(eps[0].flag, eps[0].url);
-    return [playResultToSource(result)];
+    return [await resolvePlaySource(result)];
   }
 
   // Live channel → resolve via spider
@@ -250,7 +270,7 @@ export async function getPlaybackSources(
     const channel = result.channels[ref.channelIndex];
     if (!channel) throw new Error("Channel not found");
     const playResult = await spider.play('', channel.url);
-    return [playResultToSource(playResult)];
+    return [await resolvePlaySource(playResult)];
   }
 
   throw new Error(

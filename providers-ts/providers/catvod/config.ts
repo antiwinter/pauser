@@ -3,7 +3,6 @@ export interface CatVodConfig {
   sites:   Record<string, SiteEntry | LiveEntry>;
   hosts?:  string[];
   wallpaper?: string;
-  rules?: unknown[];
   logo?: string;
 }
 
@@ -34,7 +33,6 @@ interface RawConfig {
   lives?:  Array<Omit<LiveEntry, 'type'> & { type: 0 }>;
   hosts?:  string[];
   wallpaper?: string;
-  rules?: unknown[];
   logo?: string;
 }
 
@@ -85,7 +83,6 @@ async function processConfig(raw: RawConfig): Promise<CatVodConfig> {
     sites,
     hosts: raw.hosts,
     wallpaper: raw.wallpaper,
-    rules: raw.rules,
     logo: raw.logo,
   };
 }

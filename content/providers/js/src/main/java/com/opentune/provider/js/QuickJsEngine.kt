@@ -34,6 +34,7 @@ class QuickJsEngine(
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val jarLoader   = JarLoader(httpClient)
+    private val engineHostApis = EngineHostApis(httpClient, jarLoader)
 
     /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
     private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
@@ -211,6 +212,11 @@ class QuickJsEngine(
 
     private suspend fun dispatchHost(ns: String, name: String, argsJson: String): String? =
         when (ns) {
+            // Engine-scoped (per-endpoint state: this engine's client/loader/sniffer)
+            "dns"    -> engineHostApis.handleDns(name, argsJson)
+            "relay"  -> engineHostApis.handleRelay(name, argsJson)
+            "web"    -> engineHostApis.handleWeb(name, argsJson)
+            // Shared stateless handlers
             "http"   -> hostApis.handleHttp(name, argsJson, httpClient)
             "crypto" -> hostApis.handleCrypto(name, argsJson)
             "jar"    -> hostApis.handleJar(name, argsJson, jarLoader)

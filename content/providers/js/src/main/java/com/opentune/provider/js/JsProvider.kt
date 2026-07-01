@@ -5,7 +5,7 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.core.form.contract.FormFieldKind
 import com.opentune.core.form.contract.FormFieldSpec
 import kotlinx.serialization.json.Json
-import com.opentune.proxy.contract.HttpClients
+import com.opentune.proxy.contract.WrappedProxyClient
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -58,7 +58,7 @@ class JsProvider private constructor(
         suspend fun create(assetPath: String, jsBundle: String, hostApis: HostApis): JsProvider {
             var cover = false
             var fields: List<FormFieldSpec> = emptyList()
-            val engine = QuickJsEngine(hostApis, HttpClients.noProxy)
+            val engine = QuickJsEngine(hostApis, WrappedProxyClient(null).getHttpClient())
             try {
                 engine.init()
                 engine.evalSnippet(HOST_BOOTSTRAP_JS)
@@ -121,6 +121,8 @@ class JsProvider private constructor(
     fs:     ns('fs'),
     log:    ns('log'),
     timer:  ns('timer'),
+    dns:    ns('dns'),
+    relay:  ns('relay'),
   };
   globalThis.console = {
     log: function() {

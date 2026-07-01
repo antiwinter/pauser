@@ -54,6 +54,35 @@ export interface HostAPI {
     /** Resolves after [ms] milliseconds. Backed by a host-side coroutine delay. */
     sleep(args: { ms: number }): Promise<void>;
   };
+  dns: {
+    /** Register a DNS host remap on the current endpoint's HTTP client (resolve `from` as `to`). */
+    remap(args: { from: string; to: string }): Promise<string>;
+  };
+  relay: {
+    /**
+     * Register a (typically static) jar method as a pure pass-through stream relay. Returns
+     * `{ token, baseUrl }`; rewrite the provider's localhost proxy URLs to `baseUrl`.
+     */
+    register(args: { cls: string; method: string }): Promise<{ token: string; baseUrl: string }>;
+  };
+  web: {
+    /**
+     * Headless-WebView sniffer. Loads [url] (with optional [headers]), watches every
+     * sub-resource request, and resolves with the first request URL whose address matches
+     * one of [regex] but none of [exclude]. Optional [script] snippets are injected after
+     * the page finishes loading. Rejects to `null` if nothing matches within [timeoutMs].
+     *
+     * Android-only (backed by WebView). On non-Android hosts this rejects.
+     */
+    detect(args: {
+      url: string;
+      headers?: Record<string, string>;
+      regex: string[];
+      exclude?: string[];
+      script?: string[];
+      timeoutMs?: number;
+    }): Promise<{ url: string; headers: Record<string, string> } | null>;
+  };
 }
 
 export interface PlatformInfo {

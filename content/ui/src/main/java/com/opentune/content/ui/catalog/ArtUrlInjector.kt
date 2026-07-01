@@ -2,7 +2,7 @@ package com.opentune.content.ui.catalog
 
 import com.opentune.content.contract.EntryInfo
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
-import com.opentune.server.SERVER_PORT
+import com.opentune.content.contract.SERVER_PORT
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 

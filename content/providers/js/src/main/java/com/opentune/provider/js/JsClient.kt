@@ -15,7 +15,6 @@ import com.opentune.player.PlaybackSource
 import com.opentune.player.PlatformInfoData
 import com.opentune.core.form.contract.QrResult
 import com.opentune.player.SubtitleTrack
-import com.opentune.proxy.contract.HttpClients
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.MapSerializer
@@ -29,7 +28,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import okhttp3.OkHttpClient
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 
@@ -81,7 +79,7 @@ class JsClient(
 
     override suspend fun getQr(): QrResult.QrReady? {
         return try {
-            val resultJson = withEngine(proxyClient?.getHttpClient() ?: HttpClients.noProxy) { engine ->
+            val resultJson = withEngine { engine ->
                 engine.callMethod("getQr", "{}")
             } ?: return null
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -100,7 +98,7 @@ class JsClient(
                 return QrResult.Confirmed(tokenEl.mapValues { (_, v) -> v.jsonPrimitive.content })
             }
             val args = buildJsonObject { put("token", token) }.toString()
-            val resultJson = withEngine(proxyClient?.getHttpClient() ?: HttpClients.noProxy) { engine ->
+            val resultJson = withEngine { engine ->
                 engine.callMethod("pollQr", args)
             } ?: return QrResult.Error("null response")
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -123,8 +121,8 @@ class JsClient(
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
-    private suspend fun <T> withEngine(httpClient: OkHttpClient, block: suspend (QuickJsEngine) -> T): T {
-        val engine = QuickJsEngine(hostApis, httpClient)
+    private suspend fun <T> withEngine(block: suspend (QuickJsEngine) -> T): T {
+        val engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
         return try {
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
@@ -139,8 +137,7 @@ class JsClient(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            val effectiveHttpClient = proxyClient?.getHttpClient() ?: HttpClients.noProxy
-            engine = QuickJsEngine(hostApis, effectiveHttpClient)
+            engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
             engine.init()
             engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
             engine.evalBundle(jsBundle)
@@ -148,9 +145,8 @@ class JsClient(
             val deviceInfoJson = json.encodeToString(
                 com.opentune.player.PlatformInfoData.serializer(), deviceInfo,
             )
-            val proxyConfigJson = proxyClient?.getConfig()
-                ?.let { Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), it) }
-                ?: "null"
+            val proxyConfigJson = proxyClient.getConfig()
+                .let { Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), it) }
             val initArgs = """{"credentials":${Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)},"deviceInfo":$deviceInfoJson,"proxyConfig":$proxyConfigJson}"""
             engine.callMethod("init", initArgs)
             engine.evalSnippet("globalThis.__proxyConfig = $proxyConfigJson;")

@@ -14,7 +14,6 @@ import com.opentune.content.contract.UserDataMerge
 import com.opentune.player.EntryStateKeys
 import com.opentune.player.PlaybackSource
 import com.opentune.player.PlayingState
-import com.opentune.proxy.contract.HttpClients
 import com.opentune.proxy.contract.ProxyClient
 import com.opentune.storage.EntryStateKey
 import com.opentune.storage.EntryStateStore
@@ -45,7 +44,7 @@ class CachingEndpointClient(
         get() = delegate.imageLoader
         set(value) { delegate.imageLoader = value }
 
-    override var proxyClient: ProxyClient?
+    override var proxyClient: ProxyClient
         get() = delegate.proxyClient
         set(value) { delegate.proxyClient = value }
 
@@ -118,7 +117,7 @@ class CachingEndpointClient(
         }
         return enrichSpec(
             sources, info, startMs, endpointId,
-            proxyClient?.getHttpClient() ?: HttpClients.noProxy,
+            delegate.proxyClient.getHttpClient(),
             delegate.progressIntervalMs,
             updateEntryState = { k, v -> updateEntryStateIntercepted(k, v, info) },
         )

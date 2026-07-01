@@ -41,6 +41,12 @@
 - [ ] bundle/gzip, {fields, providesCover, js: 'string'}
 - [ ] common.js
 
+### Jar loader
+- [ ] move download&verify to js side
+- [ ] bandwidthmeter -> sr
+- [ ] smb -> sr
+- [ ] preserve buffer -> sr
+
 ## Player
 - [x] Opt: episode track selection should persist on series
 - [x] Fix: subtitle position persistence

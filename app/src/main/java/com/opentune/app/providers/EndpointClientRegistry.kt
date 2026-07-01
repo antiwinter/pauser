@@ -10,13 +10,13 @@ import com.opentune.content.epcache.EndpointCache
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientAccess
 import com.opentune.proxy.contract.ProxyClient
+import com.opentune.proxy.contract.WrappedProxyClient
 import com.opentune.storage.EndpointDao
 import com.opentune.storage.EndpointEntity
 import com.opentune.storage.ProxyDao
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
 
 class EndpointClientRegistry(
     private val endpointDao: EndpointDao,
@@ -110,16 +110,17 @@ class EndpointClientRegistry(
             json.decodeFromString<Map<String, String>>(entity.fieldsJson)
         }.getOrNull() ?: return null
 
-        val proxyClient: ProxyClient? = buildProxyClient(entity.proxyId)
+        val delegate = buildProxyClient(entity.proxyId)
 
         val client = runCatching {
             provider.createClient(values)
         }.getOrNull() ?: return null
 
+        val proxyClient = WrappedProxyClient(delegate)
         client.proxyClient = proxyClient
         client.imageLoader = ImageLoader.Builder(appContext)
             .diskCache(sharedDiskCache)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = proxyClient?.getHttpClient() ?: OkHttpClient())) }
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = proxyClient.getHttpClient())) }
             .build()
         client.endpointId = entity.endpointId
         client.protocol = entity.protocol

@@ -20,6 +20,7 @@ import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.EndpointClientRegistryHolder
 import com.opentune.content.contract.OpenTuneProviderRegistryHolder
 import com.opentune.core.form.contract.FormFieldKind
+import com.opentune.proxy.contract.WrappedProxyClient
 import com.opentune.core.form.contract.QrResult
 import com.opentune.content.ui.providers.EndpointConfigRepository
 import com.opentune.core.form.ProviderFormRoute
@@ -58,7 +59,7 @@ fun NavGraphBuilder.contentRoutes(
             },
             onGetQr = if (hasQr) { proxyId ->
                 val client = provider.createClient(emptyMap())
-                client.proxyClient = EndpointClientRegistryHolder.get().buildProxyClient(proxyId)
+                client.proxyClient = WrappedProxyClient(EndpointClientRegistryHolder.get().buildProxyClient(proxyId))
                 qrClientRef[0] = client
                 client.getQr()
             } else null,

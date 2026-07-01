@@ -2,6 +2,7 @@ package com.opentune.server
 
 import com.opentune.content.contract.EndpointClient
 import com.opentune.content.contract.ProviderStream
+import com.opentune.content.contract.SERVER_PORT
 import com.opentune.content.contract.StreamRegistrar
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
