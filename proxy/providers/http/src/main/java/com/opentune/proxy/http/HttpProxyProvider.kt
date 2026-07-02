@@ -62,6 +62,8 @@ class HttpProxyClient(private val values: Map<String, String>) : ProxyClient {
     private val username = values["username"]?.trim() ?: ""
     private val password = values["password"] ?: ""
 
+    override val proxy: Proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port))
+
     override fun getHttpClient(): OkHttpClient = cached
 
     // One shared OkHttpClient (and ConnectionPool) per proxy config — stream and JS engine

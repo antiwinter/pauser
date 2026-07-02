@@ -8,6 +8,7 @@ import com.opentune.content.contract.FileRelayRecipe
 import com.opentune.content.contract.PlaybackMimeTypes
 import com.opentune.content.contract.QueryOptions
 import com.opentune.content.contract.SERVER_PORT
+import com.opentune.content.contract.UrlRelayRecipe
 import com.opentune.player.PlaybackSource
 import com.opentune.player.PlaybackSpec
 import com.opentune.player.PlaybackState
@@ -27,8 +28,17 @@ private val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
  * interprets `%xx` and leaves `+` literal, so `URLEncoder`'s `+`-for-space would break SMB
  * paths with spaces (see content/ui/.../Routes.kt:15-17).
  */
-private fun streamUrl(endpointId: String, itemRef: String): String =
-    "http://127.0.0.1:${SERVER_PORT}/relay/fs?ep=" + Uri.encode(endpointId) + "&ref=" + Uri.encode(itemRef)
+private fun streamUrl(endpointId: String, itemRef: String, cached: Boolean): String =
+    "http://127.0.0.1:${SERVER_PORT}/relay/fs?ep=" + Uri.encode(endpointId) + "&ref=" + Uri.encode(itemRef) +
+        if (cached) "&cached=true" else ""
+
+/** Wrap a progressive HTTP URL so it flows through sr (proxy on the sr→origin leg, RAM cache). */
+private fun relayUrl(endpointId: String, originalUrl: String): String =
+    "http://127.0.0.1:${SERVER_PORT}/relay/url?ep=" + Uri.encode(endpointId) + "&url=" +
+        Uri.encode(originalUrl) + "&cached=true"
+
+private val relayPrefix = "http://127.0.0.1:${SERVER_PORT}/relay/"
+private const val HLS_MIME = "application/vnd.apple.mpegurl"
 
 internal suspend fun enrichSpec(
     sources: List<PlaybackSource>,
@@ -42,7 +52,17 @@ internal suspend fun enrichSpec(
     val subtitlePrefs = StorageBindingsHolder.get().appConfigStore.loadSubtitlePrefs()
 
     val enrichedSources = sources.map { src ->
-        src.copy(mimeType = src.mimeType ?: PlaybackMimeTypes.fromUrl(src.url))
+        val mt = src.mimeType ?: PlaybackMimeTypes.fromUrl(src.url)
+        // HLS stays direct (manifest URL-rewriting breaks relative segment URLs); URLs already
+        // pointing at sr (fs/url/spider token) are left as-is. Other progressive HTTP URLs are
+        // wrapped through /relay/url so the proxy + RAM cache apply on the sr→origin leg.
+        val url = if (mt == HLS_MIME || src.url.startsWith(relayPrefix)) {
+            src.url
+        } else {
+            UrlRelayRecipe.ensureRegistered()
+            relayUrl(endpointId, src.url)
+        }
+        src.copy(mimeType = mt, url = url)
     }
 
     val state = PlaybackState(
@@ -74,7 +94,7 @@ internal suspend fun constructStreamSources(
     if (!FileRelay.ensureOpen(delegate.endpointId, info.ref) { delegate.openStream(info.ref) }) {
         return emptyList()
     }
-    val videoUrl = streamUrl(delegate.endpointId, info.ref)
+    val videoUrl = streamUrl(delegate.endpointId, info.ref, cached = true)
     val subtitleTracks = scanSidecarSubtitles(delegate, info)
 
     activeStreamRefs[info.ref] = listOf(info.ref) + subtitleTracks.map { it.trackId }
@@ -104,7 +124,7 @@ internal suspend fun scanSidecarSubtitles(
     }.mapNotNull { sibling ->
         val stem = sibling.filename?.substringBeforeLast('.') ?: return@mapNotNull null
         if (stem != videoStem) return@mapNotNull null
-        val url = streamUrl(delegate.endpointId, sibling.ref)
+        val url = streamUrl(delegate.endpointId, sibling.ref, cached = false)
         SubtitleTrack(
             trackId = sibling.ref,
             label = sibling.filename ?: sibling.ref,

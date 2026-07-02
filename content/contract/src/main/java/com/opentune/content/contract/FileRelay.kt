@@ -198,7 +198,7 @@ private suspend fun pumpProviderStream(
     }
 }
 
-internal fun parseRange(header: String, totalSize: Long): Pair<Long, Long> {
+fun parseRange(header: String, totalSize: Long): Pair<Long, Long> {
     val spec = header.removePrefix("bytes=")
     val dashIdx = spec.indexOf('-')
     val start = if (dashIdx > 0) spec.substring(0, dashIdx).toLongOrNull() ?: 0L else 0L

@@ -9,7 +9,7 @@ import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 @UnstableApi
 object OpenTuneExoPlayer {
 
-    const val DEFAULT_PRE_BUFFER_MS = 5 * 60 * 1000
+    const val DEFAULT_PRE_BUFFER_MS = 1 * 60 * 1000
 
     data class PlayerWithMeter(val player: ExoPlayer, val bandwidthMeter: DefaultBandwidthMeter)
 

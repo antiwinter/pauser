@@ -60,6 +60,9 @@ class ClashProxyClient(private val values: Map<String, String>) : ProxyClient {
 
     override fun getHttpClient(): OkHttpClient = cached
 
+    override val proxy: Proxy
+        get() = Proxy(Proxy.Type.HTTP, InetSocketAddress(host, resolvedProxyPort ?: 7890))
+
     // One shared OkHttpClient (and ConnectionPool) per proxy config — stream and JS engine
     // both call getHttpClient(), so they must share a single pool through the proxy.
     // resolvedProxyPort is populated by test(), which always runs before playback.

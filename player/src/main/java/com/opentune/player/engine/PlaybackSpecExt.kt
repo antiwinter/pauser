@@ -3,7 +3,6 @@ package com.opentune.player.engine
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -46,13 +45,6 @@ fun PlaybackSpec.toMediaSource(
         .addInterceptor(headersInterceptor())
         .build()
     val dataSourceFactory = OkHttpDataSource.Factory(okHttp)
-    // Wrap upstream in a disk cache so seeks back to already-read ranges don't re-fetch
-    // (over LAN for SMB, over the network for HLS/HTTP). Cache keys = source URL, which is
-    // stable for relay URLs. FLAG_IGNORE_CACHE_ON_ERROR: never fail a request due to the cache.
-    val cachedFactory = CacheDataSource.Factory()
-        .setCache(PlayerCache.get(context))
-        .setUpstreamDataSourceFactory(dataSourceFactory)
-        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     val mediaItem = MediaItem.Builder()
         .setUri(Uri.parse(source.url))
         .apply { source.mimeType?.let { setMimeType(it) } }
@@ -62,9 +54,9 @@ fun PlaybackSpec.toMediaSource(
     // HLS uses its dedicated factory only when there's no sidecar; with a sidecar we need
     // DefaultMediaSourceFactory, which is the one that merges the external text track.
     if (isHls && sidecarSubtitle == null) {
-        return HlsMediaSource.Factory(cachedFactory)
+        return HlsMediaSource.Factory(dataSourceFactory)
             .createMediaSource(mediaItem)
     }
-    val mediaSourceFactory = DefaultMediaSourceFactory(cachedFactory)
+    val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
     return mediaSourceFactory.createMediaSource(mediaItem)
 }
