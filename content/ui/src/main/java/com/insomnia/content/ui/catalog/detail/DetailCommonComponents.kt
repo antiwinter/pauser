@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTvMaterial3Api::class)
+
 package com.insomnia.content.ui.catalog.detail
 
 import androidx.compose.foundation.background
@@ -69,7 +71,7 @@ fun DetailHeader(viewModel: DetailViewModel) {
             text = displayTitle,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -131,7 +133,7 @@ fun DetailBackdrop(
     backdropUrl: String?,
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A1A)),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -230,7 +232,7 @@ fun DetailOverviewSnippet(
     Text(
         text = overview,
         style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.87f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.87f),
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
     )
@@ -245,7 +247,7 @@ fun DetailOverviewFull(
     Text(
         text = overview,
         style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.87f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.87f),
     )
 }
 
@@ -268,9 +270,9 @@ fun PageIndicator(
                     .width(if (i == currentPage) 16.dp else 8.dp)
                     .background(
                         if (i == currentPage)
-                            Color.White
+                            MaterialTheme.colorScheme.onSurface
                         else
-                            Color.White.copy(alpha = 0.3f),
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                         shape = MaterialTheme.shapes.extraSmall,
                     ),
             )
@@ -284,9 +286,9 @@ internal fun Badge(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
-            .background(Color.White.copy(alpha = 0.18f), shape = MaterialTheme.shapes.extraSmall)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f), shape = MaterialTheme.shapes.extraSmall)
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }

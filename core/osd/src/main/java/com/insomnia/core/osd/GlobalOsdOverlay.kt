@@ -14,8 +14,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.insomnia.core.theme.ScrimStrong
 
 @Composable
 fun GlobalOsdOverlay() {
@@ -31,10 +31,10 @@ fun GlobalOsdOverlay() {
         ) {
             Text(
                 text = message ?: "",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
-                    .background(Color(0xCC000000))
+                    .background(ScrimStrong)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }

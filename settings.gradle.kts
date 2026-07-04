@@ -19,6 +19,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "Insomnia"
 include(":app")
+include(":core:theme")
 include(":core:form")
 include(":core:form:contract")
 include(":core:osd")

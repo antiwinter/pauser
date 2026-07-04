@@ -20,8 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -34,6 +35,7 @@ import kotlinx.coroutines.delay
 private const val PAD_SURFACE_CONTROLLER_AUTO_HIDE_MS = 3_000L
 
 @UnstableApi
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PadPlayerSurface(
     controller: PlayerSurfaceController,
@@ -51,6 +53,7 @@ fun PadPlayerSurface(
 }
 
 @UnstableApi
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun PadPlayerSurfaceContent(
     controller: PlayerSurfaceController,
@@ -151,7 +154,7 @@ private fun PadPlayerSurfaceContent(
             CircularProgressIndicator(
                 modifier = Modifier.size(48.dp),
                 strokeWidth = 4.dp,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }

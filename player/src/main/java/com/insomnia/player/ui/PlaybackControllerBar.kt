@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.max
+import com.insomnia.core.theme.ScrimStrong
 
 private fun formatMs(ms: Long): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)
@@ -35,12 +37,6 @@ private fun formatMs(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
-/**
- * Shared bottom controller bar. Display-only — position polling and visibility toggling
- * are handled by the caller (TvPlayer or PadPlayer).
- *
- * No touch scrubbing in Phase 2. Both progress layers are read-only indicators.
- */
 @Composable
 fun PlaybackControllerBar(
     position: Long,
@@ -57,12 +53,13 @@ fun PlaybackControllerBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xCC000000))
+            .background(ScrimStrong)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        // Two rounded pill bars with a gap between them.
-        // Bar 1 (blue, played): 0 → playedX - halfGap. Hidden when nothing played.
-        // Bar 2 (dark gray base + gray buffered overlay): playedX + halfGap → end.
+        val barBaseColor = MaterialTheme.colorScheme.surfaceVariant
+        val barBufferedColor = MaterialTheme.colorScheme.onSurfaceVariant
+        val barPlayedColor = MaterialTheme.colorScheme.primary
+
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -77,21 +74,18 @@ fun PlaybackControllerBar(
             val playedX = totalW * playedFraction
             val bufferedX = totalW * bufferedFraction
 
-            // Bar 2: dark gray base from (playedX + halfGap) to end
             val bar2Left = if (playedFraction > 0f) (playedX + halfGap).coerceAtMost(totalW) else 0f
             val bar2Width = (totalW - bar2Left).coerceAtLeast(0f)
             if (bar2Width > 0f) {
                 val bar2Path = Path().apply {
                     addRoundRect(RoundRect(bar2Left, 0f, totalW, barH, r))
                 }
-                // dark gray base
-                drawPath(bar2Path, Color(0xFF404040))
-                // gray buffered overlay, clipped to bar 2 shape
+                drawPath(bar2Path, barBaseColor)
                 val bufferedInBar2 = (bufferedX - bar2Left).coerceIn(0f, bar2Width)
                 if (bufferedInBar2 > 0f) {
                     clipPath(bar2Path) {
                         drawRect(
-                            color = Color(0xFF808080),
+                            color = barBufferedColor,
                             topLeft = Offset(bar2Left, 0f),
                             size = Size(bufferedInBar2, barH),
                         )
@@ -99,11 +93,10 @@ fun PlaybackControllerBar(
                 }
             }
 
-            // Bar 1: blue played, 0 → (playedX - halfGap). Hidden when playedFraction == 0.
             val bar1Width = (playedX - halfGap).coerceAtLeast(0f)
             if (playedFraction > 0f && bar1Width > 0f) {
                 drawRoundRect(
-                    color = Color(0xFF2979FF),
+                    color = barPlayedColor,
                     topLeft = Offset(0f, 0f),
                     size = Size(bar1Width, barH),
                     cornerRadius = r,
@@ -129,14 +122,14 @@ fun PlaybackControllerBar(
                         },
                     ),
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(28.dp),
                 )
             }
 
             Text(
                 text = "${formatMs(position)} / ${formatMs(duration)}",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
             )
         }

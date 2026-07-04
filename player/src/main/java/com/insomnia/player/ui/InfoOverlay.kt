@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableFloatState
@@ -20,13 +21,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import com.insomnia.core.theme.ScrimStrong
+import com.insomnia.core.theme.StatusOk
+import com.insomnia.core.theme.StatusFail
 import com.insomnia.player.PlaybackDisplayInfo
 import com.insomnia.player.PlaybackSpec
 import com.insomnia.player.formatBitrate
@@ -55,8 +58,6 @@ internal class InfoOverlayState(
 internal fun InfoOverlay(state: InfoOverlayState) {
     if (!state.isVisible) return
     val ti = state.trackInfo
-    // When no track of a type is selected (e.g. renderer disabled by a decode error), fall back to
-    // every advertised mime of that type so the user still sees which formats the container carries.
     val videoMime = ti.videoMime ?: state.tracks.allMimes(C.TRACK_TYPE_VIDEO)
     val audioMime = ti.audioMime ?: state.tracks.allMimes(C.TRACK_TYPE_AUDIO)
     val isHdrEnabled = ti.isHdrCapable && state.displaySupportsHdr
@@ -72,7 +73,7 @@ internal fun InfoOverlay(state: InfoOverlayState) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xCC000000))
+                .background(ScrimStrong)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
@@ -81,33 +82,32 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = state.displayInfo.title, color = Color.White, fontSize = 14.sp)
+                Text(text = state.displayInfo.title, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
                 Text(
                     text = trackLabel(videoMime, ti.videoDecoderStatus),
-                    color = if (isTrackFailed(videoMime, ti.videoDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
+                    color = if (isTrackFailed(videoMime, ti.videoDecoderStatus)) StatusFail else MaterialTheme.colorScheme.onSurface,
                     fontSize = 14.sp,
                 )
                 Text(
                     text = trackLabel(audioMime, ti.audioDecoderStatus),
-                    color = if (isTrackFailed(audioMime, ti.audioDecoderStatus)) Color(0xFFFF6B6B) else Color.White,
+                    color = if (isTrackFailed(audioMime, ti.audioDecoderStatus)) StatusFail else MaterialTheme.colorScheme.onSurface,
                     fontSize = 14.sp,
                 )
                 if (isHdrEnabled) {
                     Text(
                         text = "HDR",
-                        color = Color(0xFF4CAF50),
+                        color = StatusOk,
                         fontSize = 14.sp,
                     )
                 }
                 state.bitrate?.takeIf { it > 0 }?.let { br ->
-                    Text(text = formatBitrate(br.toFloat()), color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                    Text(text = formatBitrate(br.toFloat()), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 }
             }
-            // Download speed on the right; hidden only before first measurement (-1 sentinel).
             if (mbps >= 0f) {
                 Text(
                     text = formatBitrate(mbps * 1_000_000f),
-                    color = Color(0xFFAAAAAA),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp,
                 )
             }
@@ -115,7 +115,6 @@ internal fun InfoOverlay(state: InfoOverlayState) {
     }
 }
 
-/** All distinct mimes advertised for [type] across every group, or null when none exist. */
 @UnstableApi
 private fun Tracks.allMimes(type: Int): String? {
     val mimes = groups.filter { it.type == type }
@@ -125,9 +124,6 @@ private fun Tracks.allMimes(type: Int): String? {
     return mimes.takeIf { it.isNotEmpty() }?.joinToString(",")
 }
 
-/** "codec[status]", or bare "codec" when status is passthrough/empty (no decoder in the path).
- *  Accepts a comma-separated mime list (the all-mimes fallback); each is stripped of its
- *  video/audio prefix and deduped. */
 private fun trackLabel(mime: String?, decoderStatus: String?): String {
     if (mime.isNullOrEmpty()) return ""
     val codecs = mime.split(',')
@@ -139,12 +135,10 @@ private fun trackLabel(mime: String?, decoderStatus: String?): String {
     return if (decoderStatus.isNullOrEmpty() || decoderStatus == "passthrough") codecs else "$codecs[$decoderStatus]"
 }
 
-/** Returns true if the track has a decode error. */
 private fun isTrackFailed(mime: String?, decoderStatus: String?): Boolean {
     return mime != null && decoderStatus == "err"
 }
 
-/** One-time check: does the default display support any HDR type? */
 private fun displaySupportsHdr(context: Context): Boolean {
     val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     return dm.getDisplay(Display.DEFAULT_DISPLAY)?.hdrCapabilities?.supportedHdrTypes?.isNotEmpty() == true

@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -37,6 +36,7 @@ import com.insomnia.player.manager.subtitle.CCOverlay
 import com.insomnia.player.ui.rememberInfoOverlayState
 import com.insomnia.player.ui.rememberMenuOverlayState
 import com.insomnia.player.engine.rememberPlaybackSurface
+import com.insomnia.core.theme.ScrimMedium
 import kotlinx.coroutines.delay
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
@@ -66,12 +66,12 @@ private fun PlayerLoadingOverlay(onBack: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = "Loading spec...",
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyLarge,
         )
     }
@@ -243,9 +243,9 @@ private fun TvPlayerSurfaceContent(
             Text(
                 text = "buffering...",
                 modifier = Modifier
-                    .background(Color(0x88000000), shape = RoundedCornerShape(8.dp))
+                    .background(ScrimMedium, shape = RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyLarge,
             )
         }

@@ -187,7 +187,6 @@ class PlaybackSession(
 
             exo.setMediaSource(spec.toMediaSource(appContext), state.positionMs)
             exo.prepare()
-            startHeartbeat()
         }
     }
 

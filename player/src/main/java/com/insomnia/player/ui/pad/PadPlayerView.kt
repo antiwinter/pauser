@@ -6,8 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -23,6 +24,7 @@ class InsomniaPadPlayerView @JvmOverloads constructor(
 ) : PlayerView(context, attrs, defStyleAttr)
 
 @UnstableApi
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 internal fun PadPlayerView(
     player: ExoPlayer,
@@ -46,6 +48,6 @@ internal fun PadPlayerView(
         },
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
     )
 }

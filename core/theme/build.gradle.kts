@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.insomnia.core.osd"
+    namespace = "com.insomnia.core.theme"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {
@@ -15,10 +15,8 @@ android {
 }
 
 dependencies {
-    implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.tv.material)
-    implementation(project(":core:theme"))
 }

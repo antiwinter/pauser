@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,8 +23,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.insomnia.player.manager.PlayerMenuEntry
@@ -130,7 +134,7 @@ fun MenuOverlay(state: MenuOverlayState) {
             modifier = Modifier
                 .padding(end = MENU_END_PADDING_DP.dp)
                 .width(MENU_WIDTH_DP.dp)
-                .background(Color(0xFF1C1C1C), shape = RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp))
                 .padding(vertical = 8.dp),
         ) {
             when (state.depth) {
@@ -190,14 +194,24 @@ fun MenuOverlay(state: MenuOverlayState) {
 
 @Composable
 private fun PlayerMenuItem(label: String, isCursor: Boolean, isActive: Boolean) {
-    val prefix = if (isActive) "● " else "  "
+    val text: AnnotatedString = buildAnnotatedString {
+        if (isActive) {
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("● ") }
+        } else {
+            append("   ")
+        }
+        append(label)
+    }
     Text(
-        text = "$prefix$label",
+        text = text,
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isCursor) Color(0xFF3D3D3D) else Color.Transparent)
+            .background(
+                if (isCursor) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        color = if (isCursor) Color.White else Color(0xFFCCCCCC),
+        color = if (isCursor) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 15.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

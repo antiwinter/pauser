@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.insomnia.app.BuildConfig
@@ -26,9 +27,23 @@ import com.insomnia.core.osd.gOSD
 import com.insomnia.proxy.contract.ProxyClient
 import com.insomnia.storage.EndpointEntity
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.launch
+
+/** Default button palette: unselected = dark gray surface, selected/focused = accent blue. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun buttonColors() = ButtonDefaults.colors(
+    containerColor       = MaterialTheme.colorScheme.surfaceVariant,
+    contentColor         = MaterialTheme.colorScheme.onSurface,
+    focusedContainerColor = MaterialTheme.colorScheme.primary,
+    focusedContentColor  = MaterialTheme.colorScheme.onPrimary,
+    pressedContainerColor = MaterialTheme.colorScheme.primary,
+    pressedContentColor  = MaterialTheme.colorScheme.onPrimary,
+)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -79,6 +94,7 @@ fun HomeRoute(
                     Button(
                         onClick = { onOpenBrowse(provider.protocol, e.endpointId) },
                         modifier = Modifier.onTvMenuKeyDown { onEditProvider(provider.protocol, e.endpointId) },
+                        colors = buttonColors(),
                     ) {
                         Text(e.displayName)
                     }
@@ -97,21 +113,33 @@ fun HomeRoute(
                     modifier = Modifier.onTvMenuKeyDown {
                         onEditProxy(proxy.proxyType, proxy.id)
                     },
+                    colors = buttonColors(),
                 ) {
                     Text(proxy.displayName)
                 }
             }
-            Button(onClick = onOpenSettings) { Text("Settings") }
-            Button(onClick = onAddEndpoint) {
+            Button(
+                onClick = onOpenSettings,
+                colors = buttonColors(),
+            ) { Text("Settings") }
+            Button(
+                onClick = onAddEndpoint,
+                colors = buttonColors(),
+            ) {
                 Text("[+]")
             }
-            Button(onClick = { gOSD.msg("OSD test message") }) {
+            Button(
+                onClick = { gOSD.msg("OSD test message") },
+                colors = buttonColors(),
+            ) {
                 Text("[OSD test]")
             }
         }
         Text(
             text = BuildConfig.GIT_VERSION,
-            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),

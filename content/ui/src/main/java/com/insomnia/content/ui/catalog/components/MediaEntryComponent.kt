@@ -25,6 +25,8 @@ import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.EntryType
 import com.insomnia.storage.TitleLang
 import java.io.File
+import com.insomnia.core.theme.StatusFail
+import com.insomnia.core.theme.StatusWarn
 
 private fun coverImageModel(cover: String?): Any? = when {
     cover.isNullOrBlank() -> null
@@ -83,10 +85,10 @@ fun MediaEntryComponent(
                 }
 
                 // Favorite overlay (bottom-left)
-                if (item.userData?.isFavorite == true) {
+                    if (item.userData?.isFavorite == true) {
                     Text(
                         text = "♥",
-                        color = Color(0xFFE53935),
+                        color = StatusFail,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -95,10 +97,10 @@ fun MediaEntryComponent(
                 }
 
                 // Rating overlay (bottom-right)
-                item.communityRating?.let { rating ->
+                    item.communityRating?.let { rating ->
                     Text(
                         text = "★ ${"%.1f".format(rating)}",
-                        color = Color(0xFFFDD835),
+                        color = StatusWarn,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)

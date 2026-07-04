@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,14 +36,24 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.insomnia.core.form.TvOutlinedTextField
+import com.insomnia.core.theme.StatusOk
+import com.insomnia.core.theme.StatusWarn
+import com.insomnia.core.theme.StatusSlow
+import com.insomnia.core.theme.StatusUnknown
 import kotlinx.coroutines.launch
 
+private val LatencyUnknown = StatusUnknown
+private val LatencyFail    = Color(0xFFC62828)
+private val LatencyFast    = StatusOk
+private val LatencyMedium  = StatusWarn
+private val LatencySlow    = StatusSlow
+
 private fun latencyColor(ms: Long?): Color = when {
-    ms == null           -> Color(0xFF808080)  // not tested yet
-    ms < 0 || ms == 0L   -> Color(0xFFC62828)  // timeout / failed
-    ms <= 200            -> Color(0xFF2E7D32)  // green: fast
-    ms <= 300            -> Color(0xFFF9A825)  // yellow: medium
-    else                 -> Color(0xFFE65100)  // orange: slow
+    ms == null           -> LatencyUnknown
+    ms < 0 || ms == 0L   -> LatencyFail
+    ms <= 200            -> LatencyFast
+    ms <= 300            -> LatencyMedium
+    else                 -> LatencySlow
 }
 
 private fun latencyText(ms: Long?): String = when {
@@ -146,7 +157,7 @@ fun ClashCtrlUi(
                 onValueChange = { subscriptionUrl = it },
                 label = { Text("Subscription URL", fontSize = 12.sp) },
                 placeholder = if (subscriptionLabel != null) {
-                    { Text(subscriptionLabel!!, fontSize = 12.sp, color = Color(0xFF808080)) }
+                    { Text(subscriptionLabel!!, fontSize = 12.sp, color = LatencyUnknown) }
                 } else null,
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -168,7 +179,7 @@ fun ClashCtrlUi(
             }
             Text(
                 text = msg,
-                color = Color(0xFFC62828),
+                color = MaterialTheme.colorScheme.error,
                 fontSize = 14.sp,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -223,7 +234,7 @@ private fun ProxyLineChip(
             .fillMaxWidth()
             .shadow(if (isActive) 1.dp else 0.5.dp, shape)
             .let { mod ->
-                if (isActive) mod.border(width = 1.5.dp, color = Color(0xFF1565C0), shape = shape)
+                if (isActive) mod.border(width = 1.5.dp, color = MaterialTheme.colorScheme.primary, shape = shape)
                 else mod
             },
     ) {

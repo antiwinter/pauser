@@ -40,4 +40,5 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.tv.material)
+    implementation(project(":core:theme"))
 }
