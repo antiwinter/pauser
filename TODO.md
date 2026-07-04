@@ -50,9 +50,8 @@
 ## Player
 - [x] Opt: episode track selection should persist on series
 - [x] Fix: subtitle position persistence
-- [ ] Fix: subtitle should align to bottom vertially
-- [ ] Fix: subtitle track/audio track not persistant or not applied on the next run
-- [ ] keep 1min played buffer
+- [x] Fix: subtitle should align to bottom vertially
+- [x] Fix: subtitle track/audio track not persistant or not applied on the next run
 - [x] Fix: smb slow buffering
 - [x] Fix: 5a.mkv audio decoder
 - [x] merge infoOSD w/ playbackOverlay
@@ -72,11 +71,12 @@
 - [ ] next episode
 - [ ] sprite
 - [ ] proxied buffering
+- [ ] keep 1min played buffer
 - [ ] live surface
 - [ ] external subtitle preload, system lang candidates, original lang reference line
 
 ## Roadmap
-- [ ] remove insomnia naming
+- [x] rename to insomnia
 - [x] HDR support
 - [-] release insomnia-x86_64-vx.x.x.apk
 - [ ] pro user decoration. ICON/badge
