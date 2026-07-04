@@ -175,7 +175,7 @@ class PlaybackSession(
         _spec.value = spec
         _spec.value?.updateEntryState(EntryStateKeys.SOURCE_INDEX, state.sourceIndex.toString())
         withContext(Dispatchers.Main) {
-            Timber.d("prepare: load startMs=${state.positionMs} (was state=${exo.playbackState})")
+            Timber.d("prepare: resumePositionMs=${state.positionMs} (was state=${exo.playbackState})")
 
             // trackSelectionParameters persists across items; reset so a prior entry's flags don't leak.
             exo.trackSelectionParameters = TrackSelectionParameters.getDefaults(appContext)
@@ -202,12 +202,17 @@ class PlaybackSession(
     }
 
     fun play() {
+        Timber.d("play: starting playback, heartbeat=${heartbeatJob != null}")
         exo.playWhenReady = true
+        startHeartbeat()
         notifyEntryState(EntryStateKeys.PLAYING_STATE, PlayingState.PLAYING.name)
     }
 
     fun pause() {
+        Timber.d("pause: stopping playback, heartbeat=${heartbeatJob != null}")
         exo.playWhenReady = false
+        heartbeatJob?.cancel()
+        heartbeatJob = null
         syncEntryState(PlayingState.PAUSED)
     }
 
@@ -246,6 +251,7 @@ class PlaybackSession(
     private fun startHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch {
+            Timber.d("heartbeat: started interval=${_spec.value?.progressIntervalMs ?: DEFAULT_PROGRESS_INTERVAL_MS}ms")
             while (isActive) {
                 val interval = _spec.value?.progressIntervalMs?.takeIf { it > 0L } ?: DEFAULT_PROGRESS_INTERVAL_MS
                 delay(interval)
@@ -258,6 +264,7 @@ class PlaybackSession(
                     currentPlayingState().name,
                 )
             }
+            Timber.d("heartbeat: stopped")
         }
     }
 }

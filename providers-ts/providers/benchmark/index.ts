@@ -37,7 +37,7 @@ import { runBench } from './bench.js';
     return [];
   },
 
-  async getPlaybackSources(_args: { itemRef: string }): Promise<PlaybackSource[]> {
+  async getPlaybackSources(_args: { itemRef: string; startMs: number }): Promise<PlaybackSource[]> {
     throw new Error('not supported');
   },
 

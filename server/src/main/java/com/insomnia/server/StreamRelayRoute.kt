@@ -43,6 +43,9 @@ class StreamRelayRoute {
             for (name in call.parameters.names()) call.parameters[name]?.let { params[name] = it }
             for (name in call.request.headers.names()) call.request.headers[name]?.let { params[name] = it }
 
+            val rangeHeader = params["Range"]
+            Timber.d("relay request: token=$token range=${rangeHeader ?: "none"}")
+
             val cached = params["cached"] == "true"
             // Key = path + query params (sorted, stable). Range is a header, so seeks on the
             // same source share a key; the route param `token` is excluded.

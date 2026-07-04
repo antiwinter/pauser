@@ -73,8 +73,9 @@ let state: CatVodClientState | null = null;
 
   async getPlaybackSources(args: {
     itemRef: string;
+    startMs: number;
   }): Promise<PlaybackSource[]> {
-    return getPlaybackSources(state!, args.itemRef);
+    return getPlaybackSources(state!, args.itemRef, args.startMs ?? 0);
   },
 
   async updateEntryState(_args: {

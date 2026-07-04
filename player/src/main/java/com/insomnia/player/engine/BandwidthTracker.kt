@@ -5,6 +5,7 @@ import okhttp3.ResponseBody
 import okio.BufferedSource
 import okio.ForwardingSource
 import okio.buffer
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicLong
 
 internal object BandwidthTracker {
@@ -19,7 +20,10 @@ internal object BandwidthTracker {
     private val lock = Any()
 
     val interceptor: Interceptor = Interceptor { chain ->
-        val response = chain.proceed(chain.request())
+        val request = chain.request()
+        val range = request.header("Range") ?: "none"
+        Timber.d("BW request: ${request.method} ${request.url} range=$range")
+        val response = chain.proceed(request)
         response.newBuilder()
             .body(response.body?.let { body -> CountingResponseBody(body) })
             .build()

@@ -91,9 +91,10 @@ class PlayerController(
             Timber.w( "prepare: no client set, ignoring")
             return
         }
-        _pendingStartMs = (startMs ?: entryInfo.userData?.positionMs ?: 0L).coerceAtLeast(0L)
+        val resumeMs = entryInfo.userData?.positionMs ?: 0L
+        _pendingStartMs = (startMs ?: resumeMs).coerceAtLeast(0L)
         _pendingInfo = entryInfo
-        Timber.d( "prepare: ref=${entryInfo.ref} startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
+        Timber.d( "prepare: ref=${entryInfo.ref} resumeMs=$resumeMs startMs=$_pendingStartMs (hadPending=${_debounceJob?.isActive})")
 
         setDisplayInfo(entryInfo)
         launchResolve(withDelay = _debounceJob?.isActive == true)

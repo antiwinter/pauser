@@ -234,6 +234,7 @@ async function resolvePlaySource(result: CatVodPlayResult): Promise<PlaybackSour
 export async function getPlaybackSources(
   _state: CatVodClientState,
   itemRef: string,
+  _startMs: number,
 ): Promise<PlaybackSource[]> {
   const ref = decodeRef(itemRef);
   if (ref.type === 'unsupported') throw new Error("Unsupported ref type");

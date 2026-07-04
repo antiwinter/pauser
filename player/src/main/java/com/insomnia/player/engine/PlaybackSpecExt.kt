@@ -11,6 +11,7 @@ import com.insomnia.player.PlaybackSpec
 import com.insomnia.player.manager.subtitle.findSubtitleTrack
 import com.insomnia.player.manager.subtitle.toSidecarConfig
 import okhttp3.OkHttpClient
+import timber.log.Timber
 
 /**
  * The single entry point for building a video [MediaSource]. Every prepare/rebuild path (initial
@@ -27,6 +28,14 @@ fun PlaybackSpec.toMediaSource(
 ): MediaSource {
     val source = sources[state.sourceIndex]
     val sidecarSubtitle = findSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
+
+    val playType = when {
+        source.url.contains("static=true") -> "direct"
+        source.mimeType == "application/vnd.apple.mpegurl" || source.url.endsWith(".m3u8") -> "hls"
+        source.url.contains("Transcoding") || source.url.contains("transcode") -> "transcode"
+        else -> "unknown"
+    }
+    Timber.d("toMediaSource: type=%s mimeType=%s url=%s".format(playType, source.mimeType, source.url))
     // Always send a User-Agent: some hosts reject the okhttp default UA that
     // OkHttpDataSource would otherwise send. Provider-supplied headers still win.
     val defaultUa = androidx.media3.common.util.Util.getUserAgent(context, context.packageName)

@@ -177,7 +177,7 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val ref = call.request.queryParameters["ref"] ?: return@get call.respond400("missing ref")
                 val startMs = call.request.queryParameters["startMs"]?.toLongOrNull() ?: 0L
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
-                val sources = runCatching { instance.getPlaybackSources(ref) }.getOrElse {
+                val sources = runCatching { instance.getPlaybackSources(ref, startMs) }.getOrElse {
                     Timber.e(it, "getPlaybackSources error"); return@get call.respond500(it.message)
                 }
                 val source = sources.firstOrNull() ?: return@get call.respond500("no sources")

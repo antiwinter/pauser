@@ -100,15 +100,15 @@ class CachingEndpointClient(
         return mergeEntryList(list)
     }
 
-    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
-        return delegate.getPlaybackSources(itemRef)
+    override suspend fun getPlaybackSources(itemRef: String, startMs: Long): List<PlaybackSource> {
+        return delegate.getPlaybackSources(itemRef, startMs)
     }
 
     suspend fun getPlaybackSpec(info: EntryInfo, startMs: Long): com.insomnia.player.PlaybackSpec {
         val sources = if (!info.sources.isNullOrEmpty()) {
             info.sources
         } else {
-            val delegateSources = delegate.getPlaybackSources(info.ref)
+            val delegateSources = delegate.getPlaybackSources(info.ref, startMs)
             if (delegateSources.isNotEmpty()) {
                 delegateSources
             } else {

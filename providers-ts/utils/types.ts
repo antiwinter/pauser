@@ -256,6 +256,7 @@ export interface InsomniaProviderBridge {
 
   getPlaybackSources(args: {
     itemRef: string;
+    startMs: number;
   }): Promise<PlaybackSource[] | { sources: PlaybackSource[]; ctx: ProviderCtx }>;
 
   updateEntryState(args: {

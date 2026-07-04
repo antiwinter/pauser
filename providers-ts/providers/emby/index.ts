@@ -85,8 +85,9 @@ let state: EmbyClientState | null = null;
 
   async getPlaybackSources(args: {
     itemRef: string;
+    startMs: number;
   }): Promise<{ sources: PlaybackSource[]; ctx: EmbyHooksCtx }> {
-    return getPlaybackSources(state!, args.itemRef);
+    return getPlaybackSources(state!, args.itemRef, args.startMs ?? 0);
   },
 
   async updateEntryState(args: {

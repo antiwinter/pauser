@@ -270,10 +270,11 @@ class JsClient(
 
     override val progressIntervalMs: Long = 0L
 
-    override suspend fun getPlaybackSources(itemRef: String): List<PlaybackSource> {
+    override suspend fun getPlaybackSources(itemRef: String, startMs: Long): List<PlaybackSource> {
         ensureReady()
         val args = buildJsonObject {
             put("itemRef", itemRef)
+            put("startMs", startMs)
         }
         val resultJson = engine.callMethod("getPlaybackSources", args.toString())
             ?: engine.callMethod("getPlaybackSpec", args.toString())

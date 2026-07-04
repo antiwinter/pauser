@@ -210,6 +210,7 @@ function normalizeSubtitleCodec(raw: string): string {
 export async function getPlaybackSources(
   state: EmbyClientState,
   itemRef: string,
+  startMs: number,
 ): Promise<{ sources: PlaybackSource[]; ctx: EmbyHooksCtx }> {
   const s = requireState(state); const credentials = s.credentials; const deviceProfile = s.deviceProfile; const capabilities = s.capabilities;
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
@@ -218,6 +219,7 @@ export async function getPlaybackSources(
     Id: itemRef,
     UserId: credentials.userId,
     MaxStreamingBitrate: 120_000_000,
+    StartTimeTicks: startMs > 0 ? startMs * 10_000 : null,
     DeviceProfile: deviceProfile,
     EnableDirectPlay: true,
     EnableDirectStream: true,
