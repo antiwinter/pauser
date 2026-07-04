@@ -28,9 +28,9 @@ export function setGlobalAuth(auth: MediaBrowserAuth): void {
 
 function mediaBrowserHeader(): string {
   const a = globalAuth ?? {
-    clientName: 'OpenTune',
+    clientName: 'Insomnia',
     deviceName: 'Android',
-    deviceId: 'opentune-fallback',
+    deviceId: 'insomnia-fallback',
     clientVersion: '0.0',
   };
   const q = (s: string) => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';

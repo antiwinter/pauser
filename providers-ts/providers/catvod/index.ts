@@ -19,7 +19,7 @@ type PlatformCapabilities = Record<string, unknown>;
 
 let state: CatVodClientState | null = null;
 
-(globalThis as unknown as Record<string, unknown>).opentuneProvider = {
+(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
 
   providesArt: true,
 

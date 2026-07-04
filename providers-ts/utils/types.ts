@@ -232,8 +232,8 @@ export interface PlatformInfo {
 
 // ── Bridge protocol ───────────────────────────────────────────────────────────
 
-/** Exposed on globalThis.opentuneProvider by providers/emby/index.ts */
-export interface OpenTuneProviderBridge {
+/** Exposed on globalThis.insomniaProvider by providers/emby/index.ts */
+export interface InsomniaProviderBridge {
   providesArt: boolean;
   getFieldsSpec(): Promise<ProviderFieldSpec[]>;
   test(): Promise<ValidationResult>;

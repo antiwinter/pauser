@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const DEFAULT_PLATFORM_INFO = {
-  deviceName: 'OpenTune Provider Test',
-  deviceId: 'opentune-provider-test',
+  deviceName: 'Insomnia Provider Test',
+  deviceId: 'insomnia-provider-test',
   clientVersion: '0.0-test',
 };
 

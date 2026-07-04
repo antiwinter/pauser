@@ -46,9 +46,9 @@ export function buildDeviceProfile(info: PlatformInfo, deviceName: string): Devi
   }));
 
   return {
-    Name: 'OpenTune Android TV',
-    FriendlyName: 'OpenTune',
-    Manufacturer: 'OpenTune',
+    Name: 'Insomnia Android TV',
+    FriendlyName: 'Insomnia',
+    Manufacturer: 'Insomnia',
     ModelName: deviceName,
     MaxStreamingBitrate: 120_000_000,
     MaxStaticBitrate: 120_000_000,

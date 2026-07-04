@@ -1,5 +1,5 @@
 /**
- * mapper.ts — Maps Emby API DTOs to the OpenTune provider contract types.
+ * mapper.ts — Maps Emby API DTOs to the Insomnia provider contract types.
  * Mirrors EmbyProviderInstance.toListItem() in Kotlin.
  *
  * All fields come from BROWSE_FIELDS (api.ts) — the single source of truth.
@@ -20,7 +20,7 @@ const METADATA_TYPES = new Set([
   'MusicArtist', 'AlbumArtist', 'CollectionFolder',
 ]);
 
-/** Map Emby types to OpenTune contract types.
+/** Map Emby types to Insomnia contract types.
  * Known media types (Movie, Episode, Video, Audio, Photo, Image,
  * Program, Trailer, MusicVideo, Book, Recording) pass through as-is.
  * Container types → Folder. Everything else → Unknown. */

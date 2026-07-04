@@ -29,7 +29,7 @@ const quickJsRuntimeName = '@jitl/quickjs-ng-wasmfile-release-sync';
 
 const program = new Command()
   .name('provider-test')
-  .description('Run standardized OpenTune TypeScript provider checks in QuickJS.')
+  .description('Run standardized Insomnia TypeScript provider checks in QuickJS.')
   .argument('[provider]', 'provider directory name under providers-ts/providers')
   .option('--no-prompt', 'do not prompt for missing credentials')
   .option('--fresh-auth', 'prompt again for provider field values before validation')

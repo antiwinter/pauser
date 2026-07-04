@@ -35,7 +35,7 @@ export default providerNames.map((name) => ({
   output: {
     file: join(rootDir, 'dist', `${name}.js`),
     format: 'iife',
-    name: 'opentuneProvider', // sets globalThis.opentuneProvider in QuickJS
+    name: 'insomniaProvider', // sets globalThis.insomniaProvider in QuickJS
     strict: false, // QuickJS bundle does not need the 'use strict' wrapper
   },
 }));

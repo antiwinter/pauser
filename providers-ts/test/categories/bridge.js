@@ -20,7 +20,7 @@ const REQUIRED_METHODS = [
  * @returns {Promise<{ providesArt: boolean }>}
  */
 export async function runBridgeChecks(reporter, runner) {
-  reporter.beginCategory('Bridge', ['opentuneProvider']);
+  reporter.beginCategory('Bridge', ['insomniaProvider']);
 
   let providesArt = false;
 

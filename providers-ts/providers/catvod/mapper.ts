@@ -2,12 +2,12 @@ import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../
 import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
 import { encodeRef } from './ref.js';
 
-// ── CatVod → OpenTune Conversion Functions ───────────────────────────────────
+// ── CatVod → Insomnia Conversion Functions ───────────────────────────────────
 // Centralized mapping layer — all handlers return CatVod types, these functions
-// convert them to OpenTune types
+// convert them to Insomnia types
 
 /**
- * Convert CatVod category list (home screen) to OpenTune folder entries
+ * Convert CatVod category list (home screen) to Insomnia folder entries
  */
 export function categoryListToFolders(
   categories: CatVodCategory[],
@@ -25,7 +25,7 @@ export function categoryListToFolders(
 }
 
 /**
- * Convert CatVod item list to OpenTune entries
+ * Convert CatVod item list to Insomnia entries
  */
 export function vodListToEntries(
   items: CatVodItem[],
@@ -40,7 +40,7 @@ export function vodListToEntries(
 }
 
 /**
- * Convert IPTV M3U channels to OpenTune entries, merging duplicate names.
+ * Convert IPTV M3U channels to Insomnia entries, merging duplicate names.
  * Channels with the same name get merged into one entry with multiple sources.
  * Logo: the URL that appears most frequently wins.
  *

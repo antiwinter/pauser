@@ -51,7 +51,7 @@ class InsomniaApplication : Application() {
     lateinit var endpointClientRegistry: EndpointClientRegistry
         private set
 
-    lateinit var openTuneServer: InsomniaServer
+    lateinit var insomniaServer: InsomniaServer
         private set
 
     /** Shared JAR loader for the debug JAR bridge — separate from per-engine loaders. */
@@ -107,8 +107,8 @@ class InsomniaApplication : Application() {
             override val appConfigStore get() = storageBindings.appConfigStore
             override val jarBridge get() = debugJarBridge
         }
-        openTuneServer = InsomniaServer(appContext = appContext)
-        appScope.launch(Dispatchers.IO) { openTuneServer.start() }
+        insomniaServer = InsomniaServer(appContext = appContext)
+        appScope.launch(Dispatchers.IO) { insomniaServer.start() }
         appScope.launch { providerRegistry.discoverAsync() }
     }
 

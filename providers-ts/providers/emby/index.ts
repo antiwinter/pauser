@@ -21,7 +21,7 @@ import type {
 
 let state: EmbyClientState | null = null;
 
-(globalThis as unknown as Record<string, unknown>).opentuneProvider = {
+(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
 
   // ── Provider-level (called from a fresh temp engine) ──────────────────
 
@@ -42,7 +42,7 @@ let state: EmbyClientState | null = null;
     deviceInfo: PlatformInfo;
   }): Promise<void> {
     setDeviceAuth({
-      clientName: 'OpenTune',
+      clientName: 'Insomnia',
       deviceName: args.deviceInfo.deviceName,
       deviceId: args.deviceInfo.deviceId,
       clientVersion: args.deviceInfo.clientVersion,

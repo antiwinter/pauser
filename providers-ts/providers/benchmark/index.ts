@@ -1,7 +1,7 @@
 import type { ProviderFieldSpec, ValidationResult, EntryList, PlaybackSource, QueryOptions } from '../../utils/types.js';
 import { runBench } from './bench.js';
 
-(globalThis as unknown as Record<string, unknown>).opentuneProvider = {
+(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
 
   providesArt: false,
 

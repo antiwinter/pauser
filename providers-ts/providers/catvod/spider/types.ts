@@ -1,5 +1,5 @@
 // ── CatVod Protocol Types ────────────────────────────────────────────────────
-// Pure CatVod/TVBox protocol data structures — no OpenTune concepts
+// Pure CatVod/TVBox protocol data structures — no Insomnia concepts
 //
 // Tags on fields indicate source specificity:
 //   [standard]  — core protocol, consumed by both fongmi-tv and tvboxosc clients

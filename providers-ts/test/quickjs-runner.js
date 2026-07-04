@@ -73,12 +73,12 @@ export class QuickJsProviderRunner {
   }
 
   async getProvidesArt() {
-    return this.evalImmediate('globalThis.opentuneProvider.providesArt', '<providesArt>');
+    return this.evalImmediate('globalThis.insomniaProvider.providesArt', '<providesArt>');
   }
 
   async hasMethod(name) {
     return this.evalImmediate(
-      `typeof globalThis.opentuneProvider[${JSON.stringify(name)}] === "function"`,
+      `typeof globalThis.insomniaProvider[${JSON.stringify(name)}] === "function"`,
       `<has:${name}>`,
     );
   }
@@ -87,8 +87,8 @@ export class QuickJsProviderRunner {
     const argsJson = JSON.stringify(args);
     const code = `
 (async function() {
-  var provider = globalThis.opentuneProvider;
-  if (provider == null) throw new Error('opentuneProvider not on globalThis');
+  var provider = globalThis.insomniaProvider;
+  if (provider == null) throw new Error('insomniaProvider not on globalThis');
   var fn = provider[${JSON.stringify(method)}];
   if (typeof fn !== 'function') throw new Error('method not found: ${method}');
   var value = await fn(${argsJson});
