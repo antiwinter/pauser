@@ -30,7 +30,7 @@ run_adb() {
 }
 
 run_adb exec-out \
-  "run-as com.opentune.app sh -c 'cd cache && tar cz dump'" \
+  "run-as com.insomnia.app sh -c 'cd cache && tar cz dump'" \
   > "$TAR"
 
 tar xzf "$TAR" -C dump --strip-components=1
