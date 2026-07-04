@@ -16,7 +16,6 @@ import com.insomnia.player.PlayingState
 import com.insomnia.player.SubtitleTrack
 import com.insomnia.storage.EntryStateStore
 import com.insomnia.storage.StorageBindingsHolder
-import timber.log.Timber
 
 private val subtitleExts = setOf(".srt", ".ass", ".ssa", ".vtt", ".sub")
 
@@ -66,7 +65,6 @@ internal suspend fun enrichSpec(
         src.copy(mimeType = mt, url = url)
     }
 
-    Timber.d("enrichSpec: ref=${info.ref} startMs=$startMs sources=${sources.size}")
     val state = PlaybackState(
         sourceIndex = getInheritedValue(endpointId, info, "sourceIndex") as? Int ?: 0,
         positionMs = startMs,
