@@ -19,7 +19,7 @@ target_include_directories(quickjs_engine PRIVATE ${QUICKJS_DIR})
 target_compile_definitions(quickjs_engine PRIVATE
     QUICKJS_NG_BUILD
     _GNU_SOURCE
-    CONFIG_VERSION=\"opentune\"
+    CONFIG_VERSION=\"insomnia\"
 )
 
 target_compile_options(quickjs_engine PRIVATE

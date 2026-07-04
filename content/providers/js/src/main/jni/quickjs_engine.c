@@ -153,7 +153,7 @@ static JSValue js_host_dispatch_sync(JSContext *ctx, JSValueConst this_val,
 
 /* ─── nativeCreateContext ───────────────────────────────────────────────── */
 JNIEXPORT jlong JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, jobject thiz) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, jobject thiz) {
     JSRuntime *rt=JS_NewRuntime(); if(!rt){LOGE("NewRuntime failed");return 0;}
     JS_SetMaxStackSize(rt, 0); /* let OS enforce; JNI stack headroom varies per device */
     JS_SetMemoryLimit(rt, QJS_MEMORY_LIMIT);
@@ -186,7 +186,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeCreateContext(JNIEnv *env, job
 
 /* ─── nativeDestroyContext ──────────────────────────────────────────────── */
 JNIEXPORT void JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeDestroyContext(JNIEnv *env, jobject thiz, jlong p) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeDestroyContext(JNIEnv *env, jobject thiz, jlong p) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return;
     EngineState *s=get_state(ctx); JSRuntime *rt=JS_GetRuntime(ctx);
     JS_FreeContext(ctx); JS_FreeRuntime(rt);
@@ -195,7 +195,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeDestroyContext(JNIEnv *env, jo
 
 /* ─── nativeEvalBundle ──────────────────────────────────────────────────── */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeEvalBundle(JNIEnv *env, jobject thiz, jlong p, jstring code) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeEvalBundle(JNIEnv *env, jobject thiz, jlong p, jstring code) {
     JSContext *ctx=(JSContext*)(uintptr_t)p;
     if(!ctx) return (*env)->NewStringUTF(env,"null context");
     const char *c=(*env)->GetStringUTFChars(env,code,NULL);
@@ -210,7 +210,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeEvalBundle(JNIEnv *env, jobjec
 
 /* ─── nativeEvalSnippet ─────────────────────────────────────────────────── */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeEvalSnippet(JNIEnv *env, jobject thiz, jlong p, jstring code) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeEvalSnippet(JNIEnv *env, jobject thiz, jlong p, jstring code) {
     JSContext *ctx=(JSContext*)(uintptr_t)p;
     if(!ctx) return (*env)->NewStringUTF(env,"null context");
     const char *c=(*env)->GetStringUTFChars(env,code,NULL);
@@ -227,7 +227,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeEvalSnippet(JNIEnv *env, jobje
 /* Evaluates a JS expression and returns its JSON.stringify'd value.
    Returns NULL on null/undefined result. Returns error message on exception. */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeEvalExpression(JNIEnv *env, jobject thiz, jlong p, jstring code) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeEvalExpression(JNIEnv *env, jobject thiz, jlong p, jstring code) {
     JSContext *ctx=(JSContext*)(uintptr_t)p;
     if(!ctx) return (*env)->NewStringUTF(env,"null context");
     const char *c=(*env)->GetStringUTFChars(env,code,NULL);
@@ -255,7 +255,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeEvalExpression(JNIEnv *env, jo
 
 /* ─── nativeExecutePendingJobs ──────────────────────────────────────────── */
 JNIEXPORT jint JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeExecutePendingJobs(JNIEnv *env, jobject thiz, jlong p, jint max) {
+Java_com_insomnia_provider_js_QuickJsEngine_nativeExecutePendingJobs(JNIEnv *env, jobject thiz, jlong p, jint max) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return 0;
     JSRuntime *rt=JS_GetRuntime(ctx);
     int total=0; JSContext *pctx=NULL; int r;
@@ -266,7 +266,7 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeExecutePendingJobs(JNIEnv *env
 
 /* ─── nativeCallMethod ──────────────────────────────────────────────────── */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeCallMethod(
+Java_com_insomnia_provider_js_QuickJsEngine_nativeCallMethod(
         JNIEnv *env, jobject thiz, jlong p,
         jstring methodName, jstring argsJson, jlong callbackKey) {
     JSContext *ctx=(JSContext*)(uintptr_t)p;
@@ -274,10 +274,10 @@ Java_com_opentune_provider_js_QuickJsEngine_nativeCallMethod(
     const char *meth=(*env)->GetStringUTFChars(env,methodName,NULL);
     const char *args=(*env)->GetStringUTFChars(env,argsJson,NULL);
     JSValue g=JS_GetGlobalObject(ctx);
-    JSValue prov=JS_GetPropertyStr(ctx,g,"opentuneProvider");
+    JSValue prov=JS_GetPropertyStr(ctx,g,"insomniaProvider");
     jstring err=NULL;
     if(JS_IsUndefined(prov)||JS_IsNull(prov)){
-        err=(*env)->NewStringUTF(env,"opentuneProvider not on globalThis");goto done;
+        err=(*env)->NewStringUTF(env,"insomniaProvider not on globalThis");goto done;
     }
     {
         JSValue fn=JS_GetPropertyStr(ctx,prov,meth);
@@ -322,7 +322,7 @@ done:
 /* ─── nativeSettleHostCall ──────────────────────────────────────────────── */
 /* isError=0: resolve with parsed JSON value; isError=1: reject with Error   */
 JNIEXPORT jstring JNICALL
-Java_com_opentune_provider_js_QuickJsEngine_nativeSettleHostCall(
+Java_com_insomnia_provider_js_QuickJsEngine_nativeSettleHostCall(
         JNIEnv *env, jobject thiz, jlong p, jlong key, jstring payload, jboolean isError) {
     JSContext *ctx=(JSContext*)(uintptr_t)p; if(!ctx) return NULL;
     const char *str=payload?(*env)->GetStringUTFChars(env,payload,NULL):NULL;
