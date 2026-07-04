@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.core.form"
+    namespace = "com.insomnia.core.form"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

@@ -12,13 +12,13 @@
         android:required="false" />
 
     <application
-        android:name=".OpenTuneApplication"
+        android:name=".InsomniaApplication"
         android:allowBackup="true"
         android:banner="@drawable/ic_banner"
         android:icon="@drawable/ic_banner"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OpenTune"
+        android:theme="@style/Theme.Insomnia"
         android:usesCleartextTraffic="true">
 
         <activity

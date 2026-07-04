@@ -86,7 +86,7 @@ This is only a problem if `listEntry` and `getDetail` are called concurrently on
 ```kotlin
 override val providesCover: Boolean by lazy {
     runWithEngine { engine ->
-        engine.evalExpression("globalThis.opentuneProvider.providesCover") == "true"
+        engine.evalExpression("globalThis.insomniaProvider.providesCover") == "true"
     }
 }
 ```

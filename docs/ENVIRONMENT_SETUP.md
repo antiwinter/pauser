@@ -13,7 +13,7 @@ Android Studio includes a **JDK** used to build projects (often shown as **jbr**
 ## 2. Open this project
 
 1. Start Android Studio.
-2. **File → Open** and select the `opentune` folder (the one that contains `settings.gradle.kts`).
+2. **File → Open** and select the `insomnia` folder (the one that contains `settings.gradle.kts`).
 3. When prompted, **Trust** the project.
 4. Wait for **Gradle sync** to finish (status bar at the bottom). The first sync downloads dependencies and can take several minutes.
 
@@ -47,7 +47,7 @@ In Android Studio: **Settings → Languages & Frameworks → Android SDK**
 
 For a physical **Android TV** or **Chromecast with Google TV**, enable **Developer options** and **USB debugging** (or wireless debugging) and connect the device; it should appear as a deployment target.
 
-## 5. Run OpenTune
+## 5. Run Insomnia
 
 1. Select the **app** run configuration (usually `app`).
 2. Choose your **TV emulator** or **physical device**.

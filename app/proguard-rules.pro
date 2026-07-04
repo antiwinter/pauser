@@ -1,7 +1,7 @@
-# OpenTune
+# Insomnia
 
 # QuickJS JNI callbacks are called by name from C — must not be renamed or removed
--keep class com.opentune.provider.js.QuickJsEngine {
+-keep class com.insomnia.provider.js.QuickJsEngine {
     @androidx.annotation.Keep *;
 }
 

@@ -2,11 +2,11 @@
 
 ## Context
 
-OpenTune currently uses a compile-time ServiceLoader pattern for providers (Emby, SMB). The goal is true runtime plugins that work across **Android + iOS + macOS** with a single deliverable — no per-platform compilation for plugin developers.
+Insomnia currently uses a compile-time ServiceLoader pattern for providers (Emby, SMB). The goal is true runtime plugins that work across **Android + iOS + macOS** with a single deliverable — no per-platform compilation for plugin developers.
 
 ## The Core Constraint
 
-Your `OpenTuneProvider` interface has:
+Your `InsomniaProvider` interface has:
 - **Coroutines** (`suspend fun`) — async browse, search, playback resolution
 - **Data classes** (`MediaListItem`, `PlaybackSpec`, `ServerFieldSpec`)
 - **Sealed classes** (`ValidationResult`, `MediaArt`, `MediaEntryKind`)
@@ -25,7 +25,7 @@ Any plugin system must map these to something that works across all three platfo
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  OpenTune App (Kotlin/Swift)                     │
+│  Insomnia App (Kotlin/Swift)                     │
 │  ┌────────────────────────────────────────────┐  │
 │  │  Embedded JS Engine (QuickJS / quickjs-ng) │  │
 │  │  ┌──────────────────────────────────────┐  │  │
@@ -112,9 +112,9 @@ Kotlin/Swift host ↔ JNI/C API ↔ QuickJS runtime ↔ Plugin .js
 - **Coroutines are async/await, not Kotlin coroutines** — the async model works but is different
 
 ### What to Provide Plugin Developers
-1. **TypeScript type definitions** (`@types/opentune-provider`) — full type-safe SDK
-2. **NPM package** `@opentune/provider-sdk` — contains the types + a test runner
-3. **CLI tool** to validate and package a plugin (`opentune validate plugin.js`)
+1. **TypeScript type definitions** (`@types/insomnia-provider`) — full type-safe SDK
+2. **NPM package** `@insomnia/provider-sdk` — contains the types + a test runner
+3. **CLI tool** to validate and package a plugin (`insomnia validate plugin.js`)
 4. **Example plugins** — a minimal HTTP provider, one with pagination, one with playback
 
 ---
@@ -127,7 +127,7 @@ Kotlin/Swift host ↔ JNI/C API ↔ QuickJS runtime ↔ Plugin .js
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  OpenTune App (Kotlin/Swift)                         │
+│  Insomnia App (Kotlin/Swift)                         │
 │  ┌────────────────────────────────────────────────┐  │
 │  │  WASM Runtime (wasm3 / WAMR)                   │  │
 │  │  ┌──────────────────────────────────────────┐  │  │
@@ -145,7 +145,7 @@ Kotlin/Swift host ↔ JNI/C API ↔ QuickJS runtime ↔ Plugin .js
 Plugin developer writes in Rust:
 ```rust
 // Plugin developer writes:
-#[opentune::provider(type = "telegram")]
+#[insomnia::provider(type = "telegram")]
 struct TelegramProvider {
     bot_token: String,
 }
@@ -202,7 +202,7 @@ impl Provider for TelegramProvider {
 
 ```
 ┌─────────────────────────┐     ┌──────────────────────────┐
-│  OpenTune App            │     │  telegram-provider        │
+│  Insomnia App            │     │  telegram-provider        │
 │                          │     │  (standalone process)     │
 │  HTTP Client ────────┐   │     │  ┌──────────────────────┐ │
 │  │                   │   │◄───►│  │  HTTP Server          │ │
@@ -222,7 +222,7 @@ The plugin is a standalone process that:
 
 ### Discovery
 
-- **Android/iOS/macOS:** Host scans a `plugins/` directory for executables matching `opentune-provider-*`
+- **Android/iOS/macOS:** Host scans a `plugins/` directory for executables matching `insomnia-provider-*`
 - **Startup:** Host launches the executable, reads its stdout for the port, then communicates via HTTP
 
 ### Pros
@@ -256,7 +256,7 @@ These are loaded via FFI (JNI on Android, `dlopen` on iOS/macOS).
 
 ### The C-ABI Problem
 
-Your current `OpenTuneProvider` interface **does not survive a C boundary**. You'd need to redefine it:
+Your current `InsomniaProvider` interface **does not survive a C boundary**. You'd need to redefine it:
 
 ```c
 // C ABI plugin interface — everything is callback-based
@@ -283,7 +283,7 @@ typedef struct {
     // ... every method needs to be a callback
     void* (*create_instance)(const char* fields_json, const char* codec_capabilities_json);
     void (*dispose_instance)(void* instance);
-} OpenTuneProviderC;
+} InsomniaProviderC;
 ```
 
 All data is JSON-serialized. Async is callback-based. No type safety at the boundary.
@@ -340,21 +340,21 @@ All data is JSON-serialized. Async is callback-based. No type safety at the boun
 ```
 ┌─ SDK for plugin developers ──────────────────────────┐
 │                                                       │
-│  1. TypeScript types (@types/opentune-provider)       │
-│     - OpenTuneProvider interface                      │
+│  1. TypeScript types (@types/insomnia-provider)       │
+│     - InsomniaProvider interface                      │
 │     - Host API types (http, storage, log)             │
 │     - Result types (MediaListItem, PlaybackSpec, etc) │
 │                                                       │
-│  2. Runtime host (embedded in OpenTune app)           │
+│  2. Runtime host (embedded in Insomnia app)           │
 │     - QuickJS engine wrapper (Kotlin JNI + Swift C)   │
 │     - Host API implementations (OkHttp/URLSession)    │
 │     - Plugin lifecycle (load → validate → browse)     │
 │     - Plugin discovery (scan plugins/ directory)      │
 │                                                       │
 │  3. CLI tool (npm package)                            │
-│     - `opentune validate plugin.js` — check contract  │
-│     - `opentune test plugin.js` — run against mock    │
-│     - `opentune package plugin.js` → .opk bundle      │
+│     - `insomnia validate plugin.js` — check contract  │
+│     - `insomnia test plugin.js` — run against mock    │
+│     - `insomnia package plugin.js` → .opk bundle      │
 │                                                       │
 │  4. Example plugins                                   │
 │     - minimal-provider.js (static file list)          │
@@ -404,21 +404,21 @@ interface HostAPI {
 }
 ```
 
-### Architecture Changes to OpenTune
+### Architecture Changes to Insomnia
 
-The current `OpenTuneProviderRegistry` would have two discovery paths:
+The current `InsomniaProviderRegistry` would have two discovery paths:
 1. **ServiceLoader** (existing) — for compiled-in providers (Emby, SMB)
-2. **JS Engine** (new) — scan `plugins/` directory, load each `.js` file into a QuickJS context, wrap it in a `JsBackedProvider : OpenTuneProvider` that forwards all calls to the JS runtime
+2. **JS Engine** (new) — scan `plugins/` directory, load each `.js` file into a QuickJS context, wrap it in a `JsBackedProvider : InsomniaProvider` that forwards all calls to the JS runtime
 
-The `JsBackedProvider` class is the adapter: it implements `OpenTuneProvider` in Kotlin and delegates every method call to the QuickJS context. This means **zero changes to the rest of the app** — BrowseRoute, DetailRoute, PlayerRoute all work unchanged.
+The `JsBackedProvider` class is the adapter: it implements `InsomniaProvider` in Kotlin and delegates every method call to the QuickJS context. This means **zero changes to the rest of the app** — BrowseRoute, DetailRoute, PlayerRoute all work unchanged.
 
 ### Files to Modify/Create
 
 **Host runtime:**
 - New: `provider-js/` module — QuickJS engine wrapper (JNI for Android, static lib for iOS/macOS)
-- New: `JsBackedProvider` — Kotlin adapter that forwards `OpenTuneProvider` calls to JS
-- Modify: [OpenTuneProviderRegistry.kt](app/src/main/java/com/opentune/app/providers/OpenTuneProviderRegistry.kt) — add JS plugin discovery
-- Modify: [OpenTuneApplication.kt](app/src/main/java/com/opentune/app/OpenTuneApplication.kt) — initialize JS engine, scan plugin directory
+- New: `JsBackedProvider` — Kotlin adapter that forwards `InsomniaProvider` calls to JS
+- Modify: [InsomniaProviderRegistry.kt](app/src/main/java/com/insomnia/app/providers/InsomniaProviderRegistry.kt) — add JS plugin discovery
+- Modify: [InsomniaApplication.kt](app/src/main/java/com/insomnia/app/InsomniaApplication.kt) — initialize JS engine, scan plugin directory
 
 **SDK for developers:**
 - New: `sdk/typescript/` — TypeScript type definitions + test runner

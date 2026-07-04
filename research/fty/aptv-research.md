@@ -108,9 +108,9 @@ Notable per-channel features used:
 
 ---
 
-## 5. Feasibility for OpenTune
+## 5. Feasibility for Insomnia
 
-APTV is not a protocol to implement — it is an app. What is relevant for OpenTune is whether APTV's M3U format adds anything beyond standard M3U that we should support.
+APTV is not a protocol to implement — it is an app. What is relevant for Insomnia is whether APTV's M3U format adds anything beyond standard M3U that we should support.
 
 | Feature | Implementable? | Notes |
 |---------|---------------|-------|
@@ -127,4 +127,4 @@ The per-channel HTTP header attributes (`http-user-agent`, `http-referer`, `http
 
 ## 6. Conclusion
 
-APTV uses **extended M3U only** — not CatVod, not 苹果CMS, not any JSON protocol. The two ecosystems are unrelated. An OpenTune M3U provider that handles standard M3U plus the per-channel HTTP header attributes would be compatible with APTV-format playlists. Catchup/timeshift and EPG are separate features that go beyond the playlist format itself.
+APTV uses **extended M3U only** — not CatVod, not 苹果CMS, not any JSON protocol. The two ecosystems are unrelated. An Insomnia M3U provider that handles standard M3U plus the per-channel HTTP header attributes would be compatible with APTV-format playlists. Catchup/timeshift and EPG are separate features that go beyond the playlist format itself.

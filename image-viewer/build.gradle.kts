@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.imageviewer"
+    namespace = "com.insomnia.imageviewer"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

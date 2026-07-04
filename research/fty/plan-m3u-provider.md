@@ -20,7 +20,7 @@ No VOD, no search, no detail page — channels are flat `Playable` entries.
 
 ```
 providers-ts/providers/m3u/
-├── index.ts       — OpenTune bridge (globalThis.opentuneProvider)
+├── index.ts       — Insomnia bridge (globalThis.insomniaProvider)
 ├── provider.ts    — getFieldsSpec, validateFields
 ├── instance.ts    — init, listEntry, getPlaybackSpec
 ├── parser.ts      — M3U text → Channel[]
@@ -243,7 +243,7 @@ import type { M3UState } from './instance.js';
 
 let state: M3UState | null = null;
 
-(globalThis as any).opentuneProvider = {
+(globalThis as any).insomniaProvider = {
   providesArt: false,
 
   async getFieldsSpec()      { return getFieldsSpec(); },
@@ -278,7 +278,7 @@ let state: M3UState | null = null;
 | Feature | Decision |
 |---------|----------|
 | Catchup / timeshift | Out of scope — requires player-level support for live seek; the `catchup` data is parsed and available on `Channel` if needed later |
-| EPG (`x-tvg-url`) | Out of scope — separate concern from playback; not part of OpenTune's current contracts |
+| EPG (`x-tvg-url`) | Out of scope — separate concern from playback; not part of Insomnia's current contracts |
 | Auto-refresh on `#EXT-X-SUB-URL` | Out of scope — handled by re-calling `init()` on provider reload |
 | Search | Not applicable — channel lists are small enough to browse |
 | `#EXT-X-APP` / `#EXT-X-APTV-TYPE` tags | Ignored — app-specific metadata, irrelevant to playback |

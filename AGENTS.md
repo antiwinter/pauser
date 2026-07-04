@@ -1,4 +1,4 @@
-# OpenTune architecture conventions
+# Insomnia architecture conventions
 
 When adding or changing TV screens for a **content source**, follow these rules so navigation and code stay easy to grep.
 
@@ -10,7 +10,7 @@ Store implementation plans under **`<project-root>/.claude/plans/`** (not `~/.cl
 
 ## Draft development (no migrations, no legacy shims)
 
-OpenTune is still **draft / pre-release**. Do **not**:
+Insomnia is still **draft / pre-release**. Do **not**:
 
 - Add **backward-compatibility** layers for removed code paths (no dual APIs, no "deprecated but still works" bridges, no version switches to keep old behavior alive).
 - Implement **data or navigation migrations** for end users (no Room destructive-migration workarounds solely to preserve old installs).
@@ -59,12 +59,12 @@ Write **only essential** comments. No boilerplate restating what the code does.
 
 ---
 
-## Embedded HTTP server (`OpenTuneServer`)
+## Embedded HTTP server (`InsomniaServer`)
 
-[`OpenTuneServer`](server/src/main/java/com/opentune/server/OpenTuneServer.kt) is started in `OpenTuneApplication.onCreate()` and runs for the app's lifetime. It is the **single mechanism** through which any provider byte resource (SMB video, SMB cover, SMB sidecar subtitle) becomes a plain `http://` URL.
+[`InsomniaServer`](server/src/main/java/com/insomnia/server/InsomniaServer.kt) is started in `InsomniaApplication.onCreate()` and runs for the app's lifetime. It is the **single mechanism** through which any provider byte resource (SMB video, SMB cover, SMB sidecar subtitle) becomes a plain `http://` URL.
 
 - Binds to `0.0.0.0` (all interfaces) on fixed port **7920** (`SERVER_PORT`). Both the local player and LAN clients can reach it.
-- Implements [`StreamRegistrar`](content/contract/src/main/java/com/opentune/content/contract/StreamRegistrar.kt) by delegating to [`StreamProxy`](server/src/main/java/com/opentune/server/StreamProxy.kt); callers only interact with `OpenTuneServer`.
+- Implements [`StreamRegistrar`](content/contract/src/main/java/com/insomnia/content/contract/StreamRegistrar.kt) by delegating to [`StreamProxy`](server/src/main/java/com/insomnia/server/StreamProxy.kt); callers only interact with `InsomniaServer`.
 - Token registry: `ConcurrentHashMap<token, TokenEntry>`. Each token is a random UUID hex string embedded in the URL path `/stream/<token>`. File size is cached after first query so repeated HEAD-like requests don't open extra connections.
 - Route `GET /stream/{token}`: looks up token → calls `client.openStream(itemRef)` → streams bytes, honoring `Range` headers with `206 Partial Content`. One SMB session opened per HTTP request, closed when response finishes.
 - **Auth by token entropy**: tokens are single-use opaque strings revoked explicitly by the provider.
@@ -73,18 +73,18 @@ Write **only essential** comments. No boilerplate restating what the code does.
 
 ### `StreamRegistrar` / `StreamRegistrarHolder`
 
-Defined in [`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/StreamRegistrar.kt). Endpoints call:
+Defined in [`:content:contract`](content/contract/src/main/java/com/insomnia/content/contract/StreamRegistrar.kt). Endpoints call:
 
 ```kotlin
 val url = StreamRegistrarHolder.get().registerStream(this, itemRef)   // returns http://127.0.0.1:7920/stream/{token}
 StreamRegistrarHolder.get().revokeToken(url)   // call when done
 ```
 
-`StreamRegistrarHolder.set(openTuneServer)` is called in `OpenTuneApplication.onCreate()`.
+`StreamRegistrarHolder.set(openTuneServer)` is called in `InsomniaApplication.onCreate()`.
 
 ### `ProviderStream`
 
-Defined in [`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/ProviderContracts.kt). Random-access stream with explicit `close()`. Used **only** by `OpenTuneServer`'s route handler; no player or UI code calls it directly.
+Defined in [`:content:contract`](content/contract/src/main/java/com/insomnia/content/contract/ProviderContracts.kt). Random-access stream with explicit `close()`. Used **only** by `InsomniaServer`'s route handler; no player or UI code calls it directly.
 
 ```kotlin
 interface ProviderStream {
@@ -102,9 +102,9 @@ interface ProviderStream {
 
 ### Contracts (`:content:contract`)
 
-[`:content:contract`](content/contract/src/main/java/com/opentune/content/contract/) contains:
+[`:content:contract`](content/contract/src/main/java/com/insomnia/content/contract/) contains:
 
-- **`OpenTuneProvider`** — stateless factory. Key members:
+- **`InsomniaProvider`** — stateless factory. Key members:
   - `val protocol: String` — stable registry key
   - `val providesArt: Boolean` — `true` if catalog list items carry HTTP cover art directly (e.g. Emby); `false` if covers must be extracted from the media stream (e.g. SMB)
   - `fun getFieldsSpec(): List<FormFieldSpec>`
@@ -124,19 +124,19 @@ interface ProviderStream {
   - **Removed:** `getDetail(itemRef): EntryDetail` — detail fields now live on `EntryInfo` (see `CatalogContracts.kt`: `logo`, `backdrop`, `bitrate`, `year`, `durationMs`, `width`, `height`, `officialRating`, `filename`). No `EntryDetail` type exists.
 - **`ProviderStream`** — random-access stream. See above.
 - **`StreamRegistrar`** / **`StreamRegistrarHolder`** — cross-module service locator for token registration. See above.
-- **`OpenTuneProviderRegistry`** / **`OpenTuneProviderRegistryHolder`** — protocol → `OpenTuneProvider` lookup.
+- **`InsomniaProviderRegistry`** / **`InsomniaProviderRegistryHolder`** — protocol → `InsomniaProvider` lookup.
 - **`EndpointClientRegistryHolder`** / **`EndpointClientAccess`** — endpointId → `EndpointClient` lifecycle (getOrCreate, registerHandle, update, remove, buildHttpClient).
 - **`CatalogContracts.kt`** — `EntryInfo`, `EntryList`, `EntryDetail`, `EntryType`, `EntryUserData`, `SearchQuery`, `QueryOptions`, `SortField`, `SortOrder`, `EntryTag`, `ExternalUrl`, `StreamInfo`, `CatalogRouteTokens`.
 - **`PlaybackMimeTypes`** — container format → MIME type mapping.
 
 ### Registry
 
-[`OpenTuneProviderRegistry`](content/contract/src/main/java/com/opentune/content/contract/OpenTuneProviderRegistry.kt) maps `protocol` string → `OpenTuneProvider` instance. Providers register via `OpenTuneProviderLoader` SPI (`META-INF/services/com.opentune.content.contract.OpenTuneProviderLoader`).
+[`InsomniaProviderRegistry`](content/contract/src/main/java/com/insomnia/content/contract/InsomniaProviderRegistry.kt) maps `protocol` string → `InsomniaProvider` instance. Providers register via `InsomniaProviderLoader` SPI (`META-INF/services/com.insomnia.content.contract.InsomniaProviderLoader`).
 
-[`EndpointClientRegistry`](app/src/main/java/com/opentune/app/providers/EndpointClientRegistry.kt) in `:app` manages the `EndpointClient` lifecycle — builds clients with shared `DiskCache`, `OkHttpClient` (optionally routed through a proxy), and per-endpoint `ImageLoader`. Set via `EndpointClientRegistryHolder`.
+[`EndpointClientRegistry`](app/src/main/java/com/insomnia/app/providers/EndpointClientRegistry.kt) in `:app` manages the `EndpointClient` lifecycle — builds clients with shared `DiskCache`, `OkHttpClient` (optionally routed through a proxy), and per-endpoint `ImageLoader`. Set via `EndpointClientRegistryHolder`.
 
-**Access interfaces** (`content/contract/src/main/java/com/opentune/content/contract/RegistryHolders.kt`):
-- `OpenTuneProviderAccess` / `OpenTuneProviderRegistryHolder` — `getProvider(protocol)`, `getProviders()`, `set(registry)`
+**Access interfaces** (`content/contract/src/main/java/com/insomnia/content/contract/RegistryHolders.kt`):
+- `InsomniaProviderAccess` / `InsomniaProviderRegistryHolder` — `getProvider(protocol)`, `getProviders()`, `set(registry)`
 - `EndpointClientAccess` / `EndpointClientRegistryHolder` — `getOrCreate(endpointId, entity)`, `registerHandle(endpointId, client)`, `update(endpointId, entity)`, `remove(endpointId)`, `buildHttpClient(proxy?, headers?)`
 
 ### Implementations
@@ -146,13 +146,13 @@ interface ProviderStream {
 | `:content:providers:smb` | `SmbProvider` / `SmbClient` | `false` | overridden — opens smbj `DiskShare`, wraps in `SmbProviderStream : ProviderStream` |
 | `:content:providers:js` | `JsProvider` / `JsClient` | varies | not overridden (null) |
 
-**Source-prefixed identifiers** (`Smb*`, `Js*`) are confined to their respective modules. Do **not** place them under `ui/catalog`, `ui/home`, or `app/.../providers/` (only the neutral registry and [`EndpointClientRegistry`](app/src/main/java/com/opentune/app/providers/EndpointClientRegistry.kt) reside in `:app`).
+**Source-prefixed identifiers** (`Smb*`, `Js*`) are confined to their respective modules. Do **not** place them under `ui/catalog`, `ui/home`, or `app/.../providers/` (only the neutral registry and [`EndpointClientRegistry`](app/src/main/java/com/insomnia/app/providers/EndpointClientRegistry.kt) reside in `:app`).
 
 ---
 
 ## Proxy providers
 
-[`:proxy:contract`](proxy/contract/src/main/java/com/opentune/proxy/contract/) contains:
+[`:proxy:contract`](proxy/contract/src/main/java/com/insomnia/proxy/contract/) contains:
 
 - **`ProxyProvider`** — factory for HTTP proxy clients:
   - `val proxyType: String` — stable registry key
@@ -171,17 +171,17 @@ Providers **never** import `:storage`.
 
 ## Playback contracts (`:player`)
 
-[`PlaybackContracts.kt`](player/src/main/java/com/opentune/player/PlaybackContracts.kt) defines:
+[`PlaybackContracts.kt`](player/src/main/java/com/insomnia/player/PlaybackContracts.kt) defines:
 
-- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `OpenTuneServer`). Contains `url`, `headers`, `mimeType`, `hooks: OpenTunePlaybackHooks`, `subtitleTracks: List<SubtitleTrack>`, `httpClient: OkHttpClient`, `mediaCodecs: List<MediaCodecInfo>`. No `title`, `durationMs`, or `bitrate` (moved to `EntryInfo`). No `customMediaSourceFactory`.
-- **`OpenTunePlaybackHooks`** — `onPlaybackReady`, `onProgressTick(isPaused: Boolean = false)`, `onStop`, `onDispose`, `fun progressIntervalMs(): Long`. SMB implementation revokes stream tokens on dispose.
+- **`PlaybackSpec`** — `url: String` is always non-null (SMB uses a loopback URL from `InsomniaServer`). Contains `url`, `headers`, `mimeType`, `hooks: InsomniaPlaybackHooks`, `subtitleTracks: List<SubtitleTrack>`, `httpClient: OkHttpClient`, `mediaCodecs: List<MediaCodecInfo>`. No `title`, `durationMs`, or `bitrate` (moved to `EntryInfo`). No `customMediaSourceFactory`.
+- **`InsomniaPlaybackHooks`** — `onPlaybackReady`, `onProgressTick(isPaused: Boolean = false)`, `onStop`, `onDispose`, `fun progressIntervalMs(): Long`. SMB implementation revokes stream tokens on dispose.
 - **`SubtitleTrack`** — `trackId`, `label`, `language`, `isDefault`, `isForced`, `externalRef`.
 
 ---
 
 ## Storage (`:storage`)
 
-[`:storage`](storage/src/main/java/com/opentune/storage/) owns all persistence. Key types:
+[`:storage`](storage/src/main/java/com/insomnia/storage/) owns all persistence. Key types:
 
 - **`EndpointEntity`** — `@PrimaryKey val endpointId: String` (`"${providerType}_${hash}"`), `protocol`, `displayName`, `fieldsJson`, `proxyId?`, timestamps.
 - **`ProxyEntity`** — `@PrimaryKey val id: String`, `proxyType`, `displayName`, `fieldsJson`, `createdAtEpochMs`.
@@ -189,11 +189,11 @@ Providers **never** import `:storage`.
 - **`EndpointDao`** / **`ProxyDao`** — Room DAOs for CRUD.
 - **`EntryStateStore`** — CRUD for `EntryStateEntity` (interface; Room-backed).
 - **`AppPrefsStore`** — app-level preferences (proxy settings, subtitle prefs, drafts, title language, pre-buffer duration).
-- **`OpenTuneStorageBindings`** — exposes `endpointDao`, `entryStateStore`, `appConfigStore`, `proxyDao`. Created by `OpenTuneApplication` and passed to routes.
+- **`InsomniaStorageBindings`** — exposes `endpointDao`, `entryStateStore`, `appConfigStore`, `proxyDao`. Created by `InsomniaApplication` and passed to routes.
 
 **No `OssCache` / blob cache** in current storage. Cover art is served directly from provider URLs (HTTP covers) or extracted on-demand.
 
-**Database version:** check [`OpenTuneDatabase`](storage/src/main/java/com/opentune/storage/OpenTuneDatabase.kt) for current version. Uses `fallbackToDestructiveMigration`.
+**Database version:** check [`InsomniaDatabase`](storage/src/main/java/com/insomnia/storage/InsomniaDatabase.kt) for current version. Uses `fallbackToDestructiveMigration`.
 
 ---
 
@@ -205,13 +205,13 @@ Cover art is generated **server-side** on-demand by `GenartRoutes.kt`. Clients f
 GET /genart/{type}/{version}/{endpointId}/{itemId}
 ```
 
-The server uses `com.opentune.genart.GenArt.generateCover` to extract embedded artwork from the media stream. Generated covers are served as HTTP image responses and cached client-side by Coil. No client-side cover extraction (`MediaMetadataRetriever`, `OssCache`, `Semaphore`-bounded jobs) exists.
+The server uses `com.insomnia.genart.GenArt.generateCover` to extract embedded artwork from the media stream. Generated covers are served as HTTP image responses and cached client-side by Coil. No client-side cover extraction (`MediaMetadataRetriever`, `OssCache`, `Semaphore`-bounded jobs) exists.
 
 When `provider.providesArt = true` (Emby), covers come directly from the provider's HTTP API URLs embedded in `EntryInfo.cover`.
 
 ### Cover clean-up on endpoint removal / identity change
 
-[`EndpointConfigRepository`](app/src/main/java/com/opentune/app/providers/EndpointConfigRepository.kt) `removeEndpoint` and the identity-change edit branch both execute, in order:
+[`EndpointConfigRepository`](app/src/main/java/com/insomnia/app/providers/EndpointConfigRepository.kt) `removeEndpoint` and the identity-change edit branch both execute, in order:
 1. `entryStateStore.deleteByEndpoint(endpointId)` — deletes all Room rows for the endpoint
 2. `endpointDao.delete(endpointId)` — deletes the endpoint record
 3. `instanceRegistry.remove(endpointId)` — evicts the live instance
@@ -222,7 +222,7 @@ No explicit cover file deletion is needed — server-side generated covers are e
 
 ## Shared catalog UI
 
-Routes and screens under **`content/ui/src/main/java/com/opentune/content/ui/catalog/`** (subdirectories):
+Routes and screens under **`content/ui/src/main/java/com/insomnia/content/ui/catalog/`** (subdirectories):
 
 | File | Role |
 |---|---|
@@ -233,13 +233,13 @@ Routes and screens under **`content/ui/src/main/java/com/opentune/content/ui/cat
 | `catalog/player/` PlayerController | Orchestrates playback lifecycle |
 | `CatalogNav` | Navigation helpers; `LIBRARIES_ROOT_SEGMENT` = `CatalogRouteTokens.LIBRARIES_ROOT_SEGMENT` |
 
-**Player shell:** `:player` module defines `PlayerSurfaceController` interface ([`player/src/main/java/com/opentune/player/PlayerSurfaceController.kt`](player/src/main/java/com/opentune/player/PlayerSurfaceController.kt)) with platform implementations: `TvPlayerSurface` ([`player/src/main/java/com/opentune/player/ui/tv/TvPlayerSurface.kt`](player/src/main/java/com/opentune/player/ui/tv/TvPlayerSurface.kt)) for TV and `PadPlayerSurface` ([`player/src/main/java/com/opentune/player/ui/pad/PadPlayerSurface.kt`](player/src/main/java/com/opentune/player/ui/pad/PadPlayerSurface.kt)) for tablets. The `PlayerController` in `:content:ui` drives playback via these surfaces — no SMB/Emby branching.
+**Player shell:** `:player` module defines `PlayerSurfaceController` interface ([`player/src/main/java/com/insomnia/player/PlayerSurfaceController.kt`](player/src/main/java/com/insomnia/player/PlayerSurfaceController.kt)) with platform implementations: `TvPlayerSurface` ([`player/src/main/java/com/insomnia/player/ui/tv/TvPlayerSurface.kt`](player/src/main/java/com/insomnia/player/ui/tv/TvPlayerSurface.kt)) for TV and `PadPlayerSurface` ([`player/src/main/java/com/insomnia/player/ui/pad/PadPlayerSurface.kt`](player/src/main/java/com/insomnia/player/ui/pad/PadPlayerSurface.kt)) for tablets. The `PlayerController` in `:content:ui` drives playback via these surfaces — no SMB/Emby branching.
 
 ---
 
 ## Navigation route strings
 
-Unified catalog flows (`provider` values come from `OpenTuneProvider.protocol`):
+Unified catalog flows (`provider` values come from `InsomniaProvider.protocol`):
 
 - `browse/{provider}/{endpointId}/{id}` — `{id}` is the entry location/id
 - `detail/{provider}/{endpointId}/{itemRef}/{id}` — `{id}` is URL-encoded serialized `EntryInfo` JSON
@@ -257,13 +257,13 @@ Encode/decode in `Routes` and/or `CatalogNav` only — avoid scattering magic st
 
 ## Server config UI
 
-[`EndpointAddRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointAddRoute.kt) / [`EndpointEditRoute`](app/src/main/java/com/opentune/app/ui/config/EndpointEditRoute.kt) under `ui/config`. Driven by `provider.getFieldsSpec()`. Field labels resolve via `strings.xml` + [`ProviderFieldLabels`](app/src/main/java/com/opentune/app/ui/config/ProviderFieldLabels.kt).
+[`EndpointAddRoute`](app/src/main/java/com/insomnia/app/ui/config/EndpointAddRoute.kt) / [`EndpointEditRoute`](app/src/main/java/com/insomnia/app/ui/config/EndpointEditRoute.kt) under `ui/config`. Driven by `provider.getFieldsSpec()`. Field labels resolve via `strings.xml` + [`ProviderFieldLabels`](app/src/main/java/com/insomnia/app/ui/config/ProviderFieldLabels.kt).
 
 ---
 
 ## Gen-art routes
 
-[`GenartRoutes.kt`](server/src/main/java/com/opentune/server/GenartRoutes.kt) in `:server` exposes:
+[`GenartRoutes.kt`](server/src/main/java/com/insomnia/server/GenartRoutes.kt) in `:server` exposes:
 
 ```
 GET /genart/{type}/{version}/{endpointId}/{itemId}
@@ -271,18 +271,18 @@ GET /genart/{type}/{version}/{endpointId}/{itemId}
 
 - `type`: `"browse"` (grid thumbnails) or `"detail"` (poster/backdrop)
 - `version`: cover generation version string (bump to bust caches)
-- Uses `com.opentune.genart.GenArt.generateCover` to extract embedded artwork from the media stream
+- Uses `com.insomnia.genart.GenArt.generateCover` to extract embedded artwork from the media stream
 - Returns the image bytes directly; no server-side disk caching
 - Installed alongside debug routes; requires non-null `AppContext`
 
 ## Form module (`:core:form`)
 
-[`:core:form:contract`](core/form/contract/src/main/java/com/opentune/core/form/contract/) provides neutral form types:
+[`:core:form:contract`](core/form/contract/src/main/java/com/insomnia/core/form/contract/) provides neutral form types:
 
 - **`FormFieldSpec`** — field definition (text, password, QR, etc.)
 - **`QrResult`** — QR code login states
 
-[`:core:form`](core/form/src/main/java/com/opentune/core/form/) provides UI:
+[`:core:form`](core/form/src/main/java/com/insomnia/core/form/) provides UI:
 
 - **`ProviderFormRoute`** — generic form renderer driven by `List<FormFieldSpec>`
 - **`FormFieldsRenderer`** — composable field rendering
@@ -294,13 +294,13 @@ GET /genart/{type}/{version}/{endpointId}/{itemId}
 
 ## Log tags
 
-- Embedded server: `"OpenTuneServer"`.
+- Embedded server: `"InsomniaServer"`.
 - Gen-art cover generation: `"GenartRoutes"`.
-- SMB player hints: `"OpenTunePlayer"` (from `SMB_LOG` in `SmbClient`).
+- SMB player hints: `"InsomniaPlayer"` (from `SMB_LOG` in `SmbClient`).
 - Debug routes: `"OT_DebugRoutes"`.
 
 ---
 
 ## Playback hooks
 
-Implement `OpenTunePlaybackHooks` from `:player`. HTTP-library: `EmbyPlaybackHooks` (in legacy `:providers:emby`). File-share: `SmbPlaybackHooks` in `:content:providers:smb` (revokes stream tokens on dispose).
+Implement `InsomniaPlaybackHooks` from `:player`. HTTP-library: `EmbyPlaybackHooks` (in legacy `:providers:emby`). File-share: `SmbPlaybackHooks` in `:content:providers:smb` (revokes stream tokens on dispose).

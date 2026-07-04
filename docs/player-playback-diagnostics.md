@@ -8,7 +8,7 @@ Instrumentation added for this work (kept in tree):
 - `PlaybackSurface.kt` — the 1 Hz poll logs a per-second timeline under tag **`OT_BW`**:
   `mbps deltaKB totalMB pos buffered state`. State: 1=IDLE 2=BUFFERING 3=READY 4=ENDED.
 - `SubtitleManager.kt` — `prepareWithSidecar` logs a rebuild marker.
-- See `.claude/skills/opentune-debug.md` → "Bandwidth / throughput diagnosis" for the capture
+- See `.claude/skills/insomnia-debug.md` → "Bandwidth / throughput diagnosis" for the capture
   recipe and remote-key driving table (seek = DPAD 21/22, menu = 82, select = 23).
 
 ---

@@ -1,0 +1,93 @@
+package com.insomnia.content.ui.catalog.search
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.navigation.NavHostController
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Text
+import com.insomnia.content.ui.Routes
+import com.insomnia.storage.StorageBindingsHolder
+import com.insomnia.storage.TitleLang
+import com.insomnia.content.ui.catalog.CatalogNav
+import com.insomnia.content.ui.catalog.NavSharedViewModel
+import com.insomnia.content.ui.catalog.player.PlayerController
+import com.insomnia.content.ui.catalog.player.PlayerStopEffect
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun SearchRoute(
+    nav: NavHostController,
+    endpointId: String,
+    scopeLocationEncoded: String,
+    sharedVm: NavSharedViewModel,
+    viewModel: SearchViewModel,
+    playerController: PlayerController,
+) {
+    val scopeDecoded = remember(scopeLocationEncoded) { CatalogNav.decodeSegment(scopeLocationEncoded) }
+
+    val client by viewModel.client.collectAsState()
+    val initError by viewModel.initError.collectAsState()
+    val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
+        .collectAsState(initial = TitleLang.Local)
+    val query by viewModel.query.collectAsState()
+    val searching by viewModel.searching.collectAsState()
+    val restoreFocusRef = remember(endpointId, scopeDecoded) {
+        viewModel.lastFocusedItemRef.value
+    }
+
+    BackHandler { nav.popBackStack() }
+
+    LaunchedEffect(endpointId, scopeDecoded) {
+        viewModel.initialize(endpointId, scopeDecoded)
+    }
+
+    // Refresh data when returning to search (e.g., from detail after playback).
+    // refresh() guards against empty query, so harmless on first entry.
+    LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
+    PlayerStopEffect(playerController) {
+        viewModel.refresh()
+    }
+
+    val imageLoader = viewModel.imageLoader
+
+    when {
+        initError != null -> Text("Error: $initError")
+        client == null || imageLoader == null -> Text("Loading…")
+        else -> SearchScreen(
+            results = viewModel.results,
+            query = query,
+            searching = searching,
+            imageLoader = imageLoader,
+            titleLang = titleLang,
+            initialFocusRef = restoreFocusRef,
+            onQueryChange = { viewModel.setQuery(it) },
+            onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
+            onOpenBrowse = { entry ->
+                sharedVm.cache(entry)
+                nav.navigate(Routes.browse(endpointId, entry))
+            },
+            onOpenDetail = { item ->
+                sharedVm.cache(item)
+                nav.navigate(Routes.detail(endpointId, item))
+            },
+            onOpenPlayer = { entry ->
+                playerController.setClient(client!!)
+                playerController.prepare(entry)
+                playerController.play()
+            },
+            onOpenImageViewer = { raw ->
+                nav.navigate(Routes.imageViewer(endpointId, raw))
+            },
+            onOpenAudioUnsupported = { raw ->
+                nav.navigate(Routes.AUDIO_UNSUPPORTED)
+            },
+        )
+    }
+}

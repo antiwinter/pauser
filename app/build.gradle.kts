@@ -29,11 +29,11 @@ fun gitVersion(): String {
 }
 
 android {
-    namespace = "com.opentune.app"
+    namespace = "com.insomnia.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.opentune.app"
+        applicationId = "com.insomnia.app"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -45,7 +45,7 @@ android {
         create("release") {
             storeFile = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/release.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEY_ALIAS") ?: "opentune"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "insomnia"
             keyPassword = System.getenv("KEY_PASSWORD") ?: ""
         }
     }

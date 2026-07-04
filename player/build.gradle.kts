@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.player"
+    namespace = "com.insomnia.player"
     compileSdk = 35
 
     defaultConfig {

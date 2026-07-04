@@ -1,4 +1,4 @@
-# OpenTune
+# Insomnia
 
 Android TV client for **Emby** libraries and **SMB** file playback using **Media3 / ExoPlayer** and system **MediaCodec** decoders (no bundled FFmpeg).
 

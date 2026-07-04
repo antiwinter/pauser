@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.proxy.ui"
+    namespace = "com.insomnia.proxy.ui"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

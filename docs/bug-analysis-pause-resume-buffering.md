@@ -197,7 +197,7 @@ But for direct play, there's no transcode job to kill, so this doesn't explain t
 ### Key Files
 
 **Player Engine:**
-- `player/src/main/java/com/opentune/player/engine/PlaybackSession.kt`
+- `player/src/main/java/com/insomnia/player/engine/PlaybackSession.kt`
   - `prepare(spec)` - line 172: sets MediaSource, starts heartbeat
   - `play()` - line 204: sets `playWhenReady = true`
   - `pause()` - line 209: sets `playWhenReady = false`, syncs state
@@ -205,29 +205,29 @@ But for direct play, there's no transcode job to kill, so this doesn't explain t
   - `syncEntryState()` - line 215: captures `exo.currentPosition`, saves to storage
   - `startHeartbeat()` - line 246: 10-second timer reporting position to storage
 
-- `player/src/main/java/com/opentune/player/engine/PlaybackSurface.kt`
+- `player/src/main/java/com/insomnia/player/engine/PlaybackSurface.kt`
   - `leaveSurface()` - line 31: calls `session.pause()`
   - Bandwidth logging - line 72-77: logs `mbps`, `deltaKB`, `pos`, `buffered`, `state`
 
-- `player/src/main/java/com/opentune/player/engine/OpenTuneExoPlayer.kt`
+- `player/src/main/java/com/insomnia/player/engine/InsomniaExoPlayer.kt`
   - Buffer config - line 25-32: `minBufferMs=290s`, `maxBufferMs=300s`
 
-- `player/src/main/java/com/opentune/player/engine/BandwidthTracker.kt`
+- `player/src/main/java/com/insomnia/player/engine/BandwidthTracker.kt`
   - `reset()` - line 30: clears totalBytes and buckets
   - `record()` - line 35: called on every OkHttp read
   - `mbps` - line 49: rolling 3-second window calculation
 
 **Player UI:**
-- `player/src/main/java/com/opentune/player/ui/tv/TvPlayerSurface.kt`
+- `player/src/main/java/com/insomnia/player/ui/tv/TvPlayerSurface.kt`
   - BackHandler - line 163-169: calls `leaveSurface()` + `onBack()`
   - Buffered bar - line 227: passes `exo.bufferedPosition` to `PlaybackControllerBar`
 
-- `player/src/main/java/com/opentune/player/ui/PlaybackControllerBar.kt`
+- `player/src/main/java/com/insomnia/player/ui/PlaybackControllerBar.kt`
   - Buffer rendering - line 54-55: calculates `bufferedFraction = buffered / duration`
   - Gray bar logic - line 80-100: draws buffered overlay from `playedX + halfGap` to `bufferedX`
 
 **Content/Controller:**
-- `content/ui/src/main/java/com/opentune/content/ui/catalog/player/PlayerController.kt`
+- `content/ui/src/main/java/com/insomnia/content/ui/catalog/player/PlayerController.kt`
   - `prepare()` - line 86-100: captures startMs, launches resolve
   - `play()` - line 102-109: calls `launchResolve()`, then `playbackSession.play()`
   - `stop()` - line 111-116: calls `playbackSession.pause()` (NOT `stop()`!)
@@ -235,13 +235,13 @@ But for direct play, there's no transcode job to kill, so this doesn't explain t
   - `resolveAndPrepare()` - line 172-194: calls `getPlaybackSpec`, then `playbackSession.prepare()`
   - Deduplication check - line 175-177: skips resolve if same `itemRef` + `startMs`
 
-- `content/ui/src/main/java/com/opentune/content/ui/catalog/detail/MovieDetailScreen.kt`
+- `content/ui/src/main/java/com/insomnia/content/ui/catalog/detail/MovieDetailScreen.kt`
   - Resume button - line 41: `resumePlay = { playerController?.play() }`
   - Play from start - line 42-45: `seekTo(0L)`, then `play()`
   - Auto-prepare - line 36-38: `LaunchedEffect(info.ref) { playerController?.prepare(info) }`
 
 **Navigation:**
-- `app/src/main/java/com/opentune/app/navigation/OpenTuneNavHost.kt`
+- `app/src/main/java/com/insomnia/app/navigation/InsomniaNavHost.kt`
   - Player surface overlay - line 124-129: shows when `isShown`, onBack calls `stop()`
 
 **Emby Provider (for reference):**

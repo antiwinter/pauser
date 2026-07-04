@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.provider.js"
+    namespace = "com.insomnia.provider.js"
     compileSdk = 35
     ndkVersion = "30.0.14904198"
     defaultConfig {

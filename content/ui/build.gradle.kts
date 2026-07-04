@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.content.ui"
+    namespace = "com.insomnia.content.ui"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

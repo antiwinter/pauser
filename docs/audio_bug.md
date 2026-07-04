@@ -1,6 +1,6 @@
   Root Cause: Race Condition in shutdown() - Navigation Cancels Cleanup
 
-  The bug is in OpenTunePlayerScreen.kt:83-100, specifically the order of operations in the shutdown() function.
+  The bug is in InsomniaPlayerScreen.kt:83-100, specifically the order of operations in the shutdown() function.
 
   suspend fun shutdown(userInitiatedExit: Boolean) {
       // ...
@@ -22,7 +22,7 @@
   1. User presses DPAD Back -> BackHandler calls scope.launch { shutdown(userInitiatedExit = true) }
   2. shutdown sets released = true via compareAndSet
   3. shutdown calls onExit() which triggers nav.popBackStack()
-  4. Navigation removes OpenTunePlayerScreen from composition
+  4. Navigation removes InsomniaPlayerScreen from composition
   5. The rememberCoroutineScope() is tied to the composition -> coroutine gets cancelled
   6. The withContext(Dispatchers.Main) { exo.release() } line never executes because the coroutine was cancelled
   7. runBlocking { shutdown(false) } in DisposableEffect.onDispose runs, but released is already true, so it skips cleanup

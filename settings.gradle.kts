@@ -17,7 +17,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OpenTune"
+rootProject.name = "Insomnia"
 include(":app")
 include(":core:form")
 include(":core:form:contract")

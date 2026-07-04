@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.proxy.clash"
+    namespace = "com.insomnia.proxy.clash"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

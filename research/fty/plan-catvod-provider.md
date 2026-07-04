@@ -1,6 +1,6 @@
 # Plan: CatVod Protocol Provider (TypeScript)
 
-**Goal:** A JS provider (`providers-ts/providers/catvod/`) that implements the CatVod protocol, exposing all site types (苹果CMS HTTP, drpy2 JS spiders, JAR spiders, IPTV M3U) as a unified OpenTune provider.
+**Goal:** A JS provider (`providers-ts/providers/catvod/`) that implements the CatVod protocol, exposing all site types (苹果CMS HTTP, drpy2 JS spiders, JAR spiders, IPTV M3U) as a unified Insomnia provider.
 
 ---
 
@@ -10,7 +10,7 @@ The user configures a CatVod subscription URL. The provider:
 1. Fetches and decodes the config JSON (including JPEG-embedded base64)
 2. Exposes all `sites` as top-level `Folder` entries
 3. When the user browses into a site, delegates to the appropriate protocol handler
-4. Maps CatVod's `VodItem` / `VodDetail` response format to OpenTune contracts
+4. Maps CatVod's `VodItem` / `VodDetail` response format to Insomnia contracts
 
 ```
 listEntry(null)
@@ -37,7 +37,7 @@ getPlaybackSpec("site:WoGGGuard/vod:12345/flag:线路1/ep:EP1$https://...")
 
 ```
 providers-ts/providers/catvod/
-├── index.ts          — OpenTune bridge (globalThis.opentuneProvider)
+├── index.ts          — Insomnia bridge (globalThis.insomniaProvider)
 ├── provider.ts       — getFieldsSpec, validateFields
 ├── instance.ts       — init, listEntry, search, getDetail, getPlaybackSpec
 ├── config.ts         — fetch + decode CatVod config.json (JPEG base64 unwrap)
@@ -365,7 +365,7 @@ function parseM3U(content: string) {
 
 ## Step 7 — Mapper (`mapper.ts`)
 
-Maps CatVod VodItem/VodDetail response format to OpenTune contracts.
+Maps CatVod VodItem/VodDetail response format to Insomnia contracts.
 
 ```typescript
 export function vodItemToEntry(item: any): EntryInfo {
@@ -490,7 +490,7 @@ import { listEntry, search, getDetail, getPlaybackSpec } from './instance.js';
 
 let config: CatVodConfig | null = null;
 
-(globalThis as any).opentuneProvider = {
+(globalThis as any).insomniaProvider = {
   providesArt: true,
   async getFieldsSpec()        { return getFieldsSpec(); },
   async validateFields(args)   { return validateFields(args.values); },

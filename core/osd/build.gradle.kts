@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.core.osd"
+    namespace = "com.insomnia.core.osd"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

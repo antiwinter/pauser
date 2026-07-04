@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.server"
+    namespace = "com.insomnia.server"
     compileSdk = 35
     defaultConfig { minSdk = 24 }
     compileOptions {

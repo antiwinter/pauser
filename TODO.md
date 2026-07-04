@@ -76,7 +76,7 @@
 - [ ] external subtitle preload, system lang candidates, original lang reference line
 
 ## Roadmap
-- [ ] remove opentune naming
+- [ ] remove insomnia naming
 - [x] HDR support
 - [-] release insomnia-x86_64-vx.x.x.apk
 - [ ] pro user decoration. ICON/badge

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.opentune.content.contract"
+    namespace = "com.insomnia.content.contract"
     compileSdk = 35
 
     defaultConfig {

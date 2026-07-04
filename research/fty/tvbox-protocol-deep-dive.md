@@ -1,4 +1,4 @@
-# TVBox Protocol Deep Dive — Feasibility for OpenTune JS Provider
+# TVBox Protocol Deep Dive — Feasibility for Insomnia JS Provider
 
 **Date:** 2026-05-20  
 **Scope:** Authorship relationships, protocol openness, drpy2 host API requirements, implementation feasibility
@@ -388,7 +388,7 @@ This gives us access to the entire open TVBox ecosystem, not just FTY's curated 
 
 A new JS provider that implements the type 1/2 HTTP API. User configures a base URL; the provider calls `?ac=list` and `?ac=detail`.
 
-Mapping to OpenTune contracts:
+Mapping to Insomnia contracts:
 - `listEntry(null)` → `?ac=list` → categories as `Folder` entries
 - `listEntry(categoryId)` → `?ac=list&t={id}&pg={page}` → `Playable`/`Series` entries
 - `search(query)` → `?ac=list&wd={query}` → results
@@ -415,7 +415,7 @@ Required JS bootstrap additions (pre-loaded before drpy2):
 
 The drpy2 engine itself (`drpy2.min.js`) loads after the bootstrap. Then the spider rule `.js` file loads last.
 
-Call flow mapping to OpenTune contracts:
+Call flow mapping to Insomnia contracts:
 - `listEntry(null)` → `drpy.home()` → categories
 - `listEntry(categoryId)` → `drpy.category(tid, pg, filter, extend)`
 - `search(query)` → `drpy.search(wd, quick, pg)`

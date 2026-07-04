@@ -1,6 +1,6 @@
-# Plan: `host.jar` — Dynamic JAR Loading for OpenTune JS Provider
+# Plan: `host.jar` — Dynamic JAR Loading for Insomnia JS Provider
 
-**Goal:** Extend OpenTune's JS provider with primitive host APIs that are fully agnostic to any specific protocol. All protocol knowledge lives in TypeScript.
+**Goal:** Extend Insomnia's JS provider with primitive host APIs that are fully agnostic to any specific protocol. All protocol knowledge lives in TypeScript.
 
 Three namespaces are added:
 - `host.jar` — load and reflect into Android JARs at runtime
