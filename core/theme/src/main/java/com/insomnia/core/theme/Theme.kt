@@ -5,6 +5,7 @@ package com.insomnia.core.theme
 import androidx.compose.material3.darkColorScheme as composeDarkColorScheme
 import androidx.compose.material3.MaterialTheme as ComposeMaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.darkColorScheme as tvDarkColorScheme
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -100,7 +101,12 @@ fun InsomniaTheme(content: @Composable () -> Unit) {
     ) {
         TvMaterialTheme(
             colorScheme = InsomniaTvScheme,
-            content = content,
-        )
+        ) {
+            CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides InsomniaComposeScheme.onSurfaceVariant,
+                androidx.tv.material3.LocalContentColor provides InsomniaTvScheme.onSurfaceVariant,
+                content = content
+            )
+        }
     }
 }

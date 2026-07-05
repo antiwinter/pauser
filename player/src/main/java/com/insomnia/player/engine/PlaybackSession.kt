@@ -157,8 +157,9 @@ class PlaybackSession(
     internal fun rebuildKeepingPosition() {
         val spec = _spec.value ?: return
         val pos = exo.currentPosition
+        val wasPlaying = exo.playWhenReady
         exo.setMediaSource(spec.toMediaSource(appContext))
-        exo.playWhenReady = true
+        exo.playWhenReady = wasPlaying
         exo.prepare()
         exo.seekTo(pos)
     }

@@ -29,10 +29,11 @@ fun PlaybackSpec.toMediaSource(
     val source = sources[state.sourceIndex]
     val sidecarSubtitle = findSubtitleTrack(state.subtitleTrackId)?.toSidecarConfig()
 
+    val decodedUrl = kotlin.runCatching { java.net.URLDecoder.decode(source.url, "UTF-8") }.getOrDefault(source.url)
     val playType = when {
-        source.url.contains("static=true") -> "direct"
-        source.mimeType == "application/vnd.apple.mpegurl" || source.url.endsWith(".m3u8") -> "hls"
-        source.url.contains("Transcoding") || source.url.contains("transcode") -> "transcode"
+        decodedUrl.contains("static=true", ignoreCase = true) || decodedUrl.contains("/original.", ignoreCase = true) || decodedUrl.contains("/stream.", ignoreCase = true) -> "direct"
+        source.mimeType == "application/vnd.apple.mpegurl" || decodedUrl.contains(".m3u8", ignoreCase = true) -> "hls"
+        decodedUrl.contains("Transcoding", ignoreCase = true) || decodedUrl.contains("transcode", ignoreCase = true) -> "transcode"
         else -> "unknown"
     }
     Timber.d("toMediaSource: type=%s mimeType=%s url=%s".format(playType, source.mimeType, source.url))
