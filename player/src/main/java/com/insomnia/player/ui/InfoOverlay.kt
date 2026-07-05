@@ -62,10 +62,6 @@ internal fun InfoOverlay(state: InfoOverlayState) {
     val audioMime = ti.audioMime ?: state.tracks.allMimes(C.TRACK_TYPE_AUDIO)
     val isHdrEnabled = ti.isHdrCapable && state.displaySupportsHdr
     val mbps = state.mbpsState.floatValue
-    Timber.d(
-        "render title='${state.displayInfo.title}' vMime=$videoMime vDec=${ti.videoDecoderStatus} " +
-            "aMime=$audioMime aDec=${ti.audioDecoderStatus} bitrate=${state.bitrate} mbps=$mbps"
-    )
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter,

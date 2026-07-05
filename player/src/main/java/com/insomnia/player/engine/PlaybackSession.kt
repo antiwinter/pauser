@@ -119,6 +119,7 @@ class PlaybackSession(
     val audioTrackIdFlow: StateFlow<String?> = stateField(null) { it.audioTrackId }
 
     private var heartbeatJob: Job? = null
+    private var diagJob: Job? = null
 
     private val released = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -231,6 +232,8 @@ class PlaybackSession(
         exo.stop()
         heartbeatJob?.cancel()
         heartbeatJob = null
+        diagJob?.cancel()
+        diagJob = null
         _spec.value = null
     }
 
@@ -265,6 +268,23 @@ class PlaybackSession(
                 )
             }
             Timber.d("heartbeat: stopped")
+        }
+        startDiagnostics()
+    }
+
+    private fun startDiagnostics() {
+        diagJob?.cancel()
+        diagJob = scope.launch {
+            while (isActive) {
+                delay(1_000)
+                if (exo.playbackState == Player.STATE_READY) continue
+                val pos = exo.currentPosition
+                val buf = exo.bufferedPosition
+                val pwr = exo.playWhenReady
+                val mbps = BandwidthTracker.mbps
+                val totalBw = BandwidthTracker.totalBytes
+                Timber.d("diag: BUFFERING pwr=$pwr pos=${pos}ms buffered=${buf}ms ahead=${maxOf(0L, buf - pos)}ms mbps=$mbps totalBw=$totalBw")
+            }
         }
     }
 }
