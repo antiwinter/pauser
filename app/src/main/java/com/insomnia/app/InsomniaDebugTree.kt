@@ -20,9 +20,9 @@ class InsomniaDebugTree : Timber.DebugTree() {
         val pkg = element.className.substringBeforeLast(".")
         val priority = currentPriority.get() ?: Log.DEBUG
         return if (priority == Log.INFO) {
-            "$pkg"
+            "xx$pkg"
         } else {
-            "$pkg:${element.methodName}:${element.lineNumber}"
+            "xx$pkg:${element.methodName}:${element.lineNumber}"
         }
     }
 }

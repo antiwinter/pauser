@@ -37,12 +37,12 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun buttonColors() = ButtonDefaults.colors(
-    containerColor       = MaterialTheme.colorScheme.surfaceVariant,
-    contentColor         = MaterialTheme.colorScheme.onSurface,
+    containerColor        = MaterialTheme.colorScheme.surfaceVariant,
+    contentColor          = MaterialTheme.colorScheme.onSurface,
     focusedContainerColor = MaterialTheme.colorScheme.primary,
-    focusedContentColor  = MaterialTheme.colorScheme.onPrimary,
+    focusedContentColor   = MaterialTheme.colorScheme.onPrimary,
     pressedContainerColor = MaterialTheme.colorScheme.primary,
-    pressedContentColor  = MaterialTheme.colorScheme.onPrimary,
+    pressedContentColor   = MaterialTheme.colorScheme.onPrimary,
 )
 
 @OptIn(ExperimentalTvMaterial3Api::class)

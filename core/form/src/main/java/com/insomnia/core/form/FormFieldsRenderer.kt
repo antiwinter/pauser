@@ -7,10 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun FormFieldsRenderer(
     fields: List<FormFieldSpec>,

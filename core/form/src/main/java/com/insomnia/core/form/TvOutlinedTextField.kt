@@ -2,6 +2,7 @@ package com.insomnia.core.form
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -46,6 +47,27 @@ fun TvOutlinedTextField(
     var editing by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
 
+    val colors = if (focused) {
+        OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedLabelColor = MaterialTheme.colorScheme.primary,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            cursorColor = MaterialTheme.colorScheme.primary,
+        )
+    } else {
+        OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
     OutlinedTextField(
         modifier = modifier
             .onFocusChanged {
@@ -53,7 +75,6 @@ fun TvOutlinedTextField(
                 if (!it.isFocused) editing = false
             }
             .onPreviewKeyEvent { event ->
-                // Back: exit editing if active, otherwise let BackHandler / nav handle it
                 if (event.key == Key.Back && event.type == KeyEventType.KeyDown) {
                     if (editing) { editing = false; true } else false
                 } else if (event.key in navigationKeys && event.type == KeyEventType.KeyDown) {
@@ -85,12 +106,6 @@ fun TvOutlinedTextField(
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
         enabled = enabled,
-        colors = if (focused && !editing)
-            OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
-                unfocusedLabelColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
-                unfocusedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        else OutlinedTextFieldDefaults.colors(),
+        colors = colors,
     )
 }

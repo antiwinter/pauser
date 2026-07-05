@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -219,7 +220,14 @@ fun ProviderFormRoute(
                     Text(stringResource(R.string.form_button))
                 }
             }
-            Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.form_action_cancel)) }
+            Button(
+                onClick = onDone,
+                enabled = !isLoading,
+                colors = ButtonDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+            ) { Text(stringResource(R.string.form_action_cancel)) }
             if (onDelete != null) {
                 Button(
                     onClick = {
@@ -234,6 +242,10 @@ fun ProviderFormRoute(
                         }
                     },
                     enabled = !isLoading,
+                    colors = ButtonDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
                 ) { Text(stringResource(R.string.form_action_delete)) }
             }
         }
@@ -282,7 +294,14 @@ private fun ProxySelector(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(stringResource(R.string.form_proxy_section_title), style = MaterialTheme.typography.labelMedium)
         Box {
-            Button(onClick = { expanded = true }, enabled = enabled) { Text(selectedLabel) }
+            Button(
+                onClick = { expanded = true },
+                enabled = enabled,
+                colors = ButtonDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+            ) { Text(selectedLabel) }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.form_proxy_none)) },

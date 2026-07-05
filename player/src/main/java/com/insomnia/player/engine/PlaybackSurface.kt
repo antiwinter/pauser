@@ -60,21 +60,10 @@ internal fun rememberPlaybackSurface(
         }
 
         LaunchedEffect(Unit) {
-            var lastTotal = 0L
             while (isActive) {
                 delay(1_000)
                 val mbps = BandwidthTracker.mbps
                 bandwidthMbps.floatValue = mbps
-                // OT_BW: per-second throughput timeline for play/seek/subtitle diagnosis.
-                val total = BandwidthTracker.totalBytes
-                val deltaKB = (total - lastTotal) / 1024
-                lastTotal = total
-                Timber.i(
-                    "mbps=%.2f deltaKB=%d totalMB=%.1f pos=%dms buffered=%dms state=%d".format(
-                        mbps, deltaKB, total / 1_048_576f,
-                        exo.currentPosition, exo.totalBufferedDuration, exo.playbackState,
-                    ),
-                )
             }
         }
 
