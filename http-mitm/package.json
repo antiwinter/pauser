@@ -1,0 +1,19 @@
+{
+  "name": "emby-mitm-proxy",
+  "version": "1.0.0",
+  "description": "HTTP/HTTPS MITM proxy for debugging Emby client behavior",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/http-proxy": "^1.17.14",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
