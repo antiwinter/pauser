@@ -25,8 +25,8 @@ import com.insomnia.core.osd.GlobalOsdOverlay
 import com.insomnia.player.ui.tv.TvPlayerSurface
 import com.insomnia.proxy.ui.ProxyRoutes
 import com.insomnia.proxy.ui.proxyRoutes
-import com.insomnia.server.debug.NavCommand
-import com.insomnia.server.debug.NavigationBridge
+import com.insomnia.server.debug.AppCommand
+import com.insomnia.server.debug.AppCommandBridge
 
 @Composable
 fun InsomniaNavHost() {
@@ -43,12 +43,12 @@ fun InsomniaNavHost() {
     }
 
     LaunchedEffect(nav) {
-        for (cmd in NavigationBridge.commands) {
+        for (cmd in AppCommandBridge.commands) {
             when (cmd) {
-                NavCommand.Home -> nav.navigate(Routes.HOME) {
+                AppCommand.Home -> nav.navigate(Routes.HOME) {
                     popUpTo(Routes.HOME) { inclusive = true }
                 }
-                is NavCommand.Browse -> {
+                is AppCommand.Browse -> {
                     val location = cmd.location ?: ""
                     val entry = EntryInfo(
                         ref = location,
@@ -57,12 +57,12 @@ fun InsomniaNavHost() {
                     )
                     cacheAndBrowse(cmd.endpointId, entry)
                 }
-                is NavCommand.Detail -> {
+                is AppCommand.Detail -> {
                     val entry = EntryInfo(ref = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
                     nav.navigate(Routes.detail(cmd.endpointId, entry))
                 }
-                is NavCommand.Player -> {
+                is AppCommand.Player -> {
                     val entry = EntryInfo(ref = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
                     sharedVm.cache(entry)
                     val client = EndpointClientRegistryHolder.get().getOrCreate(cmd.endpointId)
@@ -71,8 +71,9 @@ fun InsomniaNavHost() {
                     playerController.prepare(entry, cmd.startMs)
                     playerController.play()
                 }
-                is NavCommand.Image -> nav.navigate(Routes.imageViewer(cmd.endpointId, cmd.itemRef))
-                is NavCommand.Search -> nav.navigate(Routes.search(cmd.endpointId, cmd.scopeLocation))
+                is AppCommand.Image -> nav.navigate(Routes.imageViewer(cmd.endpointId, cmd.itemRef))
+                is AppCommand.Search -> nav.navigate(Routes.search(cmd.endpointId, cmd.scopeLocation))
+                is AppCommand.Seek -> playerController.seek(cmd.positionMs, cmd.deltaMs)
             }
         }
     }

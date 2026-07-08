@@ -40,6 +40,31 @@ data class AddServerResponse(
 )
 
 @Serializable
+data class ProxyDto(
+    val proxyId: String,
+    val proxyType: String,
+    val displayName: String,
+)
+
+@Serializable
+data class AddProxyRequest(
+    val proxyType: String,
+    val fields: Map<String, String>,
+)
+
+@Serializable
+data class AddProxyResponse(
+    val proxyId: String? = null,
+    val displayName: String? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class SetEndpointProxyRequest(
+    val proxyId: String? = null,
+)
+
+@Serializable
 data class EntryInfoDto(
     val ref: String,
     val title: String,
@@ -132,4 +157,10 @@ data class JarRequest(
 data class JarResponse(
     val result: String? = null,
     val error: String? = null,
+)
+
+@Serializable
+data class SeekRequest(
+    val positionMs: Long? = null,
+    val deltaMs: Long? = null,
 )

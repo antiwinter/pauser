@@ -103,6 +103,7 @@ class InsomniaApplication : Application() {
             override suspend fun getClient(endpointId: String) = endpointClientRegistry.getOrCreate(endpointId)
             override suspend fun registerClient(endpointId: String, entity: EndpointEntity) = endpointClientRegistry.registerHandle(endpointId, entity)
             override val endpointDao get() = storageBindings.endpointDao
+            override val proxyDao get() = storageBindings.proxyDao
             override val entryStateStore get() = storageBindings.entryStateStore
             override val appConfigStore get() = storageBindings.appConfigStore
             override val jarBridge get() = debugJarBridge

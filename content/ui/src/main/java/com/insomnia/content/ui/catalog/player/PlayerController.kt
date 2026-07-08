@@ -109,6 +109,11 @@ class PlayerController(
         Timber.d( "play: isShown=true")
     }
 
+    fun seek(positionMs: Long? = null, deltaMs: Long? = null) {
+        val target = positionMs ?: (playbackSession.exo.currentPosition + (deltaMs ?: 0L))
+        playbackSession.seekTo(target.coerceAtLeast(0L))
+    }
+
     fun stop() {
         _isShown.value = false
         playbackSession.pause()

@@ -3,8 +3,11 @@ package com.insomnia.server.debug
 import com.insomnia.server.AppContext
 import com.insomnia.content.contract.SearchQuery
 import com.insomnia.core.form.contract.QrResult
+import com.insomnia.proxy.contract.ProxyProviderRegistryHolder
+import com.insomnia.proxy.contract.ProxyValidationResult
 import com.insomnia.storage.EndpointEntity
 import com.insomnia.storage.EntryStateKey
+import com.insomnia.storage.ProxyEntity
 import com.insomnia.storage.SubtitlePrefs
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.util.UUID
 
 private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -128,6 +132,111 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 ctx.endpointDao.deleteByEndpointId(endpointId)
                 call.respondText("{}", ContentType.Application.Json)
             }
+
+            // Attach (or detach) a proxy to an endpoint. Rebuilds the live client.
+            // Body: {"proxyId":"<id>"} to attach, {"proxyId":null} to detach.
+            post("/{endpointId}/proxy") {
+                val endpointId = call.parameters["endpointId"] ?: return@post call.respond400("missing endpointId")
+                val body = runCatching { json.decodeFromString<SetEndpointProxyRequest>(call.receiveText()) }.getOrNull()
+                if (body == null) {
+                    call.respond400("invalid request body"); return@post
+                }
+                val existing = ctx.endpointDao.getByEndpointId(endpointId)
+                    ?: return@post call.respond404("unknown endpointId")
+                if (body.proxyId != null) {
+                    val proxy = ctx.proxyDao.getById(body.proxyId)
+                        ?: return@post call.respond404("unknown proxyId")
+                    Timber.i("attaching proxy ${proxy.id} (${proxy.displayName}) to endpoint $endpointId")
+                } else {
+                    Timber.i("detaching proxy from endpoint $endpointId")
+                }
+                val now = System.currentTimeMillis()
+                val updated = existing.copy(proxyId = body.proxyId, updatedAtEpochMs = now)
+                ctx.endpointDao.update(updated)
+                ctx.registerClient(endpointId, updated) // rebuilds the live client with the new proxyId
+                call.respondText(json.encodeToString(OkResponse()), ContentType.Application.Json)
+            }
+        }
+
+        route("/proxies") {
+            get {
+                val proxies = ctx.proxyDao.getAll()
+                val dtos = proxies.map { p -> ProxyDto(p.id, p.proxyType, p.displayName) }
+                call.respondText(json.encodeToString(dtos), ContentType.Application.Json)
+            }
+
+            post {
+                val body = runCatching { json.decodeFromString<AddProxyRequest>(call.receiveText()) }.getOrNull()
+                if (body == null) {
+                    call.respondText(
+                        json.encodeToString(AddProxyResponse(error = "invalid request body")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.BadRequest,
+                    )
+                    return@post
+                }
+                val provider = runCatching { ProxyProviderRegistryHolder.get().proxy(body.proxyType) }.getOrNull()
+                if (provider == null) {
+                    call.respondText(
+                        json.encodeToString(AddProxyResponse(error = "unknown proxy type: ${body.proxyType}")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.BadRequest,
+                    )
+                    return@post
+                }
+                val client = runCatching { provider.createClient(body.fields) }.getOrElse {
+                    call.respondText(
+                        json.encodeToString(AddProxyResponse(error = it.message ?: "failed to create client")),
+                        ContentType.Application.Json,
+                        HttpStatusCode.BadRequest,
+                    )
+                    return@post
+                }
+                val result = runCatching { client.test() }.getOrElse {
+                    Timber.e(it, "proxy test failed")
+                    ProxyValidationResult.Error(it.message ?: "validation failed")
+                }
+                when (result) {
+                    is ProxyValidationResult.Error -> {
+                        call.respondText(
+                            json.encodeToString(AddProxyResponse(error = result.message)),
+                            ContentType.Application.Json,
+                            HttpStatusCode.UnprocessableEntity,
+                        )
+                    }
+                    is ProxyValidationResult.Success -> {
+                        val entity = ProxyEntity(
+                            id = UUID.randomUUID().toString(),
+                            proxyType = body.proxyType,
+                            displayName = result.name,
+                            fieldsJson = Json.encodeToString(result.fields),
+                            createdAtEpochMs = System.currentTimeMillis(),
+                        )
+                        runCatching { ctx.proxyDao.insert(entity) }.onFailure {
+                            Timber.w("proxy insert failed (may already exist): ${it.message}")
+                        }
+                        Timber.i("added proxy ${entity.id} (${entity.displayName})")
+                        call.respondText(
+                            json.encodeToString(AddProxyResponse(proxyId = entity.id, displayName = entity.displayName)),
+                            ContentType.Application.Json,
+                            HttpStatusCode.Created,
+                        )
+                    }
+                }
+            }
+
+            delete("/{proxyId}") {
+                val proxyId = call.parameters["proxyId"] ?: return@delete call.respond400("missing proxyId")
+                val affected = ctx.endpointDao.getByProxyId(proxyId)
+                val now = System.currentTimeMillis()
+                affected.forEach { entity ->
+                    val updated = entity.copy(proxyId = null, updatedAtEpochMs = now)
+                    ctx.endpointDao.update(updated)
+                    ctx.registerClient(entity.endpointId, updated)
+                }
+                ctx.proxyDao.deleteById(proxyId)
+                call.respondText("{}", ContentType.Application.Json)
+            }
         }
 
         route("/clients") {
@@ -212,35 +321,35 @@ fun Application.installDebugRoutes(ctx: AppContext) {
             if (body == null) {
                 call.respond400("invalid request body"); return@post
             }
-            val cmd: NavCommand = when (body.route) {
-                "home" -> NavCommand.Home
+            val cmd: AppCommand = when (body.route) {
+                "home" -> AppCommand.Home
                 "browse" -> {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Browse(endpointId, ref)
+                    AppCommand.Browse(endpointId, ref)
                 }
                 "detail" -> {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Detail(endpointId, ref)
+                    AppCommand.Detail(endpointId, ref)
                 }
                 "player" -> {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Player(endpointId, ref, body.startMs)
+                    AppCommand.Player(endpointId, ref, body.startMs)
                 }
                 "image" -> {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
-                    NavCommand.Image(endpointId, ref)
+                    AppCommand.Image(endpointId, ref)
                 }
                 "search" -> {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    NavCommand.Search(endpointId, body.itemRef ?: "")
+                    AppCommand.Search(endpointId, body.itemRef ?: "")
                 }
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }
-            NavigationBridge.commands.trySend(cmd)
+            AppCommandBridge.commands.trySend(cmd)
             Timber.i("navigate command sent: $cmd")
             call.respondText(json.encodeToString(OkResponse()), ContentType.Application.Json)
         }
@@ -281,6 +390,18 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     ctx.appConfigStore.saveSubtitlePrefs(SubtitlePrefs(body.offsetFraction, body.sizeScale))
                     call.respondText(json.encodeToString(body), ContentType.Application.Json)
                 }
+            }
+
+            post("/seek") {
+                val body = runCatching { json.decodeFromString<SeekRequest>(call.receiveText()) }.getOrNull()
+                if (body == null) {
+                    call.respond400("invalid request body"); return@post
+                }
+                if (body.positionMs == null && body.deltaMs == null) {
+                    call.respond400("provide positionMs or deltaMs"); return@post
+                }
+                AppCommandBridge.commands.trySend(AppCommand.Seek(body.positionMs, body.deltaMs))
+                call.respondText(json.encodeToString(OkResponse()), ContentType.Application.Json)
             }
 
             route("/media-state") {                get {

@@ -137,6 +137,26 @@ curl -X POST http://localhost:7920/navigate \
   -d '{"route":"home"}'
 ```
 
+### Seek during playback
+
+Precise seek (absolute or relative) without the ±15s DPAD quantization. Use this to land
+exactly on a cached byte range when debugging seek-back latency.
+
+```sh
+# Absolute position
+curl -X POST http://localhost:7920/debug/seek \
+  -H 'Content-Type: application/json' \
+  -d '{"positionMs":28000}'
+
+# Relative (e.g. -2s from current position)
+curl -X POST http://localhost:7920/debug/seek \
+  -H 'Content-Type: application/json' \
+  -d '{"deltaMs":-2000}'
+```
+
+Returns `{"ok":true}`. One of `positionMs` / `deltaMs` must be present. Seek fires through the
+same `PlaybackSession.seekTo` path as the DPAD keys, so the `sd:` diagnostics timeline applies.
+
 ### JAR bridge (proxy host.jar calls from Node test harness)
 ```sh
 curl -X POST http://localhost:7920/debug/jar \

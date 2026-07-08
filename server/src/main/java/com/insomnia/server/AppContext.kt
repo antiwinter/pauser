@@ -7,6 +7,7 @@ import com.insomnia.storage.AppPrefsStore
 import com.insomnia.storage.EndpointDao
 import com.insomnia.storage.EndpointEntity
 import com.insomnia.storage.EntryStateStore
+import com.insomnia.storage.ProxyDao
 
 /**
  * App-level dependency surface exposed to the `:server` module.
@@ -20,6 +21,7 @@ interface AppContext {
     suspend fun getClient(endpointId: String): EndpointClient?
     suspend fun registerClient(endpointId: String, entity: EndpointEntity): EndpointClient?
     val endpointDao: EndpointDao
+    val proxyDao: ProxyDao
     val entryStateStore: EntryStateStore
     val appConfigStore: AppPrefsStore
     val jarBridge: JarBridge
