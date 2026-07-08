@@ -50,6 +50,21 @@ if ($Action -eq "ls") {
     exit 0
 }
 
+if ($Action -eq "emu") {
+    $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME }
+           elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT }
+           else { Join-Path $env:LOCALAPPDATA "Android\Sdk" }
+    $emu = Join-Path $sdk "emulator\emulator.exe"
+    if (-not (Test-Path $emu)) { $emu = "emulator" }
+
+    Get-Process | Where-Object { $_.Name -match 'qemu|emulator' } | Stop-Process -Force -ErrorAction SilentlyContinue
+    $avd = (& $emu -list-avds 2>$null | Where-Object { $_ -match 'tv|television' } | Select-Object -First 1)
+    if (-not $avd) { Write-Host "No TV AVD found."; exit 1 }
+    Write-Host "Starting $avd"
+    Start-Process -FilePath $emu -ArgumentList "-avd","$avd","-no-snapshot-load","-no-snapshot-save"
+    exit 0
+}
+
 if ($Action -eq "set") {
     if ([string]::IsNullOrWhiteSpace($Param2)) {
         Write-Host "Please provide a device ID."
