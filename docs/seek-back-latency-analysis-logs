@@ -1,0 +1,40 @@
+
+SEEK_FORWARD:
+07-08 14:23:30.875  2650  2650 V xxcom.insomnia.player.ui.tv:dispatchKeyEvent:100: dispatchKeyEvent keyCode=22 action=0 hasPlayer=true playing=true
+07-08 14:23:30.876  2650  2650 D xxcom.insomnia.player.engine:markSeek:31: sd: seek pos=1316571ms t=1318420639003
+07-08 14:23:30.908  2650  2650 D xxcom.insomnia.player.engine:onPlaybackStateChanged:70: sd: state=BUFFERING +32ms since seek
+07-08 14:23:30.908  2650  2650 D xxcom.insomnia.player.ui.tv:dispatchKeyEvent:147: seek +15000ms → 1316571
+07-08 14:23:30.928  2650  2650 V xxcom.insomnia.player.ui.tv:dispatchKeyEvent:100: dispatchKeyEvent keyCode=22 action=1 hasPlayer=true playing=false
+07-08 14:23:31.067  2650  2650 D xxcom.insomnia.player.engine:invokeSuspend:289: diag: BUFFERING pwr=true pos=1316571ms buffered=1351656ms ahead=35085ms mbps=4.9370456 totalBw=59715820
+07-08 14:23:31.139  2650  2754 D xxcom.insomnia.server:put:153: sr: span+ @785.1 len=0.0 total=23.9 spans=[761.2, 785.1]
+07-08 14:23:32.069  2650  2650 D xxcom.insomnia.player.engine:invokeSuspend:289: diag: BUFFERING pwr=true pos=1316571ms buffered=1367585ms ahead=51014ms mbps=23.374506 totalBw=66629868
+07-08 14:23:32.118  2650  2956 D xxcom.insomnia.server:put:153: sr: span+ @786.1 len=0.0 total=23.9 spans=[762.2, 786.1]
+07-08 14:23:32.214  2650  2650 D xxcom.insomnia.player.engine:onRenderedFirstFrame:55: sd: first-frame +1338ms since seek (renderTimeMs=1319757)
+07-08 14:23:32.390  2650  2650 D xxcom.insomnia.player.engine:onPlaybackStateChanged:70: sd: state=READY +1514ms since seek
+07-08 14:23:32.390  2650  2650 D xxcom.insomnia.player.engine:onPlaybackStateChanged:73: sd: ready total=+1514ms first-frame=+1338ms codec-init=-1ms
+07-08 14:23:32.519  2650  2956 D xxcom.insomnia.server:put:153: sr: span+ @787.1 len=0.0 total=23.9 spans=[763.2, 787.1]
+07-08 14:23:32.964  2650  2754 D xxcom.insomnia.server:put:153: sr: span+ @788.1 len=0.0 total=23.9 spans=[764.2, 788.1]
+07-08 14:23:33.395  2650  2956 D xxcom.insomnia.server:put:153: sr: span+ @789.1 len=0.0 total=23.9 spans=[765.2, 789.1]
+07-08 14:23:33.960  2650  2979 D xxcom.insomnia.server:put:153: sr: span+ @790.1 len=0.0 total=23.9 spans=[766.2, 790.1]
+
+SEEK_BACKWARD:
+07-08 14:26:43.360  3112  3112 V xxcom.insomnia.player.ui.tv:dispatchKeyEvent:100: dispatchKeyEvent keyCode=21 action=0 hasPlayer=true playing=true
+07-08 14:26:43.360  3112  3112 D xxcom.insomnia.player.engine:markSeek:31: sd: seek pos=1352782ms t=1510905151220
+07-08 14:26:43.458  3112  3214 D xxcom.insomnia.server:put:153: sr: span+ @795.5 len=0.0 total=23.9 spans=[771.6, 795.5]
+07-08 14:26:43.459  3112  3112 D xxcom.insomnia.player.engine:onPlaybackStateChanged:70: sd: state=BUFFERING +99ms since seek
+07-08 14:26:43.482  3112  3112 D xxcom.insomnia.player.ui.tv:dispatchKeyEvent:140: seek -15000ms → 1352782
+07-08 14:26:43.509  3112  3112 V xxcom.insomnia.player.ui.tv:dispatchKeyEvent:100: dispatchKeyEvent keyCode=21 action=1 hasPlayer=true playing=false
+07-08 14:26:43.568  3112  3211 D xxcom.insomnia.player.engine:interceptor$lambda$0:25: BW request: GET http://127.0.0.1:7920/relay/url?ep=emby_65eb6889229ade1a&url=http%3A%2F%2F192.168.56.254%3A8096%2Fvideos%2F7444%2Foriginal.mp4%3FDeviceId%3Da88cdcc5717ae423%26MediaSourceId%3Dmediasource_7444%26PlaySessionId%3Ddfa7284700f84b4b8f8fdd3c1260375d%26api_key%3Dca5f6d98205649898547a567854aefa5&cached=true range=bytes=814082963-
+07-08 14:26:43.571  3112  3178 D xxcom.insomnia.server:put:153: sr: span+ @796.5 len=0.0 total=23.9 spans=[772.6, 796.5]
+07-08 14:26:43.576  3112  3176 D xxcom.insomnia.server:invokeSuspend:47: sr: req range=776.4- cached=true
+07-08 14:26:43.577  3112  3180 D xxcom.insomnia.server:invokeSuspend:71: sr: cache hit [776.4, 796.7] length=20.3 t=1511122248303 spans=[773.5, 796.7]
+07-08 14:26:43.584  3112  3180 D xxcom.insomnia.server:invokeSuspend:84: sr: serve begin t=1511128473595 range=[776.4, 796.7]
+07-08 14:26:43.678  3112  3112 D xxcom.insomnia.player.engine:invokeSuspend:289: diag: BUFFERING pwr=true pos=1352782ms buffered=1352782ms ahead=0ms mbps=8.964813 totalBw=34081341
+07-08 14:26:44.239  3112  3184 D xxcom.insomnia.server:put:153: sr: span+ @797.5 len=0.0 total=23.9 spans=[773.5, 797.5]
+07-08 14:26:44.353  3112  3179 D xxcom.insomnia.server:invokeSuspend:152: sr: stream disconnected by client
+07-08 14:26:44.353  3112  3179 D xxcom.insomnia.server:invokeSuspend:157: sr: resp → player status=206 cr=759.6-1568.2/1570.8 length=808.6 source=remote
+07-08 14:26:44.682  3112  3112 D xxcom.insomnia.player.engine:invokeSuspend:289: diag: BUFFERING pwr=true pos=1352782ms buffered=1359272ms ahead=6490ms mbps=17.091278 totalBw=38210109
+07-08 14:26:45.351  3112  3112 D xxcom.insomnia.player.engine:onRenderedFirstFrame:55: sd: first-frame +1895ms since seek (renderTimeMs=1512782)
+07-08 14:26:45.405  3112  3112 D xxcom.insomnia.player.engine:onPlaybackStateChanged:70: sd: state=READY +2045ms since seek
+07-08 14:26:45.405  3112  3112 D xxcom.insomnia.player.engine:onPlaybackStateChanged:73: sd: ready total=+2045ms first-frame=+1895ms codec-init=-1ms
+07-08 14:27:04.734  3112  3184 D xxcom.insomnia.server:invokeSuspend:88: sr: serve end t=1532279023480 written=20.3 firstByteAt=1511159786178 firstByte+37ms
