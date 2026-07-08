@@ -9,8 +9,6 @@ import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 @UnstableApi
 object InsomniaExoPlayer {
 
-    const val DEFAULT_PRE_BUFFER_MS = 1 * 60 * 1000
-
     data class PlayerWithMeter(val player: ExoPlayer, val bandwidthMeter: DefaultBandwidthMeter)
 
     /**
@@ -20,15 +18,14 @@ object InsomniaExoPlayer {
     @JvmStatic
     fun createForBundledSources(
         context: Context,
-        preBufferMs: Int = DEFAULT_PRE_BUFFER_MS,
+        preBufferMs: Int = 30 * 1000,
     ): PlayerWithMeter {
-        val minBufferMs = preBufferMs - 10_000
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                minBufferMs,
-                preBufferMs,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+                /* minBufferMs = */ (preBufferMs - 1_000).coerceAtLeast(1_000),
+                /* preBufferMs = */ preBufferMs,
+                /* bufferForPlaybackMs = */ 200,
+                /* bufferForPlaybackAfterRebufferMs = */ 200,
             )
             .build()
         val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
