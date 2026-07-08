@@ -121,6 +121,7 @@ class InsomniaTvPlayerView @JvmOverloads constructor(
                 // MENU / PAGE_DOWN → open player menu
                 KeyEvent.KEYCODE_MENU,
                 KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_FORWARD_DEL
                 -> openMenuCallback?.invoke()
 
                 // Emulator maps host Page Down to KEYCODE_UNKNOWN with scan code 109
