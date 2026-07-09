@@ -10,6 +10,7 @@ export interface EmbyMediaSourceCtx {
   mediaSourceId: string | null;
   liveStreamId: string | null;
   playMethod: string;
+  runTimeTicks: number | null;
 }
 
 export interface EmbyHooksCtx {
@@ -47,7 +48,7 @@ function getMeta(ctx: EmbyHooksCtx): SessionMeta {
 }
 
 function mediaSourceFor(ctx: EmbyHooksCtx, meta: SessionMeta): EmbyMediaSourceCtx {
-  return ctx.mediaSources[meta.sourceIndex] ?? { mediaSourceId: null, liveStreamId: null, playMethod: 'DirectPlay' };
+  return ctx.mediaSources[meta.sourceIndex] ?? { mediaSourceId: null, liveStreamId: null, playMethod: 'DirectPlay', runTimeTicks: null };
 }
 
 export async function updateEntryState(
@@ -101,6 +102,12 @@ async function reportPlaying(ctx: EmbyHooksCtx, meta: SessionMeta): Promise<void
     PlayMethod:    ms.playMethod,
     PositionTicks: ticks,
     PlaybackRate:  meta.playbackRate,
+    CanSeek:       true,
+    IsPaused:      false,
+    IsMuted:       false,
+    NowPlayingQueue: [{ Id: ctx.itemId, PlaylistItemId: 'playlistItem0' }],
+    PlaylistIndex: 0,
+    PlaylistLength: 1,
   });
 }
 
@@ -121,6 +128,13 @@ async function reportProgress(
     PositionTicks: ticks,
     PlaybackRate:  meta.playbackRate,
     IsPaused:      isPaused,
+    CanSeek:       true,
+    IsMuted:       false,
+    RunTimeTicks:  ms.runTimeTicks,
+    PlaylistIndex: 0,
+    PlaylistLength: 1,
+    RepeatMode:    'RepeatNone',
+    EventName:     'TimeUpdate',
   });
 }
 
@@ -133,6 +147,14 @@ async function reportStopped(ctx: EmbyHooksCtx, meta: SessionMeta): Promise<void
     MediaSourceId: ms.mediaSourceId,
     PlaySessionId: ctx.playSessionId,
     LiveStreamId:  ms.liveStreamId,
+    PlayMethod:    ms.playMethod,
     PositionTicks: ticks,
+    PlaybackRate:  meta.playbackRate,
+    CanSeek:       true,
+    IsPaused:      false,
+    IsMuted:       false,
+    PlaylistIndex: 0,
+    PlaylistLength: 1,
+    RepeatMode:    'RepeatNone',
   });
 }

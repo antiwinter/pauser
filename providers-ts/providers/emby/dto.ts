@@ -127,6 +127,11 @@ export interface PlaybackInfoResponse {
   ErrorCode?: string | null;
 }
 
+export interface NowPlayingQueueItem {
+  Id: string;
+  PlaylistItemId: string;
+}
+
 export interface PlaybackStartInfo {
   ItemId: string;
   MediaSourceId?: string | null;
@@ -135,6 +140,12 @@ export interface PlaybackStartInfo {
   PlayMethod: string;
   PositionTicks: number;
   PlaybackRate: number;
+  CanSeek?: boolean;
+  IsPaused?: boolean;
+  IsMuted?: boolean;
+  NowPlayingQueue?: NowPlayingQueueItem[];
+  PlaylistIndex?: number;
+  PlaylistLength?: number;
 }
 
 export interface PlaybackProgressInfo {
@@ -146,6 +157,13 @@ export interface PlaybackProgressInfo {
   PositionTicks: number;
   PlaybackRate: number;
   IsPaused?: boolean;
+  CanSeek?: boolean;
+  IsMuted?: boolean;
+  RunTimeTicks?: number | null;
+  PlaylistIndex?: number;
+  PlaylistLength?: number;
+  RepeatMode?: string;
+  EventName?: string;
 }
 
 export interface PlaybackStopInfo {
@@ -153,7 +171,15 @@ export interface PlaybackStopInfo {
   MediaSourceId?: string | null;
   PlaySessionId?: string | null;
   LiveStreamId?: string | null;
+  PlayMethod?: string;
   PositionTicks: number;
+  PlaybackRate?: number;
+  CanSeek?: boolean;
+  IsPaused?: boolean;
+  IsMuted?: boolean;
+  PlaylistIndex?: number;
+  PlaylistLength?: number;
+  RepeatMode?: string;
 }
 
 // ── DeviceProfile ──────────────────────────────────────────────────────────

@@ -257,6 +257,7 @@ export async function getPlaybackSources(
         mediaSourceId: source.Id ?? null,
         liveStreamId: source.LiveStreamId ?? null,
         playMethod: playMethod(source),
+        runTimeTicks: source.RunTimeTicks ?? null,
       } satisfies EmbyMediaSourceCtx,
     };
   }).filter((b) => b.source.url.length > 0);
