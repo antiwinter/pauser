@@ -8,7 +8,6 @@ ACTION="deploy"
 PARAM2=""
 CLEAR_LOGS=1
 TARGET_PACKAGE="com.insomnia.app"
-clear
 
 # Parse arguments
 if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
@@ -62,6 +61,7 @@ stream_logs() {
     run_adb logcat -c
   fi
   echo "logging..."
+  clear
   run_adb logcat | grep -v "MI-SF" | grep "xxcom.insomnia"
 }
 

@@ -18,7 +18,6 @@ if (Test-Path $devFile) {
     $Device = Get-Content $devFile | Select-Object -First 1
 }
 
-clear
 Write-Host "device: $Device"
 
 function Run-Adb {
@@ -38,6 +37,7 @@ function Stream-Logs {
         Run-Adb logcat -c
     }
     Write-Host "logging..."
+    clear
     if (-not [string]::IsNullOrWhiteSpace($Device)) {
         adb -s $Device logcat | Where-Object { $_ -notmatch "MI-SF" } | Select-String "xxcom.insomnia"
     } else {
