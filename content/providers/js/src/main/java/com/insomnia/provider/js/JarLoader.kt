@@ -4,7 +4,11 @@ import com.insomnia.content.contract.ByteSink
 import com.insomnia.content.contract.StreamRelayResult
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -19,8 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
 
 private const val PUMP_CHUNK_SIZE = 128 * 1024
@@ -43,6 +45,13 @@ class JarLoader(private val httpClient: OkHttpClient) {
     private val keyGen    = AtomicLong(0)
     private val loadLocks = ConcurrentHashMap<String, Any>()
     private val loadGen   = AtomicLong(0)  // incremented on clear() so each reload gets a fresh dex dir
+    // Per-URL boot futures: concurrent `boot()` calls for the same JAR share the same
+    // future. The native Init.init / DexNative.getLoader sequence is not re-entrant
+    // (the secondary loader is process-global via .so) — letting two callers race
+    // corrupts the second loader's Context reference and the wrapped Spider ends up
+    // null in BaseSpiderGuard. boot() can also be called from any thread, so we wrap
+    // it in runBlocking to keep the public API synchronous.
+    private val bootFutures = ConcurrentHashMap<String, CompletableFuture<Void>>()
 
     // ── Public API ─────────────────────────────────────────────────────────
 
@@ -96,8 +105,45 @@ class JarLoader(private val httpClient: OkHttpClient) {
      *  3. Poll Init.loader() until secondary DexClassLoader is ready
      *  4. Patch secondary loader's parent → ctx.classLoader (app with bootstrap injected)
      *  5. Call secondary init(Context)
+     *
+     * Concurrent calls for the same `url` share a single in-flight future — see
+     * `bootFutures`. The native state is process-global and a re-entrant
+     * `Init.init(ctx)` corrupts the secondary loader's Context, so serializing is
+     * mandatory, not just an optimization.
      */
     fun boot(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
+        val key = urlKey(url)
+        // Per-URL boot future. If one is already registered AND complete, all callers
+        // short-circuit on the first get(). If one is in-flight, the new caller waits
+        // on the same future. We must not be the caller that completes it (only the
+        // first caller of a fresh future should run bootInternal).
+        val existing = bootFutures[key]
+        if (existing != null && existing.isDone) {
+            try { runBlocking { existing.get() } } catch (_: Throwable) {}
+            return
+        }
+        val inFlight = CompletableFuture<Void>()
+        val claimed = if (existing == null) {
+            bootFutures.putIfAbsent(key, inFlight) == null
+        } else {
+            // Race: existing is in-flight. Don't replace — just wait on it.
+            false
+        }
+        if (!claimed) {
+            try { runBlocking { bootFutures[key]!!.get() } } catch (_: Throwable) {}
+            return
+        }
+        try {
+            bootInternal(url, initClass, dexNativeClass, initOriginClass)
+            inFlight.complete(null)
+        } catch (t: Throwable) {
+            bootFutures.remove(key, inFlight)
+            inFlight.completeExceptionally(t)
+            throw t
+        }
+    }
+
+    private fun bootInternal(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
         val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
         val ctx     = ContextHolder.get()
         val initCls = try { primary.loadClass(initClass) } catch (_: Throwable) { return }
@@ -288,6 +334,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         instances.clear()
         loaders.clear()
         loadLocks.clear()
+        bootFutures.clear()
         loadGen.incrementAndGet()
     }
 

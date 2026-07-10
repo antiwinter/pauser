@@ -4,6 +4,7 @@ import com.insomnia.content.contract.SERVER_PORT
 import com.insomnia.content.contract.StreamRelayRegistry
 import com.insomnia.proxy.contract.HostRemapDns
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -11,13 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
-/**
- * Handles the engine-scoped `host.*` namespaces (`dns`, `relay`, `web`) — those backed by
- * per-endpoint state (this engine's HTTP client, jar loader, and WebView sniffer) rather than
- * the shared, stateless [HostApis] singleton.
- *
- * Each method returns a JSON string (or null) used to resolve the JS Promise.
- */
+/** Engine-scoped `host.*` namespaces (`dns`, `relay`, `web`); backed by per-endpoint state. */
 class EngineHostApis(
     private val httpClient: OkHttpClient,
     private val jarLoader: JarLoader,
@@ -25,7 +20,7 @@ class EngineHostApis(
     private val json = Json { ignoreUnknownKeys = true }
     private val webSniffer = WebSniffer()
 
-    /** `host.dns.remap({from, to})` — register a DNS host remap on this endpoint's client. */
+    /** `host.dns.remap({from, to})` */
     fun handleDns(name: String, argsJson: String): String {
         if (name != "remap") throw IllegalArgumentException("Unknown dns method: $name")
         val args = json.parseToJsonElement(argsJson).jsonObject
@@ -41,8 +36,11 @@ class EngineHostApis(
             "register" -> {
                 val cls = args["cls"]?.jsonPrimitive?.content ?: error("relay.register: missing cls")
                 val method = args["method"]?.jsonPrimitive?.content ?: error("relay.register: missing method")
-                val recipe = JarStreamRelayRecipe(jarLoader, cls, method)
-                val token = StreamRelayRegistry.register(recipe)
+                val token = args["token"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
+                    ?: error("relay.register: missing token")
+                // JarStreamRelayRecipe.get is process-wide per (cls, method), so re-register
+                // from a re-evaluated JS bundle returns the same instance.
+                StreamRelayRegistry.register(token, JarStreamRelayRecipe.get(jarLoader, cls, method))
                 return buildJsonObject {
                     put("token", token)
                     put("baseUrl", "http://127.0.0.1:${SERVER_PORT}/relay/$token")
@@ -52,7 +50,7 @@ class EngineHostApis(
         }
     }
 
-    /** `host.web.detect({url, headers?, regex, exclude?, script?, timeoutMs?})` — headless WebView sniff. */
+    /** `host.web.detect({url, headers?, regex, exclude?, script?, timeoutMs?})` */
     suspend fun handleWeb(name: String, argsJson: String): String? {
         if (name != "detect") throw IllegalArgumentException("Unknown web method: $name")
         val args = json.parseToJsonElement(argsJson).jsonObject
@@ -74,3 +72,4 @@ class EngineHostApis(
         }.toString()
     }
 }
+

@@ -1,6 +1,5 @@
 package com.insomnia.content.contract
 
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /** Port the embedded stream-relay/debug server listens on. */
@@ -23,22 +22,22 @@ data class StreamRelayResult(
     val pump: suspend (ByteSink) -> Unit,
 )
 
-/** Backs a `/relay/{token}` route; the server calls [serve] and pumps the result. */
+/** Backs a `/{token}` route; the server calls [serve] and pumps the result. */
 interface StreamRelayRecipe {
     suspend fun serve(params: Map<String, String>): StreamRelayResult?
 }
 
-/** Process-wide token → recipe map; the `/relay/{token}` route looks up here. */
+/** Process-wide token → recipe map; the `/{token}` route looks up here. */
 object StreamRelayRegistry {
     private val entries = ConcurrentHashMap<String, StreamRelayRecipe>()
 
-    /** Registers under a random token. */
-    fun register(recipe: StreamRelayRecipe): String =
-        UUID.randomUUID().toString().replace("-", "").also { entries[it] = recipe }
-
-    /** Registers under a caller-chosen stable token (e.g. `"fs"`). */
+    // Idempotent on same recipe instance so endpoint re-add doesn't throw; throws on a
+    // different-instance collision (two providers trying to claim one stable token).
     fun register(token: String, recipe: StreamRelayRecipe): String {
-        entries[token] = recipe
+        val previous = entries.putIfAbsent(token, recipe)
+        if (previous != null && previous !== recipe) {
+            error("StreamRelayRegistry: token '$token' is already registered with a different recipe")
+        }
         return token
     }
 

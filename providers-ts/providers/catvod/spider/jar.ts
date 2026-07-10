@@ -16,65 +16,84 @@ import {
   normalizeSearch,
   parseReflectResult,
 } from './normalize.js';
-// Spider instance handles keyed by siteKey — one engine = one endpoint = module-level cache
+
 const spiderHandles = new Map<string, string>();
 
-// Stream-relay base URL registered with the host for this endpoint's spider `Proxy.proxy` method.
-// The spider hardcodes `http://127.0.0.1:9978/proxy?…` URLs; we rewrite them to this base.
+// Serializes ensureJar() across concurrent callers; the JAR's native boot is process-global
+// and a re-entrant call corrupts the secondary loader's Context reference (boot race).
+let jarBootPromise: Promise<void> | null = null;
+
 let relayBaseUrl: string | null = null;
 
 export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void> {
   spiderHandles.clear();
-  // Use clearInstances rather than clear() — Guard JARs rely on native state set up by
-  // Init.init(Context) / DexNative.getLoader(). Calling clear() recreates the primary
-  // DexClassLoader and re-runs Init.init(), but the native .so is process-global and
-  // does not reinitialize cleanly on a second getLoader() call, leaving the secondary
-  // loader's Context reference null. clearInstances() drops spider handles without
-  // touching the loaded JAR or native state.
+  // Use clearInstances rather than clear() — the JAR's native .so is process-global and
+  // doesn't reinitialize cleanly on a second getLoader() call, leaving the secondary
+  // loader's Context reference null.
   await host.jar.clearInstances();
 }
-
-// ── CatVod/spider class name constants ───────────────────────────────────────
 
 const CATVOD_INIT         = 'com.github.catvod.spider.Init';
 const CATVOD_DEX_NATIVE   = 'com.github.catvod.spider.DexNative';
 const CATVOD_INIT_ORIGIN  = 'com.github.catvod.spider.InitOrigin';
 const CATVOD_SHIM_ASSET   = 'catvod-shim.jar';
 
-// ── JAR bootstrap ─────────────────────────────────────────────────────────────
-
 export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
-  await host.jar.loadAsset({ name: CATVOD_SHIM_ASSET });
-  await host.jar.load({ url: jarUrl, md5 });
-  await host.jar.boot({
-    url: jarUrl,
-    initClass: CATVOD_INIT,
-    dexNativeClass: CATVOD_DEX_NATIVE,
-    initOriginClass: CATVOD_INIT_ORIGIN,
-  });
-  // Register the spider's static Proxy.proxy(Map) as a pure pass-through stream relay on the host.
-  // The class/method names are catvod-specific (here); the host server is agnostic and
-  // streams bytes through untouched.
-  const reg = await host.relay.register({
-    cls: 'com.github.catvod.spider.Proxy',
-    method: 'proxy',
-  });
-  relayBaseUrl = reg.baseUrl;
+  if (jarBootPromise) return jarBootPromise;
+  jarBootPromise = (async () => {
+    await host.jar.loadAsset({ name: CATVOD_SHIM_ASSET });
+    await host.jar.load({ url: jarUrl, md5 });
+    await host.jar.boot({
+      url: jarUrl,
+      initClass: CATVOD_INIT,
+      dexNativeClass: CATVOD_DEX_NATIVE,
+      initOriginClass: CATVOD_INIT_ORIGIN,
+    });
+    // Stable token "catvod": some JARs build loopback URLs of the form
+    // http://127.0.0.1:<port>/proxy?... and call back into the app to resolve them. The
+    // host exposes the recipe at http://127.0.0.1:<server-port>/relay/catvod.
+    const reg = await host.relay.register({
+      cls: 'com.github.catvod.spider.Proxy',
+      method: 'proxy',
+      token: 'catvod',
+    });
+    relayBaseUrl = reg.baseUrl;
+  })();
+  try {
+    await jarBootPromise;
+  } catch (e) {
+    // A failed boot must be retryable — drop the cached promise so the next caller
+    // can re-attempt the load+boot sequence.
+    jarBootPromise = null;
+    throw e;
+  }
 }
 
-/**
- * Rewrite a spider-embedded `http://127.0.0.1:9978/proxy?…` (or localhost:9978) URL to the
- * host-registered stream-relay base, preserving the query string. Passes through other URLs.
- */
+// Decodes loopback proxy URLs the JAR embeds in playerContent results. The JAR's port-probe
+// loop (9978–9999) usually fails against our server (port 7920), so the URL ends up with
+// port -1; we recognise either form. When the URL carries an embedded `url=<encoded>`
+// upstream we extract it directly — segments point straight at the CDN, no relay needed.
 function rewriteProxyUrl(url: string | undefined): string | undefined {
-  if (!url || !relayBaseUrl) return url;
-  const m = url.match(/^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/proxy\b(.*)$/i);
+  if (!url) return url;
+  const m = url.match(/^https?:\/\/(?:127\.0\.0\.1|localhost):-?\d+\/proxy\b(.*)$/i);
   if (!m) return url;
   const query = m[1].startsWith('?') ? m[1] : (m[1] || '');
-  return relayBaseUrl + query;
+  const upstream = decodeProxyParam(query, 'url');
+  if (upstream) return upstream;
+  return relayBaseUrl ? relayBaseUrl + query : url;
 }
 
-// ── Spider instance lifecycle ─────────────────────────────────────────────────
+// URLSearchParams isn't bundled in QuickJS.
+function decodeProxyParam(query: string, key: string): string | null {
+  for (const part of query.split('&')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (decodeURIComponent(part.slice(0, eq)) === key) {
+      return decodeURIComponent(part.slice(eq + 1));
+    }
+  }
+  return null;
+}
 
 async function loadSpider(
   jarUrl: string,
@@ -86,13 +105,18 @@ async function loadSpider(
   if (cached) return cached;
 
   const cls = spiderClass(api);
-  // FongMi approach: direct newInstance() — BaseSpiderGuard.<init> internally calls
-  // Init.getSpider(shortName) to populate the wrapped spider field from config.db.
   const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
   if (cls.endsWith('Guard')) {
-    // FongMi line 182: sp.homeContent(false) — preloads spider internal state
-    // (cookies, sessions) that categoryContent/detailContent depend on.
-    await host.jar.reflect({ url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false] }).catch(() => undefined);
+    // Guard init(ctx, ext) populates the wrapped spider via Init.getSpider; without it
+    // homeContent returns {"class":[]}. A failure on homeContent means the wrapped
+    // spider is still null (boot race) — drop the handle so the next caller retries.
+    await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
+    try {
+      await host.jar.reflect({ url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false] });
+    } catch {
+      spiderHandles.delete(siteKey);
+      throw new Error(`loadSpider: ${cls} init failed`);
+    }
   } else {
     await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
   }
@@ -100,12 +124,6 @@ async function loadSpider(
   return handle;
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Creates a JAR spider — type 3 (csp_*)
- * These are Java classes loaded from a remote JAR file
- */
 function createJarSpider(
   jarUrl: string,
   md5: string | undefined,
@@ -113,11 +131,9 @@ function createJarSpider(
   ext: string,
   siteKey: string,
 ): CatVodSpider {
-  // Cache the spider handle loading promise
   let handlePromise: Promise<string> | null = null;
 
   const getHandle = async (): Promise<string> => {
-    // Ensure JAR is loaded first
     await ensureJar(jarUrl, md5);
     if (!handlePromise) {
       handlePromise = loadSpider(jarUrl, api, ext, siteKey);
@@ -183,8 +199,6 @@ function createJarSpider(
   };
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function spiderClass(api: string): string {
   return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
@@ -224,3 +238,4 @@ export default {
     return createJarSpider(jarConfig.url, jarConfig.md5, site.api, siteExt(site), site.key);
   },
 };
+

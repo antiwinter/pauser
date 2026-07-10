@@ -8,8 +8,8 @@ import timber.log.Timber
 
 /**
  * Embedded HTTP server for the app's lifetime. Binds to `0.0.0.0` on [SERVER_PORT]. Composes
- * [StreamRelayRoute] (`/relay/{token}` recipe pass-through) and, when [appContext] is non-null,
- * the debug + gen-art routes.
+ * [StreamRelayRoute] (`/relay/{token}` recipe pass-through) and, when [appContext] is
+ * non-null, the debug + gen-art routes.
  */
 class InsomniaServer(
     private val appContext: AppContext? = null,
@@ -17,9 +17,11 @@ class InsomniaServer(
     private val streamRelayRoute = StreamRelayRoute()
 
     private val engine = embeddedServer(CIO, host = "0.0.0.0", port = SERVER_PORT) {
-        with(streamRelayRoute) { installRoutes() }
+        // Install well-known routes first (debug/genart) so the catch-all `/{token}` route
+        // installed by StreamRelayRoute doesn't shadow them.
         appContext?.let { installGenartRoutes(it) }
         appContext?.let { installDebugRoutes(it) }
+        with(streamRelayRoute) { installRoutes() }
     }
 
     fun start() {

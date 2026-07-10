@@ -163,17 +163,11 @@ class FileRelayRecipe(
     }
 
     companion object {
-        private val registerLock = Any()
-
         /** Register the `fs` recipe once, lazily; epcache calls this before building any file-service URL. */
         fun ensureRegistered() {
-            if (StreamRelayRegistry.get("fs") != null) return
-            synchronized(registerLock) {
-                if (StreamRelayRegistry.get("fs") != null) return
-                StreamRelayRegistry.register("fs", FileRelayRecipe { ep ->
-                    runCatching { EndpointClientRegistryHolder.get().getOrCreate(ep) }.getOrNull()
-                })
-            }
+            StreamRelayRegistry.register("fs", FileRelayRecipe { ep ->
+                runCatching { EndpointClientRegistryHolder.get().getOrCreate(ep) }.getOrNull()
+            })
         }
     }
 }
