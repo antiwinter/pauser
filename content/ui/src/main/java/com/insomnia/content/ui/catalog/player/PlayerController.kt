@@ -8,10 +8,12 @@ import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.core.osd.gOSD
+import com.insomnia.player.ItemListInfo
 import com.insomnia.player.MediaCodecInfo
 import com.insomnia.player.PlaybackDisplayInfo
 import com.insomnia.player.PlaybackSpec
 import com.insomnia.player.PlayerSurfaceController
+import com.insomnia.player.PlayerSurfaceState
 import com.insomnia.player.engine.PlaybackSession
 import com.insomnia.player.manager.SourceManager
 import kotlinx.coroutines.CancellationException
@@ -28,6 +30,9 @@ import timber.log.Timber
 
 private const val DEBOUNCE_MS = 800L
 
+/** Item types whose playback uses the live surface (no seek bar, channel switching). */
+private val LIVE_ITEM_TYPES = setOf("LiveChannel")
+
 @UnstableApi
 class PlayerController(
     application: Application,
@@ -36,8 +41,12 @@ class PlayerController(
 
     private var _client: CachingEndpointClient? = null
 
-    private val _isShown = MutableStateFlow(false)
-    val isShownFlow: StateFlow<Boolean> = _isShown.asStateFlow()
+    /**
+     * Which surface the host renders. HIDE until [play]; then LIVE if the current item is a
+     * live channel, else VOD. Derived from the item type, never set directly.
+     */
+    private val _surfaceState = MutableStateFlow(PlayerSurfaceState.HIDE)
+    val surfaceStateFlow: StateFlow<PlayerSurfaceState> = _surfaceState.asStateFlow()
 
     /** Emits when [stop] is called (user closed the player). Not emitted for [reset]. */
     private val _stopEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -49,9 +58,9 @@ class PlayerController(
     private val _displayInfo = MutableStateFlow<PlaybackDisplayInfo>(PlaybackDisplayInfo())
     override val displayInfoFlow: StateFlow<PlaybackDisplayInfo> = _displayInfo.asStateFlow()
 
-    private var _nextVideoCallback: (() -> Unit)? = null
-    private val _hasNextVideo = MutableStateFlow(false)
-    override val hasNextVideoFlow: StateFlow<Boolean> = _hasNextVideo.asStateFlow()
+    private var _switchItemCallback: ((Int) -> Unit)? = null
+    private val _itemListInfo = MutableStateFlow<ItemListInfo?>(null)
+    override val itemListInfoFlow: StateFlow<ItemListInfo?> = _itemListInfo.asStateFlow()
 
     private var _debounceJob: Job? = null
     private var _osdJob: Job? = null
@@ -65,9 +74,9 @@ class PlayerController(
     private val _sourceManager = MutableStateFlow<SourceManager?>(null)
     override val sourceManagerFlow: StateFlow<SourceManager?> = _sourceManager.asStateFlow()
 
-    fun setNextVideoCallback(cb: (() -> Unit)?) {
-        _nextVideoCallback = cb
-        _hasNextVideo.value = cb != null
+    fun setItemListCallback(cb: ((Int) -> Unit)?, info: ItemListInfo?) {
+        _switchItemCallback = cb
+        _itemListInfo.value = info
     }
 
     fun setDisplayInfo(info: EntryInfo) {
@@ -75,8 +84,8 @@ class PlayerController(
         _displayInfo.value = PlaybackDisplayInfo(info.title)
     }
 
-    override fun requestNextVideo() {
-        _nextVideoCallback?.invoke()
+    override fun requestSwitchItem(index: Int) {
+        _switchItemCallback?.invoke(index)
     }
 
     fun setClient(client: EndpointClient) {
@@ -101,12 +110,15 @@ class PlayerController(
     }
 
     fun play() {
-        _isShown.value = true
+        _surfaceState.value = when (_pendingInfo?.type) {
+            in LIVE_ITEM_TYPES -> PlayerSurfaceState.LIVE
+            else -> PlayerSurfaceState.VOD
+        }
         launchResolve(onComplete = {
             playbackSession.play()
             _osdJob?.cancel()
         })
-        Timber.d( "play: isShown=true")
+        Timber.d( "play: surfaceState=${_surfaceState.value}")
     }
 
     fun seek(positionMs: Long? = null, deltaMs: Long? = null) {
@@ -115,14 +127,14 @@ class PlayerController(
     }
 
     fun stop() {
-        _isShown.value = false
+        _surfaceState.value = PlayerSurfaceState.HIDE
         playbackSession.pause()
         _stopEvents.tryEmit(Unit)
         Timber.d( "stop")
     }
 
     fun reset() {
-        _isShown.value = false
+        _surfaceState.value = PlayerSurfaceState.HIDE
         _debounceJob?.cancel()
         _osdJob?.cancel()
         playbackSession.stop()
@@ -131,8 +143,8 @@ class PlayerController(
         _workingItemRef = null
         _workingStartMs = null
         _sourceManager.value = null
-        _nextVideoCallback = null
-        _hasNextVideo.value = false
+        _switchItemCallback = null
+        _itemListInfo.value = null
         _mediaCodecs.value = emptyList()
         _displayInfo.value = PlaybackDisplayInfo()
         Timber.d( "controller states cleared")

@@ -38,6 +38,7 @@ import com.insomnia.content.ui.catalog.LaunchedScrollToIndexIfNeeded
 import com.insomnia.content.ui.catalog.components.ThumbEntryComponent
 import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.player.EntryStateKeys
+import com.insomnia.player.ItemListInfo
 import com.insomnia.storage.decodeSeriesProgress
 import com.insomnia.storage.encodeSeriesProgress
 import kotlinx.coroutines.launch
@@ -88,11 +89,19 @@ fun DigipakDetailScreen(
         }
     }
 
-    LaunchedEffect(playerController) {
-        playerController?.setNextVideoCallback {
-            pendingAutoPlay = true
-            vm.nextSubEntry()
-        }
+    LaunchedEffect(playerController, subEntryIndex, children) {
+        playerController?.setItemListCallback(
+            cb = { index ->
+                if (index in children.indices) {
+                    pendingAutoPlay = true
+                    vm.setSubEntry(index)
+                }
+            },
+            info = ItemListInfo(
+                current = subEntryIndex ?: 0,
+                names = children.map { it.title },
+            ),
+        )
     }
 
     val listState = rememberLazyListState()

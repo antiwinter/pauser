@@ -44,6 +44,8 @@ internal class InfoOverlayState(
     val tracks: Tracks,
     val displaySupportsHdr: Boolean,
     val bitrate: Int?,
+    val sourceIndex: Int,
+    val sourceCount: Int,
     private val showState: MutableState<Boolean>,
     val mbpsState: MutableFloatState,
 ) {
@@ -79,6 +81,13 @@ internal fun InfoOverlay(state: InfoOverlayState) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text = state.displayInfo.title, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
+                if (state.sourceCount > 1) {
+                    Text(
+                        text = "Source ${state.sourceIndex + 1}/${state.sourceCount}",
+                        color = StatusOk,
+                        fontSize = 14.sp,
+                    )
+                }
                 Text(
                     text = trackLabel(videoMime, ti.videoDecoderStatus),
                     color = if (isTrackFailed(videoMime, ti.videoDecoderStatus)) StatusFail else MaterialTheme.colorScheme.onSurface,
@@ -163,6 +172,8 @@ internal fun rememberInfoOverlayState(
             tracks = tracks,
             displaySupportsHdr = displaySupportsHdr,
             bitrate = bitrate,
+            sourceIndex = spec.state.sourceIndex,
+            sourceCount = spec.sources.size,
             showState = showState,
             mbpsState = bandwidthMbps,
         )

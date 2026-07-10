@@ -22,7 +22,7 @@ internal object BandwidthTracker {
     val interceptor: Interceptor = Interceptor { chain ->
         val request = chain.request()
         val range = request.header("Range") ?: "none"
-        Timber.d("BW request: ${request.method} ${request.url} range=$range")
+        // Timber.d("BW request: ${request.method} ${request.url} range=$range")
         val response = chain.proceed(request)
         response.newBuilder()
             .body(response.body?.let { body -> CountingResponseBody(body) })

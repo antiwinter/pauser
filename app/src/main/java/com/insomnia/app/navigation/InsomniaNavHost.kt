@@ -22,7 +22,9 @@ import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.content.ui.contentRoutes
 import com.insomnia.app.ui.settings.SettingsScreen
 import com.insomnia.core.osd.GlobalOsdOverlay
+import com.insomnia.player.PlayerSurfaceState
 import com.insomnia.player.ui.tv.TvPlayerSurface
+import com.insomnia.player.ui.tv.TvLivePlayerSurface
 import com.insomnia.proxy.ui.ProxyRoutes
 import com.insomnia.proxy.ui.proxyRoutes
 import com.insomnia.server.debug.AppCommand
@@ -78,7 +80,8 @@ fun InsomniaNavHost() {
         }
     }
 
-    val isShown by playerController.isShownFlow.collectAsState()
+    val surfaceState by playerController.surfaceStateFlow.collectAsState()
+    val isShown = surfaceState != PlayerSurfaceState.HIDE
 
     Box(modifier = Modifier.fillMaxSize()) {
         // When the player overlay is shown, block all Compose key events from reaching
@@ -122,11 +125,16 @@ fun InsomniaNavHost() {
         }
         }
 
-        if (isShown) {
-            TvPlayerSurface(
+        when (surfaceState) {
+            PlayerSurfaceState.LIVE -> TvLivePlayerSurface(
                 controller = playerController,
                 onBack = { playerController.stop() },
             )
+            PlayerSurfaceState.VOD -> TvPlayerSurface(
+                controller = playerController,
+                onBack = { playerController.stop() },
+            )
+            PlayerSurfaceState.HIDE -> {}
         }
 
         GlobalOsdOverlay()

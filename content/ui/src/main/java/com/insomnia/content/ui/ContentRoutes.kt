@@ -14,6 +14,7 @@ import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.content.ui.catalog.detail.DetailRoute
 import com.insomnia.content.ui.catalog.detail.DetailViewModel
 import com.insomnia.content.ui.catalog.ImageViewerRoute
+import com.insomnia.content.ui.catalog.live.LiveRoute
 import com.insomnia.content.ui.catalog.search.SearchRoute
 import com.insomnia.content.ui.catalog.search.SearchViewModel
 import com.insomnia.content.contract.EndpointClient
@@ -118,6 +119,25 @@ fun NavGraphBuilder.contentRoutes(
             itemRef = ref,
             initialInfo = entryInfo,
             viewModel = detailVm,
+            playerController = playerController,
+        )
+    }
+    composable(
+        Routes.LIVE_PLAYER,
+        listOf(
+            navArgument("endpointId") { type = NavType.StringType },
+            navArgument("ref") { type = NavType.StringType },
+        ),
+    ) {
+        val endpointId = it.arguments!!.getString("endpointId")!!
+        val ref = it.arguments!!.getString("ref")!!
+        val entryInfo = sharedVm.get(ref)
+
+        LiveRoute(
+            nav = nav,
+            endpointId = endpointId,
+            initialInfo = entryInfo,
+            livepakRef = ref,
             playerController = playerController,
         )
     }

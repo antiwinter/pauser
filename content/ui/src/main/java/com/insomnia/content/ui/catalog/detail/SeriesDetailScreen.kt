@@ -38,6 +38,7 @@ import com.insomnia.content.ui.catalog.LaunchedScrollToIndexIfNeeded
 import com.insomnia.content.ui.catalog.components.ThumbEntryComponent
 import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.player.EntryStateKeys
+import com.insomnia.player.ItemListInfo
 import com.insomnia.storage.decodeSeriesProgress
 import com.insomnia.storage.encodeSeriesProgress
 
@@ -84,11 +85,19 @@ fun SeriesDetailScreen(
         }
     }
 
-    LaunchedEffect(playerController) {
-        playerController?.setNextVideoCallback {
-            pendingAutoPlay = true
-            vm.nextEpisode()
-        }
+    LaunchedEffect(playerController, episodeIndex, totalCount, episodes) {
+        playerController?.setItemListCallback(
+            cb = { index ->
+                if (index in 0 until totalCount) {
+                    pendingAutoPlay = true
+                    vm.setEpisode(vm.subEntryIndex.value ?: 0, index)
+                }
+            },
+            info = ItemListInfo(
+                current = episodeIndex ?: 0,
+                names = (0 until totalCount).map { episodes[it]?.title ?: "" },
+            ),
+        )
     }
 
     DetailOverviewShell(viewModel = vm) {

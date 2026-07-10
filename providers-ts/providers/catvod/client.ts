@@ -306,7 +306,7 @@ async function listRoot(): Promise<EntryList> {
       return {
         ref: encodeRef({ type: "live-source", key }),
         title: entry.name,
-        type: "Folder" as const,
+        type: "Livepak" as const,
         cover: null,
       };
     }

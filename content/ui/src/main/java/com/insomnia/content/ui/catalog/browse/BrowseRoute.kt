@@ -79,6 +79,10 @@ fun BrowseRoute(
                 sharedVm.cache(item)
                 nav.navigate(Routes.detail(endpointId, item))
             },
+            onOpenLivePlayer = { item ->
+                sharedVm.cache(item)
+                nav.navigate(Routes.livePlayer(endpointId, item))
+            },
             onOpenPlayer = { entry ->
                 playerController.setClient(client!!)
                 val startMs = if (entry.type == "LiveChannel") 0L else null

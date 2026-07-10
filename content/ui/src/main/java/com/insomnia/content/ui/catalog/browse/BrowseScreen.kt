@@ -51,6 +51,7 @@ fun BrowseScreen(
     onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowseLocation: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
+    onOpenLivePlayer: (EntryInfo) -> Unit = {},
     onOpenPlayer: (EntryInfo) -> Unit,
     onOpenImageViewer: (String) -> Unit = {},
     onOpenAudioUnsupported: (String) -> Unit = {},
@@ -121,6 +122,7 @@ fun BrowseScreen(
                         fun resolveAction(type: String): (() -> Unit)? = when (type) {
                             "Folder", "Season" -> { -> onOpenBrowseLocation(item) }
                             "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
+                            "Livepak" -> { -> onOpenLivePlayer(item) }
                             "Episode", "Video", "LiveChannel" -> { -> onOpenPlayer(item) }
                             "Image" -> { -> onOpenImageViewer(item.ref) }
                             "Audio" -> { -> onOpenAudioUnsupported(item.ref) }

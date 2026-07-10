@@ -85,7 +85,8 @@ private fun TvPlayerSurfaceContent(
     spec: com.insomnia.player.PlaybackSpec,
     onBack: () -> Unit,
 ) {
-    val hasNextVideo by controller.hasNextVideoFlow.collectAsState()
+    val itemListInfo by controller.itemListInfoFlow.collectAsState()
+    val hasNextVideo = itemListInfo?.let { it.current + 1 < it.names.size } ?: false
     val displayInfo by controller.displayInfoFlow.collectAsState()
     val session = controller.playbackSession
     val surface = rememberPlaybackSurface(
@@ -258,7 +259,7 @@ private fun TvPlayerSurfaceContent(
                 .align(Alignment.BottomEnd)
                 .padding(end = 24.dp, bottom = 72.dp),
         ) {
-            androidx.tv.material3.Button(onClick = { controller.requestNextVideo() }) {
+            androidx.tv.material3.Button(onClick = { itemListInfo?.let { controller.requestSwitchItem(it.current + 1) } }) {
                 Text("Next")
             }
         }

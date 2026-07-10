@@ -87,13 +87,29 @@ data class PlaybackSpec(
 }
 
 /**
+ * The list of switchable items (episodes, digipak children, live channels) plus the current
+ * position within it. Drives the player's channel/episode list overlay.
+ */
+data class ItemListInfo(
+    val current: Int,
+    val names: List<String>,
+)
+
+/**
+ * Which player surface the host renders. [HIDE] = no overlay; [VOD] = seek-bar surface;
+ * [LIVE] = live-stream surface. VOD vs LIVE is derived from the current item's type, not set.
+ */
+enum class PlayerSurfaceState { HIDE, VOD, LIVE }
+
+/**
  * Contract that player surfaces (TvPlayerSurface, PadPlayerSurface) need from the
  * host controller. Only `:player` and `:content:contract` types — no dependency on `:content:ui`.
  */
 interface PlayerSurfaceController {
     val playbackSession: PlaybackSession
-    val hasNextVideoFlow: StateFlow<Boolean>
+    val itemListInfoFlow: StateFlow<ItemListInfo?>
     val displayInfoFlow: StateFlow<PlaybackDisplayInfo>
     val sourceManagerFlow: StateFlow<SourceManager?> get() = MutableStateFlow(null)
-    fun requestNextVideo()
+    /** Jump to the item at [index] in [ItemListInfo.names]. Callers derive it from current ±1 or a list pick. */
+    fun requestSwitchItem(index: Int)
 }
