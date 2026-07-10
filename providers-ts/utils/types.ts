@@ -60,10 +60,12 @@ export interface HostAPI {
   };
   relay: {
     /**
-     * Register a (typically static) jar method as a pure pass-through stream relay. Returns
-     * `{ token, baseUrl }`; rewrite the provider's localhost proxy URLs to `baseUrl`.
+     * Register a (typically static) jar method as a pure pass-through stream relay. `token`
+     * is the stable path segment the host exposes — must be unique process-wide. The host
+     * builds the route as `/relay/<token>`. Returns `{ token, baseUrl }`; rewrite the
+     * provider's localhost proxy URLs to `baseUrl`.
      */
-    register(args: { cls: string; method: string }): Promise<{ token: string; baseUrl: string }>;
+    register(args: { cls: string; method: string; token: string }): Promise<{ token: string; baseUrl: string }>;
   };
   web: {
     /**
