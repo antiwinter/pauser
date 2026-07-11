@@ -14,38 +14,25 @@ import java.util.concurrent.atomic.AtomicLong
 import timber.log.Timber
 
 /**
- * QuickJS context wrapper.
- *
- * Runs a single engine coroutine that owns the QuickJS context pointer. All JS
- * execution happens on that coroutine; callers enqueue [EngineTask]s via
- * [taskChannel] and await results through [CompletableDeferred].
- *
- * Threading contract:
- *  - [taskChannel] is the only input path to the engine thread.
- *  - [resolveCallback] and [rejectCallback] are called from C on the engine
- *    thread (during [pumpJobs]) and must NOT suspend.
- *  - [invokeHostFunction] is called from C on the engine thread and must
- *    return immediately; it enqueues [EngineTask.SettleHost] via [Channel.trySend],
- *    via [Channel.trySend], which never blocks on an UNLIMITED channel.
+ * QuickJS context wrapper — one engine coroutine owns the context.
+ * [resolveCallback]/[rejectCallback] are called from C on the engine thread
+ * and must NOT suspend. [invokeHostFunction] returns immediately; it enqueues
+ * `SettleHost` via [Channel.trySend], which never blocks on an UNLIMITED channel.
  */
 class QuickJsEngine(
     private val hostApis: HostApis,
     private val httpClient: OkHttpClient,
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val jarLoader   = JarLoader(httpClient)
+    private val jarLoader   = JarLoader(hostApis.sandboxRoot, httpClient)
     private val engineHostApis = EngineHostApis(httpClient, jarLoader)
 
     /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
     private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
 
-    /** Map from callback key → CompletableDeferred for in-flight JS calls. */
     private val pendingCalls = ConcurrentHashMap<Long, CompletableDeferred<String?>>()
 
-    /** Monotonically increasing key generator. */
     private val keyGen = AtomicLong(1L)
-
-    // ── Task type ──────────────────────────────────────────────────────────
 
     private sealed class EngineTask {
         data class CallMethod(val method: String, val args: String, val key: Long) : EngineTask()
@@ -55,12 +42,6 @@ class QuickJsEngine(
         data class EvalExpression(val code: String, val deferred: CompletableDeferred<String?>) : EngineTask()
     }
 
-    // ── Lifecycle ──────────────────────────────────────────────────────────
-
-    /**
-     * Creates the QuickJS context and starts the engine loop coroutine.
-     * Must be called before any other method.
-     */
     suspend fun init() {
         val ready = CompletableDeferred<Unit>()
         engineScope.launch(Dispatchers.IO.limitedParallelism(1)) {
@@ -89,12 +70,7 @@ class QuickJsEngine(
         taskChannel.close()
     }
 
-    // ── Public API — enqueue and await ─────────────────────────────────────
-
-    /**
-     * Calls `globalThis.insomniaProvider.<method>(argsJson)` asynchronously.
-     * Returns the JSON string result (or null for void methods).
-     */
+    /** Calls `globalThis.insomniaProvider.<method>(argsJson)`; returns JSON result or null. */
     suspend fun callMethod(method: String, argsJson: String): String? {
         val key = keyGen.getAndIncrement()
         val deferred = CompletableDeferred<String?>()
@@ -122,17 +98,12 @@ class QuickJsEngine(
         deferred.await()
     }
 
-    /**
-     * Evaluates [jsCode] as a JS expression and returns its JSON.stringify'd value,
-     * or null if the result is null/undefined.
-     */
+    /** Returns `JSON.stringify`'d result, or null if the expression is null/undefined. */
     suspend fun evalExpression(jsCode: String): String? {
         val deferred = CompletableDeferred<String?>()
         taskChannel.send(EngineTask.EvalExpression(jsCode, deferred))
         return deferred.await()
     }
-
-    // ── Engine loop helpers ────────────────────────────────────────────────
 
     private fun processTask(ctx: Long, task: EngineTask) {
         when (task) {
@@ -163,12 +134,11 @@ class QuickJsEngine(
         }
     }
 
-    /** Drains the QuickJS microtask queue. Called once per task in the engine loop. */
     private fun pumpJobs(ctx: Long) {
         while (nativeExecutePendingJobs(ctx, 64) > 0) { /* drain */ }
     }
 
-    // ── Callbacks called from JNI (on engine thread, during pumpJobs) ──────
+    // Called from JNI on the engine thread during pumpJobs
 
     @Keep
     fun resolveCallback(key: Long, value: String?) {
@@ -188,11 +158,7 @@ class QuickJsEngine(
         deferred.completeExceptionally(RuntimeException(message))
     }
 
-    /**
-     * Called from JNI when JS calls `__hostDispatch(ns, name, argsJson)`.
-     * Must NOT suspend — returns a key string immediately, then launches an
-     * IO coroutine that enqueues a [EngineTask.SettleHost] when the host work completes.
-     */
+    /** Called from JNI when JS calls `__hostDispatch`. Must NOT suspend — returns a key immediately; the IO coroutine enqueues `SettleHost` on completion. */
     @Keep
     fun invokeHostFunction(namespace: String, name: String, argsJson: String): String {
         val key = keyGen.getAndIncrement()
@@ -207,8 +173,6 @@ class QuickJsEngine(
         }
         return key.toString()
     }
-
-    // ── Host API dispatch ──────────────────────────────────────────────────
 
     private suspend fun dispatchHost(ns: String, name: String, argsJson: String): String? =
         when (ns) {
@@ -226,12 +190,7 @@ class QuickJsEngine(
             else     -> throw IllegalArgumentException("Unknown host namespace: $ns")
         }
 
-    // ── JNI callbacks and sync host functions ──────────────────────────────
-
-    /**
-     * Called synchronously from C when JS invokes `__hostDispatchSync(ns, name, argsJson)`.
-     * Runs on the engine thread — blocks it for the duration of the call.
-     */
+    /** Called synchronously from C; runs on the engine thread — blocks it for the duration. */
     @Keep
     fun invokeHostFunctionSync(namespace: String, name: String, argsJson: String): String? =
         when (namespace) {

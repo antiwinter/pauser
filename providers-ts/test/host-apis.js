@@ -53,10 +53,28 @@ export class HostApis {
         return JSON.stringify(this.handleCrypto(name, args));
       case 'platform':
         return JSON.stringify(this.handlePlatform(name));
+      case 'fs':
+        return JSON.stringify(await this.handleFs(name, args));
       case 'jar':
         return await this.handleJar(name, argsJson ?? '{}');
       default:
         throw new Error(`Unknown host namespace: ${namespace}`);
+    }
+  }
+
+  // host.fs is a no-op stub in the test harness — providers exercise cache writes through the
+  // real Android sandbox. Returning the absolute path keeps the contract symmetric with the
+  // Kotlin implementation (which echoes `file.absolutePath` after a successful write).
+  async handleFs(name, args) {
+    if (name !== 'write' && name !== 'read' && name !== 'exists' && name !== 'delete') {
+      throw new Error(`Unknown fs method: ${name}`);
+    }
+    if (!args?.path) throw new Error(`fs.${name}: missing path`);
+    switch (name) {
+      case 'write':  return args.path;
+      case 'read':   return '';
+      case 'exists': return false;
+      case 'delete': return true;
     }
   }
 
@@ -108,7 +126,12 @@ export class HostApis {
 
   handleJarStub(name, args) {
     switch (name) {
-      case 'load':   return true;
+      case 'load': {
+        if (!args?.source || typeof args.source !== 'object') throw new Error('host.jar.load: missing source');
+        const variants = Object.keys(args.source);
+        if (variants.length !== 1) throw new Error(`host.jar.load: source must declare exactly one of url|path|buffer (got ${variants.join(',')})`);
+        return true;
+      }
       case 'clear':  return true;
       case 'clearInstances': return true;
       case 'reflect': {
@@ -121,14 +144,27 @@ export class HostApis {
         if (method === 'playerContent')  return JSON.stringify({ url: null });
         return null;
       }
+      case 'loadClass': return true;
+      case 'registerLoader': return true;
+      case 'adoptParent': return true;
       default:
         throw new Error(`host.jar.${name} is not available in the test harness`);
     }
   }
 
   handleCrypto(name, args) {
-    if (name !== 'sha256') throw new Error(`Unknown crypto method: ${name}`);
-    return createHash('sha256').update(String(args?.input ?? ''), 'utf8').digest('hex');
+    if (name !== 'checksum') throw new Error(`Unknown crypto method: ${name}`);
+    const algo = (args?.algo ?? 'sha-256').toLowerCase().replace('-', '');
+    if (algo !== 'md5' && algo !== 'sha1' && algo !== 'sha256' && algo !== 'sha512') {
+      throw new Error(`host.crypto.checksum: unsupported algo '${args?.algo}'`);
+    }
+    const input = String(args?.input ?? '');
+    const encoding = args?.encoding ?? 'utf8';
+    let bytes;
+    if (encoding === 'base64') bytes = Buffer.from(input, 'base64');
+    else if (encoding === 'hex') bytes = Buffer.from(input, 'hex');
+    else bytes = Buffer.from(input, 'utf8');
+    return createHash(algo === 'md5' ? 'md5' : algo === 'sha1' ? 'sha1' : algo === 'sha512' ? 'sha512' : 'sha256').update(bytes).digest('hex');
   }
 
   handlePlatform(name) {

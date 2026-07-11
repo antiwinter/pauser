@@ -1,11 +1,8 @@
 # Plan: `host.jar` — Dynamic JAR Loading for Insomnia JS Provider
 
-**Goal:** Extend Insomnia's JS provider with primitive host APIs that are fully agnostic to any specific protocol. All protocol knowledge lives in TypeScript.
+> **Superseded by `.claude/plans/jar-loader-agnostic-split.md`.** This is the original research doc that motivated the design. The API shapes below (`host.jar.load({ url, md5 })`) are pre-refactor. The active contract is in `providers-ts/utils/types.ts` — see `host.jar.load({ source: { url | path | buffer } })`, `host.crypto.checksum({ input, algo, encoding? })`, and the generic primitives `loadClass` / `registerLoader` / `adoptParent`. The catvod-specific orchestration (Init/DexNative/InitOrigin boot dance, including polling) now lives in `providers-ts/providers/catvod/spider/jar.ts`; the catvod-free `JarLoader.kt` exposes only generic Android-dex plumbing.
 
-Three namespaces are added:
-- `host.jar` — load and reflect into Android JARs at runtime
-- `host.eval` — fetch and eval remote JS assets, with caching
-- Sync HTTP (`_http`) — blocking HTTP call required by drpy2's synchronous execution model
+**Goal:** Extend Insomnia's JS provider with primitive host APIs that are fully agnostic to any specific protocol. All protocol knowledge lives in TypeScript.
 
 ---
 

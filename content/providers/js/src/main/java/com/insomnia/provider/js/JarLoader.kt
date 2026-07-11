@@ -4,9 +4,7 @@ import com.insomnia.content.contract.ByteSink
 import com.insomnia.content.contract.StreamRelayResult
 import dalvik.system.DexClassLoader
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.serialization.json.JsonArray
@@ -17,50 +15,98 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.zip.ZipFile
 
 private const val PUMP_CHUNK_SIZE = 128 * 1024
 
 /**
- * Downloads and caches Android JARs, then reflectively invokes methods on their classes.
- *
- * Bootstrap injection model:
- *  1. loadAsset() → bootstrap dex is injected into the app classloader.
- *     After injection, bootstrap classes are resolvable via ctx.classLoader.
- *  2. load() → DexClassLoader with ctx.classLoader as parent.
- *     The parent chain is: loaded.jar → app(bootstrap+kotlin+okhttp) → boot
- *  3. boot() → Init.init() creates secondary loader; we patch its parent → ctx.classLoader.
- *     Chain: secondary → app(bootstrap+kotlin+okhttp) → boot
+ * Source bytes handed to [JarLoader.load]. The host resolves the path / decodes the
+ * buffer / fetches the URL; [JarLoader] never escapes [JarLoader.sandboxRoot].
  */
-class JarLoader(private val httpClient: OkHttpClient) {
+sealed class LoadSource {
+    /** Kotlin downloads to `sandboxRoot/jars/<urlKey(url)>.jar`, then loads. */
+    data class Url(val url: String) : LoadSource()
+
+    /** Pre-validated by [HostApis.resolve]. */
+    data class Path(val path: String) : LoadSource()
+
+    /** Kotlin decodes, writes to `sandboxRoot/jars/<sha256(bytes)>.jar`, loads. */
+    data class Buffer(val bufferB64: String) : LoadSource()
+}
+
+/**
+ * All state (downloaded JARs, extracted .so files) lives under [sandboxRoot].
+ * Dex output stays under [Context.codeCacheDir] so the OS can reclaim it.
+ */
+class JarLoader(
+    private val sandboxRoot: File,
+    private val httpClient: OkHttpClient,
+) {
+    private val jarsDir = File(sandboxRoot, "jars").also { it.mkdirs() }
 
     private val loaders   = ConcurrentHashMap<String, DexClassLoader>()
     private val instances = ConcurrentHashMap<String, Any>()
     private val keyGen    = AtomicLong(0)
     private val loadLocks = ConcurrentHashMap<String, Any>()
     private val loadGen   = AtomicLong(0)  // incremented on clear() so each reload gets a fresh dex dir
-    // Per-URL boot futures: concurrent `boot()` calls for the same JAR share the same
-    // future. The native Init.init / DexNative.getLoader sequence is not re-entrant
-    // (the secondary loader is process-global via .so) — letting two callers race
-    // corrupts the second loader's Context reference and the wrapped Spider ends up
-    // null in BaseSpiderGuard. boot() can also be called from any thread, so we wrap
-    // it in runBlocking to keep the public API synchronous.
-    private val bootFutures = ConcurrentHashMap<String, CompletableFuture<Void>>()
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    /** clinit must run before reflect; some plugins load .so in static initializers. */
+    fun loadClass(url: String, cls: String) {
+        val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
+        try {
+            primary.loadClass(cls)
+        } catch (e: UnsatisfiedLinkError) {
+            throw e
+        } catch (_: Throwable) {
+            throw NoClassDefFoundError("loadClass($cls) failed for $url")
+        }
+    }
 
-    fun load(url: String, md5: String?) {
-        val key = urlKey(url)
+    fun registerLoader(key: String, instanceHandle: String) {
+        val instance = instances[instanceHandle]
+            ?: error("Instance not found: $instanceHandle")
+        val cl = instance as? ClassLoader
+            ?: error("Instance $instanceHandle is not a ClassLoader")
+        @Suppress("UNCHECKED_CAST")
+        loaders[key] = cl as DexClassLoader
+    }
+
+    /**
+     * Plugin runtimes that build their own DexClassLoader at runtime need this so the
+     * runtime can resolve shim classes through the app classloader. [childKey] is a
+     * loader key or instance handle; [parentKey] `"context"` → app classloader, else
+     * a registered loader key.
+     */
+    fun adoptParent(childKey: String, parentKey: String) {
+        val child: ClassLoader = loaders[childKey] ?: instances[childKey] as? ClassLoader
+            ?: error("Child not found or not a ClassLoader: $childKey")
+        val parent: ClassLoader = when (parentKey) {
+            "context" -> ContextHolder.get().classLoader
+            else      -> loaders[parentKey] ?: instances[parentKey] as? ClassLoader
+                ?: error("Parent not found or not a ClassLoader: $parentKey")
+        }
+        val parentField = ClassLoader::class.java.getDeclaredField("parent")
+            .also { it.isAccessible = true }
+        parentField.set(child, parent)
+    }
+    /** `Path` variant is pre-validated by [HostApis.resolve]. */
+    fun load(source: LoadSource) {
+        val key = sourceKey(source)
         if (loaders.containsKey(key)) return
         synchronized(loadLocks.getOrPut(key) { Any() }) {
             if (loaders.containsKey(key)) return
-            loadJarFile(key, downloadAndVerify(url, md5))
+            val file = when (source) {
+                is LoadSource.Url    -> download(source.url)
+                is LoadSource.Path   -> File(source.path)
+                is LoadSource.Buffer -> writeBuffer(source.bufferB64)
+            }
+            loadJarFile(key, file)
         }
     }
 
@@ -70,14 +116,9 @@ class JarLoader(private val httpClient: OkHttpClient) {
         synchronized(loadLocks.getOrPut(key) { Any() }) {
             if (loaders.containsKey(key)) return
             val ctx  = ContextHolder.get()
-            val dir  = File(ctx.cacheDir, "jars").also { it.mkdirs() }
-            val dest = File(dir, assetName)
-            dest.setWritable(true)
+            val dest = File(jarsDir, assetName)
             ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
-            dest.setReadOnly()
-
-            // Inject bootstrap dex elements into the app classloader.
-            // After injection, bootstrap classes are resolvable via ctx.classLoader.
+            // After injection, bootstrap classes resolve via ctx.classLoader.
             ClassPathInjector.inject(ctx, dest)
         }
     }
@@ -86,9 +127,8 @@ class JarLoader(private val httpClient: OkHttpClient) {
         val ctx    = ContextHolder.get()
         val gen    = loadGen.get()
         val dexOut = File(ctx.codeCacheDir, "dex/$key/$gen").also { it.mkdirs() }
-        val soOut  = File(ctx.cacheDir, "so/$key").also { it.mkdirs() }
+        val soOut  = File(sandboxRoot, "so/$key").also { it.mkdirs() }
         extractNativeLibs(jar, soOut)
-        // Parent = app classloader, which now contains bootstrap classes via injection.
         loaders[key] = DexClassLoader(
             jar.absolutePath,
             dexOut.absolutePath,
@@ -96,116 +136,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
             ctx.classLoader,
         )
     }
-
-    /**
-     * Boot sequence:
-     *  1. Force-load DexNative class → triggers <clinit> which extracts & loads native .so
-     *  2. Call Init.init(Context) → sets Application ref, calls DexNative.getLoader()
-     *     which creates secondary DexClassLoader + spawns background thread
-     *  3. Poll Init.loader() until secondary DexClassLoader is ready
-     *  4. Patch secondary loader's parent → ctx.classLoader (app with bootstrap injected)
-     *  5. Call secondary init(Context)
-     *
-     * Concurrent calls for the same `url` share a single in-flight future — see
-     * `bootFutures`. The native state is process-global and a re-entrant
-     * `Init.init(ctx)` corrupts the secondary loader's Context, so serializing is
-     * mandatory, not just an optimization.
-     */
-    fun boot(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
-        val key = urlKey(url)
-        // Per-URL boot future. If one is already registered AND complete, all callers
-        // short-circuit on the first get(). If one is in-flight, the new caller waits
-        // on the same future. We must not be the caller that completes it (only the
-        // first caller of a fresh future should run bootInternal).
-        val existing = bootFutures[key]
-        if (existing != null && existing.isDone) {
-            try { runBlocking { existing.get() } } catch (_: Throwable) {}
-            return
-        }
-        val inFlight = CompletableFuture<Void>()
-        val claimed = if (existing == null) {
-            bootFutures.putIfAbsent(key, inFlight) == null
-        } else {
-            // Race: existing is in-flight. Don't replace — just wait on it.
-            false
-        }
-        if (!claimed) {
-            try { runBlocking { bootFutures[key]!!.get() } } catch (_: Throwable) {}
-            return
-        }
-        try {
-            bootInternal(url, initClass, dexNativeClass, initOriginClass)
-            inFlight.complete(null)
-        } catch (t: Throwable) {
-            bootFutures.remove(key, inFlight)
-            inFlight.completeExceptionally(t)
-            throw t
-        }
-    }
-
-    private fun bootInternal(url: String, initClass: String, dexNativeClass: String, initOriginClass: String) {
-        val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
-        val ctx     = ContextHolder.get()
-        val initCls = try { primary.loadClass(initClass) } catch (_: Throwable) { return }
-
-        // Step 1: force-load DexNative class — triggers <clinit> which extracts
-        // and loads the native .so. UnsatisfiedLinkError = wrong arch.
-        try {
-            primary.loadClass(dexNativeClass)
-        } catch (e: UnsatisfiedLinkError) { throw e } catch (_: Throwable) {}
-
-        // Step 2: Init.init(Context) — sets Application ref, creates secondary loader
-        val initMethod = initCls.methods.firstOrNull { m ->
-            m.name == "init" && (m.parameterCount == 0 ||
-                (m.parameterCount == 1 && m.parameterTypes[0].name == "android.content.Context"))
-        }
-        if (initMethod != null) {
-            initMethod.isAccessible = true
-            val args = if (initMethod.parameterCount == 1) arrayOf(ctx) else emptyArray()
-            try { initMethod.invoke(null, *args) } catch (e: java.lang.reflect.InvocationTargetException) {
-                val cause = e.cause
-                if (cause is UnsatisfiedLinkError) throw cause
-            } catch (_: Throwable) {}
-        }
-
-        // Step 3: poll Init.loader() until secondary DexClassLoader is ready
-        val loaderMethod = initCls.methods.firstOrNull { it.name == "loader" && it.parameterCount == 0 }
-        if (loaderMethod == null) return
-        loaderMethod.isAccessible = true
-        var secondaryLoader: DexClassLoader? = null
-        for (attempt in 0..20) {
-            val raw = loaderMethod.invoke(null)
-            if (raw is DexClassLoader) {
-                secondaryLoader = raw
-                break
-            }
-            Thread.sleep(50)
-        }
-        if (secondaryLoader == null) return
-
-        // Step 4: patch secondary loader's parent → ctx.classLoader
-        // The app classloader now contains bootstrap classes via ClassPathInjector injection.
-        val parentField = ClassLoader::class.java.getDeclaredField("parent")
-            .also { it.isAccessible = true }
-        try { parentField.set(secondaryLoader, ctx.classLoader) } catch (_: Throwable) {}
-
-        loaders["secondary:${urlKey(url)}"] = secondaryLoader
-
-        // Step 5: InitOrigin.init(Context) on secondary loader
-        try {
-            val originCls = secondaryLoader.loadClass(initOriginClass)
-            originCls.methods.firstOrNull { m ->
-                m.name == "init" && m.parameterCount == 1 &&
-                m.parameterTypes[0].name == "android.content.Context"
-            }?.also { it.isAccessible = true }?.invoke(null, ctx)
-        } catch (_: Throwable) {}
-    }
-
-    /**
-     * Reflective method invocation.
-     *
-     * newInstance: direct constructor call.
-     */
+    /** `method == "newInstance"` (with no instance handle) → direct constructor call. */
     fun reflect(
         url: String,
         cls: String,
@@ -260,13 +191,7 @@ class JarLoader(private val httpClient: OkHttpClient) {
         }
     }
 
-    /**
-     * Reflectively invokes [method] on [cls] with [params] and unpacks the spider's
-     * `Object[]{status, mime, InputStream, headers}` into a [StreamRelayResult]. The pump wraps
-     * the blocking `InputStream.read` in `withContext(IO)` — the bridge belongs here, since a
-     * Java `InputStream` is genuinely blocking (the file-relay side needs no such bridge).
-     * Tries each loaded loader; returns the first non-null result.
-     */
+    /** Unpacks the plugin's `Object[]{status, mime, InputStream, headers}` and pumps via IO. */
     fun invokeStreaming(
         cls: String,
         method: String,
@@ -334,36 +259,33 @@ class JarLoader(private val httpClient: OkHttpClient) {
         instances.clear()
         loaders.clear()
         loadLocks.clear()
-        bootFutures.clear()
         loadGen.incrementAndGet()
     }
 
-    /** Clears only jar instances, keeping loaded JARs. Re-init runs on next reflect call. */
     fun clearInstances() {
         instances.clear()
     }
-
-    // ── Download ────────────────────────────────────────────────────────────
-
-    private fun downloadAndVerify(url: String, md5: String?): File {
-        val dir  = File(ContextHolder.get().cacheDir, "jars").also { it.mkdirs() }
-        val name = url.substringAfterLast('/').substringBefore('?').ifBlank { urlKey(url) }
-        val baseName = name.substringBeforeLast('.').ifBlank { name }
-        val dest = File(dir, "$baseName.jar")
-
-        if (dest.exists() && md5 != null && dest.md5hex() == md5) return dest
-
-        dest.setWritable(true)
+    private fun download(url: String): File {
+        val dest = File(jarsDir, "${urlKey(url)}.jar")
+        if (dest.exists()) return dest
         httpClient.newCall(Request.Builder().url(url).build()).execute().use { r ->
             check(r.isSuccessful) { "JAR download failed: HTTP ${r.code} $url" }
             dest.writeBytes(r.body!!.bytes())
         }
-        if (md5 != null) {
-            val actual = dest.md5hex()
-            check(actual == md5) { "JAR MD5 mismatch ($url): expected=$md5 actual=$actual" }
-        }
-        dest.setReadOnly()
         return dest
+    }
+
+    private fun writeBuffer(bufferB64: String): File {
+        val bytes = Base64.getDecoder().decode(bufferB64)
+        val dest = File(jarsDir, "${sha256Hex(bytes).take(16)}.jar")
+        if (!dest.exists()) dest.writeBytes(bytes)
+        return dest
+    }
+
+    private fun sourceKey(source: LoadSource): String = when (source) {
+        is LoadSource.Url  -> urlKey(source.url)
+        is LoadSource.Path -> "path:${sha256Hex(source.path.toByteArray()).take(16)}"
+        is LoadSource.Buffer -> "buf:${sha256Hex(Base64.getDecoder().decode(source.bufferB64)).take(16)}"
     }
 
     private fun extractNativeLibs(jar: File, soOut: File) {
@@ -380,8 +302,6 @@ class JarLoader(private val httpClient: OkHttpClient) {
             }
         } catch (_: Exception) { /* JAR has no native libs — fine */ }
     }
-
-    // ── Method resolution ───────────────────────────────────────────────────
 
     private fun resolveMethod(clz: Class<*>, name: String, argCount: Int): java.lang.reflect.Method? =
         clz.methods.firstOrNull { it.name == name && it.parameterCount == argCount }
@@ -423,17 +343,9 @@ class JarLoader(private val httpClient: OkHttpClient) {
             else -> p?.content ?: el.toString()
         }
     }
-
-    // ── Utilities ──────────────────────────────────────────────────────────
-
-    private fun urlKey(url: String): String =
+    private fun urlKey(url: String): String = sha256Hex(url.toByteArray()).take(16)
+    private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256")
-            .digest(url.toByteArray())
+            .digest(bytes)
             .joinToString("") { "%02x".format(it) }
-            .take(16)
 }
-
-private fun File.md5hex(): String =
-    MessageDigest.getInstance("MD5")
-        .digest(readBytes())
-        .joinToString("") { "%02x".format(it) }

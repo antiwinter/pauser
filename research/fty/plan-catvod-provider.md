@@ -471,7 +471,7 @@ export async function validateFields(values: Record<string, string>): Promise<Va
     if (!url) throw new Error('Config URL is required');
     const config = await fetchConfig(url);
     if (!config.sites?.length) throw new Error('No sites found in config');
-    const hash = await host.crypto.sha256({ input: url });
+    const hash = await host.crypto.checksum({ input: url, algo: 'sha-256' });
     return { success: true, hash, name: `CatVod (${config.sites.length} sources)`, fields: { config_url: url } };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) };

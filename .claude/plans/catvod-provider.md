@@ -2,9 +2,9 @@
 
 ## Current Status
 
-**Nothing implemented.** All 10 provider files are missing. `host.jar` and `host.eval` namespaces are not yet in `types.ts` or wired in Kotlin. Phase 1 can start immediately; Phase 2 requires `plan-host-load-jar.md` to be implemented first.
+> **Superseded by `.claude/plans/jar-loader-agnostic-split.md`.** This document was the original "build the catvod provider" plan; everything it described is now implemented. The API shapes referenced in the example code below (`host.jar.load({ url, md5 })`, `host.crypto.sha256`) are pre-refactor; the active contract is in `providers-ts/utils/types.ts` — see `host.jar.load({ source: { url | path | buffer } })`, `host.crypto.checksum({ input, algo, encoding? })`, and the generic primitives `loadClass` / `registerLoader` / `adoptParent`.
 
----
+**Nothing implemented.** All 10 provider files are missing. `host.jar` and `host.eval` namespaces are not yet in `types.ts` or wired in Kotlin. Phase 1 can start immediately; Phase 2 requires `plan-host-load-jar.md` to be implemented first.
 
 ## Goal
 
@@ -190,9 +190,7 @@ export async function cmsSearch(api: string, keyword: string, pg: number): Promi
 
 ## Step 4 — JAR Handler (`handlers/jar.ts`)
 
-Handles type 3 sites via `host.jar.load` + `host.jar.reflect`. Requires `plan-host-load-jar.md` to be implemented first. All CatVod class naming conventions live here — Kotlin knows nothing of them.
-
-Spider instances are created with `newInstance` then initialized with `init(ext)`. Handles are cached per-site to avoid re-instantiation.
+**Status: implemented** at `providers-ts/providers/catvod/spider/jar.ts`. See the superseded notice at the top — the example code below uses the pre-refactor `host.jar.load({ url, md5 })` shape; the live implementation uses `host.jar.load({ source: { url | path } })` + `host.crypto.checksum({ input, algo: 'md5', encoding: 'base64' })` for verification, then composes generic primitives (`loadClass` → `reflect(Init.init)` → poll `reflect(Init.loader)` → `registerLoader` → `adoptParent` → `reflect(InitOrigin.init)`) for the catvod boot dance.
 
 ```typescript
 // Spider instance handles, keyed by siteKey
@@ -454,7 +452,7 @@ export async function validateFields(values: Record<string, string>): Promise<Va
     if (!url) throw new Error('Config URL is required');
     const config = await fetchConfig(url);
     if (!config.sites?.length) throw new Error('No sites found in config');
-    const hash = await host.crypto.sha256({ input: url });
+    const hash = await host.crypto.checksum({ input: url, algo: 'sha-256' });
     return { success: true, hash, name: `CatVod (${config.sites.length} sources)`, fields: { config_url: url } };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) };
@@ -500,11 +498,7 @@ Works with type 0/1/2 sites and all `lives[]` entries. Can start immediately.
 ### Phase 2 — JAR spider support
 Files: `handlers/jar.ts`
 
-**Prerequisite:** `plan-host-load-jar.md` must be implemented first:
-- `JarLoader.kt` — `host.jar.load` + `host.jar.reflect`
-- `providers-ts/utils/types.ts` — add `jar` namespace to `HostAPI`
-
-Unlocks all type 3 (`csp_*`) sites.
+**Status: implemented.** The prerequisite (`plan-host-load-jar.md`, since superseded by `.claude/plans/jar-loader-agnostic-split.md`) is done. `JarLoader.kt` now exposes `load({ source })`, `reflect`, `loadClass`, `registerLoader`, `adoptParent`, `clear`, `clearInstances`. The catvod-specific orchestration (Init / DexNative / InitOrigin boot dance, including the 50 ms / 5 s polling) lives in `providers-ts/providers/catvod/spider/jar.ts`. Type 3 (`csp_*`) sites work end-to-end.
 
 ### Phase 3 — drpy2 JS spider support
 Files: `handlers/drpy.ts` (full implementation)

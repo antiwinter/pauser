@@ -2,7 +2,7 @@
 
 ## Context
 
-Add Telegram as a content provider for OpenTune (Android TV). Users log in by scanning a QR code with their own Telegram mobile app (not a bot). Joined channels/groups surface as libraries; messages within them are browsable as content items (videos, photos, text posts). Text posts are parsed for movie metadata (title, year, rating, genres, links). Video messages are playable; photo messages are viewable.
+> **Plan status: not yet implemented.** The host-API contract in this document is current — `host.jar.loadAsset({ name })`, `host.jar.reflect({ url, cls, method, args, instance, factoryCls, factoryMethod })`, and `host.jar.load({ source: { url | path | buffer } })` are the post-refactor shapes (see `providers-ts/utils/types.ts`). Telegram's `api.ts` is the right place to compose those primitives — no shim-specific changes to `JarLoader.kt` are needed for the load/reflect flow. If Telegram's TDLib jar ever needs the secondary-loader dance (Phase B's `loadClass`/`registerLoader`/`adoptParent`), the same primitives used by catvod compose into TDLib's boot recipe.
 
 **Core rule: No Telegram-specific code in the main `:content` module. All Telegram logic lives in the shim-jar.**
 
@@ -101,7 +101,7 @@ export async function ensureLoaded(): Promise<void> {
 }
 ```
 
-**Existing `host.jar.reflect()` API handles everything** — no new host namespace, no new `dispatchHost` branch. The asset key (`"asset:telegram-shim.jar"`) is passed as the `url` parameter, matching how `JarLoader` stores asset-loaded JARs.
+**Existing `host.jar.reflect()` API handles everything** — no new host namespace, no new `dispatchHost` branch. The asset key (`"asset:telegram-shim.jar"`) is passed as the `url` parameter, matching how `JarLoader` stores asset-loaded JARs. **Caveat:** `reflect()` looks up the loader by `urlKey(url) = SHA-256(url).take(16)` — but `loadAsset` stores under the raw `"asset:$name"` key. The one-line `loaders[urlKeyVal] ?: loaders[url]` fallback below is still required before Telegram's `api.ts` works; today `reflect({ url: ASSET_KEY, … })` would error. If Telegram's TDLib shim ever needs a boot dance, compose the generic primitives — `loadClass` to run `<clinit>`, poll `reflect` for a `ClassLoader` handle, `registerLoader` to register it, `adoptParent` to wire its parent.
 
 ### One-line `JarLoader` fix
 

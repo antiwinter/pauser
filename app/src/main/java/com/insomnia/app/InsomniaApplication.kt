@@ -55,8 +55,9 @@ class InsomniaApplication : Application() {
         private set
 
     /** Shared JAR loader for the debug JAR bridge — separate from per-engine loaders. */
-    private val debugJarLoader: JarLoader by lazy { JarLoader(OkHttpClient()) }
-    private val debugJarBridge: JarBridge by lazy { JarBridgeImpl(debugJarLoader, HostApis()) }
+    private val debugSandbox: File by lazy { File(cacheDir, "providers/debug").apply { mkdirs() } }
+    private val debugJarLoader: JarLoader by lazy { JarLoader(debugSandbox, OkHttpClient()) }
+    private val debugJarBridge: JarBridge by lazy { JarBridgeImpl(debugJarLoader, HostApis("debug", debugSandbox)) }
 
     /** Shared disk cache — one instance, one size limit, correct LRU across all image loaders. */
     val sharedDiskCache: DiskCache by lazy {

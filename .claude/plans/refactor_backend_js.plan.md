@@ -198,7 +198,7 @@ export const provider: OpenTuneProvider = {
             if (!userId) return { type: "error", message: "No user id returned" };
 
             const info = await getSystemInfo(baseUrl, token);
-            const hash = host.crypto.sha256(baseUrl + userId);
+            const hash = await host.crypto.checksum({ input: baseUrl + userId, algo: 'sha-256' });
 
             return {
                 type: "success",
@@ -741,7 +741,7 @@ Add a `register(providerType: String, provider: OpenTuneProvider)` method so the
 
 1. Implement `host.http.get/post` in JNI + Kotlin (OkHttp bridge with Promise resolution)
 2. Implement `host.log.info/warn/error` (Logcat)
-3. Implement `host.crypto.sha256` (MessageDigest)
+3. Implement `host.crypto.checksum` (MessageDigest; default algo `sha-256`)
 4. Implement `host.config` (inject platform context values as JS properties)
 5. Test: JS calls `host.http.get("https://httpbin.org/get")` → verify response
 
@@ -859,9 +859,9 @@ The current Kotlin provider uses a global `EmbyClientIdentificationStore` for th
 
 ### 9. `sha256` Encoding Must Match Existing Kotlin
 
-`sourceId = "emby_${sha256(baseUrl + userId)}"` is the Room primary key for existing stored servers. If `host.crypto.sha256` returns a different encoding (e.g., Base64, uppercase hex), all stored server records break on migration.
+`sourceId = "emby_${sha256(baseUrl + userId)}"` is the Room primary key for existing stored servers. If `host.crypto.checksum({ input, algo: 'sha-256' })` returns a different encoding (e.g., Base64, uppercase hex), all stored server records break on migration.
 
-**Solution:** `host.crypto.sha256` must return lowercase hex, matching the current Kotlin implementation: `MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }`. Document this in `types.ts` as a binding contract.
+**Solution:** `host.crypto.checksum` must return lowercase hex, matching the current Kotlin implementation: `MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }`. Document this in `types.ts` as a binding contract.
 
 ### 10. JS Instance Lifecycle
 
@@ -880,7 +880,7 @@ The current Kotlin provider uses a global `EmbyClientIdentificationStore` for th
 
 ### Phase 2
 1. JS: `host.http.get("https://httpbin.org/get")` → returns 200 with JSON body
-2. JS: `host.crypto.sha256("test")` → returns `"9f86d..."`
+2. JS: `host.crypto.checksum({ input: 'test', algo: 'sha-256' })` → returns `"9f86d..."`
 3. JS: `host.log.info("hello")` → appears in Logcat
 
 ### Phase 3

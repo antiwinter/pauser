@@ -42,7 +42,7 @@ function parseJsonc(text: string): RawConfig {
 }
 
 async function hashKey(input: string, prefix: string): Promise<string> {
-  const hash = await host.crypto.sha256({ input });
+  const hash = await host.crypto.checksum({ input, algo: 'sha-256' });
   return prefix + hash.slice(0, 5);
 }
 

@@ -41,4 +41,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.startup:startup-runtime:1.2.0")
+    testImplementation("junit:junit:4.13.2")
 }

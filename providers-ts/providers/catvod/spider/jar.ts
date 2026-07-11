@@ -42,13 +42,42 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
   if (jarBootPromise) return jarBootPromise;
   jarBootPromise = (async () => {
     await host.jar.loadAsset({ name: CATVOD_SHIM_ASSET });
-    await host.jar.load({ url: jarUrl, md5 });
-    await host.jar.boot({
-      url: jarUrl,
-      initClass: CATVOD_INIT,
-      dexNativeClass: CATVOD_DEX_NATIVE,
-      initOriginClass: CATVOD_INIT_ORIGIN,
-    });
+    // Kotlin writes the cached JAR to sandboxRoot/jars/<sha256(url).take(16)>.jar — matching this path lets the warm path skip the download.
+    const urlKey = (await host.crypto.checksum({ input: jarUrl, algo: 'sha-256' })).slice(0, 16);
+    const cachePath = `jars/${urlKey}.jar`;
+    let usedCached = false;
+    if (await host.fs.exists({ path: cachePath })) {
+      // Warm-path MD5 only: base64 + checksum allocates ~2.3× file size on the JS heap; cold path trusts the server's md5 param.
+      const buf = await host.fs.read({ path: cachePath, encoding: 'base64' });
+      const digest = await host.crypto.checksum({ input: buf, algo: 'md5', encoding: 'base64' });
+      if (!md5 || digest === md5) {
+        await host.jar.load({ source: { path: cachePath } });
+        usedCached = true;
+      }
+    }
+    if (!usedCached) await host.jar.load({ source: { url: jarUrl } });
+    // clinit extracts & System.loadLibrary's the .so; fails fast on wrong arch.
+    await host.jar.loadClass({ url: jarUrl, cls: CATVOD_DEX_NATIVE });
+    // Init.init(Context) — sets Application ref, kicks off secondary-loader
+    // construction on a background thread.
+    await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT, method: 'init' });
+    // Poll Init.loader() until the secondary DexClassLoader is ready.
+    const secKey = `secondary:${urlKey}`;
+    let loaderHandle: string | null = null;
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const raw = await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT, method: 'loader' });
+      if (raw && raw !== 'null') { loaderHandle = JSON.parse(raw); break; }
+      await host.timer.sleep({ ms: 50 });
+    }
+    if (!loaderHandle) throw new Error(`Init.loader() returned null after 5000ms for ${jarUrl}`);
+    // Register the ClassLoader as secondary so reflect finds classes in it.
+    await host.jar.registerLoader({ key: secKey, instanceHandle: loaderHandle });
+    // Patch secondary loader's parent → app classloader (shim classes injected via loadAsset).
+    await host.jar.adoptParent({ childKey: secKey, parentKey: 'context' });
+    // InitOrigin.init(Context) on the secondary loader — wires the catvod
+    // plugin system into our HTTP server.
+    await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT_ORIGIN, method: 'init' });
     // Stable token "catvod": some JARs build loopback URLs of the form
     // http://127.0.0.1:<port>/proxy?... and call back into the app to resolve them. The
     // host exposes the recipe at http://127.0.0.1:<server-port>/relay/catvod.
@@ -68,6 +97,7 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
     throw e;
   }
 }
+
 
 // Decodes loopback proxy URLs the JAR embeds in playerContent results. The JAR's port-probe
 // loop (9978–9999) usually fails against our server (port 7920), so the URL ends up with

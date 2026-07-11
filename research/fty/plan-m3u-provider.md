@@ -223,7 +223,7 @@ export async function validateFields(
     const channels = parseM3U(resp.body);
     if (channels.length === 0) throw new Error('No channels found in playlist');
 
-    const hash = await host.crypto.sha256({ input: url });
+    const hash = await host.crypto.checksum({ input: url, algo: 'sha-256' });
     const name = `IPTV (${channels.length} channels)`;
     return { success: true, hash, name, fields: { m3u_url: url } };
   } catch (e) {

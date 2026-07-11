@@ -1,11 +1,8 @@
 /**
  * types.ts — contract types shared between all provider implementations.
- *
- * This file mirrors the Kotlin `contracts` module; both sides must stay in sync.
+ * Mirrors the Kotlin `contracts` module; both sides must stay in sync.
  * The `host` global is injected by QuickJsEngine before the bundle runs.
  */
-
-// ── Host API ──────────────────────────────────────────────────────────────────
 
 export interface HttpRequestArgs {
   url: string;
@@ -26,18 +23,35 @@ export interface HostAPI {
     post(args: HttpRequestArgs): Promise<HttpResponse>;
   };
   fs: {
-    write(args: { path: string; content: string }): Promise<string>;
+    /** `..` and absolute paths are rejected. */
+    write(args: { path: string; content: string; encoding?: 'utf8' | 'base64' }): Promise<string>;
+    read(args: { path: string; encoding?: 'utf8' | 'base64' }): Promise<string>;
+    exists(args: { path: string }): Promise<boolean>;
+    /** Recursive. */
+    delete(args: { path: string }): Promise<boolean>;
   };
   crypto: {
-    sha256(args: { input: string }): Promise<string>;
+    /** Default algo: sha-256. Returns lowercase hex. */
+    checksum(args: {
+      input: string;
+      algo?: 'md5' | 'sha-1' | 'sha-256' | 'sha-512';
+      encoding?: 'utf8' | 'base64' | 'hex';
+    }): Promise<string>;
   };
   platform: {
     getPlatformInfo(args?: null): Promise<PlatformInfo>;
   };
   jar: {
-    load(args: { url: string; md5?: string }): Promise<void>;
+    /**
+     * Discriminated source:
+     *  - `{ url }` — Kotlin downloads to sandbox (no integrity check).
+     *  - `{ path }` — sandbox-relative; warm/cached JARs (low heap).
+     *  - `{ buffer }` — base64-encoded; small/synthetic only (~134% heap).
+     */
+    load(args: {
+      source: { url: string } | { path: string } | { buffer: string };
+    }): Promise<void>;
     loadAsset(args: { name: string }): Promise<void>;
-    boot(args: { url: string; initClass: string; dexNativeClass: string; initOriginClass: string }): Promise<void>;
     reflect(args: {
       url: string;
       cls: string;
@@ -47,35 +61,29 @@ export interface HostAPI {
       factoryCls?: string;
       factoryMethod?: string;
     }): Promise<string>;
+    loadClass(args: { url: string; cls: string }): Promise<void>;
+    registerLoader(args: { key: string; instanceHandle: string }): Promise<void>;
+    /**
+     * `parentKey: 'context'` → app classloader (with bootstrap classes
+     * injected). Plugin runtimes that build their own DexClassLoader need
+     * this to resolve shim classes.
+     */
+    adoptParent(args: { childKey: string; parentKey: string }): Promise<void>;
     clear(args?: null): Promise<void>;
     clearInstances(args?: null): Promise<void>;
   };
   timer: {
-    /** Resolves after [ms] milliseconds. Backed by a host-side coroutine delay. */
     sleep(args: { ms: number }): Promise<void>;
   };
   dns: {
-    /** Register a DNS host remap on the current endpoint's HTTP client (resolve `from` as `to`). */
     remap(args: { from: string; to: string }): Promise<string>;
   };
   relay: {
-    /**
-     * Register a (typically static) jar method as a pure pass-through stream relay. `token`
-     * is the stable path segment the host exposes — must be unique process-wide. The host
-     * builds the route as `/relay/<token>`. Returns `{ token, baseUrl }`; rewrite the
-     * provider's localhost proxy URLs to `baseUrl`.
-     */
+    /** Token is the URL path segment under `/relay/`; must be process-unique. Rewrite provider's localhost proxy URLs to `baseUrl`. */
     register(args: { cls: string; method: string; token: string }): Promise<{ token: string; baseUrl: string }>;
   };
   web: {
-    /**
-     * Headless-WebView sniffer. Loads [url] (with optional [headers]), watches every
-     * sub-resource request, and resolves with the first request URL whose address matches
-     * one of [regex] but none of [exclude]. Optional [script] snippets are injected after
-     * the page finishes loading. Rejects to `null` if nothing matches within [timeoutMs].
-     *
-     * Android-only (backed by WebView). On non-Android hosts this rejects.
-     */
+    /** Android-only (WebView). Resolves first sub-resource URL matching any [regex] and no [exclude]. Injects [script] after page load. Rejects to `null` if nothing matches within [timeoutMs]. */
     detect(args: {
       url: string;
       headers?: Record<string, string>;
@@ -93,7 +101,6 @@ export interface PlatformInfo {
   clientVersion: string;
 }
 
-/** Injected by QuickJsEngine before the bundle runs. Available as a global. */
 declare global {
   const host: HostAPI;
   function atob(data: string): string;
@@ -104,8 +111,6 @@ declare global {
     error(...args: unknown[]): void;
   };
 }
-
-// ── Provider contracts ────────────────────────────────────────────────────────
 
 export type ProviderFieldKind = 'text' | 'singleLine' | 'password' | 'proxySelector' | 'qrCode';
 
@@ -127,7 +132,7 @@ export type ValidationResult =
 export type EntryType = string;
 
 export interface EntryUserData {
-  /** Omitted or null when the provider has no resume position (e.g. series sXeY). */
+  /** Null when the provider has no resume position (e.g. series sXeY). */
   positionMs?: number | null;
   isFavorite: boolean;
   played: boolean;
@@ -147,7 +152,6 @@ export interface EntryInfo {
   indexNumber?: number | null;
   overview?: string | null;
   childCount?: number | null;
-  // detail fields
   parentRef?: string | null;
   seriesRef?: string | null;
   seasonNumber?: number | null;
@@ -191,10 +195,6 @@ export interface SubtitleTrack {
   externalRef: string | null;
 }
 
-/**
- * Opaque context blob used in JS provider hooks, passed back into
- * `updateEntryState`.
- */
 export type ProviderCtx = Record<string, unknown>;
 
 export interface PlaybackSource {
@@ -211,15 +211,18 @@ export interface ProfileLevel {
 }
 
 export interface VideoCodecInfo {
-  codec: string;    // "h264", "hevc", "vp9", "av1"
-  mime: string;     // "video/avc", "video/hevc"
+  // "h264", "hevc", "vp9", "av1"
+  codec: string;
+  // "video/avc", "video/hevc"
+  mime: string;
   maxWidth: number;
   maxHeight: number;
   profileLevels: ProfileLevel[];
 }
 
 export interface AudioCodecInfo {
-  codec: string;    // "aac", "ac3", "eac3", ...
+  // "aac", "ac3", "eac3", ...
+  codec: string;
   mime: string;
 }
 
@@ -232,9 +235,6 @@ export interface PlatformInfo {
   subtitleFormats: string[];
 }
 
-// ── Bridge protocol ───────────────────────────────────────────────────────────
-
-/** Exposed on globalThis.insomniaProvider by providers/emby/index.ts */
 export interface InsomniaProviderBridge {
   providesArt: boolean;
   getFieldsSpec(): Promise<ProviderFieldSpec[]>;
