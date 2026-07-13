@@ -1,0 +1,9 @@
+{
+  "protocol": "benchmark",
+  "providesArt": false,
+  "version": "1.0.0",
+  "displayName": "Benchmark",
+  "fieldSpec": [
+    { "id": "results", "labelKey": "benchmark.results", "kind": "qrCode", "required": false, "order": 0 }
+  ]
+}

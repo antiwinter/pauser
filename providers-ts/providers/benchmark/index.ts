@@ -1,15 +1,7 @@
-import type { ProviderFieldSpec, ValidationResult, EntryList, PlaybackSource, QueryOptions } from '../../utils/types.js';
+import type { ValidationResult, EntryList, PlaybackSource, QueryOptions } from '../../utils/types.js';
 import { runBench } from './bench.js';
 
-(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
-
-  providesArt: false,
-
-  async getFieldsSpec(): Promise<ProviderFieldSpec[]> {
-    return [
-      { id: 'results', labelKey: 'benchmark.results', kind: 'qrCode', required: false, order: 0 },
-    ];
-  },
+export default {
 
   async test(): Promise<ValidationResult> {
     return { success: true, fields: {} };

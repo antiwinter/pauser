@@ -1,0 +1,24 @@
+{
+  "protocol": "catvod",
+  "providesArt": true,
+  "version": "1.0.0",
+  "displayName": "CatVod",
+  "fieldSpec": [
+    {
+      "id": "config_url",
+      "labelKey": "catvod.field.config_url",
+      "kind": "singleLine",
+      "required": true,
+      "identity": true,
+      "order": 0,
+      "placeholderKey": "catvod.field.config_url.placeholder"
+    },
+    {
+      "id": "name",
+      "labelKey": "fld_endpoint_name",
+      "kind": "singleLine",
+      "required": false,
+      "order": 100
+    }
+  ]
+}

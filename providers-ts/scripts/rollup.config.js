@@ -1,4 +1,4 @@
-import { readdirSync, existsSync } from 'fs';
+import { readdirSync, existsSync, mkdirSync, copyFileSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import typescript from '@rollup/plugin-typescript';
@@ -28,14 +28,38 @@ function makePlugins() {
   ];
 }
 
+/** Materialise every sibling of `index.ts` (meta.json, *.jar, …) into dist/<name>/ so the
+ *  Gradle asset merger picks the folder up whole. */
+function copyProviderAssets(name) {
+  const srcDir = join(providersRoot, name);
+  const dstDir = join(rootDir, 'dist', name);
+  mkdirSync(dstDir, { recursive: true });
+  for (const child of readdirSync(srcDir)) {
+    if (child === 'index.ts') continue;
+    const src = join(srcDir, child);
+    const dst = join(dstDir, child);
+    if (!existsSync(src)) continue;
+    // Only copy regular files. Subdirectories under a provider (e.g. catvod/shim-jar,
+    // catvod/test) are not part of the asset bundle — those are build/test inputs.
+    if (!statSync(src).isFile()) continue;
+    copyFileSync(src, dst);
+  }
+  return {
+    name: 'copy-provider-assets',
+    buildStart() { copyProviderAssets(name); },
+  };
+}
+
 /** @type {import('rollup').RollupOptions[]} */
 export default providerNames.map((name) => ({
   input: join(rootDir, 'providers', name, 'index.ts'),
-  plugins: makePlugins(),
+  plugins: [...makePlugins(), copyProviderAssets(name)],
   output: {
-    file: join(rootDir, 'dist', `${name}.js`),
+    file: join(rootDir, 'dist', name, 'index.js'),
     format: 'iife',
-    name: 'insomniaProvider', // sets globalThis.insomniaProvider in QuickJS
+    name: 'insomniaProvider', // the bundle assigns its `export default` to
+                              // `globalThis.insomniaProvider`; host looks methods
+                              // up via that single key.
     strict: false, // QuickJS bundle does not need the 'use strict' wrapper
   },
 }));

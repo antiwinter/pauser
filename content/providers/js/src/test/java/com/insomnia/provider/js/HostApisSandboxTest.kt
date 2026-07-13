@@ -114,4 +114,17 @@ class HostApisSandboxTest {
             host.handleCrypto("checksum", """{"input":"x","algo":"blake2"}""")
         }
     }
+
+    @Test
+    fun loadAsset_returnsDocumentedError() {
+        // The host.jar.loadAsset API was removed in the provider-folder refactor.
+        // Old JS bundles that still call it must get the documented error string
+        // back rather than a silent no-op or a crash. The shim jar is now
+        // co-located in the provider folder and auto-injected by JsProviderLoader.
+        // The handleJar implementation does not dereference the loader for the
+        // loadAsset case, so a freshly-constructed loader (no sandbox reads) is fine.
+        val loader = JarLoader(sandboxRoot, okhttp3.OkHttpClient())
+        val result = host.handleJar("loadAsset", """{"name":"catvod-shim.jar"}""", loader)
+        assertTrue("got: $result", result!!.contains("error: loadAsset removed"))
+    }
 }

@@ -82,8 +82,9 @@ try {
 async function run(providerName, opts, out) {
   const providerDir = join(providersDir, providerName);
   const entryPath = join(providerDir, 'index.ts');
+  const metaPath = join(providerDir, 'meta.json');
   const envPath = join(providerDir, '.env');
-  const bundlePath = join(distDir, `${providerName}.js`);
+  const bundlePath = join(distDir, providerName, 'index.js');
 
   assertProviderName(providerName);
   if (!existsSync(entryPath)) {
@@ -116,6 +117,9 @@ async function run(providerName, opts, out) {
       cwd: rootDir,
       encoding: 'utf8',
       stdio: opts.json ? 'pipe' : 'inherit',
+      // Windows: spawnSync('npm', ...) needs the shell wrapper, otherwise the
+      // npm.cmd shim never runs and the child returns status=null/signal=null.
+      shell: process.platform === 'win32',
     });
     if (result.status !== 0) {
       throw new Error(result.stderr || result.stdout || `npm run build failed with status ${result.status}`);
@@ -134,16 +138,16 @@ async function run(providerName, opts, out) {
   try {
     await configRunner.init();
 
-    const bridgeResult = await runBridgeChecks(out, configRunner);
+    const bridgeResult = await runBridgeChecks(out, configRunner, { providerName });
     providesArt = bridgeResult.providesArt;
 
-    const envValues = await loadCredentials(out, configRunner, envPath, opts);
+    const envValues = await loadCredentials(out, metaPath, envPath, opts);
     if (!envValues) {
       out.finish();
       process.exit(0);
     }
 
-    const configResult = await runConfigChecks(out, configRunner, envValues);
+    const configResult = await runConfigChecks(out, configRunner, { meta: bridgeResult.meta }, envValues);
     credentials = configResult.credentials;
     await writeEnvFile(envPath, { ...envValues, ...credentials });
   } finally {
@@ -192,11 +196,10 @@ async function run(providerName, opts, out) {
   }
 }
 
-async function loadCredentials(out, runner, envPath, opts) {
-  // Read fields directly (infrastructure step, not a test assertion) so we
-  // know which fields are required before running the formal Config category.
-  const rawFieldsJson = await runner.callMethod('getFieldsSpec', {});
-  const rawFields = typeof rawFieldsJson === 'string' ? JSON.parse(rawFieldsJson) : rawFieldsJson;
+async function loadCredentials(out, metaPath, envPath, opts) {
+  // Read fields directly from meta.json (infrastructure step, not a test assertion)
+  // so we know which fields are required before running the formal Config category.
+  const rawFields = JSON.parse(await readFile(metaPath, 'utf8')).fieldSpec;
 
   const values = await out.step('load provider credentials', async () => {
     let vals = opts.freshAuth ? {} : await readEnvFile(envPath);

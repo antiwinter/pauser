@@ -21,12 +21,14 @@ const spiderHandles = new Map<string, string>();
 
 // Serializes ensureJar() across concurrent callers; the JAR's native boot is process-global
 // and a re-entrant call corrupts the secondary loader's Context reference (boot race).
-let jarBootPromise: Promise<void> | null = null;
+let jarBootPromise: Promise<string> | null = null;
+const jarHandleByUrl = new Map<string, string>();
 
 let relayBaseUrl: string | null = null;
 
 export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void> {
   spiderHandles.clear();
+  jarHandleByUrl.clear();
   // Use clearInstances rather than clear() — the JAR's native .so is process-global and
   // doesn't reinitialize cleanly on a second getLoader() call, leaving the secondary
   // loader's Context reference null.
@@ -36,48 +38,61 @@ export async function resetSpiders(jarUrl?: string, md5?: string): Promise<void>
 const CATVOD_INIT         = 'com.github.catvod.spider.Init';
 const CATVOD_DEX_NATIVE   = 'com.github.catvod.spider.DexNative';
 const CATVOD_INIT_ORIGIN  = 'com.github.catvod.spider.InitOrigin';
-const CATVOD_SHIM_ASSET   = 'catvod-shim.jar';
 
-export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
+/** Returns the primary handle for the loaded JAR. Callers thread the handle through every
+ *  subsequent loadClass / reflect / registerLoader call — Kotlin identifies the loader by
+ *  handle, not by URL, so warming the cache from a {path} source and looking up by URL
+ *  used to silently miss. */
+export async function ensureJar(jarUrl: string, md5?: string): Promise<string> {
+  const cached = jarHandleByUrl.get(jarUrl);
+  if (cached) return cached;
   if (jarBootPromise) return jarBootPromise;
   jarBootPromise = (async () => {
-    await host.jar.loadAsset({ name: CATVOD_SHIM_ASSET });
-    // Kotlin writes the cached JAR to sandboxRoot/jars/<sha256(url).take(16)>.jar — matching this path lets the warm path skip the download.
-    const urlKey = (await host.crypto.checksum({ input: jarUrl, algo: 'sha-256' })).slice(0, 16);
-    const cachePath = `jars/${urlKey}.jar`;
-    let usedCached = false;
+    // The catvod-shim.jar is auto-fused into the app classloader by
+    // [JsProviderLoader] at bundle load time — by the time we get here, the
+    // shim classes (CATVOD_INIT, CATVOD_INIT_ORIGIN, …) are visible via the
+    // app classloader and adoptParent('context') resolves them naturally.
+    // Kotlin stages Url/Buffer sources to `code_cache/jars/<safe>.jar`; Path
+    // sources are hardlinked `sandbox/<rel>` → `code_cache/jars/<safe>.jar`.
+    // The handle returned by load() unifies lookups regardless of source variant.
+    const cachePath = await cachePathFor(jarUrl);
+    let handle: string;
     if (await host.fs.exists({ path: cachePath })) {
       // Warm-path MD5 only: base64 + checksum allocates ~2.3× file size on the JS heap; cold path trusts the server's md5 param.
       const buf = await host.fs.read({ path: cachePath, encoding: 'base64' });
       const digest = await host.crypto.checksum({ input: buf, algo: 'md5', encoding: 'base64' });
       if (!md5 || digest === md5) {
-        await host.jar.load({ source: { path: cachePath } });
-        usedCached = true;
+        handle = await host.jar.load({ source: { path: cachePath } });
+      } else {
+        handle = await host.jar.load({ source: { url: jarUrl } });
       }
+    } else {
+      handle = await host.jar.load({ source: { url: jarUrl } });
     }
-    if (!usedCached) await host.jar.load({ source: { url: jarUrl } });
     // clinit extracts & System.loadLibrary's the .so; fails fast on wrong arch.
-    await host.jar.loadClass({ url: jarUrl, cls: CATVOD_DEX_NATIVE });
+    await host.jar.loadClass({ handle, cls: CATVOD_DEX_NATIVE });
     // Init.init(Context) — sets Application ref, kicks off secondary-loader
     // construction on a background thread.
-    await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT, method: 'init' });
+    await host.jar.reflect({ handle, cls: CATVOD_INIT, method: 'init', args: [] });
     // Poll Init.loader() until the secondary DexClassLoader is ready.
-    const secKey = `secondary:${urlKey}`;
-    let loaderHandle: string | null = null;
+    // `reflect` returns the parsed value already (host dispatcher JSON-parses once);
+    // a second JSON.parse here would break when the bridge returns an instance handle
+    // like `obj_22` (no surrounding quotes after the host-side parse).
+    let instanceHandle: string | null = null;
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
-      const raw = await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT, method: 'loader' });
-      if (raw && raw !== 'null') { loaderHandle = JSON.parse(raw); break; }
+      const raw = await host.jar.reflect({ handle, cls: CATVOD_INIT, method: 'loader' });
+      if (raw && raw !== 'null') { instanceHandle = raw; break; }
       await host.timer.sleep({ ms: 50 });
     }
-    if (!loaderHandle) throw new Error(`Init.loader() returned null after 5000ms for ${jarUrl}`);
+    if (!instanceHandle) throw new Error(`Init.loader() returned null after 5000ms for ${jarUrl}`);
     // Register the ClassLoader as secondary so reflect finds classes in it.
-    await host.jar.registerLoader({ key: secKey, instanceHandle: loaderHandle });
+    await host.jar.registerLoader({ handle, instanceHandle });
     // Patch secondary loader's parent → app classloader (shim classes injected via loadAsset).
-    await host.jar.adoptParent({ childKey: secKey, parentKey: 'context' });
+    await host.jar.adoptParent({ childKey: `secondary:${handle}`, parentKey: 'context' });
     // InitOrigin.init(Context) on the secondary loader — wires the catvod
     // plugin system into our HTTP server.
-    await host.jar.reflect({ url: jarUrl, cls: CATVOD_INIT_ORIGIN, method: 'init' });
+    await host.jar.reflect({ handle, cls: CATVOD_INIT_ORIGIN, method: 'init', args: [] });
     // Stable token "catvod": some JARs build loopback URLs of the form
     // http://127.0.0.1:<port>/proxy?... and call back into the app to resolve them. The
     // host exposes the recipe at http://127.0.0.1:<server-port>/relay/catvod.
@@ -87,15 +102,22 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<void> {
       token: 'catvod',
     });
     relayBaseUrl = reg.baseUrl;
+    jarHandleByUrl.set(jarUrl, handle);
+    return handle;
   })();
   try {
-    await jarBootPromise;
+    return await jarBootPromise;
   } catch (e) {
     // A failed boot must be retryable — drop the cached promise so the next caller
     // can re-attempt the load+boot sequence.
     jarBootPromise = null;
     throw e;
   }
+}
+
+async function cachePathFor(jarUrl: string): Promise<string> {
+  const urlKey = (await host.crypto.checksum({ input: jarUrl, algo: 'sha-256' })).slice(0, 16);
+  return `jars/${urlKey}.jar`;
 }
 
 
@@ -126,7 +148,7 @@ function decodeProxyParam(query: string, key: string): string | null {
 }
 
 async function loadSpider(
-  jarUrl: string,
+  handle: string,
   api: string,
   ext: string,
   siteKey: string,
@@ -135,23 +157,27 @@ async function loadSpider(
   if (cached) return cached;
 
   const cls = spiderClass(api);
-  const handle = await host.jar.reflect({ url: jarUrl, cls, method: 'newInstance', args: [] });
+  const spiderInstance = await host.jar.reflect({ handle, cls, method: 'newInstance', args: [] });
   if (cls.endsWith('Guard')) {
     // Guard init(ctx, ext) populates the wrapped spider via Init.getSpider; without it
     // homeContent returns {"class":[]}. A failure on homeContent means the wrapped
     // spider is still null (boot race) — drop the handle so the next caller retries.
-    await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
+    await host.jar.reflect({ handle, cls, method: 'init', instance: spiderInstance, args: [ext] }).catch(() => undefined);
     try {
-      await host.jar.reflect({ url: jarUrl, cls, method: 'homeContent', instance: handle, args: [false] });
+      await host.jar.reflect({ handle, cls, method: 'homeContent', instance: spiderInstance, args: [false] });
     } catch {
       spiderHandles.delete(siteKey);
       throw new Error(`loadSpider: ${cls} init failed`);
     }
   } else {
-    await host.jar.reflect({ url: jarUrl, cls, method: 'init', instance: handle, args: [ext] }).catch(() => undefined);
+    await host.jar.reflect({ handle, cls, method: 'init', instance: spiderInstance, args: [ext] }).catch(() => undefined);
   }
-  spiderHandles.set(siteKey, handle);
-  return handle;
+  spiderHandles.set(siteKey, spiderInstance);
+  return spiderInstance;
+}
+
+function spiderClass(api: string): string {
+  return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
 
 function createJarSpider(
@@ -162,13 +188,21 @@ function createJarSpider(
   siteKey: string,
 ): CatVodSpider {
   let handlePromise: Promise<string> | null = null;
+  let spiderInstancePromise: Promise<string> | null = null;
 
   const getHandle = async (): Promise<string> => {
-    await ensureJar(jarUrl, md5);
     if (!handlePromise) {
-      handlePromise = loadSpider(jarUrl, api, ext, siteKey);
+      handlePromise = ensureJar(jarUrl, md5);
     }
     return handlePromise;
+  };
+
+  const getSpiderInstance = async (): Promise<string> => {
+    const handle = await getHandle();
+    if (!spiderInstancePromise) {
+      spiderInstancePromise = loadSpider(handle, api, ext, siteKey);
+    }
+    return spiderInstancePromise;
   };
 
   const cls = spiderClass(api);
@@ -176,8 +210,9 @@ function createJarSpider(
   return {
     async home(filter?: boolean): Promise<CatVodHomeResult> {
       const handle = await getHandle();
+      const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'homeContent', instance: handle, args: [filter ?? false],
+        handle, cls, method: 'homeContent', instance, args: [filter ?? false],
       });
       const data = parseReflectResult(raw) as CatVodHomeResult;
       return normalizeHome(data);
@@ -185,9 +220,10 @@ function createJarSpider(
 
     async category(tid: string, pg: number, filter?: boolean, extend?: CatVodFilterExtend): Promise<CatVodCategoryResult> {
       const handle = await getHandle();
+      const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'categoryContent',
-        instance: handle, args: [tid, String(pg), filter ?? false, extend ?? {}],
+        handle, cls, method: 'categoryContent',
+        instance, args: [tid, String(pg), filter ?? false, extend ?? {}],
       });
       const data = parseReflectResult(raw) as CatVodCategoryResult;
       return normalizeCategory(data);
@@ -195,9 +231,10 @@ function createJarSpider(
 
     async detail(ids: string[]): Promise<CatVodDetailResult> {
       const handle = await getHandle();
+      const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'detailContent',
-        instance: handle, args: [ids],
+        handle, cls, method: 'detailContent',
+        instance, args: [ids],
       });
       const data = parseReflectResult(raw, true) as CatVodDetailResult;
       return normalizeDetail(data);
@@ -205,9 +242,10 @@ function createJarSpider(
 
     async play(flag: string, epUrl: string, vipFlags?: string[]): Promise<CatVodPlayResult> {
       const handle = await getHandle();
+      const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'playerContent',
-        instance: handle, args: [flag, epUrl, vipFlags ?? []],
+        handle, cls, method: 'playerContent',
+        instance, args: [flag, epUrl, vipFlags ?? []],
       });
       const data = normalizePlay(parseReflectResult(raw) as CatVodPlayResult);
       if (data) {
@@ -219,18 +257,15 @@ function createJarSpider(
 
     async search(query: string, pg: number, quick?: boolean): Promise<CatVodCategoryResult> {
       const handle = await getHandle();
+      const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        url: jarUrl, cls, method: 'searchContent',
-        instance: handle, args: [query, quick ?? false, String(pg)],
+        handle, cls, method: 'searchContent',
+        instance, args: [query, quick ?? false, String(pg)],
       });
       const data = parseReflectResult(raw) as CatVodCategoryResult;
       return normalizeSearch(data, { useListLength: true });
     },
   };
-}
-
-function spiderClass(api: string): string {
-  return `com.github.catvod.spider.${api.replace(/^csp_/, '')}`;
 }
 
 let jarConfig: { url: string; md5?: string } | null = null;
@@ -268,4 +303,3 @@ export default {
     return createJarSpider(jarConfig.url, jarConfig.md5, site.api, siteExt(site), site.key);
   },
 };
-

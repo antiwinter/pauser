@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/../../.."
 SRC="$SCRIPT_DIR/src"
 BUILD="$SCRIPT_DIR/build"
-DIST="$ROOT/dist"
+DIST="$ROOT/dist/catvod"
 
 ANDROID_JAR="${ANDROID_HOME:-$HOME/Android/Sdk}/platforms/android-35/android.jar"
 # Use d8.bat on Windows, d8 on Unix
@@ -48,6 +48,7 @@ fi
   $(find "$BUILD/classes" -name "*.class")
 
 # Repack classes.dex into a JAR so DexClassLoader can load it
+mkdir -p "$DIST"
 rm -f "$DIST/catvod-shim.jar"
 (cd "$BUILD" && jar cf "$DIST/catvod-shim.jar" classes.dex)
 

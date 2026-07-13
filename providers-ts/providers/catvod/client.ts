@@ -26,8 +26,12 @@ export interface CatVodClientState {
 
 // ── test() ───────────────────────────────────────────────────────────────────
 
-export async function test(state: CatVodClientState): Promise<ValidationResult> {
-  const configUrl = state.rawCredentials['config_url'];
+export async function test(args: {
+  values?: Record<string, string>;
+  credentials?: Record<string, string>;
+}): Promise<ValidationResult> {
+  const values = args.values ?? args.credentials ?? {};
+  const configUrl = values['config_url'] ?? '';
   if (!configUrl) {
     return { success: false, error: 'config_url is required' };
   }

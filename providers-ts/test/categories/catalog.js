@@ -10,7 +10,7 @@ import {
 } from '../validators.js';
 import { NAError } from '../reporter.js';
 
-const ENTRY_TYPES = new Set(['Folder', 'Series', 'Season', 'Episode', 'Playable', 'Other']);
+const ENTRY_TYPES = new Set(['Folder', 'Series', 'Season', 'Episode', 'Playable', 'Other', 'Livepak', 'Digipak', 'Video', 'LiveChannel']);
 const CONTAINER_TYPES = new Set(['Folder', 'Series', 'Season']);
 const SERIES_CHILD_TYPES = new Set(['Season', 'Episode']);
 

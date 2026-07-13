@@ -20,7 +20,12 @@ const HOST_BOOTSTRAP_JS = `
     http:     ns('http'),
     crypto:   ns('crypto'),
     platform: ns('platform'),
+    fs:       ns('fs'),
     jar:      ns('jar'),
+    timer:    ns('timer'),
+    dns:      ns('dns'),
+    relay:    ns('relay'),
+    web:      ns('web'),
   };
   if (typeof atob === 'undefined') {
     var _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -70,10 +75,6 @@ export class QuickJsProviderRunner {
   dispose() {
     this.vm?.dispose();
     this.vm = null;
-  }
-
-  async getProvidesArt() {
-    return this.evalImmediate('globalThis.insomniaProvider.providesArt', '<providesArt>');
   }
 
   async hasMethod(name) {

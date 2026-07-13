@@ -47,13 +47,18 @@ export interface HostAPI {
      *  - `{ url }` — Kotlin downloads to sandbox (no integrity check).
      *  - `{ path }` — sandbox-relative; warm/cached JARs (low heap).
      *  - `{ buffer }` — base64-encoded; small/synthetic only (~134% heap).
+     *
+     * Returns an opaque handle that the caller passes to loadClass / reflect /
+     * registerLoader. The handle abstracts away Path/Url/Buffer key derivation
+     * — same handle regardless of which source variant was loaded.
      */
     load(args: {
       source: { url: string } | { path: string } | { buffer: string };
-    }): Promise<void>;
-    loadAsset(args: { name: string }): Promise<void>;
+    }): Promise<string>;
+    /** Same handle convention as `load` — pass to loadClass/reflect for shim classes. */
+    loadAsset(args: { name: string }): Promise<string>;
     reflect(args: {
-      url: string;
+      handle: string;
       cls: string;
       method: string;
       instance?: string;
@@ -61,12 +66,13 @@ export interface HostAPI {
       factoryCls?: string;
       factoryMethod?: string;
     }): Promise<string>;
-    loadClass(args: { url: string; cls: string }): Promise<void>;
-    registerLoader(args: { key: string; instanceHandle: string }): Promise<void>;
+    loadClass(args: { handle: string; cls: string }): Promise<void>;
+    /** `handle` is the primary handle from `load`; secondary loader is registered under `secondary:<handle>`. */
+    registerLoader(args: { handle: string; instanceHandle: string }): Promise<void>;
     /**
      * `parentKey: 'context'` → app classloader (with bootstrap classes
      * injected). Plugin runtimes that build their own DexClassLoader need
-     * this to resolve shim classes.
+     * this to resolve shim classes. `childKey` is typically `secondary:<handle>`.
      */
     adoptParent(args: { childKey: string; parentKey: string }): Promise<void>;
     clear(args?: null): Promise<void>;

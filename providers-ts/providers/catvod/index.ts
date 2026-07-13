@@ -1,4 +1,3 @@
-import { getFieldsSpec } from './provider.js';
 import { fetchConfig, parseSpiderField } from './config.js';
 import { test, listEntry, search, getEntries, getPlaybackSources } from './client.js';
 import { resetSpiders as resetJarSpiders } from './spider/jar.js';
@@ -6,7 +5,6 @@ import { resetSpiders as resetDrpySpiders } from './spider/drpy.js';
 import { initSpiders, getConfig } from './spider/index.js';
 import type { CatVodClientState } from './client.js';
 import type {
-  ProviderFieldSpec,
   ValidationResult,
   EntryList,
   EntryInfo,
@@ -19,16 +17,10 @@ type PlatformCapabilities = Record<string, unknown>;
 
 let state: CatVodClientState | null = null;
 
-(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
+export default {
 
-  providesArt: true,
-
-  async getFieldsSpec(): Promise<ProviderFieldSpec[]> {
-    return getFieldsSpec();
-  },
-
-  async test(): Promise<ValidationResult> {
-    return test(state!);
+  async test(args: { values?: Record<string, string> }): Promise<ValidationResult> {
+    return test(args);
   },
 
   async init(args: {

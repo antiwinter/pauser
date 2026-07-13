@@ -4,6 +4,7 @@ import com.insomnia.content.contract.InsomniaProvider
 import com.insomnia.content.contract.EndpointClient
 import com.insomnia.core.form.contract.FormFieldKind
 import com.insomnia.core.form.contract.FormFieldSpec
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import com.insomnia.proxy.contract.WrappedProxyClient
 import kotlinx.serialization.json.JsonObject
@@ -14,27 +15,24 @@ import kotlinx.serialization.json.jsonPrimitive
 /**
  * An [InsomniaProvider] backed by a JavaScript bundle running inside QuickJS.
  *
- * The JS bundle must export `globalThis.insomniaProvider` conforming to the
- * bridge protocol defined in `providers-ts/utils/types.ts`.
- *
- * Construct via [create] — the suspend factory evaluates the bundle once to
- * read [providesArt] and [getFieldsSpec] without blocking any thread.
+ * Static surface (protocol, providesArt, version, displayName, fieldSpec) comes from
+ * a [ProviderMeta] loaded from the provider's `meta.json` — the single source of
+ * truth. The JS bundle's dynamic surface (init/test/listEntry/etc.) is reached via
+ * the host bridge and is no longer described in the bundle.
  */
 class JsProvider private constructor(
-    private val assetPath: String,
+    private val meta: ProviderMeta,
     private val jsBundle: String,
     private val hostApis: HostApis,
-    override val providesArt: Boolean,
-    private val cachedFieldsSpec: List<FormFieldSpec>,
 ) : InsomniaProvider {
 
-    override val protocol: String = assetPath.removeSuffix(".js")
+    override val protocol: String = meta.protocol
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    override val providesArt: Boolean = meta.providesArt
 
     // ── Field spec ─────────────────────────────────────────────────────────
 
-    override fun getFieldsSpec(): List<FormFieldSpec> = cachedFieldsSpec
+    override fun getFieldsSpec(): List<FormFieldSpec> = parseFieldsSpec(meta.fieldSpec)
 
     // ── Client creation ──────────────────────────────────────────────────
 
@@ -51,95 +49,60 @@ class JsProvider private constructor(
 
     companion object {
         /**
-         * Evaluates the bundle in a temporary engine to read [providesArt] and
-         * [getFieldsSpec], then constructs and returns a ready [JsProvider].
+         * Constructs a [JsProvider] from already-parsed manifest + bundle source.
          * Runs on whatever dispatcher the caller is on — call from [Dispatchers.IO].
          */
-        suspend fun create(assetPath: String, jsBundle: String, hostApis: HostApis): JsProvider {
-            var cover = false
-            var fields: List<FormFieldSpec> = emptyList()
-            val engine = QuickJsEngine(hostApis, WrappedProxyClient(null).getHttpClient())
-            try {
-                engine.init()
-                engine.evalSnippet(HOST_BOOTSTRAP_JS)
-                engine.evalBundle(jsBundle)
-                cover = engine.evalExpression("globalThis.insomniaProvider.providesArt") == "true"
-                val result = engine.callMethod("getFieldsSpec", "{}") ?: ""
-                fields = parseFieldsSpec(result)
-            } finally {
-                engine.close()
-            }
-            return JsProvider(assetPath, jsBundle, hostApis, cover, fields)
+        suspend fun create(meta: ProviderMeta, jsBundle: String, hostApis: HostApis): JsProvider {
+            return JsProvider(meta, jsBundle, hostApis)
         }
 
-        private fun parseFieldsSpec(json: String): List<FormFieldSpec> {
-            val serializer = Json { ignoreUnknownKeys = true; isLenient = true }
-            return try {
-                val arr = serializer.parseToJsonElement(json).jsonArray
-                arr.mapNotNull { el ->
-                    val obj = el.jsonObject
-                    val id  = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val lbl = obj["labelKey"]?.jsonPrimitive?.content ?: id
-                    val kind = when (obj["kind"]?.jsonPrimitive?.content) {
-                        "password"      -> FormFieldKind.Password
-                        "singleLine"    -> FormFieldKind.SingleLineText
-                        "proxySelector" -> FormFieldKind.ProxySelector
-                        "qrCode"        -> FormFieldKind.QrCode
-                        else            -> FormFieldKind.Text
-                    }
-                    FormFieldSpec(
-                        id             = id,
-                        labelKey       = lbl,
-                        kind           = kind,
-                        required       = obj["required"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
-                        sensitive      = obj["sensitive"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                        order          = obj["order"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-                        placeholderKey = obj["placeholderKey"]?.jsonPrimitive?.content,
-                        identity       = obj["identity"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    )
+        /** Translate a [FieldSpecDto] array into the host's [FormFieldSpec] model. */
+        private fun parseFieldsSpec(dtos: List<FieldSpecDto>): List<FormFieldSpec> =
+            dtos.map { dto ->
+                val kind = when (dto.kind) {
+                    "password"      -> FormFieldKind.Password
+                    "singleLine"    -> FormFieldKind.SingleLineText
+                    "proxySelector" -> FormFieldKind.ProxySelector
+                    "qrCode"        -> FormFieldKind.QrCode
+                    else            -> FormFieldKind.Text
                 }
-            } catch (_: Exception) {
-                emptyList()
+                FormFieldSpec(
+                    id             = dto.id,
+                    labelKey       = dto.labelKey ?: dto.id,
+                    kind           = kind,
+                    required       = dto.required ?: true,
+                    sensitive      = dto.sensitive ?: false,
+                    order          = dto.order ?: 0,
+                    placeholderKey = dto.placeholderKey,
+                    identity       = dto.identity ?: false,
+                )
             }
-        }
-
-        const val HOST_BOOTSTRAP_JS = """
-(function() {
-  function ns(name) {
-    return new Proxy({}, {
-      get: function(_, prop) {
-        return function(args) {
-          return globalThis.__hostDispatch(name, prop, JSON.stringify(args === undefined ? null : args));
-        };
-      }
-    });
-  }
-  globalThis.host = {
-    http:   ns('http'),
-    crypto: ns('crypto'),
-    jar:    ns('jar'),
-    fs:     ns('fs'),
-    log:    ns('log'),
-    timer:  ns('timer'),
-    dns:    ns('dns'),
-    relay:  ns('relay'),
-  };
-  globalThis.console = {
-    log: function() {
-      host.log.d({ msg: Array.prototype.join.call(arguments, ' ') });
-    },
-    warn: function() {
-      host.log.w({ msg: Array.prototype.join.call(arguments, ' ') });
-    },
-    error: function() {
-      host.log.e({ msg: Array.prototype.join.call(arguments, ' ') });
-    },
-  };
-  Object.defineProperty(globalThis.host, 'proxyConfig', {
-    get: function() { return globalThis.__proxyConfig || null; },
-    enumerable: true,
-  });
-})();
-"""
     }
 }
+
+/**
+ * Provider static manifest loaded from `assets/<provider>/meta.json`. The single
+ * source of truth for protocol, providesArt, version, displayName, and fieldSpec —
+ * no fallback to `globalThis.insomniaProvider`. All fields required; the loader
+ * validates and rejects on any absence or wrong type.
+ */
+@Serializable
+data class ProviderMeta(
+    val protocol: String,
+    val providesArt: Boolean,
+    val version: String,
+    val displayName: String,
+    val fieldSpec: List<FieldSpecDto>,
+)
+
+@Serializable
+data class FieldSpecDto(
+    val id: String,
+    val kind: String,
+    val labelKey: String? = null,
+    val required: Boolean? = null,
+    val sensitive: Boolean? = null,
+    val order: Int? = null,
+    val placeholderKey: String? = null,
+    val identity: Boolean? = null,
+)
