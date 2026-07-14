@@ -28,20 +28,25 @@ function makePlugins() {
   ];
 }
 
-/** Materialise every sibling of `index.ts` (meta.json, *.jar, …) into dist/<name>/ so the
- *  Gradle asset merger picks the folder up whole. */
+/** Materialise release-shape assets for one provider into `dist/<name>/`:
+ *  - `meta.json` — provider manifest read by `JsProviderLoader.readProviderMeta`
+ *  - `*.jar`     — co-located JARs auto-injected by `JsProviderLoader.injectCoLocatedJars`
+ *  Source-only files (`.ts`, `.env`, anything else) are NOT part of the release shape
+ *  and stay out of dist. `dist/` is wiped by `scripts/clean-dist.js` before the build,
+ *  so stale outputs from a previous run cannot survive here. */
+function isReleaseAsset(name) {
+  return name === 'meta.json' || name.endsWith('.jar');
+}
+
 function copyProviderAssets(name) {
   const srcDir = join(providersRoot, name);
   const dstDir = join(rootDir, 'dist', name);
   mkdirSync(dstDir, { recursive: true });
   for (const child of readdirSync(srcDir)) {
-    if (child === 'index.ts') continue;
     const src = join(srcDir, child);
     const dst = join(dstDir, child);
-    if (!existsSync(src)) continue;
-    // Only copy regular files. Subdirectories under a provider (e.g. catvod/shim-jar,
-    // catvod/test) are not part of the asset bundle — those are build/test inputs.
-    if (!statSync(src).isFile()) continue;
+    if (!existsSync(src) || !statSync(src).isFile()) continue;
+    if (!isReleaseAsset(child)) continue;
     copyFileSync(src, dst);
   }
   return {

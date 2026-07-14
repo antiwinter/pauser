@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
+import java.io.FileNotFoundException
 
 class JsProviderLoader : InsomniaProviderLoader {
 
@@ -47,25 +48,20 @@ class JsProviderLoader : InsomniaProviderLoader {
     }
 
     /**
-     * Lists top-level folders under `assets/`. A folder is detected by the fact that
-     * `assets.list(name)` returns a non-empty list of children — `assets.list("")`
-     * returns mixed names (files + folders) and there's no direct "is directory"
-     * probe on an `AssetManager`, so we use the presence of children as the signal.
+     * Lists provider folders under `assets/js-providers/`. Scoping to this
+     * subdirectory keeps the loader from tripping on unrelated asset folders
+     * that happen to live at the top of `assets/`.
      */
-    private fun assetFolders(assets: AssetManager): List<String> {
-        val topLevel = assets.list("") ?: return emptyList()
-        return topLevel.filter { name ->
-            // Skip loose files (e.g. flat-layout stragglers like an old `catvod.js`).
-            // A folder is anything with at least one child.
-            !name.endsWith(".js") && !name.endsWith(".jar") && !name.endsWith(".json") &&
-                (assets.list(name)?.isNotEmpty() == true)
-        }
-    }
+    private fun assetFolders(assets: AssetManager): List<String> =
+        assets.list(JS_PROVIDERS_DIR)?.toList().orEmpty()
 
     private fun readProviderMeta(assets: AssetManager, folderName: String): ProviderMeta? = try {
-        val path = "$folderName/meta.json"
+        val path = "$JS_PROVIDERS_DIR/$folderName/meta.json"
         val text = assets.open(path).use { it.readBytes().toString(Charsets.UTF_8) }
         META_JSON.decodeFromString(ProviderMeta.serializer(), text)
+    } catch (e: FileNotFoundException) {
+        Timber.w("JsProviderLoader: '%s' is missing meta.json", folderName)
+        null
     } catch (e: Exception) {
         Timber.w(e, "readProviderMeta(%s) failed", folderName)
         null
@@ -88,16 +84,16 @@ class JsProviderLoader : InsomniaProviderLoader {
      * Auto-injects every `.jar` co-located in the provider's folder into the app
      * classloader. Convention over configuration: a provider that doesn't want a jar
      * fused doesn't put one in the folder. Source bytes are copied straight from
-     * `assets/<provider>/<jar>` into `codeCacheDir/jars/asset_<safe>.jar` — the host
-     * never publishes anything into the sandbox (rule #5).
+     * `assets/js-providers/<provider>/<jar>` into `codeCacheDir/jars/asset_<safe>.jar`
+     * — the host never publishes anything into the sandbox (rule #5).
      */
     private fun injectCoLocatedJars(assets: AssetManager, folderName: String, ctx: Context) {
-        val children = assets.list(folderName) ?: return
+        val children = assets.list("$JS_PROVIDERS_DIR/$folderName") ?: return
         for (child in children) {
             if (!child.endsWith(".jar")) continue
             val dest = File(JarStaging.stageDir(ctx), "asset_${JarStaging.safeName(child)}.jar")
             if (dest.exists()) continue
-            assets.open("$folderName/$child").use { inp ->
+            assets.open("$JS_PROVIDERS_DIR/$folderName/$child").use { inp ->
                 dest.outputStream().use { out -> inp.copyTo(out) }
             }
             dest.setReadOnly()
@@ -106,13 +102,17 @@ class JsProviderLoader : InsomniaProviderLoader {
     }
 
     private fun readIndexJs(assets: AssetManager, folderName: String): String? = try {
-        assets.open("$folderName/index.js").use { it.readBytes().toString(Charsets.UTF_8) }
+        assets.open("$JS_PROVIDERS_DIR/$folderName/index.js").use { it.readBytes().toString(Charsets.UTF_8) }
+    } catch (e: FileNotFoundException) {
+        Timber.w("JsProviderLoader: '%s' is missing index.js", folderName)
+        null
     } catch (e: Exception) {
         Timber.w(e, "readIndexJs(%s) failed", folderName)
         null
     }
 
     private companion object {
+        const val JS_PROVIDERS_DIR = "js-providers"
         val META_JSON = Json { ignoreUnknownKeys = false; isLenient = false }
     }
 }

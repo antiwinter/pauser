@@ -1,5 +1,6 @@
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import org.gradle.api.tasks.Sync
 
 plugins {
     alias(libs.plugins.android.application)
@@ -26,6 +27,18 @@ fun gitVersion(): String {
         append("$hash-$date")
         if (dirty) append("-dirty")
     }
+}
+
+// Mirror `providers-ts/dist/<provider>/` into `src/main/assets/js-providers/<provider>/`
+// so the bundled JS providers land at `assets/js-providers/...` in the APK. The
+// providers-ts/ build (npm run build) writes the rollup output to a flat `dist/`,
+// and this Sync task rebases it under `js-providers/`. `Sync` deletes the
+// destination first, so removing a provider in the build also drops it here.
+val syncJsProviders by tasks.registering(Sync::class) {
+    val distDir = file("${rootDir}/providers-ts/dist")
+    val targetDir = file("${project.projectDir}/src/main/assets/js-providers")
+    from(distDir)
+    into(targetDir)
 }
 
 android {
@@ -80,10 +93,12 @@ android {
 
     sourceSets {
         getByName("main") {
-            assets.srcDirs("src/main/assets", "${rootDir}/providers-ts/dist")
+            assets.srcDirs("src/main/assets")
         }
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(syncJsProviders) }
 
 dependencies {
     implementation(project(":core:osd"))

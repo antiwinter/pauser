@@ -82,6 +82,8 @@ curl -X POST http://localhost:7920/endpoints \
 ```
 Runs `provider.test()` before saving. Returns `{ "endpointId": "...", "displayName": "..." }` on success, or `{ "error": "..." }` on failure.
 
+Pass URLs verbatim — including IDN hostnames like `http://www.饭太硬.net/tv`. Do **not** convert to punycode (`xn--…`); the app's network stack handles IDN encoding natively.
+
 ### Delete an endpoint
 ```sh
 curl -X DELETE http://localhost:7920/endpoints/<endpointId>

@@ -23,6 +23,7 @@ dump/
 node_modules/
 providers-ts/dist/
 providers-ts/providers/*/.env
+app/src/main/assets/js-providers/
 **/bin/
 .env
 classes.dex
