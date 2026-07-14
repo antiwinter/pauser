@@ -114,4 +114,5 @@ class HostApisSandboxTest {
             host.handleCrypto("checksum", """{"input":"x","algo":"blake2"}""")
         }
     }
+
 }

@@ -27,54 +27,54 @@ private const val PUMP_CHUNK_SIZE = 128 * 1024
 
 /**
  * Source bytes handed to [JarLoader.load]. The host resolves the path / decodes the
- * buffer / fetches the URL; [JarLoader] never escapes [JarLoader.sandboxRoot].
+ * buffer / fetches the URL; [JarLoader] never writes into [JarLoader.sandboxRoot].
  */
 sealed class LoadSource {
-    /** Kotlin downloads to `sandboxRoot/jars/<urlKey(url)>.jar`, then loads. */
+    /** Kotlin downloads and writes to `codeCacheDir/jars/<urlKey(url)>.jar`. */
     data class Url(val url: String) : LoadSource()
 
-    /** Pre-validated by [HostApis.resolve]. */
+    /** Pre-validated by [HostApis.resolve]; relative to [JarLoader.sandboxRoot]. */
     data class Path(val path: String) : LoadSource()
 
-    /** Kotlin decodes, writes to `sandboxRoot/jars/<sha256(bytes)>.jar`, loads. */
+    /** Kotlin decodes and writes to `codeCacheDir/jars/<sha256(bytes)>.jar`. */
     data class Buffer(val bufferB64: String) : LoadSource()
 }
 
 /**
- * All state (downloaded JARs, extracted .so files) lives under [sandboxRoot].
- * Dex output stays under [Context.codeCacheDir] so the OS can reclaim it.
+ * Loaded JARs and extracted .so files live under [Context.codeCacheDir] so the OS
+ * can reclaim them. The host never writes into [sandboxRoot] — it's provider-owned
+ * free-form space (rule #5 in the provider-layout plan).
  */
 class JarLoader(
     private val sandboxRoot: File,
     private val httpClient: OkHttpClient,
 ) {
-    private val jarsDir = File(sandboxRoot, "jars").also { it.mkdirs() }
-
     private val loaders   = ConcurrentHashMap<String, DexClassLoader>()
     private val instances = ConcurrentHashMap<String, Any>()
     private val keyGen    = AtomicLong(0)
     private val loadLocks = ConcurrentHashMap<String, Any>()
     private val loadGen   = AtomicLong(0)  // incremented on clear() so each reload gets a fresh dex dir
 
-    /** clinit must run before reflect; some plugins load .so in static initializers. */
-    fun loadClass(url: String, cls: String) {
-        val primary = loaders[urlKey(url)] ?: error("JAR not loaded: $url")
+    /** [handle] is the value [load] returned. clinit must run before reflect; some plugins load
+     *  .so in static initializers. */
+    fun loadClass(handle: String, cls: String) {
+        val primary = loaders[handle] ?: error("JAR not loaded: handle=$handle")
         try {
             primary.loadClass(cls)
         } catch (e: UnsatisfiedLinkError) {
             throw e
         } catch (_: Throwable) {
-            throw NoClassDefFoundError("loadClass($cls) failed for $url")
+            throw NoClassDefFoundError("loadClass($cls) failed for handle=$handle")
         }
     }
 
-    fun registerLoader(key: String, instanceHandle: String) {
+    fun registerLoader(handle: String, instanceHandle: String) {
         val instance = instances[instanceHandle]
             ?: error("Instance not found: $instanceHandle")
         val cl = instance as? ClassLoader
             ?: error("Instance $instanceHandle is not a ClassLoader")
         @Suppress("UNCHECKED_CAST")
-        loaders[key] = cl as DexClassLoader
+        loaders["secondary:$handle"] = cl as DexClassLoader
     }
 
     /**
@@ -95,32 +95,34 @@ class JarLoader(
             .also { it.isAccessible = true }
         parentField.set(child, parent)
     }
-    /** `Path` variant is pre-validated by [HostApis.resolve]. */
-    fun load(source: LoadSource) {
+    /** `Path` variant is pre-validated by [HostApis.resolve]. Returns a stable opaque handle
+     *  the caller passes to [loadClass]/[reflect]/[registerLoader]. The handle lets Path/Url/Buffer
+     *  sources share a single lookup space without the caller re-deriving keys from the URL. */
+    fun load(source: LoadSource): String {
         val key = sourceKey(source)
-        if (loaders.containsKey(key)) return
-        synchronized(loadLocks.getOrPut(key) { Any() }) {
-            if (loaders.containsKey(key)) return
-            val file = when (source) {
-                is LoadSource.Url    -> download(source.url)
-                is LoadSource.Path   -> File(source.path)
-                is LoadSource.Buffer -> writeBuffer(source.bufferB64)
+        if (!loaders.containsKey(key)) {
+            synchronized(loadLocks.getOrPut(key) { Any() }) {
+                if (!loaders.containsKey(key)) {
+                    // For Path sources the producer is empty — bytes come from the sandbox
+                    // file. We pre-compute the staged path so stageJar can hardlink sandbox
+                    // → code_cache directly (rule #4 in the provider-layout plan).
+                    val staged = if (source is LoadSource.Path) {
+                        val src = resolveAgainstSandbox(source.path)
+                        stageFromSandbox(key, src)
+                    } else {
+                        stageJar(key) {
+                            when (source) {
+                                is LoadSource.Url    -> fetchUrl(source.url)
+                                is LoadSource.Buffer -> Base64.getDecoder().decode(source.bufferB64)
+                                is LoadSource.Path   -> error("unreachable: handled above")
+                            }
+                        }
+                    }
+                    loadJarFile(key, staged)
+                }
             }
-            loadJarFile(key, file)
         }
-    }
-
-    fun loadAsset(assetName: String) {
-        val key = "asset:$assetName"
-        if (loaders.containsKey(key)) return
-        synchronized(loadLocks.getOrPut(key) { Any() }) {
-            if (loaders.containsKey(key)) return
-            val ctx  = ContextHolder.get()
-            val dest = File(jarsDir, assetName)
-            ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
-            // After injection, bootstrap classes resolve via ctx.classLoader.
-            ClassPathInjector.inject(ctx, dest)
-        }
+        return key
     }
 
     private fun loadJarFile(key: String, jar: File) {
@@ -138,7 +140,7 @@ class JarLoader(
     }
     /** `method == "newInstance"` (with no instance handle) → direct constructor call. */
     fun reflect(
-        url: String,
+        handle: String,
         cls: String,
         method: String,
         instanceHandle: String?,
@@ -146,9 +148,8 @@ class JarLoader(
         factoryCls: String? = null,
         factoryMethod: String? = null,
     ): String {
-        val urlKeyVal = urlKey(url)
-        val primaryLoader   = loaders[urlKeyVal] ?: error("JAR not loaded: $url")
-        val secondaryLoader = loaders["secondary:$urlKeyVal"]
+        val primaryLoader   = loaders[handle] ?: error("JAR not loaded: handle=$handle")
+        val secondaryLoader = loaders["secondary:$handle"]
         val instance = instanceHandle?.let { h -> instances[h] }
 
         if (method == "newInstance" && instance == null) {
@@ -158,9 +159,9 @@ class JarLoader(
             val obj = clz.getDeclaredConstructor()
                 .also { it.isAccessible = true }
                 .newInstance()
-            val handle = "obj_${keyGen.incrementAndGet()}"
-            instances[handle] = obj
-            return JsonPrimitive(handle).toString()
+            val instanceKey = "obj_${keyGen.incrementAndGet()}"
+            instances[instanceKey] = obj
+            return JsonPrimitive(instanceKey).toString()
         }
 
         val clz = tryLoadClass(primaryLoader, cls)
@@ -184,9 +185,9 @@ class JarLoader(
             is Boolean -> JsonPrimitive(result).toString()
             is Number  -> JsonPrimitive(result).toString()
             else       -> {
-                val handle = "obj_${keyGen.incrementAndGet()}"
-                instances[handle] = result
-                JsonPrimitive(handle).toString()
+                val instanceKey = "obj_${keyGen.incrementAndGet()}"
+                instances[instanceKey] = result
+                JsonPrimitive(instanceKey).toString()
             }
         }
     }
@@ -265,27 +266,66 @@ class JarLoader(
     fun clearInstances() {
         instances.clear()
     }
-    private fun download(url: String): File {
-        val dest = File(jarsDir, "${urlKey(url)}.jar")
-        if (dest.exists()) return dest
+    /** Downloads [url] and returns its bytes. Used as a [BytesProducer] for [stageJar]. */
+    private fun fetchUrl(url: String): ByteArray =
         httpClient.newCall(Request.Builder().url(url).build()).execute().use { r ->
             check(r.isSuccessful) { "JAR download failed: HTTP ${r.code} $url" }
-            dest.writeBytes(r.body!!.bytes())
+            r.body!!.bytes()
         }
-        return dest
+
+    /**
+     * Stage a JAR exactly once on disk at `codeCacheDir/jars/<safe>.jar`. The producer
+     * yields the bytes (URL/Buffer). The host never publishes anything into the
+     * sandbox; sandbox-path sources are handled by [stageFromSandbox].
+     *
+     * The staged file is mode `0400` (owner-read only) so Android 13+ ART accepts it
+     * under DexFile's non-writable-ancestor check.
+     */
+    private fun stageJar(key: String, producer: () -> ByteArray): File {
+        val staged = stagedPath(key)
+        if (!staged.exists()) {
+            staged.writeBytes(producer())
+            staged.setReadOnly()
+        }
+        return staged
     }
 
-    private fun writeBuffer(bufferB64: String): File {
-        val bytes = Base64.getDecoder().decode(bufferB64)
-        val dest = File(jarsDir, "${sha256Hex(bytes).take(16)}.jar")
-        if (!dest.exists()) dest.writeBytes(bytes)
-        return dest
+    /**
+     * Stage a JAR by linking (or, on cross-FS / link-not-permitted, copying) a file the
+     * provider placed in its sandbox into `codeCacheDir/jars/<safe>.jar`. Hardlink
+     * direction is **always sandbox → code_cache** (rule #4): the sandbox file is the
+     * source, the staged file is the destination. We never publish anything back into
+     * the sandbox.
+     */
+    private fun stageFromSandbox(key: String, srcInSandbox: File): File {
+        val staged = stagedPath(key)
+        if (!staged.exists()) {
+            runCatching {
+                java.nio.file.Files.createLink(staged.toPath(), srcInSandbox.toPath())
+            }.getOrElse {
+                // Cross-FS or link not permitted — copy bytes from sandbox into code_cache.
+                staged.writeBytes(srcInSandbox.readBytes())
+            }
+            staged.setReadOnly()
+        }
+        return staged
     }
+
+    private fun stagedPath(key: String): File = File(JarStaging.stageDir(ContextHolder.get()), "${JarStaging.safeName(key)}.jar")
 
     private fun sourceKey(source: LoadSource): String = when (source) {
         is LoadSource.Url  -> urlKey(source.url)
         is LoadSource.Path -> "path:${sha256Hex(source.path.toByteArray()).take(16)}"
         is LoadSource.Buffer -> "buf:${sha256Hex(Base64.getDecoder().decode(source.bufferB64)).take(16)}"
+    }
+
+    /** Path sources are sandbox-relative — the JS sees the path through host.fs which is
+     *  rooted at sandboxRoot, so load({path: ...}) must read from the same root. Without this
+     *  anchor `File("jars/foo.jar")` would resolve against process CWD (`/` on Android).
+     *  Read-only access: we only read here; the resulting bytes are written to code_cache. */
+    private fun resolveAgainstSandbox(relPath: String): File {
+        require(!relPath.contains("..")) { "host.jar.load: '..' segment rejected: $relPath" }
+        return File(sandboxRoot, relPath.trimStart('/'))
     }
 
     private fun extractNativeLibs(jar: File, soOut: File) {

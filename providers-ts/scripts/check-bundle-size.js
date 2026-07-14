@@ -18,18 +18,26 @@ mkdirSync(DIST_DIR, { recursive: true });
 
 let failed = false;
 
-for (const name of readdirSync(DIST_DIR)) {
-  if (!name.endsWith('.js')) continue;
-  const filePath = join(DIST_DIR, name);
-  const size     = statSync(filePath).size;
-  const kb       = (size / 1024).toFixed(1);
-  if (size > MAX_BYTES) {
-    console.error(`❌  Bundle too large: ${name}  (${kb} KB > 150 KB)`);
-    console.error(`    Check for accidental polyfill chains or large transitive deps.`);
-    failed = true;
-  } else {
-    console.log(`✅  ${name}  ${kb} KB`);
+function walk(dir) {
+  for (const name of readdirSync(dir)) {
+    const filePath = join(dir, name);
+    const st = statSync(filePath);
+    if (st.isDirectory()) {
+      walk(filePath);
+    } else if (name === 'index.js') {
+      const size = st.size;
+      const kb   = (size / 1024).toFixed(1);
+      if (size > MAX_BYTES) {
+        console.error(`❌  Bundle too large: ${filePath.slice(DIST_DIR.length + 1)}  (${kb} KB > 150 KB)`);
+        console.error(`    Check for accidental polyfill chains or large transitive deps.`);
+        failed = true;
+      } else {
+        console.log(`✅  ${filePath.slice(DIST_DIR.length + 1)}  ${kb} KB`);
+      }
+    }
   }
 }
+
+walk(DIST_DIR);
 
 if (failed) process.exit(1);

@@ -57,7 +57,8 @@ class JsClient(
     override suspend fun test(): EndpointValidationResult {
         return try {
             ensureReady()
-            val resultJson = engine.callMethod("test", "{}")
+            val credsJson = Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)
+            val resultJson = engine.callMethod("test", """{"credentials":$credsJson}""")
                 ?: return EndpointValidationResult.Error("Validation returned null")
 
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -125,7 +126,7 @@ class JsClient(
         val engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
         return try {
             engine.init()
-            engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
+            engine.evalSnippet(HostBootstrap.JS)
             engine.evalBundle(jsBundle)
             block(engine)
         } finally {
@@ -139,7 +140,7 @@ class JsClient(
             if (initialized) return
             engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
             engine.init()
-            engine.evalSnippet(JsProvider.HOST_BOOTSTRAP_JS)
+            engine.evalSnippet(HostBootstrap.JS)
             engine.evalBundle(jsBundle)
 
             val deviceInfoJson = json.encodeToString(
@@ -147,7 +148,8 @@ class JsClient(
             )
             val proxyConfigJson = proxyClient.getConfig()
                 .let { Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), it) }
-            val initArgs = """{"credentials":${Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)},"deviceInfo":$deviceInfoJson,"proxyConfig":$proxyConfigJson}"""
+            val credsJson = Json.encodeToString(MapSerializer(String.serializer(), String.serializer()), values)
+            val initArgs = """{"credentials":$credsJson,"deviceInfo":$deviceInfoJson,"proxyConfig":$proxyConfigJson}"""
             engine.callMethod("init", initArgs)
             engine.evalSnippet("globalThis.__proxyConfig = $proxyConfigJson;")
             initialized = true

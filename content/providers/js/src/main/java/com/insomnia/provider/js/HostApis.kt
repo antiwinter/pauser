@@ -197,34 +197,29 @@ class HostApis(
             "load" -> {
                 val source = args["source"]?.jsonObject
                     ?: throw IllegalArgumentException("host.jar.load: missing 'source' object")
-                jarLoader.load(parseLoadSource(source))
-                "true"
-            }
-            "loadAsset" -> {
-                val n = args["name"]!!.jsonPrimitive.content
-                jarLoader.loadAsset(n)
-                "true"
+                // Handle returned to JS for use in loadClass/reflect/registerLoader.
+                JsonPrimitive(jarLoader.load(parseLoadSource(source))).toString()
             }
             "reflect" -> {
-                val url           = args["url"]!!.jsonPrimitive.content
+                val handle        = args["handle"]!!.jsonPrimitive.content
                 val cls           = args["cls"]!!.jsonPrimitive.content
                 val method        = args["method"]!!.jsonPrimitive.content
                 val instance      = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
                 val rawArgs       = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
                 val factoryCls    = args["factoryCls"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
                 val factoryMethod = args["factoryMethod"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                jarLoader.reflect(url, cls, method, instance, rawArgs, factoryCls, factoryMethod)
+                jarLoader.reflect(handle, cls, method, instance, rawArgs, factoryCls, factoryMethod)
             }
             "loadClass" -> {
-                val url = args["url"]!!.jsonPrimitive.content
-                val cls = args["cls"]!!.jsonPrimitive.content
-                jarLoader.loadClass(url, cls)
+                val handle = args["handle"]!!.jsonPrimitive.content
+                val cls    = args["cls"]!!.jsonPrimitive.content
+                jarLoader.loadClass(handle, cls)
                 "true"
             }
             "registerLoader" -> {
-                val key = args["key"]!!.jsonPrimitive.content
+                val handle        = args["handle"]!!.jsonPrimitive.content
                 val instanceHandle = args["instanceHandle"]!!.jsonPrimitive.content
-                jarLoader.registerLoader(key, instanceHandle)
+                jarLoader.registerLoader(handle, instanceHandle)
                 "true"
             }
             "adoptParent" -> {

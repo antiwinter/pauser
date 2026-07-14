@@ -57,6 +57,17 @@ export class HostApis {
         return JSON.stringify(await this.handleFs(name, args));
       case 'jar':
         return await this.handleJar(name, argsJson ?? '{}');
+      // Stubs for namespaces the bundle references but the harness doesn't model.
+      // Real implementations live on the Android side; tests just no-op them.
+      case 'timer':
+        if (name === 'sleep') await new Promise((r) => setTimeout(r, args?.ms ?? 0));
+        return null;
+      case 'dns':
+        return JSON.stringify({ ok: true });
+      case 'relay':
+        return JSON.stringify({ token: args?.token ?? '', baseUrl: `http://localhost/${args?.token ?? ''}` });
+      case 'web':
+        throw new Error(`host.web.${name} is not available in the test harness`);
       default:
         throw new Error(`Unknown host namespace: ${namespace}`);
     }
@@ -130,7 +141,12 @@ export class HostApis {
         if (!args?.source || typeof args.source !== 'object') throw new Error('host.jar.load: missing source');
         const variants = Object.keys(args.source);
         if (variants.length !== 1) throw new Error(`host.jar.load: source must declare exactly one of url|path|buffer (got ${variants.join(',')})`);
-        return true;
+        // Returns a JSON-encoded opaque handle, mirroring Kotlin. The dispatch layer
+        // (HostApis.handleJar in Kotlin) wraps with JsonPrimitive(...).toString().
+        const v = variants[0];
+        if (v === 'url') return JSON.stringify(sha16(args.source.url));
+        if (v === 'path') return JSON.stringify('path:' + sha16(args.source.path));
+        return JSON.stringify('buf:' + sha16(args.source.buffer));
       }
       case 'clear':  return true;
       case 'clearInstances': return true;
@@ -175,5 +191,9 @@ export class HostApis {
 
 function hasHeader(headers, needle) {
   return Object.keys(headers).some((key) => key.toLowerCase() === needle);
+}
+
+function sha16(s) {
+  return createHash('sha256').update(String(s), 'utf8').digest('hex').slice(0, 16);
 }
 

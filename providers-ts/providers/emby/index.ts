@@ -4,13 +4,12 @@
  * One engine = one endpoint client. Module-level `state` holds the single
  * configured client; no clientId map needed.
  */
-import { getFieldsSpec, makeClientState } from './provider.js';
+import { makeClientState } from './provider.js';
 import { listEntry, search, getPlaybackSources, test, getEntries } from './client.js';
 import { updateEntryState, setDeviceAuth } from './hooks.js';
 import type { EmbyHooksCtx } from './hooks.js';
 import type { EmbyClientState } from './client.js';
 import type {
-  ProviderFieldSpec,
   ValidationResult,
   EntryList,
   EntryInfo,
@@ -21,21 +20,11 @@ import type {
 
 let state: EmbyClientState | null = null;
 
-(globalThis as unknown as Record<string, unknown>).insomniaProvider = {
-
-  // ── Provider-level (called from a fresh temp engine) ──────────────────
-
-  providesArt: true,
-
-  async getFieldsSpec(): Promise<ProviderFieldSpec[]> {
-    return getFieldsSpec();
-  },
+export default {
 
   async test(): Promise<ValidationResult> {
     return test(state!, state!.capabilities, state!.capabilities.deviceName);
   },
-
-  // ── Client init (called once per engine, replaces createClient) ───
 
   async init(args: {
     credentials: Record<string, string>;
@@ -58,8 +47,6 @@ let state: EmbyClientState | null = null;
       };
     }
   },
-
-  // ── Client methods ──────────────────────────────────────────────────
 
   async listEntry(args: {
     location: string | null;
