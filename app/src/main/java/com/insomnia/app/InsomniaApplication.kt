@@ -108,6 +108,7 @@ class InsomniaApplication : Application() {
             override val entryStateStore get() = storageBindings.entryStateStore
             override val appConfigStore get() = storageBindings.appConfigStore
             override val jarBridge get() = debugJarBridge
+            override val cacheDir get() = this@InsomniaApplication.cacheDir
         }
         insomniaServer = InsomniaServer(appContext = appContext)
         appScope.launch(Dispatchers.IO) { insomniaServer.start() }

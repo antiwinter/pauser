@@ -103,17 +103,17 @@ if [[ "$ACTION" == "dump" ]]; then
   rm -rf dump
   mkdir dump
   TAR="$ROOT/dump.tar.gz"
-  
+
   set +e
   run_adb exec-out \
-    "run-as $TARGET_PACKAGE sh -c 'cd cache && tar cz .'" \
+    "run-as $TARGET_PACKAGE sh -c 'cd cache/providers && tar cz .'" \
     > "$TAR"
   if [ "$?" -ne 0 ]; then
     echo "adb failed"
     rm -f "$TAR"
     exit 1
   fi
-  
+
   tar xzf "$TAR" -C dump
   if [ "$?" -ne 0 ]; then
     echo "tar extract failed"

@@ -24,10 +24,16 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.util.UUID
+import java.io.File
 
 private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 fun Application.installDebugRoutes(ctx: AppContext) {
+    // Wipe diagnostic dumps from all provider sandboxes so each session starts fresh.
+    File(ctx.cacheDir, "dump").deleteRecursively()
+    File(ctx.cacheDir, "providers").listFiles()?.forEach { providerDir ->
+        File(providerDir, "dump").deleteRecursively()
+    }
     routing {
         route("/providers") {
             get {

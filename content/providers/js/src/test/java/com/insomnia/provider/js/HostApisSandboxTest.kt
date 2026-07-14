@@ -14,20 +14,21 @@ import java.nio.file.Files
 import java.security.MessageDigest
 
 class HostApisSandboxTest {
-
     private lateinit var sandboxRoot: File
     private lateinit var host: HostApis
 
     @Before
     fun setUp() {
-        sandboxRoot = Files.createTempDirectory("insomnia-hostapis-").toFile()
+        val base = Files.createTempDirectory("insomnia-hostapis-").toFile()
+        sandboxRoot = File(base, "sandbox").apply { mkdirs() }
         host = HostApis("test-provider", sandboxRoot)
     }
 
     @After
     fun tearDown() {
-        sandboxRoot.deleteRecursively()
+        sandboxRoot.parentFile?.deleteRecursively()
     }
+
 
     @Test
     fun write_thenRead_relativePath_roundTripsUtf8() {
@@ -114,5 +115,6 @@ class HostApisSandboxTest {
             host.handleCrypto("checksum", """{"input":"x","algo":"blake2"}""")
         }
     }
+
 
 }

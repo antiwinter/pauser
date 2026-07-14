@@ -8,6 +8,7 @@ import com.insomnia.storage.EndpointDao
 import com.insomnia.storage.EndpointEntity
 import com.insomnia.storage.EntryStateStore
 import com.insomnia.storage.ProxyDao
+import java.io.File
 
 /**
  * App-level dependency surface exposed to the `:server` module.
@@ -25,4 +26,5 @@ interface AppContext {
     val entryStateStore: EntryStateStore
     val appConfigStore: AppPrefsStore
     val jarBridge: JarBridge
+    val cacheDir: File
 }

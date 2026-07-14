@@ -120,7 +120,7 @@ class HostApis(
             else -> throw IllegalArgumentException("Unknown fs method: $name")
         }
     }
-    /** Rejects `..` segments and any canonical path that escapes the sandbox root. */
+    /** Rejects `..` segments and any canonical path that escapes [sandboxRoot]. */
     private fun resolve(path: String): File {
         require(path.isNotBlank()) { "host.fs: empty path" }
         if (path.contains("..")) throw SecurityException("host.fs: '..' segment rejected: $path")
