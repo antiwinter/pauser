@@ -95,7 +95,7 @@ class JsProviderLoader : InsomniaProviderLoader {
         val children = assets.list(folderName) ?: return
         for (child in children) {
             if (!child.endsWith(".jar")) continue
-            val dest = File(stagingDir(ctx), "asset_${sanitize(child)}.jar")
+            val dest = File(JarStaging.stageDir(ctx), "asset_${JarStaging.safeName(child)}.jar")
             if (dest.exists()) continue
             assets.open("$folderName/$child").use { inp ->
                 dest.outputStream().use { out -> inp.copyTo(out) }
@@ -104,15 +104,6 @@ class JsProviderLoader : InsomniaProviderLoader {
             ClassPathInjector.inject(ctx, dest)
         }
     }
-
-    private fun stagingDir(ctx: Context): File {
-        val dir = File(ctx.codeCacheDir, "jars").apply { mkdirs() }
-        DexFilePermissions.chmodForDex(dir)
-        DexFilePermissions.chmodForDex(ctx.codeCacheDir)
-        return dir
-    }
-
-    private fun sanitize(name: String): String = name.replace(':', '_').replace('/', '_')
 
     private fun readIndexJs(assets: AssetManager, folderName: String): String? = try {
         assets.open("$folderName/index.js").use { it.readBytes().toString(Charsets.UTF_8) }

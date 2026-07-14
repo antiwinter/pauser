@@ -80,13 +80,11 @@ class JarLoaderPrimitivesTest {
     }
 
     @Test
-    fun dexFileName_collonsSafe() {
-        // The colon in `path:<sha>` would split on DexClassLoader path — both safely
-        // sanitize via [dexFileName]. Verified indirectly via the package-internal helper.
-        val f = JarLoader::class.java.getDeclaredMethod("dexFileName", String::class.java)
-            .also { it.isAccessible = true }
-        assertEquals("path_abc123", f.invoke(loader, "path:abc123") as String)
-        assertEquals("buf_abc123", f.invoke(loader, "buf:abc123") as String)
-        assertEquals("sub_dir", f.invoke(loader, "sub/dir") as String)
+    fun safeName_colonsSafe() {
+        // The colon in `path:<sha>` would split on DexClassLoader path —
+        // sanitized via [JarStaging.safeName] (shared by JarLoader + JsProviderLoader).
+        assertEquals("path_abc123", JarStaging.safeName("path:abc123"))
+        assertEquals("buf_abc123", JarStaging.safeName("buf:abc123"))
+        assertEquals("sub_dir", JarStaging.safeName("sub/dir"))
     }
 }

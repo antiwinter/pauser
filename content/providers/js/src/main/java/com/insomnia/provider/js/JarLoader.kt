@@ -125,27 +125,6 @@ class JarLoader(
         return key
     }
 
-    /** Co-located JARs in a provider's `assets/<provider>/` folder are auto-injected by
-     *  [com.insomnia.provider.js.JsProviderLoader] at bundle load time; the JS surface no
-     *  longer carries [loadAsset]. Kept for the test surface and one-shot bootstrap. */
-    fun loadAsset(assetName: String): String {
-        val key = "asset:$assetName"
-        if (!loaders.containsKey(key)) {
-            synchronized(loadLocks.getOrPut(key) { Any() }) {
-                if (!loaders.containsKey(key)) {
-                    val ctx  = ContextHolder.get()
-                    val dest = File(stageDir(), "${dexFileName(key)}.jar")
-                    if (!dest.exists()) {
-                        ctx.assets.open(assetName).use { inp -> dest.outputStream().use { inp.copyTo(it) } }
-                        dest.setReadOnly()
-                    }
-                    ClassPathInjector.inject(ctx, dest)
-                }
-            }
-        }
-        return key
-    }
-
     private fun loadJarFile(key: String, jar: File) {
         val ctx    = ContextHolder.get()
         val gen    = loadGen.get()
@@ -332,23 +311,7 @@ class JarLoader(
         return staged
     }
 
-    private fun stagedPath(key: String): File = File(stageDir(), "${dexFileName(key)}.jar")
-
-    /** `codeCacheDir/jars/`. Android 13+ DexFile refuses jars under group/world-writable
-     *  parents — strip those bits on the staging dir and its parent on first use per inode. */
-    private fun stageDir(): File {
-        val ctx = ContextHolder.get()
-        val dir = File(ctx.codeCacheDir, "jars").also { it.mkdirs() }
-        DexFilePermissions.chmodForDex(dir)
-        DexFilePermissions.chmodForDex(ctx.codeCacheDir)
-        return dir
-    }
-
-    /** DexClassLoader splits its jar path on `:` (path-list separator). Handles like
-     *  `path:abc123…` become two nonsense files. Translate the in-memory key to a colon-free
-     *  filename for files on disk. */
-    private fun dexFileName(key: String) =
-        key.replace(':', '_').replace('/', '_')
+    private fun stagedPath(key: String): File = File(JarStaging.stageDir(ContextHolder.get()), "${JarStaging.safeName(key)}.jar")
 
     private fun sourceKey(source: LoadSource): String = when (source) {
         is LoadSource.Url  -> urlKey(source.url)

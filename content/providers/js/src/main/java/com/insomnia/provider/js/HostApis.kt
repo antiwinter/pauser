@@ -200,14 +200,6 @@ class HostApis(
                 // Handle returned to JS for use in loadClass/reflect/registerLoader.
                 JsonPrimitive(jarLoader.load(parseLoadSource(source))).toString()
             }
-            "loadAsset" -> {
-                // Removed in the provider-folder refactor. Shim JARs now live next to
-                // `index.js` in `assets/<provider>/` and are auto-injected by
-                // [JsProviderLoader] at bundle-load time. JS should never call this.
-                Timber.w("host.jar.loadAsset called but the API was removed; " +
-                         "co-locate the JAR in the provider's folder instead")
-                JsonPrimitive("error: loadAsset removed; co-locate JAR in provider folder").toString()
-            }
             "reflect" -> {
                 val handle        = args["handle"]!!.jsonPrimitive.content
                 val cls           = args["cls"]!!.jsonPrimitive.content

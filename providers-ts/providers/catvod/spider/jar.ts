@@ -88,7 +88,7 @@ export async function ensureJar(jarUrl: string, md5?: string): Promise<string> {
     if (!instanceHandle) throw new Error(`Init.loader() returned null after 5000ms for ${jarUrl}`);
     // Register the ClassLoader as secondary so reflect finds classes in it.
     await host.jar.registerLoader({ handle, instanceHandle });
-    // Patch secondary loader's parent → app classloader (shim classes injected via loadAsset).
+    // Patch secondary loader's parent → app classloader (shim classes auto-injected at bundle load).
     await host.jar.adoptParent({ childKey: `secondary:${handle}`, parentKey: 'context' });
     // InitOrigin.init(Context) on the secondary loader — wires the catvod
     // plugin system into our HTTP server.

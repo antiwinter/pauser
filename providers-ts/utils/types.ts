@@ -55,8 +55,6 @@ export interface HostAPI {
     load(args: {
       source: { url: string } | { path: string } | { buffer: string };
     }): Promise<string>;
-    /** Same handle convention as `load` — pass to loadClass/reflect for shim classes. */
-    loadAsset(args: { name: string }): Promise<string>;
     reflect(args: {
       handle: string;
       cls: string;
@@ -118,18 +116,6 @@ declare global {
   };
 }
 
-export type ProviderFieldKind = 'text' | 'singleLine' | 'password' | 'proxySelector' | 'qrCode';
-
-export interface ProviderFieldSpec {
-  id: string;
-  labelKey: string;
-  kind: ProviderFieldKind;
-  required?: boolean;
-  sensitive?: boolean;
-  order?: number;
-  placeholderKey?: string;
-  identity?: boolean;
-}
 
 export type ValidationResult =
   | { success: true; fields: Record<string, string> }
@@ -242,8 +228,6 @@ export interface PlatformInfo {
 }
 
 export interface InsomniaProviderBridge {
-  providesArt: boolean;
-  getFieldsSpec(): Promise<ProviderFieldSpec[]>;
   test(): Promise<ValidationResult>;
 
   init(args: {
