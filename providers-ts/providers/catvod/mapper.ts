@@ -129,35 +129,36 @@ export function playResultToSource(
 // These are still used by the list converters above
 
 export function vodItemToEntry(
-  item: CatVodItem,
+  item: CatVodItem | null | undefined,
   siteKey: string,
   tid: string,
   itemRef?: string,
+  fallbackVodId?: string,
 ): EntryInfo {
-  const vodId = String(item.vod_id);
+  const vodId = String(item?.vod_id ?? fallbackVodId ?? itemRef ?? '');
   // msearch: IDs are Douban placeholders — browsing them fans out to a
   // cross-source search in listEntry, so they stay Folders. Every other vod
   // is a Digipak: listEntry resolves it via spider.detail into a flat episode
   // list, so a movie is just a single-episode Digipak and a series has N.
   const type = vodId.startsWith('msearch:') ? 'Folder' : 'Digipak';
-  const episodes = parseEpisodes(item);
+  const episodes = item ? parseEpisodes(item) : [];
   const childCount = episodes.length;
-  const quality = episodes[0]?.name.trim() || item.vod_remarks?.trim() || null;
+  const quality = episodes[0]?.name.trim() || item?.vod_remarks?.trim() || null;
   return {
     ref: itemRef ?? encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
-    title: item.vod_name ?? vodId,
+    title: item?.vod_name ?? vodId,
     type,
-    cover: item.vod_pic?.trim() || null,
-    overview: cleanOverview(item.vod_blurb) ?? cleanOverview(item.vod_content),
+    cover: item?.vod_pic?.trim() || null,
+    overview: cleanOverview(item?.vod_blurb) ?? cleanOverview(item?.vod_content),
     childCount: childCount > 0 ? childCount : null,
-    communityRating: Number.isFinite(Number(item.vod_score)) ? Number(item.vod_score) : null,
-    genres: splitNames(item.type_name),
-    actors: splitNames(item.vod_actor),
-    directors: splitNames(item.vod_director),
-    areas: splitNames(item.vod_area),
-    languages: splitNames(item.vod_lang),
+    communityRating: Number.isFinite(Number(item?.vod_score)) ? Number(item?.vod_score) : null,
+    genres: splitNames(item?.type_name),
+    actors: splitNames(item?.vod_actor),
+    directors: splitNames(item?.vod_director),
+    areas: splitNames(item?.vod_area),
+    languages: splitNames(item?.vod_lang),
     backdrop: [],
-    year: Number.isFinite(Number.parseInt(item.vod_year ?? '', 10)) ? Number.parseInt(item.vod_year ?? '', 10) : null,
+    year: Number.isFinite(Number.parseInt(item?.vod_year ?? '', 10)) ? Number.parseInt(item?.vod_year ?? '', 10) : null,
     quality,
   };
 }

@@ -48,11 +48,6 @@ export interface CatVodItem {
   vod_play_url?: string;
 }
 
-// ── CatVodDetail ─────────────────────────────────────────────────────────────
-
-export interface CatVodDetail extends CatVodItem {
-  /** Detail responses have the same shape as list items; some sites only populate fields here. */
-}
 
 // ── Filter ───────────────────────────────────────────────────────────────────
 // Category filter definitions — used for genre/year/area selection
@@ -152,8 +147,8 @@ export interface CatVodCategoryResult {
 }
 
 export interface CatVodDetailResult {
-  /** List of video details — typically one item per detailContent() call [standard] */
-  list?: CatVodDetail[];
+  /** List of video details — same CatVodItem shape as category/search/home lists. */
+  list?: CatVodItem[];
 }
 
 export interface CatVodPlayResult {

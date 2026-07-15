@@ -25,6 +25,7 @@ export interface CatVodClientState {
   rawCredentials: Record<string, string>;
 }
 
+
 // ── test() ───────────────────────────────────────────────────────────────────
 
 export async function test(args: {
@@ -71,13 +72,12 @@ export async function listEntry(
 
   if (ref.type === "cat") {
     const result = await spider.category(ref.tid, pg);
-    const entryList = vodListToEntries(
+    return vodListToEntries(
       result.list ?? [],
       ref.key,
       ref.tid,
       result.total,
     );
-    return entryList;
   }
 
   if (ref.type === "vod") {
@@ -162,7 +162,7 @@ export async function search(
         { list: [], total: 0 } as CatVodCategoryResult,
       );
       return vodListToEntries(result.list ?? [], key, '', result.total).items;
-    } catch (_) { /* site failed or timed out — skip */ return []; }
+    } catch { return []; }
   }));
   return batches.flat();
 }
@@ -170,8 +170,7 @@ export async function search(
 // ── getEntries ───────────────────────────────────────────────────────────────
 
 // Resolves itemRefs back to EntryInfo — used by the detail screen's header refresh.
-// For vod refs we re-fetch the detail so the metadata/childCount stay current;
-// refs we can't resolve fall back to a minimal Folder entry.
+// For vod refs we re-fetch the detail so the metadata/childCount stay current.
 
 export async function getEntries(
   _state: CatVodClientState,
@@ -181,16 +180,15 @@ export async function getEntries(
   for (const itemRef of itemRefs) {
     const ref = decodeRef(itemRef);
     if (ref.type === 'vod') {
+      let detail = null;
       try {
         const spider = getSpider(ref.key);
-        const detail = (await spider.detail([ref.id])).list?.[0];
-        if (detail) {
-          out.push(vodItemToEntry(detail, ref.key, ref.tid, itemRef));
-          continue;
-        }
-      } catch { /* fall through to placeholder */ }
+        detail = (await spider.detail([ref.id])).list?.[0] ?? null;
+      } catch { /* fall through to original item */ }
+      out.push(vodItemToEntry(detail, ref.key, ref.tid, itemRef, ref.id));
+      continue;
     }
-    out.push({ ref: itemRef, title: '', type: 'Folder', cover: null });
+    out.push({ ref: itemRef, title: itemRef, type: 'Folder', cover: null });
   }
   return out;
 }

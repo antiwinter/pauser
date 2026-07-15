@@ -1,9 +1,10 @@
-import type { CatVodDetailResult, CatVodSpider } from './types.js';
+import type { CatVodCategoryResult, CatVodDetailResult, CatVodItem, CatVodSpider } from './types.js';
 import type { SiteEntry, LiveEntry, CatVodConfig } from '../config.js';
 import cmsHandler from './cms.js';
 import jarHandler from './jar.js';
 import drpyHandler from './drpy.js';
 import { createIptvSpider } from './iptv.js';
+
 
 // ── Site handler registry ────────────────────────────────────────────────────
 // Only VOD site types (CMS, JAR, drpy) — IPTV lives are routed separately.
@@ -34,10 +35,12 @@ for (const h of SPIDER_HANDLERS) {
 
 let globalConfig: CatVodConfig | null = null;
 let spiderCache: Map<string, CatVodSpider> | null = null;
+let snapshot = new Map<string, CatVodItem>();
 
 export async function initSpiders(config: CatVodConfig): Promise<void> {
   globalConfig = config;
   spiderCache = new Map();
+  snapshot = new Map();
 
   for (const handler of SPIDER_HANDLERS) {
     if ("init" in handler) {
@@ -59,30 +62,45 @@ async function dumpResult(key: string, method: string, result: unknown): Promise
 }
 
 // ── Spider wrapper ────────────────────────────────────────────────────────────
-// Wraps a spider so every method call dumps its result before returning.
+// Wraps a spider with result dumps and detail fallback from prior list snapshots.
+
+
+function snapshotKey(siteKey: string, id: string): string {
+  return `${siteKey}-${id}`;
+}
+
+function rememberItems(siteKey: string, result: CatVodCategoryResult): void {
+  const items = new Map<string, CatVodItem>();
+  for (const item of result.list ?? []) {
+    if (item.vod_id == null) continue;
+    items.set(snapshotKey(siteKey, String(item.vod_id)), item);
+  }
+  snapshot = items;
+}
+
 
 function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
-  let detailCacheKey: string | null = null;
-  let detailCacheResult: CatVodDetailResult | null = null;
   const spider: CatVodSpider = {
     async home(filter?: boolean) {
       const result = await inner.home(filter);
+      if (result.list) rememberItems(key, result);
       await dumpResult(key, 'home', result);
       return result;
     },
 
     async category(tid, pg, filter?, extend?) {
       const result = await inner.category(tid, pg, filter, extend);
+      rememberItems(key, result);
       await dumpResult(key, `category-${tid}-${pg}`, result);
       return result;
     },
 
     async detail(ids) {
-      const cacheKey = JSON.stringify(ids);
-      if (detailCacheKey === cacheKey && detailCacheResult) return detailCacheResult;
       const result = await inner.detail(ids);
-      detailCacheKey = cacheKey;
-      detailCacheResult = result;
+      const details = new Map((result.list ?? []).map((item) => [String(item.vod_id), item]));
+      result.list = ids
+        .map((id) => details.get(id) ?? snapshot.get(snapshotKey(key, id)))
+        .filter((item): item is CatVodItem => item != null);
       await dumpResult(key, `detail-${ids.join(',')}`, result);
       return result;
     },
@@ -97,6 +115,7 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
   if (inner.homeVideo) {
     spider.homeVideo = async () => {
       const result = await inner.homeVideo!();
+      rememberItems(key, result);
       await dumpResult(key, 'homeVideo', result);
       return result;
     };
@@ -105,6 +124,7 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
     spider.search = async (query, pg, quick?) => {
       const t0 = Date.now();
       const result = await inner.search!(query, pg, quick);
+      rememberItems(key, result);
       const listLen = result?.list?.length ?? 0;
       console.warn(`[search] site=${key} q="${query}" pg=${pg} list=${listLen} ttl=${Date.now() - t0}ms`);
       await dumpResult(key, `search-${query}-${pg}`, result);
