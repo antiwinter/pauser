@@ -4,9 +4,7 @@ package com.insomnia.content.ui.catalog.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -101,48 +99,45 @@ fun SeriesDetailScreen(
     }
 
     DetailOverviewShell(viewModel = vm) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailHeader(viewModel = vm)
+            DetailBadges(viewModel = vm, playerController = playerController)
+            DetailCredits(entryInfo = info)
+            DetailButtons(viewModel = vm)
+            info.overview?.let { DetailOverviewSnippet(it) }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                DetailHeader(viewModel = vm)
-                DetailBadges(viewModel = vm, playerController = playerController)
-                DetailButtons(viewModel = vm)
-                info.overview?.let { DetailOverviewSnippet(it) }
-
-                if (seasons.size > 1) {
-                    TextButtonsRow(
-                        labels = seasons.map { it.title },
-                        itemKeys = seasons.map { it.ref },
-                        selectedIndex = seasonIndex,
-                        onSelect = { i -> if (i != seasonIndex) vm.setEpisode(i, 0) },
-                    )
-                }
-
-                EpisodeRow(
-                    totalCount = totalCount,
-                    episodes = episodes,
-                    selectedIndex = episodeIndex,
-                    imageLoader = imageLoader,
-                    onFocusEpisode = { vm.setEpisode(seasonIndex ?: 0, it) },
-                    onPlayEpisode = { playEpisode() },
+            if (seasons.size > 1) {
+                TextButtonsRow(
+                    labels = seasons.map { it.title },
+                    itemKeys = seasons.map { it.ref },
+                    selectedIndex = seasonIndex,
+                    onSelect = { i -> if (i != seasonIndex) vm.setEpisode(i, 0) },
                 )
+            }
 
-                if (totalCount > UI_EPISODE_PAGE_SIZE) {
-                    TextButtonsRow(
-                        labels = episodePageLabels(totalCount),
-                        selectedIndex = (episodeIndex ?: 0) / UI_EPISODE_PAGE_SIZE,
-                        onSelect = { page ->
-                            vm.setEpisode(seasonIndex ?: 0, page * UI_EPISODE_PAGE_SIZE)
-                        },
-                    )
-                }
+            EpisodeRow(
+                totalCount = totalCount,
+                episodes = episodes,
+                selectedIndex = episodeIndex,
+                imageLoader = imageLoader,
+                onFocusEpisode = { vm.setEpisode(seasonIndex ?: 0, it) },
+                onPlayEpisode = { playEpisode() },
+            )
+
+            if (totalCount > UI_EPISODE_PAGE_SIZE) {
+                TextButtonsRow(
+                    labels = episodePageLabels(totalCount),
+                    selectedIndex = (episodeIndex ?: 0) / UI_EPISODE_PAGE_SIZE,
+                    onSelect = { page ->
+                        vm.setEpisode(seasonIndex ?: 0, page * UI_EPISODE_PAGE_SIZE)
+                    },
+                )
             }
         }
     }

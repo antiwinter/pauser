@@ -25,6 +25,10 @@ data class EntryInfo(
     val genres: List<String>? = null,
     val communityRating: Float? = null,
     val studios: List<String>? = null,
+    val actors: List<String>? = null,
+    val directors: List<String>? = null,
+    val areas: List<String>? = null,
+    val languages: List<String>? = null,
     val etag: String? = null,
     val indexNumber: Int? = null,
     val overview: String? = null,
@@ -41,6 +45,7 @@ data class EntryInfo(
     val width: Int? = null,
     val height: Int? = null,
     val officialRating: String? = null,
+    val quality: String? = null,
     val filename: String? = null,
     val sources: List<PlaybackSource>? = null,
 )

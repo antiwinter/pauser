@@ -316,6 +316,10 @@ class JsClient(
             genres = obj["genres"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
             communityRating = obj["communityRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toFloatOrNull(),
             studios = obj["studios"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
+            actors = obj["actors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
+            directors = obj["directors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
+            areas = obj["areas"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
+            languages = obj["languages"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
             etag = obj["etag"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             overview = obj["overview"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
@@ -331,6 +335,7 @@ class JsClient(
             width = obj["width"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             height = obj["height"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
             officialRating = obj["officialRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
+            quality = obj["quality"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             filename = obj["filename"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
             sources = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
                 ?.mapNotNull { el -> parseSource(el.jsonObject).takeIf { it.url.isNotEmpty() } },

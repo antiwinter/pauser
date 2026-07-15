@@ -1,5 +1,5 @@
 import type { EntryInfo, EntryList, PlaybackSource, SubtitleTrack } from '../../utils/types.js';
-import type { CatVodItem, CatVodDetail, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
+import type { CatVodItem, CatVodCategory, CatVodSub, CatVodPlayResult, M3UChannel } from './spider/types.js';
 import { encodeRef } from './ref.js';
 
 // ── CatVod → Insomnia Conversion Functions ───────────────────────────────────
@@ -84,7 +84,7 @@ export function liveChannelsToEntries(channels: M3UChannel[], liveKey: string, u
       title: name,
       type: 'LiveChannel' as const,
       cover: bestLogo,
-      sources: sources.length > 1 ? sources : undefined,
+      sources,
     });
   }
 
@@ -128,44 +128,37 @@ export function playResultToSource(
 // ── Legacy Item-Level Converters ─────────────────────────────────────────────
 // These are still used by the list converters above
 
-export function vodItemToEntry(item: CatVodItem, siteKey: string, tid: string): EntryInfo {
+export function vodItemToEntry(
+  item: CatVodItem,
+  siteKey: string,
+  tid: string,
+  itemRef?: string,
+): EntryInfo {
   const vodId = String(item.vod_id);
   // msearch: IDs are Douban placeholders — browsing them fans out to a
   // cross-source search in listEntry, so they stay Folders. Every other vod
   // is a Digipak: listEntry resolves it via spider.detail into a flat episode
   // list, so a movie is just a single-episode Digipak and a series has N.
   const type = vodId.startsWith('msearch:') ? 'Folder' : 'Digipak';
+  const episodes = parseEpisodes(item);
+  const childCount = episodes.length;
+  const quality = episodes[0]?.name.trim() || item.vod_remarks?.trim() || null;
   return {
-    ref: encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
+    ref: itemRef ?? encodeRef({ type: 'vod', key: siteKey, tid, id: vodId }),
     title: item.vod_name ?? vodId,
     type,
-    cover: item.vod_pic ?? null,
-    overview: item.vod_blurb ?? item.vod_content ?? null,
-    communityRating: item.vod_score ? parseFloat(item.vod_score) : null,
-    genres: item.type_name ? [item.type_name] : null,
-  };
-}
-
-export function vodDetailToEntryInfo(item: CatVodDetail): EntryInfo {
-  const { sources, urlGroups } = alignPlayFields(item);
-
-  const episodeCount = sources.flatMap((src, i) =>
-    (urlGroups[i] ?? '').split('#')
-      .map((ep) => ep.trim())
-      .filter(Boolean)
-  ).length;
-
-  return {
-    ref:         item.vod_id ? String(item.vod_id) : '',
-    title:       item.vod_name ?? '',
-    type:        'Movie',
-    cover:       item.vod_pic ?? null,
-    overview:    item.vod_content ?? item.vod_blurb ?? null,
-    childCount:  episodeCount,
-    communityRating: item.vod_score ? parseFloat(item.vod_score) : null,
-    genres:      item.type_name ? [item.type_name] : null,
-    backdrop:    item.vod_pic ? [item.vod_pic] : [],
-    year:        item.vod_year ? parseInt(item.vod_year, 10) : null,
+    cover: item.vod_pic?.trim() || null,
+    overview: cleanOverview(item.vod_blurb) ?? cleanOverview(item.vod_content),
+    childCount: childCount > 0 ? childCount : null,
+    communityRating: Number.isFinite(Number(item.vod_score)) ? Number(item.vod_score) : null,
+    genres: splitNames(item.type_name),
+    actors: splitNames(item.vod_actor),
+    directors: splitNames(item.vod_director),
+    areas: splitNames(item.vod_area),
+    languages: splitNames(item.vod_lang),
+    backdrop: [],
+    year: Number.isFinite(Number.parseInt(item.vod_year ?? '', 10)) ? Number.parseInt(item.vod_year ?? '', 10) : null,
+    quality,
   };
 }
 
@@ -178,7 +171,7 @@ export interface ParsedEpisode {
   url: string;
 }
 
-export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
+export function parseEpisodes(item: CatVodItem): ParsedEpisode[] {
   const { sources, urlGroups } = alignPlayFields(item);
   const episodes: ParsedEpisode[] = [];
 
@@ -198,6 +191,17 @@ export function parseEpisodes(item: CatVodDetail): ParsedEpisode[] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function splitNames(value?: string | null): string[] | null {
+  const names = (value ?? '').split(/[\s,，、/]+/).map((p) => p.trim()).filter(Boolean);
+  return names.length > 0 ? names : null;
+}
+
+function cleanOverview(value?: string | null): string | null {
+  const trimmed = value?.replace(/<[^>]+>/g, '').trim();
+  return trimmed ? trimmed : null;
+}
+
+
 function splitField(s?: string): string[] {
   return (s ?? '').split('$$$').map((p) => p.trim()).filter(Boolean);
 }
@@ -206,7 +210,7 @@ function splitField(s?: string): string[] {
 // omit vod_play_from entirely when there is a single play source, so a literal
 // split would yield zero sources and drop every episode — pad with empty-flag
 // entries to match the url groups in that case.
-function alignPlayFields(item: CatVodDetail): { sources: string[]; urlGroups: string[] } {
+function alignPlayFields(item: CatVodItem): { sources: string[]; urlGroups: string[] } {
   const sources   = splitField(item.vod_play_from);
   const urlGroups = splitField(item.vod_play_url);
   while (sources.length < urlGroups.length) sources.push('');

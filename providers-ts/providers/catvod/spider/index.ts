@@ -1,4 +1,4 @@
-import type { CatVodSpider } from './types.js';
+import type { CatVodDetailResult, CatVodSpider } from './types.js';
 import type { SiteEntry, LiveEntry, CatVodConfig } from '../config.js';
 import cmsHandler from './cms.js';
 import jarHandler from './jar.js';
@@ -62,6 +62,8 @@ async function dumpResult(key: string, method: string, result: unknown): Promise
 // Wraps a spider so every method call dumps its result before returning.
 
 function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
+  let detailCacheKey: string | null = null;
+  let detailCacheResult: CatVodDetailResult | null = null;
   const spider: CatVodSpider = {
     async home(filter?: boolean) {
       const result = await inner.home(filter);
@@ -76,7 +78,11 @@ function wrapSpider(inner: CatVodSpider, key: string): CatVodSpider {
     },
 
     async detail(ids) {
+      const cacheKey = JSON.stringify(ids);
+      if (detailCacheKey === cacheKey && detailCacheResult) return detailCacheResult;
       const result = await inner.detail(ids);
+      detailCacheKey = cacheKey;
+      detailCacheResult = result;
       await dumpResult(key, `detail-${ids.join(',')}`, result);
       return result;
     },

@@ -93,7 +93,10 @@ class DetailViewModel(
                     _entryInfo.value = initialInfo
                     Timber.d("Using cached EntryInfo: type=${initialInfo.type}")
                 }
-                loadSubEntries(c)
+                withContext(Dispatchers.IO) {
+                    refreshHeader(c)
+                    loadSubEntries(c)
+                }
             } catch (e: Exception) {
                 Timber.e(e, "initialize failed for endpointId=$endpointId")
             }

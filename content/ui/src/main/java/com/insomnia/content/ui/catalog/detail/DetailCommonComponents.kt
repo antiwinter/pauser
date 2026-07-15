@@ -5,6 +5,7 @@ package com.insomnia.content.ui.catalog.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -85,7 +86,7 @@ fun DetailHeader(viewModel: DetailViewModel) {
 @Composable
 fun DetailOverviewShell(
     viewModel: DetailViewModel,
-    page1Content: @Composable () -> Unit,
+    page1Content: @Composable BoxScope.() -> Unit,
 ) {
     val entryInfo by viewModel.entryInfo.collectAsState()
     val info = entryInfo ?: return
@@ -98,7 +99,10 @@ fun DetailOverviewShell(
             userScrollEnabled = false,
         ) { page ->
             when (page) {
-                0 -> page1Content()
+                0 -> Box(modifier = Modifier.fillMaxSize()) {
+                    DetailBackdrop(backdropUrl = info.backdrop.firstOrNull() ?: info.cover)
+                    page1Content()
+                }
                 1 -> DetailPage2(entryInfo = info)
             }
         }
@@ -113,7 +117,7 @@ fun DetailOverviewShell(
 @Composable
 private fun DetailPage2(entryInfo: EntryInfo) {
     Box(modifier = Modifier.fillMaxSize()) {
-        DetailBackdrop(backdropUrl = entryInfo.backdrop.getOrNull(1) ?: entryInfo.backdrop.firstOrNull())
+        DetailBackdrop(backdropUrl = entryInfo.backdrop.getOrNull(1) ?: entryInfo.backdrop.firstOrNull() ?: entryInfo.cover)
 
         Column(
             modifier = Modifier
@@ -178,19 +182,21 @@ fun DetailBadges(
     val info = entryInfo ?: return
     val mediaCodecs by (playerController?.mediaCodecs
         ?: MutableStateFlow(emptyList<MediaCodecInfo>())).collectAsState()
-    val resolution = widthToResolutionLabel(info.width)
+    val resolution = info.quality?.takeIf { it.isNotBlank() } ?: widthToResolutionLabel(info.width)
     val videoCodec = mediaCodecs.firstOrNull()
     val audioCodecs = mediaCodecs.drop(1)
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         info.communityRating?.let { Badge("★ ${"%.1f".format(it)}") }
         info.year?.let { Badge(it.toString()) }
-        if (resolution.isNotEmpty()) Badge(resolution)
+        if (resolution.isNotBlank()) Badge(resolution)
         videoCodec?.bitDepth?.let { Badge("${it}bit") }
         videoCodec?.let { Badge(it.codec.uppercase()) }
         audioCodecs.forEach { Badge(it.codec.uppercase()) }
         info.officialRating?.let { Badge(it) }
         info.genres?.take(3)?.forEach { Badge(it) }
+        info.areas?.take(2)?.forEach { Badge(it) }
+        info.languages?.take(2)?.forEach { Badge(it) }
     }
 }
 
@@ -223,6 +229,28 @@ fun widthToResolutionLabel(width: Int?): String = when {
 }
 
 /** Overview text (snippet mode) */
+@Composable
+fun DetailCredits(entryInfo: EntryInfo) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        DetailCreditRow("Director", entryInfo.directors)
+        DetailCreditRow("Actor", entryInfo.actors)
+        DetailCreditRow("Area", entryInfo.areas)
+        DetailCreditRow("Language", entryInfo.languages)
+    }
+}
+
+@Composable
+private fun DetailCreditRow(label: String, values: List<String>?) {
+    val text = values?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }?.joinToString(" / ") ?: return
+    Text(
+        text = "$label: $text",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun DetailOverviewSnippet(

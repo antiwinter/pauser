@@ -2,9 +2,7 @@ package com.insomnia.content.ui.catalog.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -107,41 +105,38 @@ fun DigipakDetailScreen(
     val listState = rememberLazyListState()
 
     DetailOverviewShell(viewModel = vm) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailHeader(viewModel = vm)
+            DetailBadges(viewModel = vm, playerController = playerController)
+            DetailCredits(entryInfo = info)
+            DetailButtons(viewModel = vm)
+            info.overview?.let { DetailOverviewSnippet(it) }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                DetailHeader(viewModel = vm)
-                DetailBadges(viewModel = vm, playerController = playerController)
-                DetailButtons(viewModel = vm)
-                info.overview?.let { DetailOverviewSnippet(it) }
+            if (children.isNotEmpty()) {
+                DigipakChildren(
+                    listState = listState,
+                    children = children,
+                    subEntryIndex = subEntryIndex,
+                    imageLoader = imageLoader,
+                    onFocusChild = { vm.setSubEntry(it) },
+                    onPlayChild = { playChild() },
+                )
+            }
 
-                if (children.isNotEmpty()) {
-                    DigipakChildren(
-                        listState = listState,
-                        children = children,
-                        subEntryIndex = subEntryIndex,
-                        imageLoader = imageLoader,
-                        onFocusChild = { vm.setSubEntry(it) },
-                        onPlayChild = { playChild() },
-                    )
-                }
-
-                if (children.size > UI_EPISODE_PAGE_SIZE) {
-                    TextButtonsRow(
-                        labels = episodePageLabels(children.size),
-                        selectedIndex = (subEntryIndex ?: 0) / UI_EPISODE_PAGE_SIZE,
-                        onSelect = { page ->
-                            scope.launch { listState.scrollToItem(page * UI_EPISODE_PAGE_SIZE) }
-                        },
-                    )
-                }
+            if (children.size > UI_EPISODE_PAGE_SIZE) {
+                TextButtonsRow(
+                    labels = episodePageLabels(children.size),
+                    selectedIndex = (subEntryIndex ?: 0) / UI_EPISODE_PAGE_SIZE,
+                    onSelect = { page ->
+                        scope.launch { listState.scrollToItem(page * UI_EPISODE_PAGE_SIZE) }
+                    },
+                )
             }
         }
     }

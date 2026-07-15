@@ -124,6 +124,8 @@ export const BROWSE_FIELDS = [
   'CommunityRating',
   'Genres',
   'Studios',
+  'People',
+  'ProductionLocations',
   'ProductionYear',
   'ProviderIds',
   'IndexNumber',

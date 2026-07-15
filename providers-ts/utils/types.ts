@@ -140,6 +140,10 @@ export interface EntryInfo {
   genres?: string[] | null;
   communityRating?: number | null;
   studios?: string[] | null;
+  actors?: string[] | null;
+  directors?: string[] | null;
+  areas?: string[] | null;
+  languages?: string[] | null;
   etag?: string | null;
   indexNumber?: number | null;
   overview?: string | null;
@@ -155,6 +159,7 @@ export interface EntryInfo {
   width?: number | null;
   height?: number | null;
   officialRating?: string | null;
+  quality?: string | null;
   filename?: string | null;
   sources?: PlaybackSource[] | null;
 }

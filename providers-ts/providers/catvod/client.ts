@@ -11,6 +11,7 @@ import {
   parseEpisodes,
   categoryListToFolders,
   vodListToEntries,
+  vodItemToEntry,
   liveChannelsToEntries,
   playResultToSource,
 } from "./mapper.js";
@@ -60,16 +61,12 @@ export async function listEntry(
   if (location === null) return await listRoot();
   const ref = decodeRef(location);
   if (ref.type === 'unsupported') return { items: [], totalCount: 0 };
-  const pg = startIndex === 0 ? 1 : Math.floor(startIndex / limit) + 1;
+  const pg = limit > 0 ? Math.floor(startIndex / limit) + 1 : 1;
   const spider = getSpider(ref.key);
 
   if (ref.type === "site") {
     const result = await spider.home();
-    const all = categoryListToFolders(result.class ?? [], ref.key);
-    return {
-      items: all.items.slice(startIndex, startIndex + limit),
-      totalCount: all.totalCount,
-    };
+    return categoryListToFolders(result.class ?? [], ref.key);
   }
 
   if (ref.type === "cat") {
@@ -91,7 +88,7 @@ export async function listEntry(
       if (!title) return { items: [], totalCount: 0 };
       const results = await search(state, '', title);
       return {
-        items: results.slice(startIndex, startIndex + limit),
+        items: results,
         totalCount: results.length,
       };
     }
@@ -99,7 +96,7 @@ export async function listEntry(
     const detail = detailResult.list?.[0];
     if (!detail) return { items: [], totalCount: 0 };
     const eps = parseEpisodes(detail);
-    const items = eps.map((ep, epIndex) => ({
+    const items = eps.map((ep, epIndex): EntryInfo => ({
       ref: encodeRef({
         type: "ep",
         key: ref.key,
@@ -113,7 +110,7 @@ export async function listEntry(
       cover: detail.vod_pic ?? null,
     }));
     return {
-      items: items.slice(startIndex, startIndex + limit),
+      items,
       totalCount: items.length,
     };
   }
@@ -123,11 +120,7 @@ export async function listEntry(
     const result = await spider.channels();
     const liveEntry = getConfig().sites[ref.key];
     const ua = liveEntry && liveEntry.type === 'live' ? liveEntry.ua : undefined;
-    const all = liveChannelsToEntries(result.channels, ref.key, ua);
-    return {
-      items: all.items.slice(startIndex, startIndex + limit),
-      totalCount: all.totalCount,
-    };
+    return liveChannelsToEntries(result.channels, ref.key, ua);
   }
 
   return { items: [], totalCount: 0 };
@@ -192,19 +185,7 @@ export async function getEntries(
         const spider = getSpider(ref.key);
         const detail = (await spider.detail([ref.id])).list?.[0];
         if (detail) {
-          const eps = parseEpisodes(detail);
-          out.push({
-            ref: itemRef,
-            title: detail.vod_name ?? ref.id,
-            type: 'Digipak',
-            cover: detail.vod_pic ?? null,
-            overview: detail.vod_content ?? detail.vod_blurb ?? null,
-            childCount: eps.length,
-            communityRating: detail.vod_score ? parseFloat(detail.vod_score) : null,
-            genres: detail.type_name ? [detail.type_name] : null,
-            backdrop: detail.vod_pic ? [detail.vod_pic] : [],
-            year: detail.vod_year ? parseInt(detail.vod_year, 10) : null,
-          });
+          out.push(vodItemToEntry(detail, ref.key, ref.tid, itemRef));
           continue;
         }
       } catch { /* fall through to placeholder */ }
@@ -243,10 +224,8 @@ export async function getPlaybackSources(
   const ref = decodeRef(itemRef);
   if (ref.type === 'unsupported') throw new Error("Unsupported ref type");
 
-  const spider = getSpider(ref.key);
-
-  // Direct episode ref → resolve flag and URL from vod detail
   if (ref.type === "ep") {
+    const spider = getSpider(ref.key);
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) throw new Error("Vod not found");
@@ -259,6 +238,7 @@ export async function getPlaybackSources(
 
   // Vod ref with single episode → resolve inline
   if (ref.type === "vod") {
+    const spider = getSpider(ref.key);
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) throw new Error("No episodes found");
@@ -268,14 +248,8 @@ export async function getPlaybackSources(
     return [await resolvePlaySource(result)];
   }
 
-  // Live channel → resolve via spider
   if (ref.type === "live") {
-    if (!spider.channels) throw new Error("Live source has no channels");
-    const result = await spider.channels();
-    const channel = result.channels[ref.channelIndex];
-    if (!channel) throw new Error("Channel not found");
-    const playResult = await spider.play('', channel.url);
-    return [await resolvePlaySource(playResult)];
+    throw new Error("CatVod live entries already include playback sources; host should use EntryInfo.sources instead of calling getPlaybackSources.");
   }
 
   throw new Error(

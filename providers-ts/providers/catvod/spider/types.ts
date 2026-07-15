@@ -12,6 +12,10 @@
 export interface CatVodItem {
   /** Unique identifier for this video [standard] */
   vod_id: string | number;
+  /** Direct category ID [MacCMS] */
+  type_id?: string | number;
+  /** Parent category ID [MacCMS] */
+  type_id_1?: string | number;
   /** Display title [standard] */
   vod_name?: string;
   /** Cover/thumbnail image URL [standard] */
@@ -28,6 +32,8 @@ export interface CatVodItem {
   vod_remarks?: string;
   /** Production region, e.g. "大陆", "美国" [standard] — Vod.vodArea / Movie.Video.area */
   vod_area?: string;
+  /** Audio/subtitle language label, e.g. "英语" [MacCMS] */
+  vod_lang?: string;
   /** Cast list [standard] — Vod.vodActor / Movie.Video.actor */
   vod_actor?: string;
   /** Director name [standard] — Vod.vodDirector / Movie.Video.director */
@@ -36,16 +42,16 @@ export interface CatVodItem {
   vod_tag?: string;
   /** Category name this item belongs to [standard] */
   type_name?: string;
+  /** Play source names separated by "$$$", e.g. "youku$$$qq$$$iqiyi" [standard] */
+  vod_play_from?: string;
+  /** Episode URLs separated by "$$$" for sources, "#" for episodes, "$" between name and URL. */
+  vod_play_url?: string;
 }
 
 // ── CatVodDetail ─────────────────────────────────────────────────────────────
 
 export interface CatVodDetail extends CatVodItem {
-  /** Play source names separated by "$$$", e.g. "youku$$$qq$$$iqiyi" [standard] */
-  vod_play_from?: string;
-  /** Episode URLs separated by "$$$" for sources, "#" for episodes, "$" between name and URL.
-   *  e.g. "EP1$http://url1#EP2$http://url2$$$EP1$http://url3" [standard] */
-  vod_play_url?: string;
+  /** Detail responses have the same shape as list items; some sites only populate fields here. */
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────

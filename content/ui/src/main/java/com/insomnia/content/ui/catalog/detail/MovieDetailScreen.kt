@@ -1,10 +1,8 @@
 package com.insomnia.content.ui.catalog.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -46,28 +44,25 @@ fun MovieDetailScreen(
     }
 
     DetailOverviewShell(viewModel = viewModel) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            DetailBackdrop(backdropUrl = info.backdrop.firstOrNull())
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                DetailHeader(viewModel = viewModel)
-                DetailBadges(viewModel = viewModel, playerController = playerController)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MoviePlayButton(
-                        resumeMs = resumeMs,
-                        onResume = resumePlay,
-                        onPlayFromStart = playFromStart,
-                    )
-                    DetailButtons(viewModel = viewModel)
-                }
-                info.overview?.let { DetailOverviewSnippet(it) }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailHeader(viewModel = viewModel)
+            DetailBadges(viewModel = viewModel, playerController = playerController)
+            DetailCredits(entryInfo = info)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MoviePlayButton(
+                    resumeMs = resumeMs,
+                    onResume = resumePlay,
+                    onPlayFromStart = playFromStart,
+                )
+                DetailButtons(viewModel = viewModel)
             }
+            info.overview?.let { DetailOverviewSnippet(it) }
         }
     }
 }
