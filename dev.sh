@@ -71,7 +71,15 @@ if [[ "$ACTION" == "ls" ]]; then
 fi
 
 if [[ "$ACTION" == "emu" ]]; then
-  EMU="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}/emulator/emulator"
+  EMU="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+  if [[ -z "$EMU" ]]; then
+    if [[ -d "$HOME/Library/Android/sdk" ]]; then
+      EMU="$HOME/Library/Android/sdk"
+    elif [[ -d "$HOME/Android/Sdk" ]]; then
+      EMU="$HOME/Android/Sdk"
+    fi
+  fi
+  EMU="${EMU:-}/emulator/emulator"
   [[ -x "$EMU" ]] || EMU="emulator"
   pkill -f 'qemu-system|emulator.*-avd' 2>/dev/null || true
   AVD="$("$EMU" -list-avds 2>/dev/null | grep -iE 'tv|television' | head -1)"
@@ -80,7 +88,9 @@ if [[ "$ACTION" == "emu" ]]; then
     exit 1
   fi
   echo "Starting $AVD"
-  nohup "$EMU" -avd "$AVD" -no-snapshot-load -no-snapshot-save >/tmp/insomnia-emulator.log 2>&1 &
+  nohup "$EMU" -avd "$AVD" -no-snapshot-load -no-snapshot-save \
+    -crash-report-mode disabled \
+    >/tmp/insomnia-emulator.log 2>&1 &
   disown
   exit 0
 fi
