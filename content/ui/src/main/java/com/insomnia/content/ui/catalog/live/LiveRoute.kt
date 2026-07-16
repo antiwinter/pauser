@@ -17,9 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavHostController
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
+import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.player.EntryStateKeys
 import com.insomnia.player.ItemListInfo
@@ -27,6 +27,7 @@ import com.insomnia.player.PlayerSurfaceState
 import com.insomnia.storage.decodeSeriesProgress
 import com.insomnia.storage.encodeSeriesProgress
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -49,7 +50,7 @@ fun LiveRoute(
 ) {
     val scope = rememberCoroutineScope()
 
-    var client by remember { mutableStateOf<EndpointClient?>(null) }
+    var client by remember { mutableStateOf<CachingEndpointClient?>(null) }
     var channels by remember { mutableStateOf<List<EntryInfo>>(emptyList()) }
     var currentIndex by remember { mutableIntStateOf(0) }
 
@@ -69,7 +70,9 @@ fun LiveRoute(
         }
         client = c
         playerController.setClient(c)
-        val loaded = withContext(Dispatchers.IO) { c.listEntry(livepakRef, 0, 500) }.items
+        val loaded = withContext(Dispatchers.IO) {
+            c.listEntry(livepakRef, 0, 500).first { it.isComplete }.items
+        }
         if (loaded.isEmpty()) {
             Timber.w("LiveRoute: no channels under $livepakRef")
             return@LaunchedEffect

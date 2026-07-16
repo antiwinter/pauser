@@ -1,5 +1,6 @@
 package com.insomnia.content.contract
 
+import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.proxy.contract.ProxyClient
 import com.insomnia.storage.EndpointEntity
 
@@ -10,8 +11,8 @@ object EndpointClientRegistryHolder {
 }
 
 interface EndpointClientAccess {
-    suspend fun getOrCreate(endpointId: String): EndpointClient?
-    suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient?
+    suspend fun getOrCreate(endpointId: String): CachingEndpointClient?
+    suspend fun registerHandle(endpointId: String, entity: EndpointEntity): CachingEndpointClient?
     suspend fun update(endpointId: String, entity: EndpointEntity)
     suspend fun remove(endpointId: String)
     suspend fun buildProxyClient(proxyId: String?): ProxyClient?

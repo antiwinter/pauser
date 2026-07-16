@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.insomnia.content.epcache.CachingEndpointClient
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.core.osd.gOSD
 import com.insomnia.player.ItemListInfo
@@ -88,8 +87,8 @@ class PlayerController(
         _switchItemCallback?.invoke(index)
     }
 
-    fun setClient(client: EndpointClient) {
-        _client = client as CachingEndpointClient
+    fun setClient(client: CachingEndpointClient) {
+        _client = client
     }
 
     fun prepare(

@@ -21,6 +21,18 @@ interface ProviderStream {
     fun close()
 }
 
+// --- Progressive entry emission ---
+
+data class EntryEmission(
+    val items: List<EntryInfo>,
+    val totalCount: Int?,
+    val isComplete: Boolean = false,
+)
+
+interface EntryEmitter {
+    suspend fun emit(items: List<EntryInfo>, totalCount: Int? = null, isComplete: Boolean = false)
+}
+
 // --- Provider factory ---
 
 interface InsomniaProvider {
@@ -44,6 +56,7 @@ abstract class EndpointClient {
     open var protocol: String = ""
     open val progressIntervalMs: Long = 10_000L
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
+    internal var entryEmitter: EntryEmitter? = null
     abstract suspend fun listEntry(
         location: String?,
         startIndex: Int,

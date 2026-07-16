@@ -3,11 +3,10 @@ package com.insomnia.content.ui.catalog.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
-import com.insomnia.content.contract.EntryList
 import com.insomnia.content.contract.QueryOptions
+import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.content.ui.catalog.ArtUrlInjector
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +23,8 @@ import timber.log.Timber
  * Navigate back → ViewModel is still alive → no re-fetch needed.
  *
  * The data layer (CachingEndpointClient) handles network dedup:
- *   - First visit: fetches from network
- *   - Return visit: serves from cache (if stale, refreshes in background)
+ *   - First visit: fetches from network (or cache miss), emits progressively
+ *   - Return visit: serves from cache (single immediate emission)
  */
 class BrowseViewModel(
     private val location: String,
@@ -46,8 +45,8 @@ class BrowseViewModel(
     private val _lastFocusedItemRef = MutableStateFlow<String?>(null)
     val lastFocusedItemRef: StateFlow<String?> = _lastFocusedItemRef.asStateFlow()
 
-    private val _client = MutableStateFlow<EndpointClient?>(null)
-    val client: StateFlow<EndpointClient?> = _client.asStateFlow()
+    private val _client = MutableStateFlow<CachingEndpointClient?>(null)
+    val client: StateFlow<CachingEndpointClient?> = _client.asStateFlow()
 
     val imageLoader: ImageLoader?
         get() = _client.value?.imageLoader
@@ -81,48 +80,40 @@ class BrowseViewModel(
             Timber.d("load() skipped — items already present for location=$location")
             return
         }
-        if (_client.value == null) return
+        val c = _client.value ?: return
         Timber.d("load() fetching for location=$location")
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
             runCatching {
-                listPage(0, PAGE_SIZE)
-            }.fold(
-                onSuccess = { result ->
-                    _items.value = result.items
-                    _totalCount.value = result.totalCount
-                    Timber.d("load() complete: ${result.items.size}/${result.totalCount}")
-                },
-                onFailure = { e ->
-                    _error.value = e.message ?: "Unknown error"
-                    Timber.e(e, "load() failed")
-                },
-            )
+                collectList(c, startIndex = 0)
+            }.onFailure { e ->
+                _error.value = e.message ?: "Unknown error"
+                Timber.e(e, "load() failed")
+            }
             _loading.value = false
         }
     }
 
-    suspend fun listPage(startIndex: Int, limit: Int): EntryList {
-        val c = _client.value ?: throw IllegalStateException("BrowseViewModel not initialized")
+    private suspend fun collectList(c: CachingEndpointClient, startIndex: Int, append: Boolean = false) {
         val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
-        return withContext(Dispatchers.IO) {
-            c.listEntry(location, startIndex, limit, queryOptions)
-        }.let { result ->
-            result.copy(items = ArtUrlInjector.apply(result.items, c.protocol, eid))
-        }
+        c.listEntry(location, startIndex, PAGE_SIZE, queryOptions)
+            .collect { emission ->
+                val injectedItems = ArtUrlInjector.apply(emission.items, c.protocol, eid)
+                _items.value = if (append) _items.value + injectedItems else injectedItems
+                _totalCount.value = emission.totalCount ?: _items.value.size
+                if (emission.isComplete) {
+                    Timber.d("listEntry complete at startIndex=$startIndex: ${emission.items.size}/${emission.totalCount}")
+                }
+            }
     }
 
     fun refresh() {
-        if (_client.value == null || _items.value.isEmpty()) return
+        val c = _client.value ?: return
+        if (_items.value.isEmpty()) return
         viewModelScope.launch {
             runCatching {
-                val limit = _items.value.size.coerceAtLeast(PAGE_SIZE)
-                listPage(0, limit)
-            }.onSuccess { result ->
-                _items.value = result.items
-                _totalCount.value = result.totalCount
-                Timber.d("refresh() complete: ${result.items.size}/${result.totalCount}")
+                collectList(c, startIndex = 0)
             }.onFailure { e ->
                 Timber.e(e, "refresh() failed")
             }
@@ -130,16 +121,14 @@ class BrowseViewModel(
     }
 
     fun loadMore() {
+        val c = _client.value ?: return
         val currentItems = _items.value
         val total = _totalCount.value
         if (_loading.value || currentItems.size >= total) return
         viewModelScope.launch {
             _loading.value = true
             runCatching {
-                listPage(currentItems.size, PAGE_SIZE)
-            }.onSuccess { result ->
-                _items.value = currentItems + result.items
-                _totalCount.value = result.totalCount
+                collectList(c, startIndex = currentItems.size, append = true)
             }.onFailure { e ->
                 _error.value = e.message ?: "Unknown error"
             }

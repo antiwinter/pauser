@@ -261,14 +261,16 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 
                 Timber.d("[debug browse] location=$location")
 
-                val result = runCatching { instance.listEntry(location, start, limit) }.getOrElse {
+                val emission = runCatching {
+                    instance.listEntry(location, start, limit).first { it.isComplete }
+                }.getOrElse {
                     Timber.e(it, "listEntry error"); return@get call.respond500(it.message)
                 }
                 val dto = EntryListDto(
-                    items = result.items.map { e ->
+                    items = emission.items.map { e ->
                         EntryInfoDto(ref = e.ref, title = e.title, type = e.type, cover = e.cover)
                     },
-                    totalCount = result.totalCount,
+                    totalCount = emission.totalCount ?: emission.items.size,
                 )
                 call.respondText(json.encodeToString(dto), ContentType.Application.Json)
             }
@@ -278,10 +280,12 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                 val scope = call.request.queryParameters["scope"] ?: ""
                 val query = call.request.queryParameters["q"] ?: return@get call.respond400("missing q")
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
-                val results = runCatching { instance.search(scope, SearchQuery(term = query)).items }.getOrElse {
+                val emission = runCatching {
+                    instance.search(scope, SearchQuery(term = query)).first { it.isComplete }
+                }.getOrElse {
                     Timber.e(it, "search error"); return@get call.respond500(it.message)
                 }
-                val dtos = results.map { e ->
+                val dtos = emission.items.map { e ->
                     EntryInfoDto(ref = e.ref, title = e.title, type = e.type, cover = e.cover)
                 }
                 call.respondText(json.encodeToString(dtos), ContentType.Application.Json)

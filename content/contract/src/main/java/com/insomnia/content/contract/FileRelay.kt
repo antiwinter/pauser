@@ -1,5 +1,6 @@
 package com.insomnia.content.contract
 
+import com.insomnia.content.epcache.CachingEndpointClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -135,7 +136,7 @@ private class Handle(
  * pump runs under [FileRelay.withStream] and calls `readAt` directly — no InputStream bridge.
  */
 class FileRelayRecipe(
-    private val resolveClient: suspend (endpointId: String) -> EndpointClient?,
+    private val resolveClient: suspend (endpointId: String) -> CachingEndpointClient?,
 ) : StreamRelayRecipe {
     override suspend fun serve(params: Map<String, String>): StreamRelayResult? {
         val ep = params["ep"] ?: return null

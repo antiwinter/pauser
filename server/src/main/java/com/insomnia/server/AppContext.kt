@@ -1,7 +1,7 @@
 package com.insomnia.server
 
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.InsomniaProvider
+import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.server.debug.JarBridge
 import com.insomnia.storage.AppPrefsStore
 import com.insomnia.storage.EndpointDao
@@ -19,8 +19,8 @@ import java.io.File
 interface AppContext {
     fun getProviders(): List<InsomniaProvider>
     fun getProvider(protocol: String): InsomniaProvider?
-    suspend fun getClient(endpointId: String): EndpointClient?
-    suspend fun registerClient(endpointId: String, entity: EndpointEntity): EndpointClient?
+    suspend fun getClient(endpointId: String): CachingEndpointClient?
+    suspend fun registerClient(endpointId: String, entity: EndpointEntity): CachingEndpointClient?
     val endpointDao: EndpointDao
     val proxyDao: ProxyDao
     val entryStateStore: EntryStateStore

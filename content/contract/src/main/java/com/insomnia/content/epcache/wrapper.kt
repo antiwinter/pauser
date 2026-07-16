@@ -1,16 +1,19 @@
 package com.insomnia.content.epcache
 
+import com.insomnia.content.contract.EntryEmission
+import com.insomnia.content.contract.EntryEmitter
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.EntryList
 import com.insomnia.content.contract.EntryTag
 import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointValidationResult
+import com.insomnia.content.contract.FileRelay
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.contract.SearchQuery
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
-import com.insomnia.content.contract.FileRelay
 import com.insomnia.content.contract.UserDataMerge
+import com.insomnia.core.form.contract.QrResult
 import com.insomnia.player.EntryStateKeys
 import com.insomnia.player.PlaybackSource
 import com.insomnia.player.PlayingState
@@ -19,18 +22,32 @@ import com.insomnia.storage.EntryStateKey
 import com.insomnia.storage.EntryStateStore
 import com.insomnia.storage.StorageBindingsHolder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import coil3.ImageLoader
 
 /**
- * Decorator that wraps a real [EndpointClient] with transparent caching.
+ * Wrapper around an [EndpointClient] that adds caching and progressive entry emission.
  *
- * Cached methods: listEntry, getEntries, getTaggedEntries, search
- * Non-cached (always go to network): getPlaybackSources, test, openStream, getQr, pollQr
- * [updateEntryState]: local persist + cache patch, then delegate remote
+ * Cached methods (listEntry, search, getEntries, getTaggedEntries): serve from cache when fresh,
+ * otherwise fetch from delegate. Results are exposed as [Flow] of [EntryEmission] so consumers
+ * can display data as it arrives.
+ *
+ * Non-cached methods (test, getPlaybackSources, openStream, getQr, pollQr): always delegate.
+ *
+ * Progressive emission: providers can call [EndpointClient.entryEmitter] during execution to
+ * report partial results. The wrapper collects these into the Flow. If the provider doesn't
+ * emit, the final return value is emitted as the single complete result.
  */
 class CachingEndpointClient(
     private val delegate: EndpointClient,
-) : EndpointClient() {
+) {
 
     private val inheritableKeys = setOf(
         EntryStateKeys.SPEED,
@@ -40,69 +57,29 @@ class CachingEndpointClient(
 
     private val activeStreamRefs = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
 
-    override var imageLoader: coil3.ImageLoader?
-        get() = delegate.imageLoader
-        set(value) { delegate.imageLoader = value }
+    val endpointId: String get() = delegate.endpointId
+    val protocol: String get() = delegate.protocol
+    val imageLoader: ImageLoader? get() = delegate.imageLoader
+    val proxyClient: ProxyClient get() = delegate.proxyClient
+    val progressIntervalMs: Long get() = delegate.progressIntervalMs
 
-    override var proxyClient: ProxyClient
-        get() = delegate.proxyClient
-        set(value) { delegate.proxyClient = value }
+    // --- Non-cached delegates ---
 
-    override var endpointId: String
-        get() = delegate.endpointId
-        set(value) { delegate.endpointId = value }
+    suspend fun test(): EndpointValidationResult = delegate.test()
 
-    override var protocol: String
-        get() = delegate.protocol
-        set(value) { delegate.protocol = value }
+    suspend fun getPlaybackSources(itemRef: String, startMs: Long = 0L): List<PlaybackSource> =
+        delegate.getPlaybackSources(itemRef, startMs)
 
-    override suspend fun test(): EndpointValidationResult = delegate.test()
-
-    override suspend fun listEntry(
-        location: String?,
-        startIndex: Int,
-        limit: Int,
-        options: QueryOptions,
-    ): EntryList {
-        val key = EndpointCache.buildCacheKey("listEntry", endpointId, location, startIndex, limit, options)
-        return cachedList(key) { delegate.listEntry(location, startIndex, limit, options) }
-    }
-
-    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
-        val key = EndpointCache.buildCacheKey("search", endpointId, scopeLocation, query)
-        return cachedList(key) { delegate.search(scopeLocation, query) }
-    }
-
-    override suspend fun getEntries(itemRefs: List<String>): EntryList {
-        val key = EndpointCache.buildCacheKey("getEntries", endpointId, itemRefs)
-        return cachedList(key) { delegate.getEntries(itemRefs) }
-    }
-
-    override suspend fun getTaggedEntries(
-        tag: EntryTag,
-        scopeLocation: String?,
-        startIndex: Int,
-        limit: Int,
-        sortBy: SortField?,
-        sortOrder: SortOrder,
-    ): EntryList {
-        val key = EndpointCache.buildCacheKey(
-            "getTaggedEntries", endpointId, tag, scopeLocation, startIndex, limit, sortBy, sortOrder,
-        )
-        return cachedList(key) {
-            delegate.getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder)
+    suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
+        withContext(Dispatchers.IO) {
+            persistLocalEntryState(itemRef, key, value)
         }
+        delegate.updateEntryState(itemRef, key, value)
     }
 
-    private suspend fun cachedList(key: String, fetch: suspend () -> EntryList): EntryList {
-        val list = EndpointCache.get(key)
-            ?: fetch().also { EndpointCache.put(key, endpointId, it) }
-        return mergeEntryList(list)
-    }
-
-    override suspend fun getPlaybackSources(itemRef: String, startMs: Long): List<PlaybackSource> {
-        return delegate.getPlaybackSources(itemRef, startMs)
-    }
+    suspend fun openStream(itemRef: String) = delegate.openStream(itemRef)
+    suspend fun getQr(): QrResult.QrReady? = delegate.getQr()
+    suspend fun pollQr(token: String): QrResult = delegate.pollQr(token)
 
     suspend fun getPlaybackSpec(info: EntryInfo, startMs: Long): com.insomnia.player.PlaybackSpec {
         val sources = if (!info.sources.isNullOrEmpty()) {
@@ -137,13 +114,6 @@ class CachingEndpointClient(
             }
         }
         delegate.updateEntryState(info.ref, key, value)
-    }
-
-    override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {
-        withContext(Dispatchers.IO) {
-            persistLocalEntryState(itemRef, key, value)
-        }
-        delegate.updateEntryState(itemRef, key, value)
     }
 
     private suspend fun persistLocalEntryState(itemRef: String, key: String, value: String?) {
@@ -192,6 +162,96 @@ class CachingEndpointClient(
         }
     }
 
+    // --- Flow-based entry queries ---
+
+    fun listEntry(
+        location: String?,
+        startIndex: Int,
+        limit: Int,
+        options: QueryOptions = QueryOptions(),
+    ): Flow<EntryEmission> = progressiveFlow(
+        methodName = "listEntry",
+        location, startIndex, limit, options,
+        fetch = { delegate.listEntry(location, startIndex, limit, options) },
+    )
+
+    fun search(scopeLocation: String, query: SearchQuery): Flow<EntryEmission> = progressiveFlow(
+        methodName = "search",
+        scopeLocation, query,
+        fetch = { delegate.search(scopeLocation, query) },
+    )
+
+    fun getEntries(itemRefs: List<String>): Flow<EntryEmission> = progressiveFlow(
+        methodName = "getEntries",
+        itemRefs,
+        fetch = { delegate.getEntries(itemRefs) },
+    )
+
+    fun getTaggedEntries(
+        tag: EntryTag,
+        scopeLocation: String? = null,
+        startIndex: Int = 0,
+        limit: Int = 20,
+        sortBy: SortField? = null,
+        sortOrder: SortOrder = SortOrder.Descending,
+    ): Flow<EntryEmission> = progressiveFlow(
+        methodName = "getTaggedEntries",
+        tag, scopeLocation, startIndex, limit, sortBy, sortOrder,
+        fetch = { delegate.getTaggedEntries(tag, scopeLocation, startIndex, limit, sortBy, sortOrder) },
+    )
+
+    private fun progressiveFlow(
+        methodName: String,
+        vararg params: Any?,
+        fetch: suspend () -> EntryList,
+    ): Flow<EntryEmission> = flow {
+        val key = EndpointCache.buildCacheKey(methodName, endpointId, *params)
+
+        // Cache hit: single immediate emission
+        val cached = EndpointCache.get(key)
+        if (cached != null) {
+            val merged = mergeEntryList(cached)
+            emit(EntryEmission(merged.items, merged.totalCount, isComplete = true))
+            return@flow
+        }
+
+        // Cache miss: fetch via provider, collecting emissions
+        // Use `coroutineScope` so we can launch both the fetch and the collector concurrently
+        // while keeping `emit` calls on the FlowCollector's context.
+        kotlinx.coroutines.coroutineScope {
+            val emitter = ChannelEntryEmitter()
+            delegate.entryEmitter = emitter
+
+            val deferredResult = async(Dispatchers.IO) { fetch() }
+
+            try {
+                // Collect provider emissions as they arrive
+                var emittedComplete = false
+                emitter.asFlow().collect { emission ->
+                    emit(mergeEmission(emission))
+                    if (emission.isComplete) emittedComplete = true
+                }
+
+                val result = deferredResult.await()
+                EndpointCache.put(key, endpointId, result)
+
+                // If provider didn't emit its own completion, emit the final result
+                if (!emittedComplete) {
+                    val merged = mergeEntryList(result)
+                    emit(EntryEmission(merged.items, merged.totalCount, isComplete = true))
+                }
+            } finally {
+                emitter.close()
+                delegate.entryEmitter = null
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private suspend fun mergeEmission(emission: EntryEmission): EntryEmission {
+        val merged = mergeEntryList(EntryList(emission.items, emission.totalCount ?: 0))
+        return emission.copy(items = merged.items, totalCount = merged.totalCount)
+    }
+
     private suspend fun mergeEntryList(list: EntryList): EntryList {
         val store = StorageBindingsHolder.get().entryStateStore
         val merged = list.items.map { mergeEntry(it, store) }
@@ -204,16 +264,20 @@ class CachingEndpointClient(
         return if (userData != info.userData) info.copy(userData = userData) else info
     }
 
-    override suspend fun openStream(itemRef: String) =
-        delegate.openStream(itemRef)
-
-    override suspend fun getQr() = delegate.getQr()
-
-    override suspend fun pollQr(token: String) = delegate.pollQr(token)
-
     private fun evictStreamRefs(itemRef: String) {
         activeStreamRefs.remove(itemRef)?.forEach { ref ->
             FileRelay.evict(endpointId, ref)
         }
     }
+}
+
+private class ChannelEntryEmitter : EntryEmitter {
+    private val channel = Channel<EntryEmission>(Channel.BUFFERED)
+
+    override suspend fun emit(items: List<EntryInfo>, totalCount: Int?, isComplete: Boolean) {
+        channel.send(EntryEmission(items, totalCount, isComplete))
+    }
+
+    fun asFlow(): Flow<EntryEmission> = channel.consumeAsFlow()
+    fun close() = channel.close()
 }

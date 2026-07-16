@@ -27,11 +27,11 @@ class EndpointClientRegistry(
     private val appContext: android.content.Context,
 ) : EndpointClientAccess {
     private val mutex = Mutex()
-    private val clients = mutableMapOf<String, EndpointClient>()
+    private val clients = mutableMapOf<String, CachingEndpointClient>()
     private val proxyClients = mutableMapOf<String, ProxyClient>()
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun getOrCreate(endpointId: String): EndpointClient? = mutex.withLock {
+    override suspend fun getOrCreate(endpointId: String): CachingEndpointClient? = mutex.withLock {
         clients[endpointId] ?: run {
             val entity = endpointDao.getByEndpointId(endpointId) ?: return@withLock null
             val client = buildClient(entity) ?: return@withLock null
@@ -41,7 +41,7 @@ class EndpointClientRegistry(
         }
     }
 
-    override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): EndpointClient? =
+    override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): CachingEndpointClient? =
         mutex.withLock {
             val client = buildClient(entity) ?: return@withLock null
             val wrapped = CachingEndpointClient(client)

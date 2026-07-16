@@ -3,10 +3,10 @@ package com.insomnia.content.ui.catalog.search
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.SearchQuery
+import com.insomnia.content.epcache.CachingEndpointClient
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -31,8 +32,8 @@ class SearchViewModel : ViewModel() {
     private val _lastFocusedItemRef = MutableStateFlow<String?>(null)
     val lastFocusedItemRef: StateFlow<String?> = _lastFocusedItemRef.asStateFlow()
 
-    private val _client = MutableStateFlow<EndpointClient?>(null)
-    val client: StateFlow<EndpointClient?> = _client.asStateFlow()
+    private val _client = MutableStateFlow<CachingEndpointClient?>(null)
+    val client: StateFlow<CachingEndpointClient?> = _client.asStateFlow()
 
     val imageLoader: ImageLoader?
         get() = _client.value?.imageLoader
@@ -80,7 +81,9 @@ class SearchViewModel : ViewModel() {
                 } ?: throw IllegalStateException("No instance for $endpointId")
                 _client.value = c
                 searchFn = { q ->
-                    c.search(scopeLocation, SearchQuery(term = q)).items
+                    c.search(scopeLocation, SearchQuery(term = q))
+                        .first { it.isComplete }
+                        .items
                 }
                 initializedKey = key
             } catch (e: Exception) {

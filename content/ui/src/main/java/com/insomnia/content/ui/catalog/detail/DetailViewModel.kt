@@ -3,12 +3,12 @@ package com.insomnia.content.ui.catalog.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
 import com.insomnia.content.contract.EntryInfo
+import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.player.EntryStateKeys
 import com.insomnia.storage.AppPrefsStore
 import com.insomnia.storage.EntryStateKey
@@ -16,6 +16,7 @@ import com.insomnia.storage.StorageBindingsHolder
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,8 +64,8 @@ class DetailViewModel(
     private val _totalCount = MutableStateFlow(0)
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
 
-    private val _client = MutableStateFlow<EndpointClient?>(null)
-    val client: StateFlow<EndpointClient?> = _client.asStateFlow()
+    private val _client = MutableStateFlow<CachingEndpointClient?>(null)
+    val client: StateFlow<CachingEndpointClient?> = _client.asStateFlow()
 
     val imageLoader: ImageLoader?
         get() = _client.value?.imageLoader
@@ -143,12 +144,13 @@ class DetailViewModel(
         }
     }
 
-    private suspend fun refreshHeader(c: EndpointClient) {
-        val info = c.getEntries(listOf(itemRef)).items.firstOrNull() ?: return
-        _entryInfo.value = info
+    private suspend fun refreshHeader(c: CachingEndpointClient) {
+        val result = c.getEntries(listOf(itemRef))
+            .first { it.isComplete }
+        _entryInfo.value = result.items.firstOrNull()
     }
 
-    private suspend fun refreshLists(c: EndpointClient) {
+    private suspend fun refreshLists(c: CachingEndpointClient) {
         loadSubEntries(c)
         when (_entryInfo.value?.type) {
             "Series" -> refreshEpisodes()
@@ -162,9 +164,10 @@ class DetailViewModel(
         fetchEpisodePage(subIdx, pageStart(epIdx))
     }
 
-    private suspend fun loadSubEntries(c: EndpointClient) {
+    private suspend fun loadSubEntries(c: CachingEndpointClient) {
         if (_subEntries.value.isNotEmpty()) return
         val result = c.listEntry(itemRef, 0, 500)
+            .first { it.isComplete }
         _subEntries.value = result.items
         Timber.d("loadSubEntries: ${result.items.size} items")
     }
@@ -209,10 +212,11 @@ class DetailViewModel(
 
         val result = withContext(Dispatchers.IO) {
             c.listEntry(subEntry.ref, start, LOADER_PAGE_SIZE, episodeListOptions)
+                .first { it.isComplete }
         }
 
-        if (result.totalCount > 0) {
-            _totalCount.value = result.totalCount
+        if ((result.totalCount ?: 0) > 0) {
+            _totalCount.value = result.totalCount ?: 0
         }
 
         val items = result.items
