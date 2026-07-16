@@ -9,7 +9,6 @@ import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointValidationResult
 import com.insomnia.content.contract.FileRelay
 import com.insomnia.content.contract.QueryOptions
-import com.insomnia.content.contract.SearchQuery
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
 import com.insomnia.content.contract.UserDataMerge
@@ -35,7 +34,7 @@ import coil3.ImageLoader
 /**
  * Wrapper around an [EndpointClient] that adds caching and progressive entry emission.
  *
- * Cached methods (listEntry, search, getEntries, getTaggedEntries): serve from cache when fresh,
+ * Cached methods (listEntry, getEntries, getTaggedEntries): serve from cache when fresh,
  * otherwise fetch from delegate. Results are exposed as [Flow] of [EntryEmission] so consumers
  * can display data as it arrives.
  *
@@ -173,12 +172,6 @@ class CachingEndpointClient(
         methodName = "listEntry",
         location, startIndex, limit, options,
         fetch = { delegate.listEntry(location, startIndex, limit, options) },
-    )
-
-    fun search(scopeLocation: String, query: SearchQuery): Flow<EntryEmission> = progressiveFlow(
-        methodName = "search",
-        scopeLocation, query,
-        fetch = { delegate.search(scopeLocation, query) },
     )
 
     fun getEntries(itemRefs: List<String>): Flow<EntryEmission> = progressiveFlow(

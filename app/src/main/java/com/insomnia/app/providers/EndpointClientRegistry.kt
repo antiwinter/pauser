@@ -103,6 +103,10 @@ class EndpointClientRegistry(
         getOrBuildProxyClient(proxyId)
     }
 
+    override suspend fun allEndpointIds(): List<String> = mutex.withLock {
+        clients.keys.toList()
+    }
+
     private suspend fun buildClient(entity: EndpointEntity): EndpointClient? {
         val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()
             ?: return null

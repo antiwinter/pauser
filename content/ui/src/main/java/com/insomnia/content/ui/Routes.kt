@@ -21,7 +21,6 @@ object Routes {
     const val BROWSE = "browse/{endpointId}/{ref}"
     const val DETAIL = "detail/{endpointId}/{ref}"
     const val LIVE_PLAYER = "live_player/{endpointId}/{ref}"
-    const val SEARCH = "search/{endpointId}/{scopeLocation}"
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
     const val IMAGE_VIEWER = "image_viewer/{endpointId}/{itemRef}"
@@ -36,8 +35,6 @@ object Routes {
         "detail/${Uri.encode(endpointId)}/${Uri.encode(entry.ref)}"
     fun livePlayer(endpointId: String, entry: EntryInfo) =
         "live_player/${Uri.encode(endpointId)}/${Uri.encode(entry.ref)}"
-    fun search(endpointId: String, scopeLocationRaw: String) =
-        "search/${Uri.encode(endpointId)}/${Uri.encode(scopeLocationRaw)}"
     fun imageViewer(endpointId: String, itemRef: String) =
         "image_viewer/${Uri.encode(endpointId)}/${Uri.encode(itemRef)}"
 }

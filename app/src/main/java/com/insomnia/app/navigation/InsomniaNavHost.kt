@@ -74,7 +74,6 @@ fun InsomniaNavHost() {
                     playerController.play()
                 }
                 is AppCommand.Image -> nav.navigate(Routes.imageViewer(cmd.endpointId, cmd.itemRef))
-                is AppCommand.Search -> nav.navigate(Routes.search(cmd.endpointId, cmd.scopeLocation))
                 is AppCommand.Seek -> playerController.seek(cmd.positionMs, cmd.deltaMs)
             }
         }

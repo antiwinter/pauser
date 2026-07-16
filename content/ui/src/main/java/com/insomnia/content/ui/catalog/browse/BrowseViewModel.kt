@@ -10,9 +10,13 @@ import com.insomnia.content.epcache.CachingEndpointClient
 import com.insomnia.content.ui.catalog.ArtUrlInjector
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -21,6 +25,10 @@ import timber.log.Timber
  * Per-back-stack-entry ViewModel for BrowseRoute.
  * Data lives here until the route is popped from the back stack.
  * Navigate back → ViewModel is still alive → no re-fetch needed.
+ *
+ * Search is treated identically to browsing — it's just a listEntry with a searchTerm
+ * in QueryOptions. The search modal constructs the options, and the same code path
+ * (collectList) renders results.
  *
  * The data layer (CachingEndpointClient) handles network dedup:
  *   - First visit: fetches from network (or cache miss), emits progressively
@@ -48,10 +56,12 @@ class BrowseViewModel(
     private val _client = MutableStateFlow<CachingEndpointClient?>(null)
     val client: StateFlow<CachingEndpointClient?> = _client.asStateFlow()
 
+    private val _activeQueryOptions = MutableStateFlow(QueryOptions())
+    val activeQueryOptions: StateFlow<QueryOptions> = _activeQueryOptions.asStateFlow()
+
     val imageLoader: ImageLoader?
         get() = _client.value?.imageLoader
 
-    private val queryOptions = QueryOptions()
     private var endpointId: String? = null
 
     fun setLastFocusedItemRef(ref: String) {
@@ -86,7 +96,8 @@ class BrowseViewModel(
             _loading.value = true
             _error.value = null
             runCatching {
-                collectList(c, startIndex = 0)
+                val location = if (_activeQueryOptions.value.searchTerm != null) null else this@BrowseViewModel.location
+                collectList(c, startIndex = 0, location = location, options = _activeQueryOptions.value)
             }.onFailure { e ->
                 _error.value = e.message ?: "Unknown error"
                 Timber.e(e, "load() failed")
@@ -95,9 +106,39 @@ class BrowseViewModel(
         }
     }
 
-    private suspend fun collectList(c: CachingEndpointClient, startIndex: Int, append: Boolean = false) {
+    fun applySearch(term: String, scope: SearchScope) {
+        val c = _client.value ?: return
+        val opts = QueryOptions(searchTerm = term, recursive = true)
+        _activeQueryOptions.value = opts
+        Timber.d("applySearch term=$term scope=$scope")
+        viewModelScope.launch {
+            _loading.value = true
+            _error.value = null
+            runCatching {
+                if (scope == SearchScope.Global) {
+                    collectGlobalSearch(c, term)
+                } else {
+                    // Search "current endpoint" — search from the endpoint root,
+                    // not from the current browse location.
+                    collectList(c, startIndex = 0, location = null, options = opts)
+                }
+            }.onFailure { e ->
+                _error.value = e.message ?: "Unknown error"
+                Timber.e(e, "applySearch() failed")
+            }
+            _loading.value = false
+        }
+    }
+
+    private suspend fun collectList(
+        c: CachingEndpointClient,
+        startIndex: Int,
+        options: QueryOptions,
+        append: Boolean = false,
+        location: String? = this.location,
+    ) {
         val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
-        c.listEntry(location, startIndex, PAGE_SIZE, queryOptions)
+        c.listEntry(location, startIndex, PAGE_SIZE, options)
             .collect { emission ->
                 val injectedItems = ArtUrlInjector.apply(emission.items, c.protocol, eid)
                 _items.value = if (append) _items.value + injectedItems else injectedItems
@@ -108,12 +149,36 @@ class BrowseViewModel(
             }
     }
 
+    private suspend fun collectGlobalSearch(c: CachingEndpointClient, term: String) {
+        val registry = EndpointClientRegistryHolder.get()
+        val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
+        val allIds = registry.allEndpointIds()
+
+        coroutineScope {
+            val deferreds = allIds.map { otherEid ->
+                async(Dispatchers.IO) {
+                    runCatching {
+                        val otherClient = registry.getOrCreate(otherEid) ?: return@runCatching null
+                        otherClient.listEntry(null, 0, PAGE_SIZE, QueryOptions(searchTerm = term, recursive = true))
+                            .first { it.isComplete }
+                            .items
+                    }.getOrNull().orEmpty()
+                }
+            }
+            val merged = deferreds.awaitAll().flatten()
+            val injected = ArtUrlInjector.apply(merged, c.protocol, eid)
+            _items.value = injected
+            _totalCount.value = injected.size
+        }
+    }
+
     fun refresh() {
         val c = _client.value ?: return
-        if (_items.value.isEmpty()) return
+        if (_items.value.isEmpty() && _activeQueryOptions.value == QueryOptions()) return
         viewModelScope.launch {
             runCatching {
-                collectList(c, startIndex = 0)
+                val location = if (_activeQueryOptions.value.searchTerm != null) null else this@BrowseViewModel.location
+                collectList(c, startIndex = 0, location = location, options = _activeQueryOptions.value)
             }.onFailure { e ->
                 Timber.e(e, "refresh() failed")
             }
@@ -122,13 +187,15 @@ class BrowseViewModel(
 
     fun loadMore() {
         val c = _client.value ?: return
+        // Search results are loaded in one page — don't paginate further.
+        if (_activeQueryOptions.value.searchTerm != null) return
         val currentItems = _items.value
         val total = _totalCount.value
         if (_loading.value || currentItems.size >= total) return
         viewModelScope.launch {
             _loading.value = true
             runCatching {
-                collectList(c, startIndex = currentItems.size, append = true)
+                collectList(c, startIndex = currentItems.size, options = _activeQueryOptions.value, append = true)
             }.onFailure { e ->
                 _error.value = e.message ?: "Unknown error"
             }

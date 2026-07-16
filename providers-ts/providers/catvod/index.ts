@@ -1,5 +1,5 @@
 import { fetchConfig, parseSpiderField } from './config.js';
-import { test, listEntry, search, getEntries, getPlaybackSources } from './client.js';
+import { test, listEntry, getEntries, getPlaybackSources } from './client.js';
 import { resetSpiders as resetJarSpiders } from './spider/jar.js';
 import { resetSpiders as resetDrpySpiders } from './spider/drpy.js';
 import { initSpiders, getConfig } from './spider/index.js';
@@ -47,14 +47,7 @@ export default {
     limit: number;
     options?: QueryOptions;
   }): Promise<EntryList> {
-    return listEntry(state!, args.location, args.startIndex, args.limit);
-  },
-
-  async search(args: {
-    scopeLocation: string;
-    query: string;
-  }): Promise<EntryInfo[]> {
-    return search(state!, args.scopeLocation, args.query);
+    return listEntry(state!, args.location, args.startIndex, args.limit, args.options);
   },
 
   async getEntries(args: {

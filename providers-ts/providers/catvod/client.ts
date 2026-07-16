@@ -58,7 +58,15 @@ export async function listEntry(
   location: string | null,
   startIndex: number,
   limit: number,
+  options?: import("../../utils/types.js").QueryOptions,
 ): Promise<EntryList> {
+ const searchTerm = options?.searchTerm?.trim();
+  if (searchTerm) {
+    // spider ignores limit, may return more than requested
+    const all = await searchAllSites(state, searchTerm);
+    return { items: all, totalCount: all.length };
+  }
+
   if (location === null) return await listRoot();
   const ref = decodeRef(location);
   if (ref.type === 'unsupported') return { items: [], totalCount: 0 };
@@ -86,11 +94,8 @@ export async function listEntry(
     if (ref.id.startsWith('msearch:')) {
       const title = ref.id.split('###')[1] ?? '';
       if (!title) return { items: [], totalCount: 0 };
-      const results = await search(state, '', title);
-      return {
-        items: results,
-        totalCount: results.length,
-      };
+      const results = await searchAllSites(state, title);
+      return { items: results, totalCount: results.length };
     }
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
@@ -138,11 +143,12 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, host.timer.sleep({ ms }).then(() => fallback)]);
 }
 
-export async function search(
+async function searchAllSites(
   _state: CatVodClientState,
-  _scopeLocation: string,
   query: string,
 ): Promise<EntryInfo[]> {
+  const q = query.trim();
+  if (!q) return [];
   const config = getConfig();
   const keys: string[] = [];
   for (const [key, entry] of Object.entries(config.sites)) {
@@ -157,7 +163,7 @@ export async function search(
       const spider = getSpider(key);
       if (!spider.search) return [];
       const result = await withTimeout(
-        spider.search(query, 1),
+        spider.search(q, 1),
         SEARCH_SITE_TIMEOUT_MS,
         { list: [], total: 0 } as CatVodCategoryResult,
       );

@@ -7,7 +7,6 @@ import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.File as SmbFile
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.EntryList
-import com.insomnia.content.contract.SearchQuery
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
@@ -63,35 +62,19 @@ class SmbClient(
             val session = SmbSession.open(credentials())
             try {
                 val share = session.share
-                val all = share.listDirectory(location ?: "")
+                val searchTerm = options.searchTerm?.trim().orEmpty()
+                val raw = if (searchTerm.isNotEmpty()) {
+                    share.listDirectory(location ?: "").filterByName(searchTerm)
+                } else {
+                    share.listDirectory(location ?: "")
+                }
+                val all = raw.map { mapEntry(it, location) }
                 val sorted = when (options.sortBy) {
-                    SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.name }
-                    else -> all.sortedBy { it.name }
-                }.let { if (options.sortOrder == SortOrder.Descending) it.reversed() else it }
-                val slice = sorted.drop(startIndex).take(limit)
-                EntryList(items = slice.map { mapEntry(it, location) }, totalCount = all.size)
-            } finally {
-                session.close()
-            }
-        }
-    }
-
-    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
-        if (query.term.isBlank()) return EntryList(emptyList(), 0)
-        return withContext(Dispatchers.IO) {
-            val session = SmbSession.open(credentials())
-            try {
-                val share = session.share
-                val all = share.listDirectory(scopeLocation)
-                    .filterByName(query.term)
-                    .map { mapEntry(it, scopeLocation) }
-                    .filter { it.type !in query.excludeTypes }
-                val sorted = when (query.sortBy) {
                     SortField.Title, SortField.IndexNumber, null -> all.sortedBy { it.title }
                     else -> all.sortedBy { it.title }
-                }.let { if (query.sortOrder == SortOrder.Descending) it.reversed() else it }
-                val page = sorted.drop(query.startIndex).take(query.limit)
-                EntryList(items = page, totalCount = all.size)
+                }.let { if (options.sortOrder == SortOrder.Descending) it.reversed() else it }
+                val slice = sorted.drop(startIndex).take(limit)
+                EntryList(items = slice, totalCount = all.size)
             } finally {
                 session.close()
             }

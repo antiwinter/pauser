@@ -6,7 +6,6 @@ import com.insomnia.content.contract.EntryTag
 import com.insomnia.content.contract.EntryUserData
 import com.insomnia.player.MediaCodecInfo
 import com.insomnia.content.contract.QueryOptions
-import com.insomnia.content.contract.SearchQuery
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
 import com.insomnia.content.contract.EndpointClient
@@ -175,6 +174,7 @@ class JsClient(
                 put("sortOrder", options.sortOrder.name)
                 put("recursive", options.recursive)
                 options.filterByType?.let { put("filterByType", it) }
+                options.searchTerm?.let { put("searchTerm", it) }
             })
         }
         val argsStr = args.toString()
@@ -184,29 +184,6 @@ class JsClient(
         val items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList()
         val totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         return EntryList(items = items, totalCount = totalCount)
-    }
-
-    override suspend fun search(scopeLocation: String, query: SearchQuery): EntryList {
-        ensureReady()
-        val args = buildJsonObject {
-            put("scopeLocation", scopeLocation)
-            put("query", query.term)
-            put("term", query.term)
-            query.years?.let { put("years", kotlinx.serialization.json.JsonArray(it.map { y -> JsonPrimitive(y) })) }
-            query.genres?.let { put("genres", kotlinx.serialization.json.JsonArray(it.map { g -> JsonPrimitive(g) })) }
-            query.countries?.let { put("countries", kotlinx.serialization.json.JsonArray(it.map { c -> JsonPrimitive(c) })) }
-            query.studios?.let { put("studios", kotlinx.serialization.json.JsonArray(it.map { s -> JsonPrimitive(s) })) }
-            put("startIndex", query.startIndex)
-            put("limit", query.limit)
-            query.sortBy?.let { put("sortBy", it.name) }
-            put("sortOrder", query.sortOrder.name)
-        }
-        val resultJson = engine.callMethod("search", args.toString())
-            ?: return EntryList(emptyList(), 0)
-        val all = json.parseToJsonElement(resultJson).jsonArray
-            .mapNotNull { parseListItem(it.jsonObject) }
-            .filter { it.type !in query.excludeTypes }
-        return EntryList(items = all, totalCount = all.size)
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {

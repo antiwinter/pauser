@@ -60,6 +60,7 @@ data class QueryOptions(
     val sortOrder: SortOrder = SortOrder.Ascending,
     val recursive: Boolean = false,
     val filterByType: String? = null,
+    val searchTerm: String? = null,
 )
 
 @Serializable
@@ -82,20 +83,6 @@ enum class EntryTag {
     Played,
     Unplayed,
 }
-
-@Serializable
-data class SearchQuery(
-    val term: String = "",
-    val years: List<Int>? = null,
-    val genres: List<String>? = null,
-    val countries: List<String>? = null,
-    val studios: List<String>? = null,
-    val excludeTypes: Set<String> = emptySet(),
-    val startIndex: Int = 0,
-    val limit: Int = 100,
-    val sortBy: SortField? = null,
-    val sortOrder: SortOrder = SortOrder.Ascending,
-)
 
 object CatalogRouteTokens {
     const val LIBRARIES_ROOT_SEGMENT: String = "__insomnia_library_root__"

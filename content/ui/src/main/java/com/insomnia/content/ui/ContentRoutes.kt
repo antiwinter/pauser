@@ -15,8 +15,6 @@ import com.insomnia.content.ui.catalog.detail.DetailRoute
 import com.insomnia.content.ui.catalog.detail.DetailViewModel
 import com.insomnia.content.ui.catalog.ImageViewerRoute
 import com.insomnia.content.ui.catalog.live.LiveRoute
-import com.insomnia.content.ui.catalog.search.SearchRoute
-import com.insomnia.content.ui.catalog.search.SearchViewModel
 import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.InsomniaProviderRegistryHolder
@@ -138,23 +136,6 @@ fun NavGraphBuilder.contentRoutes(
             endpointId = endpointId,
             initialInfo = entryInfo,
             livepakRef = ref,
-            playerController = playerController,
-        )
-    }
-    composable(
-        Routes.SEARCH,
-        listOf(
-            navArgument("endpointId") { type = NavType.StringType },
-            navArgument("scopeLocation") { type = NavType.StringType },
-        ),
-    ) {
-        val searchVm: SearchViewModel = viewModel()
-        SearchRoute(
-            nav = nav,
-            endpointId = it.arguments!!.getString("endpointId")!!,
-            scopeLocationEncoded = it.arguments!!.getString("scopeLocation")!!,
-            sharedVm = sharedVm,
-            viewModel = searchVm,
             playerController = playerController,
         )
     }

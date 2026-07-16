@@ -169,6 +169,7 @@ export interface QueryOptions {
   sortOrder?: 'Ascending' | 'Descending';
   recursive?: boolean;
   filterByType?: string | null;
+  searchTerm?: string | null;
 }
 
 export interface EntryList {
@@ -244,12 +245,8 @@ export interface InsomniaProviderBridge {
     location: string | null;
     startIndex: number;
     limit: number;
+    options?: QueryOptions;
   }): Promise<EntryList>;
-
-  search(args: {
-    scopeLocation: string;
-    query: string;
-  }): Promise<EntryInfo[]>;
 
   getPlaybackSources(args: {
     itemRef: string;

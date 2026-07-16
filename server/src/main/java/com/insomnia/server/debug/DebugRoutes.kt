@@ -1,7 +1,7 @@
 package com.insomnia.server.debug
 
 import com.insomnia.server.AppContext
-import com.insomnia.content.contract.SearchQuery
+import com.insomnia.content.contract.QueryOptions
 import com.insomnia.core.form.contract.QrResult
 import com.insomnia.proxy.contract.ProxyProviderRegistryHolder
 import com.insomnia.proxy.contract.ProxyValidationResult
@@ -277,11 +277,12 @@ fun Application.installDebugRoutes(ctx: AppContext) {
 
             get("/{endpointId}/search") {
                 val endpointId = call.parameters["endpointId"] ?: return@get call.respond400("missing endpointId")
-                val scope = call.request.queryParameters["scope"] ?: ""
+                val scope = call.request.queryParameters["scope"]
                 val query = call.request.queryParameters["q"] ?: return@get call.respond400("missing q")
                 val instance = ctx.getClient(endpointId) ?: return@get call.respond404("unknown endpointId")
+                val location = scope?.takeIf { it.isNotEmpty() }
                 val emission = runCatching {
-                    instance.search(scope, SearchQuery(term = query)).first { it.isComplete }
+                    instance.listEntry(location, 0, 100, QueryOptions(searchTerm = query)).first { it.isComplete }
                 }.getOrElse {
                     Timber.e(it, "search error"); return@get call.respond500(it.message)
                 }
@@ -352,10 +353,6 @@ fun Application.installDebugRoutes(ctx: AppContext) {
                     val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
                     val ref = body.itemRef ?: return@post call.respond400("missing itemRef")
                     AppCommand.Image(endpointId, ref)
-                }
-                "search" -> {
-                    val endpointId = body.endpointId ?: return@post call.respond400("missing endpointId")
-                    AppCommand.Search(endpointId, body.itemRef ?: "")
                 }
                 else -> return@post call.respond400("unknown route: ${body.route}")
             }

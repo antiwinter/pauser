@@ -16,7 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
@@ -47,7 +49,7 @@ fun BrowseScreen(
     subtitle: String,
     initialFocusRef: String? = null,
     onLoadMore: () -> Unit,
-    onSearch: () -> Unit,
+    onSearch: (term: String, scope: SearchScope) -> Unit,
     onItemFocused: (EntryInfo) -> Unit = {},
     onOpenBrowseLocation: (EntryInfo) -> Unit,
     onOpenDetail: (EntryInfo) -> Unit,
@@ -74,6 +76,8 @@ fun BrowseScreen(
         }
     }
 
+    var searchModalOpen by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -83,7 +87,7 @@ fun BrowseScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Button(onClick = onSearch) { Text("Search") }
+            Button(onClick = { searchModalOpen = true }) { Text("Search") }
         }
         Text(text = subtitle, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         error?.let { Text("Error: $it") }
@@ -146,5 +150,15 @@ fun BrowseScreen(
                 }
             }
         }
+    }
+
+    if (searchModalOpen) {
+        SearchModal(
+            onDismiss = { searchModalOpen = false },
+            onConfirm = { term, scope ->
+                searchModalOpen = false
+                onSearch(term, scope)
+            },
+        )
     }
 }

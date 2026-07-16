@@ -69,7 +69,7 @@ fun BrowseRoute(
             imageLoader = imageLoader,
             initialFocusRef = restoreFocusRef,
             onLoadMore = { viewModel.loadMore() },
-            onSearch = { nav.navigate(Routes.search(endpointId, initialEntryInfo.ref)) },
+            onSearch = { term, scope -> viewModel.applySearch(term, scope) },
             onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
             onOpenBrowseLocation = { folderEntry ->
                 sharedVm.cache(folderEntry)

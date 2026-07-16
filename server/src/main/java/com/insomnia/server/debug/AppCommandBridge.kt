@@ -18,7 +18,6 @@ sealed class AppCommand {
     data class Detail(val endpointId: String, val itemRef: String) : AppCommand()
     data class Player(val endpointId: String, val itemRef: String, val startMs: Long = 0) : AppCommand()
     data class Image(val endpointId: String, val itemRef: String) : AppCommand()
-    data class Search(val endpointId: String, val scopeLocation: String) : AppCommand()
     data class Seek(val positionMs: Long? = null, val deltaMs: Long? = null) : AppCommand()
 }
 

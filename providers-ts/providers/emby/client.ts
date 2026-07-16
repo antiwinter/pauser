@@ -117,7 +117,9 @@ export async function listEntry(
   const { credentials } = requireState(state);
   const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
 
-  if (location === null) {
+  const searchTerm = options?.searchTerm?.trim();
+
+  if (location === null && !searchTerm) {
     const views = await api.getViews();
     populateViewsCache(state, views);
     return {
@@ -130,16 +132,19 @@ export async function listEntry(
       const views = await api.getViews();
       populateViewsCache(state, views);
     }
-    const isMoviesLibrary = state.viewsCache![location] === 'movies';
+    // When searching, parentId is null (search from endpoint root). When browsing,
+    // parentId is the requested location; a movies library forces recursive + type filter.
+    const isMoviesLibrary = location !== null && state.viewsCache![location] === 'movies';
     const result = await api.getItems({
-      parentId: location,
-      recursive: isMoviesLibrary ? true : (options?.recursive ?? false),
+      parentId: searchTerm ? null : location,
+      recursive: searchTerm ? true : (isMoviesLibrary ? true : (options?.recursive ?? false)),
       startIndex,
       limit,
       fields: BROWSE_FIELDS_STR,
       sortBy: options?.sortBy ?? undefined,
       sortOrder: options?.sortOrder ?? undefined,
-      includeItemTypes: isMoviesLibrary ? 'Movie' : (options?.filterByType ?? undefined),
+      includeItemTypes: searchTerm ? 'Movie,Series' : (isMoviesLibrary ? 'Movie' : (options?.filterByType ?? undefined)),
+      ...(searchTerm ? { searchTerm } : {}),
     });
     return {
       items: result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[],
@@ -166,27 +171,6 @@ export async function getEntries(
   );
   const valid = items.filter(Boolean) as EntryInfo[];
   return { items: valid, totalCount: valid.length };
-}
-
-export async function search(
-  state: EmbyClientState,
-  scopeLocation: string,
-  query: string,
-): Promise<EntryInfo[]> {
-  const q = query.trim();
-  if (!q) return [];
-  const { credentials } = requireState(state);
-  const api = new EmbyApi(credentials.baseUrl, credentials.accessToken, credentials.userId);
-  const result = await api.getItems({
-    parentId: scopeLocation || null,
-    includeItemTypes: 'Series,Folder',
-    recursive: true,
-    searchTerm: q,
-    startIndex: 0,
-    limit: 100,
-    fields: BROWSE_FIELDS_STR,
-  });
-  return result.Items.map((i) => toListItem(i, credentials.baseUrl, credentials.accessToken)).filter(Boolean) as EntryInfo[];
 }
 
 // Emby's stream.Codec values don't always match the canonical tokens in the player's

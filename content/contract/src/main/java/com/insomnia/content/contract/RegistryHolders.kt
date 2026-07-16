@@ -18,6 +18,7 @@ interface EndpointClientAccess {
     suspend fun buildProxyClient(proxyId: String?): ProxyClient?
     suspend fun getProxyClient(proxyId: String): ProxyClient?
     suspend fun getAllProxyClients(): Map<String, ProxyClient>
+    suspend fun allEndpointIds(): List<String>
 }
 
 object InsomniaProviderRegistryHolder {
