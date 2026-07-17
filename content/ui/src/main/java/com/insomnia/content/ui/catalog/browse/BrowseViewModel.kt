@@ -16,27 +16,26 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+
+data class QuerySpec(
+    val endpointId: String,
+    val location: String?,
+    val options: QueryOptions = QueryOptions(),
+)
 
 /**
  * Per-back-stack-entry ViewModel for BrowseRoute.
  * Data lives here until the route is popped from the back stack.
  * Navigate back → ViewModel is still alive → no re-fetch needed.
  *
- * Search is treated identically to browsing — it's just a listEntry with a searchTerm
- * in QueryOptions. The search modal constructs the options, and the same code path
- * (collectList) renders results.
- *
- * The data layer (CachingEndpointClient) handles network dedup:
- *   - First visit: fetches from network (or cache miss), emits progressively
- *   - Return visit: serves from cache (single immediate emission)
+ * Browse and search are the same operation: a listEntry against one or more (endpoint, location,
+ * options) tuples. The ViewModel collects from a set of queries in parallel and always merges
+ * results by itemRef, so duplicate emissions replace existing entries rather than appending.
  */
-class BrowseViewModel(
-    private val location: String,
-) : ViewModel() {
+class BrowseViewModel : ViewModel() {
 
     private val _items = MutableStateFlow<List<EntryInfo>>(emptyList())
     val items: StateFlow<List<EntryInfo>> = _items.asStateFlow()
@@ -56,160 +55,161 @@ class BrowseViewModel(
     private val _client = MutableStateFlow<CachingEndpointClient?>(null)
     val client: StateFlow<CachingEndpointClient?> = _client.asStateFlow()
 
-    private val _activeQueryOptions = MutableStateFlow(QueryOptions())
-    val activeQueryOptions: StateFlow<QueryOptions> = _activeQueryOptions.asStateFlow()
+    private val _activeQueries = MutableStateFlow<List<QuerySpec>>(emptyList())
+    val activeQueries: StateFlow<List<QuerySpec>> = _activeQueries.asStateFlow()
+
+    private val _currentPageIndex = MutableStateFlow(0)
 
     val imageLoader: ImageLoader?
         get() = _client.value?.imageLoader
-
-    private var endpointId: String? = null
 
     fun setLastFocusedItemRef(ref: String) {
         _lastFocusedItemRef.value = ref
     }
 
-    fun initialize(endpointId: String) {
-        if (this.endpointId != null) return
+    fun initialize(initialQuery: QuerySpec) {
+        if (_activeQueries.value.isNotEmpty()) return
         viewModelScope.launch {
             try {
                 val c = withContext(Dispatchers.IO) {
-                    EndpointClientRegistryHolder.get().getOrCreate(endpointId)
-                } ?: throw IllegalStateException("No provider instance for $endpointId")
-                this@BrowseViewModel.endpointId = endpointId
+                    EndpointClientRegistryHolder.get().getOrCreate(initialQuery.endpointId)
+                } ?: throw IllegalStateException("No provider instance for ${initialQuery.endpointId}")
                 _client.value = c
-                load()
+                _activeQueries.value = listOf(initialQuery)
+                startCollection(listOf(initialQuery))
             } catch (e: Exception) {
-                Timber.e(e, "initialize failed for endpointId=$endpointId")
+                Timber.e(e, "initialize failed for endpointId=${initialQuery.endpointId}")
                 _error.value = e.message ?: "Unknown error"
             }
-        }
-    }
-
-    fun load() {
-        if (_items.value.isNotEmpty()) {
-            Timber.d("load() skipped — items already present for location=$location")
-            return
-        }
-        val c = _client.value ?: return
-        Timber.d("load() fetching for location=$location")
-        viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            runCatching {
-                val location = if (_activeQueryOptions.value.searchTerm != null) null else this@BrowseViewModel.location
-                collectList(c, startIndex = 0, location = location, options = _activeQueryOptions.value)
-            }.onFailure { e ->
-                _error.value = e.message ?: "Unknown error"
-                Timber.e(e, "load() failed")
-            }
-            _loading.value = false
         }
     }
 
     fun applySearch(term: String, scope: SearchScope) {
-        val c = _client.value ?: return
-        val opts = QueryOptions(searchTerm = term, recursive = true)
-        _activeQueryOptions.value = opts
-        Timber.d("applySearch term=$term scope=$scope")
         viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            runCatching {
-                if (scope == SearchScope.Global) {
-                    collectGlobalSearch(c, term)
-                } else {
-                    // Search "current endpoint" — search from the endpoint root,
-                    // not from the current browse location.
-                    collectList(c, startIndex = 0, location = null, options = opts)
+            val queries = when (scope) {
+                SearchScope.Global -> {
+                    val registry = EndpointClientRegistryHolder.get()
+                    val allIds = registry.allEndpointIds()
+                    allIds.map { QuerySpec(it, null, QueryOptions(searchTerm = term, recursive = true)) }
                 }
-            }.onFailure { e ->
-                _error.value = e.message ?: "Unknown error"
-                Timber.e(e, "applySearch() failed")
-            }
-            _loading.value = false
-        }
-    }
-
-    private suspend fun collectList(
-        c: CachingEndpointClient,
-        startIndex: Int,
-        options: QueryOptions,
-        append: Boolean = false,
-        location: String? = this.location,
-    ) {
-        val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
-        c.listEntry(location, startIndex, PAGE_SIZE, options)
-            .collect { emission ->
-                val injectedItems = ArtUrlInjector.apply(emission.items, c.protocol, eid)
-                _items.value = if (append) _items.value + injectedItems else injectedItems
-                _totalCount.value = emission.totalCount ?: _items.value.size
-                if (emission.isComplete) {
-                    Timber.d("listEntry complete at startIndex=$startIndex: ${emission.items.size}/${emission.totalCount}")
+                SearchScope.Current -> {
+                    // Search from the first query's endpoint root, not the current browse location.
+                    val firstQuery = _activeQueries.value.firstOrNull()
+                    if (firstQuery != null) {
+                        listOf(firstQuery.copy(location = null, options = QueryOptions(searchTerm = term, recursive = true)))
+                    } else {
+                        emptyList()
+                    }
                 }
             }
-    }
 
-    private suspend fun collectGlobalSearch(c: CachingEndpointClient, term: String) {
-        val registry = EndpointClientRegistryHolder.get()
-        val eid = endpointId ?: throw IllegalStateException("BrowseViewModel not initialized")
-        val allIds = registry.allEndpointIds()
+            _activeQueries.value = queries
+            startCollection(queries)
 
-        coroutineScope {
-            val deferreds = allIds.map { otherEid ->
-                async(Dispatchers.IO) {
-                    runCatching {
-                        val otherClient = registry.getOrCreate(otherEid) ?: return@runCatching null
-                        otherClient.listEntry(null, 0, PAGE_SIZE, QueryOptions(searchTerm = term, recursive = true))
-                            .first { it.isComplete }
-                            .items
-                    }.getOrNull().orEmpty()
-                }
-            }
-            val merged = deferreds.awaitAll().flatten()
-            val injected = ArtUrlInjector.apply(merged, c.protocol, eid)
-            _items.value = injected
-            _totalCount.value = injected.size
+            Timber.d("applySearch term=$term scope=$scope queries=${queries.size}")
         }
     }
 
     fun refresh() {
-        val c = _client.value ?: return
-        if (_items.value.isEmpty() && _activeQueryOptions.value == QueryOptions()) return
+        val queries = _activeQueries.value
+        if (queries.isEmpty()) return
+        if (_items.value.isEmpty()) return
+
+        val pageIndex = pageOfFocusedItem()
+        fetch(queries, startIndex = pageIndex * PAGE_SIZE, limit = PAGE_SIZE, replaceItems = false)
+    }
+
+    private fun pageOfFocusedItem(): Int {
+        val focusedRef = _lastFocusedItemRef.value ?: return 0
+        val idx = _items.value.indexOfFirst { it.ref == focusedRef }
+        return if (idx >= 0) idx / PAGE_SIZE else 0
+    }
+
+    fun loadMore() {
+        if (_loading.value) return
+
+        val queries = _activeQueries.value
+        if (queries.isEmpty()) return
+
+        // Search results are loaded in one page — don't paginate further.
+        if (queries.any { it.options.searchTerm != null }) return
+
+        val nextPage = _currentPageIndex.value + 1
+        _currentPageIndex.value = nextPage
+        fetch(queries, startIndex = nextPage * PAGE_SIZE, limit = PAGE_SIZE, replaceItems = false)
+    }
+
+    private fun startCollection(queries: List<QuerySpec>) {
+        if (queries.isEmpty()) return
+        _items.value = emptyList()
+        _totalCount.value = 0
+        _currentPageIndex.value = 0
+        fetch(queries, startIndex = 0, limit = PAGE_SIZE, replaceItems = true)
+    }
+
+    private fun fetch(
+        queries: List<QuerySpec>,
+        startIndex: Int,
+        limit: Int,
+        replaceItems: Boolean,
+    ) {
+        if (queries.isEmpty()) return
+
         viewModelScope.launch {
+            _loading.value = true
+            _error.value = null
+
             runCatching {
-                val location = if (_activeQueryOptions.value.searchTerm != null) null else this@BrowseViewModel.location
-                collectList(c, startIndex = 0, location = location, options = _activeQueryOptions.value)
+                val registry = EndpointClientRegistryHolder.get()
+
+                coroutineScope {
+                    val flows = queries.map { query ->
+                        async(Dispatchers.IO) {
+                            val client = registry.getOrCreate(query.endpointId) ?: return@async emptyList<EntryInfo>()
+                            val items = mutableListOf<EntryInfo>()
+                            client.listEntry(query.location, startIndex, limit, query.options)
+                                .collect { emission ->
+                                    val injected = ArtUrlInjector.apply(emission.items, client.protocol, query.endpointId)
+                                    items.addAll(injected)
+                                    if (emission.isComplete) {
+                                        Timber.d("listEntry complete endpoint=${query.endpointId} location=${query.location} startIndex=$startIndex: ${emission.items.size}/${emission.totalCount}")
+                                    }
+                                }
+                            items
+                        }
+                    }
+
+                    val allItems = flows.awaitAll().flatten()
+                    _items.value = if (replaceItems) {
+                        mergeByRef(emptyList(), allItems)
+                    } else {
+                        mergeByRef(_items.value, allItems)
+                    }
+                    _totalCount.value = _items.value.size
+                }
+            }.onSuccess {
+                _loading.value = false
             }.onFailure { e ->
-                Timber.e(e, "refresh() failed")
+                _error.value = e.message
+                _loading.value = false
+                Timber.e(e, "fetch failed startIndex=$startIndex limit=$limit")
             }
         }
     }
 
-    fun loadMore() {
-        val c = _client.value ?: return
-        // Search results are loaded in one page — don't paginate further.
-        if (_activeQueryOptions.value.searchTerm != null) return
-        val currentItems = _items.value
-        val total = _totalCount.value
-        if (_loading.value || currentItems.size >= total) return
-        viewModelScope.launch {
-            _loading.value = true
-            runCatching {
-                collectList(c, startIndex = currentItems.size, options = _activeQueryOptions.value, append = true)
-            }.onFailure { e ->
-                _error.value = e.message ?: "Unknown error"
-            }
-            _loading.value = false
-        }
+    private fun mergeByRef(existing: List<EntryInfo>, incoming: List<EntryInfo>): List<EntryInfo> {
+        val merged = existing.associateBy { it.ref }.toMutableMap()
+        incoming.forEach { merged[it.ref] = it }
+        return merged.values.toList()
     }
 
     companion object {
         private const val PAGE_SIZE = 30
 
-        fun factory(location: String) = object : ViewModelProvider.Factory {
+        fun factory() = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                BrowseViewModel(location) as T
+                BrowseViewModel() as T
         }
     }
 }

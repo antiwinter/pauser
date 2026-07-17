@@ -10,6 +10,7 @@ import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.insomnia.content.contract.EntryInfo
+import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.ui.Routes
 import com.insomnia.storage.StorageBindingsHolder
 import com.insomnia.storage.TitleLang
@@ -40,13 +41,8 @@ fun BrowseRoute(
     BackHandler { nav.popBackStack() }
 
     LaunchedEffect(endpointId) {
-        viewModel.initialize(endpointId)
-    }
-
-    // Refresh data when returning to browse (e.g., from detail after playback).
-    // refresh() guards against empty initial state, so harmless on first entry.
-    LaunchedEffect(Unit) {
-        viewModel.refresh()
+        val query = QuerySpec(endpointId, initialEntryInfo.ref, QueryOptions())
+        viewModel.initialize(query)
     }
 
     PlayerStopEffect(playerController) {

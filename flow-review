@@ -1,0 +1,25 @@
+ Summary gap
+
+ ┌──────────────────────────────────────────┬──────────────────────────────────────────┬────────────────────────────┐
+ │ Behavior                                 │ Browse                                   │ Detail                     │
+ ├──────────────────────────────────────────┼──────────────────────────────────────────┼────────────────────────────┤
+ │ Returns final result                     │ ✅                                       │ ✅                         │
+ ├──────────────────────────────────────────┼──────────────────────────────────────────┼────────────────────────────┤
+ │ Emits partial via emitter                │ ✅ (wired, unused)                       │ ✅ (wired, unused)         │
+ ├──────────────────────────────────────────┼──────────────────────────────────────────┼────────────────────────────┤
+ │ UI updates progressively                 │ ✅                                       │ ❌ (.first { isComplete }) │
+ ├──────────────────────────────────────────┼──────────────────────────────────────────┼────────────────────────────┤
+ │ Updates existing itemRef on new emission │ ✅ (append = false) / ❌ (append = true) │ ❌ (final-only)            │
+ └──────────────────────────────────────────┴──────────────────────────────────────────┴────────────────────────────┘
+
+ The deadlock fix unblocks the core path (point 1) so browse works again. Points 2–4 are infrastructure that's wired but not exercised by any provider, and the detail screen explicitly opts out of progressive
+ updates.
+
+╭── π  > ⬢ Intchains DeepSeek V4 Pro · ◒ high > 📁 ~/code/insomnia > ⑂ flow +1 > ◫ 55.1%/128K ⟲ ▶───────────────────────────────────────────────────────────────────────────◀ Debug browse screen loading issue ──╮
+│  the mental model behavior is:                                                                                                                                                                                  │
+│  1. providers can still return result on end of async suspend function                                                                                                                                          │
+│  2. while they can also emit partial result in the middle via emitter                                                                                                                                           │
+│  3. the consumers (such as browse screen and detail screen) should update display on receiving new data                                                                                                         │
+│  4. new data may contain existing itemRef, and the corresponding item should be updated                                                                                                                         │
+│                                                                                                                                                                                                                 │
+╰─ is it working like this? confirm and describe, don't change code yet

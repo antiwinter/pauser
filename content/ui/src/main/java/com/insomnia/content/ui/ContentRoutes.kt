@@ -84,7 +84,7 @@ fun NavGraphBuilder.contentRoutes(
             ?: error("No EntryInfo cached for ref=$ref — navigate via cacheAndBrowse()")
 
         val browseVm: BrowseViewModel = viewModel(
-            factory = BrowseViewModel.factory(ref),
+            factory = BrowseViewModel.factory(),
         )
 
         BrowseRoute(
