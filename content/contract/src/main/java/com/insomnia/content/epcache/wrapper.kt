@@ -218,14 +218,20 @@ class CachingEndpointClient(
             val deferredResult = async(Dispatchers.IO) { fetch() }
 
             try {
-                // Collect provider emissions as they arrive
+                // Collect provider emissions in a separate coroutine so we can
+                // await the fetch result, then close the channel to unblock the collector.
                 var emittedComplete = false
-                emitter.asFlow().collect { emission ->
-                    emit(mergeEmission(emission))
-                    if (emission.isComplete) emittedComplete = true
+                val collectorJob = launch {
+                    emitter.asFlow().collect { emission ->
+                        emit(mergeEmission(emission))
+                        if (emission.isComplete) emittedComplete = true
+                    }
                 }
 
                 val result = deferredResult.await()
+                emitter.close()
+                collectorJob.join()
+
                 EndpointCache.put(key, endpointId, result)
 
                 // If provider didn't emit its own completion, emit the final result
