@@ -56,8 +56,6 @@ fun BrowseScreen(
     onOpenAudioUnsupported: (endpointId: String, String) -> Unit = { _, _ -> },
 ) {
     val allItems = results.flatMap { it.items }
-    val totalCount = results.sumOf { it.totalCount }
-    
     val gridState = rememberLazyGridState()
 
     val focusRequesters = rememberGridFocusRequesters(allItems, initialFocusRef, gridState)
@@ -70,9 +68,13 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(nearEnd, allItems.size, totalCount) {
-        if (nearEnd && !loading && allItems.size < totalCount) {
-            onLoadMore()
+    // Pagination: only for single-query mode
+    LaunchedEffect(nearEnd) {
+        if (nearEnd && !loading && results.size == 1) {
+            val result = results[0]
+            if (result.items.size < result.totalCount) {
+                onLoadMore()
+            }
         }
     }
 
@@ -91,16 +93,10 @@ fun BrowseScreen(
         }
         error?.let { Text("Error: $it") }
         if (error == null) {
-            Text(
-                when {
-                    loading && allItems.isEmpty() -> "Loading…"
-                    !loading && allItems.isEmpty() -> "Nothing here."
-                    totalCount > 0 && allItems.size < totalCount -> "Showing ${allItems.size} of $totalCount"
-                    totalCount > 0 -> "$totalCount items"
-                    else -> "${allItems.size} items"
-                },
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
+            when {
+                loading && allItems.isEmpty() -> Text("Loading…", modifier = Modifier.padding(bottom = 8.dp))
+                !loading && allItems.isEmpty() -> Text("Nothing here.", modifier = Modifier.padding(bottom = 8.dp))
+            }
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(COLUMNS),
@@ -112,7 +108,7 @@ fun BrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            var itemIndex = 0
+            var globalIndex = 0
             results.forEachIndexed { queryIndex, result ->
                 // Path header
                 item(span = { GridItemSpan(COLUMNS) }) {
@@ -134,24 +130,28 @@ fun BrowseScreen(
                             Text(pathLabel)
                         }
                         Text(
-                            text = "${result.items.size} items",
+                            text = if (result.items.size < result.totalCount) {
+                                "Showing ${result.items.size} of ${result.totalCount}"
+                            } else {
+                                "${result.items.size} items"
+                            },
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 }
 
                 // Items
-                result.items.forEach { item ->
-                    val currentItemIndex = itemIndex++
+                result.items.forEachIndexed { itemIndex, item ->
+                    val currentGlobalIndex = globalIndex++
                     item(key = item.ref) {
                         MediaEntryComponent(
                             item = item,
                             titleLang = titleLang,
                             imageLoader = result.client.imageLoader!!,
-                            modifier = if (currentItemIndex < focusRequesters.size)
-                                Modifier.focusRequester(focusRequesters[currentItemIndex])
+                            modifier = if (currentGlobalIndex < focusRequesters.size)
+                                Modifier.focusRequester(focusRequesters[currentGlobalIndex])
                             else Modifier,
-                            onFocused = { onItemFocused(queryIndex, currentItemIndex) },
+                            onFocused = { onItemFocused(queryIndex, itemIndex) },
                             onClick = {
                                 fun resolveAction(type: String): (() -> Unit)? = when (type) {
                                     "Folder", "Season" -> { -> onOpenBrowseLocation(result.spec.endpointId, item) }
@@ -170,7 +170,7 @@ fun BrowseScreen(
                     }
                 }
             }
-            if (loading && allItems.size < totalCount) {
+            if (loading && results.size == 1 && results[0].items.size < results[0].totalCount) {
                 item(span = { GridItemSpan(COLUMNS) }) {
                     Text(
                         "Loading…",
