@@ -74,14 +74,12 @@ fun NavGraphBuilder.contentRoutes(
     composable(
         Routes.BROWSE,
         listOf(
-            navArgument("endpointId") { type = NavType.StringType },
-            navArgument("ref") { type = NavType.StringType },
+            navArgument("querySpecJson") { type = NavType.StringType },
         ),
     ) { backStackEntry ->
-        val endpointId = backStackEntry.arguments!!.getString("endpointId")!!
-        val ref = backStackEntry.arguments!!.getString("ref")!!
-        val entryInfo = sharedVm.get(ref)
-            ?: error("No EntryInfo cached for ref=$ref — navigate via cacheAndBrowse()")
+        val querySpecJson = backStackEntry.arguments!!.getString("querySpecJson")!!
+        val queries = decodeQuerySpecList(querySpecJson) 
+            ?: listOf(decodeQuerySpec(querySpecJson) ?: error("Failed to decode QuerySpec from: $querySpecJson"))
 
         val browseVm: BrowseViewModel = viewModel(
             factory = BrowseViewModel.factory(),
@@ -89,8 +87,7 @@ fun NavGraphBuilder.contentRoutes(
 
         BrowseRoute(
             nav = nav,
-            endpointId = endpointId,
-            initialEntryInfo = entryInfo,
+            initialSpecs = queries,
             viewModel = browseVm,
             sharedVm = sharedVm,
             playerController = playerController,

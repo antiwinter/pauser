@@ -16,6 +16,8 @@ import com.insomnia.app.ui.home.AddEndpointRoute
 import com.insomnia.app.ui.home.HomeRoute
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
+import com.insomnia.content.contract.QueryOptions
+import com.insomnia.content.ui.catalog.browse.QuerySpec
 import com.insomnia.content.ui.Routes
 import com.insomnia.content.ui.catalog.NavSharedViewModel
 import com.insomnia.content.ui.catalog.player.PlayerController
@@ -36,12 +38,12 @@ fun InsomniaNavHost() {
     val sharedVm: NavSharedViewModel = viewModel()
     val playerController: PlayerController = viewModel()
 
-    fun cacheAndBrowse(
+    fun browseEndpoint(
         endpointId: String,
-        entry: EntryInfo,
+        location: String = "",
     ) {
-        sharedVm.cache(entry)
-        nav.navigate(Routes.browse(endpointId, entry))
+        val spec = QuerySpec(endpointId, location.ifEmpty { null }, QueryOptions())
+        nav.navigate(Routes.browse(listOf(spec)))
     }
 
     LaunchedEffect(nav) {
@@ -51,13 +53,7 @@ fun InsomniaNavHost() {
                     popUpTo(Routes.HOME) { inclusive = true }
                 }
                 is AppCommand.Browse -> {
-                    val location = cmd.location ?: ""
-                    val entry = EntryInfo(
-                        ref = location,
-                        title = location,
-                        type = "Root",
-                    )
-                    cacheAndBrowse(cmd.endpointId, entry)
+                    browseEndpoint(cmd.endpointId, cmd.location ?: "")
                 }
                 is AppCommand.Detail -> {
                     val entry = EntryInfo(ref = cmd.itemRef, title = cmd.itemRef, type = "Unknown")
@@ -96,9 +92,8 @@ fun InsomniaNavHost() {
             composable(Routes.HOME) {
                 HomeRoute(
                     onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
-                    onOpenBrowse = { _, sid ->
-                        val entry = EntryInfo(ref = "", title = "", type = "Root")
-                        cacheAndBrowse(sid, entry)
+                    onOpenBrowse = { _, endpointId ->
+                        browseEndpoint(endpointId)
                     },
                     onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                     onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },

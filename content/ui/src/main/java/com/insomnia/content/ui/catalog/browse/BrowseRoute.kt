@@ -1,16 +1,18 @@
 package com.insomnia.content.ui.catalog.browse
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.QueryOptions
+import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.ui.Routes
 import com.insomnia.storage.StorageBindingsHolder
 import com.insomnia.storage.TitleLang
@@ -22,8 +24,7 @@ import com.insomnia.content.ui.catalog.player.PlayerStopEffect
 @Composable
 fun BrowseRoute(
     nav: NavHostController,
-    endpointId: String,
-    initialEntryInfo: EntryInfo,
+    initialSpecs: List<QuerySpec>,
     viewModel: BrowseViewModel,
     sharedVm: NavSharedViewModel,
     playerController: PlayerController,
@@ -31,66 +32,68 @@ fun BrowseRoute(
     val titleLang by StorageBindingsHolder.get().appConfigStore.titleLangFlow
         .collectAsState(initial = TitleLang.Local)
 
-    val client by viewModel.client.collectAsState()
-    val items by viewModel.items.collectAsState()
+    val queries by viewModel.queries.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val totalCount by viewModel.totalCount.collectAsState()
     val restoreFocusRef by viewModel.lastFocusedItemRef.collectAsState()
 
     BackHandler { nav.popBackStack() }
-
-    LaunchedEffect(endpointId) {
-        val query = QuerySpec(endpointId, initialEntryInfo.ref, QueryOptions())
-        viewModel.initialize(query)
+    LaunchedEffect(initialSpecs) {
+        viewModel.initialize(initialSpecs)
     }
 
     PlayerStopEffect(playerController) {
         viewModel.refresh()
     }
 
-    val imageLoader = viewModel.imageLoader
 
     when {
-        client == null || imageLoader == null -> Text("Loading…")
-        error != null && items.isEmpty() -> Text("Error: $error")
-        else -> BrowseScreen(
-            logTag = "OT_Browse_$endpointId",
-            items = items,
-            totalCount = totalCount,
-            loading = loading,
-            error = error,
-            subtitle = initialEntryInfo.title,
-            titleLang = titleLang,
-            imageLoader = imageLoader,
-            initialFocusRef = restoreFocusRef,
-            onLoadMore = { viewModel.loadMore() },
-            onSearch = { term, scope -> viewModel.applySearch(term, scope) },
-            onItemFocused = { item -> viewModel.setLastFocusedItemRef(item.ref) },
-            onOpenBrowseLocation = { folderEntry ->
-                sharedVm.cache(folderEntry)
-                nav.navigate(Routes.browse(endpointId, folderEntry))
-            },
-            onOpenDetail = { item ->
-                sharedVm.cache(item)
-                nav.navigate(Routes.detail(endpointId, item))
-            },
-            onOpenLivePlayer = { item ->
-                sharedVm.cache(item)
-                nav.navigate(Routes.livePlayer(endpointId, item))
-            },
-            onOpenPlayer = { entry ->
-                playerController.setClient(client!!)
-                val startMs = if (entry.type == "LiveChannel") 0L else null
-                playerController.prepare(entry, startMs)
-                playerController.play()
-            },
-            onOpenImageViewer = { raw ->
-                nav.navigate(Routes.imageViewer(endpointId, raw))
-            },
-            onOpenAudioUnsupported = { raw ->
-                nav.navigate(Routes.AUDIO_UNSUPPORTED)
-            },
-        )
+        queries.isEmpty() -> Text("No results")
+        else -> {
+            val coroutineScope = rememberCoroutineScope()
+            BrowseScreen(
+                results = queries,
+                loading = loading,
+                error = error,
+                titleLang = titleLang,
+                initialFocusRef = restoreFocusRef,
+                onLoadMore = { viewModel.loadMore() },
+                onSearch = { term, scope ->
+                    coroutineScope.launch {
+                        val searchSpecs = viewModel.buildSearchQuerySpec(term, scope)
+                        if (searchSpecs.isNotEmpty()) {
+                            nav.navigate(Routes.browse(searchSpecs))
+                        }
+                    }
+                },
+                onItemFocused = { queryIndex, itemIndex -> viewModel.setLastFocusedItem(queryIndex, itemIndex) },
+                onNavigateToPath = { spec ->
+                    nav.navigate(Routes.browse(listOf(spec)))
+                },
+                onOpenBrowseLocation = { endpointId, folderEntry ->
+                    val spec = QuerySpec(endpointId, folderEntry.ref, QueryOptions())
+                    nav.navigate(Routes.browse(listOf(spec)))
+                },
+                onOpenDetail = { endpointId, item ->
+                    sharedVm.cache(item)
+                    nav.navigate(Routes.detail(endpointId, item))
+                },
+                onOpenLivePlayer = { endpointId, item ->
+                    sharedVm.cache(item)
+                    nav.navigate(Routes.livePlayer(endpointId, item))
+                },
+                onOpenPlayer = { endpointId, entry ->
+                    val itemClient = queries.firstOrNull { it.spec.endpointId == endpointId }?.client
+                        ?: throw IllegalStateException("No client for endpoint $endpointId")
+                    playerController.setClient(itemClient)
+                    val startMs = if (entry.type == "LiveChannel") 0L else null
+                    playerController.prepare(entry, startMs)
+                    playerController.play()
+                },
+                onOpenAudioUnsupported = { endpointId, raw ->
+                    nav.navigate(Routes.AUDIO_UNSUPPORTED)
+                },
+            )
+        }
     }
 }

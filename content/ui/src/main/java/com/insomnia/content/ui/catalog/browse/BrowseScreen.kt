@@ -39,28 +39,28 @@ private const val OVERSCAN_ROWS = 3
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BrowseScreen(
-    logTag: String,
-    items: List<EntryInfo>,
-    totalCount: Int,
+    results: List<QueryState>,
     loading: Boolean,
     error: String?,
-    imageLoader: ImageLoader,
     titleLang: TitleLang,
-    subtitle: String,
     initialFocusRef: String? = null,
     onLoadMore: () -> Unit,
     onSearch: (term: String, scope: SearchScope) -> Unit,
-    onItemFocused: (EntryInfo) -> Unit = {},
-    onOpenBrowseLocation: (EntryInfo) -> Unit,
-    onOpenDetail: (EntryInfo) -> Unit,
-    onOpenLivePlayer: (EntryInfo) -> Unit = {},
-    onOpenPlayer: (EntryInfo) -> Unit,
-    onOpenImageViewer: (String) -> Unit = {},
-    onOpenAudioUnsupported: (String) -> Unit = {},
+    onItemFocused: (queryIndex: Int, itemIndex: Int) -> Unit = { _, _ -> },
+    onNavigateToPath: (QuerySpec) -> Unit,
+    onOpenBrowseLocation: (endpointId: String, EntryInfo) -> Unit,
+    onOpenDetail: (endpointId: String, EntryInfo) -> Unit,
+    onOpenLivePlayer: (endpointId: String, EntryInfo) -> Unit = { _, _ -> },
+    onOpenPlayer: (endpointId: String, EntryInfo) -> Unit,
+    onOpenImageViewer: (endpointId: String, String) -> Unit = { _, _ -> },
+    onOpenAudioUnsupported: (endpointId: String, String) -> Unit = { _, _ -> },
 ) {
+    val allItems = results.flatMap { it.items }
+    val totalCount = results.sumOf { it.totalCount }
+    
     val gridState = rememberLazyGridState()
 
-    val focusRequesters = rememberGridFocusRequesters(items, initialFocusRef, gridState)
+    val focusRequesters = rememberGridFocusRequesters(allItems, initialFocusRef, gridState)
 
     val nearEnd by remember {
         derivedStateOf {
@@ -70,8 +70,8 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(nearEnd, items.size, totalCount) {
-        if (nearEnd && !loading && items.size < totalCount) {
+    LaunchedEffect(nearEnd, allItems.size, totalCount) {
+        if (nearEnd && !loading && allItems.size < totalCount) {
             onLoadMore()
         }
     }
@@ -89,16 +89,15 @@ fun BrowseScreen(
         ) {
             Button(onClick = { searchModalOpen = true }) { Text("Search") }
         }
-        Text(text = subtitle, modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         error?.let { Text("Error: $it") }
         if (error == null) {
             Text(
                 when {
-                    loading && items.isEmpty() -> "Loading…"
-                    !loading && items.isEmpty() -> "Nothing here."
-                    totalCount > 0 && items.size < totalCount -> "Showing ${items.size} of $totalCount"
+                    loading && allItems.isEmpty() -> "Loading…"
+                    !loading && allItems.isEmpty() -> "Nothing here."
+                    totalCount > 0 && allItems.size < totalCount -> "Showing ${allItems.size} of $totalCount"
                     totalCount > 0 -> "$totalCount items"
-                    else -> "${items.size} items"
+                    else -> "${allItems.size} items"
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
@@ -113,32 +112,65 @@ fun BrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            itemsIndexed(items, key = { _, item -> item.ref }) { index, item ->
-                MediaEntryComponent(
-                    item = item,
-                    titleLang = titleLang,
-                    imageLoader = imageLoader,
-                    modifier = if (index < focusRequesters.size)
-                        Modifier.focusRequester(focusRequesters[index])
-                    else Modifier,
-                    onFocused = { onItemFocused(item) },
-                    onClick = {
-                        fun resolveAction(type: String): (() -> Unit)? = when (type) {
-                            "Folder", "Season" -> { -> onOpenBrowseLocation(item) }
-                            "Movie", "Digipak", "Series" -> { -> onOpenDetail(item) }
-                            "Livepak" -> { -> onOpenLivePlayer(item) }
-                            "Episode", "Video", "LiveChannel" -> { -> onOpenPlayer(item) }
-                            "Image" -> { -> onOpenImageViewer(item.ref) }
-                            "Audio" -> { -> onOpenAudioUnsupported(item.ref) }
-                            else -> null
+            var itemIndex = 0
+            results.forEachIndexed { queryIndex, result ->
+                // Path header
+                item(span = { GridItemSpan(COLUMNS) }) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val pathLabel = result.spec.options.searchTerm?.let { term ->
+                            "Search: \"$term\""
+                        } ?: result.spec.location?.takeIf { it.isNotEmpty() }?.let { loc ->
+                            loc.substringAfterLast('/')
+                        } ?: "Root"
+                        
+                        Button(onClick = { 
+                            onNavigateToPath(result.spec)
+                        }) {
+                            Text(pathLabel)
                         }
-                        (resolveAction(item.type)
-                            ?: resolveAction(FilenameDetector.detectType(item.filename ?: item.title)))
-                            ?.invoke()
-                    },
-                )
+                        Text(
+                            text = "${result.items.size} items",
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+
+                // Items
+                result.items.forEach { item ->
+                    val currentItemIndex = itemIndex++
+                    item(key = item.ref) {
+                        MediaEntryComponent(
+                            item = item,
+                            titleLang = titleLang,
+                            imageLoader = result.client.imageLoader!!,
+                            modifier = if (currentItemIndex < focusRequesters.size)
+                                Modifier.focusRequester(focusRequesters[currentItemIndex])
+                            else Modifier,
+                            onFocused = { onItemFocused(queryIndex, currentItemIndex) },
+                            onClick = {
+                                fun resolveAction(type: String): (() -> Unit)? = when (type) {
+                                    "Folder", "Season" -> { -> onOpenBrowseLocation(result.spec.endpointId, item) }
+                                    "Movie", "Digipak", "Series" -> { -> onOpenDetail(result.spec.endpointId, item) }
+                                    "Livepak" -> { -> onOpenLivePlayer(result.spec.endpointId, item) }
+                                    "Episode", "Video", "LiveChannel" -> { -> onOpenPlayer(result.spec.endpointId, item) }
+                                    "Image" -> { -> onOpenImageViewer(result.spec.endpointId, item.ref) }
+                                    "Audio" -> { -> onOpenAudioUnsupported(result.spec.endpointId, item.ref) }
+                                    else -> null
+                                }
+                                (resolveAction(item.type)
+                                    ?: resolveAction(FilenameDetector.detectType(item.filename ?: item.title)))
+                                    ?.invoke()
+                            },
+                        )
+                    }
+                }
             }
-            if (loading && items.size < totalCount) {
+            if (loading && allItems.size < totalCount) {
                 item(span = { GridItemSpan(COLUMNS) }) {
                     Text(
                         "Loading…",
