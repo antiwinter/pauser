@@ -143,6 +143,19 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([p, host.timer.sleep({ ms }).then(() => fallback)]);
 }
 
+async function searchOneSite(key: string, q: string): Promise<EntryInfo[]> {
+  try {
+    const spider = getSpider(key);
+    if (!spider.search) return [];
+    const result = await withTimeout(
+      spider.search(q, 1),
+      SEARCH_SITE_TIMEOUT_MS,
+      { list: [], total: 0 } as CatVodCategoryResult,
+    );
+    return vodListToEntries(result.list ?? [], key, '', result.total).items;
+  } catch { return []; }
+}
+
 async function searchAllSites(
   _state: CatVodClientState,
   query: string,
@@ -158,19 +171,23 @@ async function searchAllSites(
     keys.push(key);
   }
 
-  const batches = await Promise.all(keys.map(async (key): Promise<EntryInfo[]> => {
-    try {
-      const spider = getSpider(key);
-      if (!spider.search) return [];
-      const result = await withTimeout(
-        spider.search(q, 1),
-        SEARCH_SITE_TIMEOUT_MS,
-        { list: [], total: 0 } as CatVodCategoryResult,
-      );
-      return vodListToEntries(result.list ?? [], key, '', result.total).items;
-    } catch { return []; }
+  // Emit each site's results as they resolve so the UI can paint incrementally
+  // instead of waiting on the slowest spider (or its timeout). The final
+  // flat (config-order) list is returned for the wrapper's terminal emission
+  // and cache payload; the wrapper emits it as isComplete=true.
+  const settled: EntryInfo[][] = new Array(keys.length);
+  await Promise.all(keys.map(async (key, i) => {
+    const items = await searchOneSite(key, q);
+    settled[i] = items;
+    if (items.length) {
+      await host.notification.send({
+        method: 'emit-entries',
+        message: 'partial',
+        result: { data: items, isComplete: false },
+      });
+    }
   }));
-  return batches.flat();
+  return settled.flat();
 }
 
 // ── getEntries ───────────────────────────────────────────────────────────────

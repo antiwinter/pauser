@@ -5,6 +5,7 @@ import com.insomnia.content.contract.StreamRelayRegistry
 import com.insomnia.proxy.contract.HostRemapDns
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -12,10 +13,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
-/** Engine-scoped `host.*` namespaces (`dns`, `relay`, `web`); backed by per-endpoint state. */
+/** Engine-scoped `host.*` namespaces (`dns`, `relay`, `web`, `notification`); backed by per-endpoint state. */
 class EngineHostApis(
     private val httpClient: OkHttpClient,
     private val jarLoader: JarLoader,
+    private val notificationDispatcher: suspend (method: String, result: JsonObject?) -> Unit,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val webSniffer = WebSniffer()
@@ -48,6 +50,21 @@ class EngineHostApis(
             }
             else -> throw IllegalArgumentException("Unknown relay method: $name")
         }
+    }
+
+    /**
+     * `host.notification.send({ method, message?, result? })` — a generic JSON-RPC-ish
+     * channel for JS providers to push host-side notifications. Dispatched by [method];
+     * the [JsClient] registers handlers (e.g. `emit-entries` → [com.insomnia.content.contract.EntryEmitter]).
+     */
+    suspend fun handleNotification(name: String, argsJson: String): String? {
+        if (name != "send") throw IllegalArgumentException("Unknown notification method: $name")
+        val parsed = json.parseToJsonElement(argsJson)
+        val args = if (parsed is JsonNull) JsonObject(emptyMap()) else parsed.jsonObject
+        val method = args["method"]?.jsonPrimitive?.content ?: error("notification.send: missing method")
+        val result = args["result"]?.takeIf { it !is JsonNull }?.jsonObject
+        notificationDispatcher(method, result)
+        return null
     }
 
     /** `host.web.detect({url, headers?, regex, exclude?, script?, timeoutMs?})` */

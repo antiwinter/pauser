@@ -97,6 +97,18 @@ export interface HostAPI {
       timeoutMs?: number;
     }): Promise<{ url: string; headers: Record<string, string> } | null>;
   };
+  /**
+   * Generic JSON-RPC-ish notification channel: JS pushes a host-side notification
+   * keyed by `method`. The host registers handlers per method (e.g. `emit-entries`
+   * forwards a progressive batch to the EntryEmitter during a streaming listEntry).
+   */
+  notification: {
+    send(args: {
+      method: string;
+      message?: string;
+      result?: unknown;
+    }): Promise<void>;
+  };
 }
 
 export interface PlatformInfo {

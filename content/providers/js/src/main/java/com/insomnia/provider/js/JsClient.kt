@@ -1,10 +1,7 @@
 package com.insomnia.provider.js
 
-import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.EntryList
 import com.insomnia.content.contract.EntryTag
-import com.insomnia.content.contract.EntryUserData
-import com.insomnia.player.MediaCodecInfo
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
@@ -13,7 +10,6 @@ import com.insomnia.content.contract.EndpointValidationResult
 import com.insomnia.player.PlaybackSource
 import com.insomnia.player.PlatformInfoData
 import com.insomnia.core.form.contract.QrResult
-import com.insomnia.player.SubtitleTrack
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.MapSerializer
@@ -50,6 +46,25 @@ class JsClient(
     private var initialized = false
     private val initMutex = Mutex()
     private val providerCtxs = ConcurrentHashMap<String, String>()
+
+    /**
+     * Dispatches `host.notification.send` payloads by [method]. Currently handles
+     * `emit-entries` — forwards a progressive batch to the wrapper-supplied
+     * [entryEmitter]. No-op when no emitter is attached (non-progressive caller).
+     */
+    private val notificationDispatcher: suspend (String, JsonObject?) -> Unit = { method, result ->
+        when (method) {
+            "emit-entries" -> {
+                val items = result?.get("data")?.takeIf { it !is JsonNull }?.jsonArray
+                    ?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList()
+                val totalCount = result?.get("totalCount")
+                    ?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull()
+                val isComplete = result?.get("isComplete")?.takeIf { it !is JsonNull }
+                    ?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+                entryEmitter?.emit(items, totalCount, isComplete)
+            }
+        }
+    }
 
     // ── Validation ─────────────────────────────────────────────────────────
 
@@ -122,7 +137,7 @@ class JsClient(
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     private suspend fun <T> withEngine(block: suspend (QuickJsEngine) -> T): T {
-        val engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
+        val engine = QuickJsEngine(hostApis, proxyClient.getHttpClient(), notificationDispatcher)
         return try {
             engine.init()
             engine.evalSnippet(HostBootstrap.JS)
@@ -137,7 +152,7 @@ class JsClient(
         if (initialized) return
         initMutex.withLock {
             if (initialized) return
-            engine = QuickJsEngine(hostApis, proxyClient.getHttpClient())
+            engine = QuickJsEngine(hostApis, proxyClient.getHttpClient(), notificationDispatcher)
             engine.init()
             engine.evalSnippet(HostBootstrap.JS)
             engine.evalBundle(jsBundle)
@@ -181,7 +196,7 @@ class JsClient(
         val resultJson = engine.callMethod("listEntry", argsStr)
             ?: return EntryList(emptyList(), 0)
         val obj = json.parseToJsonElement(resultJson).jsonObject
-        val items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList()
+        val items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList()
         val totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         return EntryList(items = items, totalCount = totalCount)
     }
@@ -196,11 +211,11 @@ class JsClient(
         val obj = json.parseToJsonElement(resultJson)
         return if (obj is kotlinx.serialization.json.JsonObject) {
             EntryList(
-                items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList(),
+                items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList(),
                 totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
             )
         } else {
-            val items = obj.jsonArray.mapNotNull { parseListItem(it.jsonObject) }
+            val items = obj.jsonArray.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) }
             EntryList(items = items, totalCount = items.size)
         }
     }
@@ -226,7 +241,7 @@ class JsClient(
             ?: return EntryList(emptyList(), 0)
         val obj = json.parseToJsonElement(resultJson).jsonObject
         return EntryList(
-            items = obj["items"]?.jsonArray?.mapNotNull { parseListItem(it.jsonObject) } ?: emptyList(),
+            items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList(),
             totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
         )
     }
@@ -267,62 +282,10 @@ class JsClient(
         return parsePlaybackSources(itemRef, obj)
     }
 
-    // ── Parsers ────────────────────────────────────────────────────────────
-
-    private fun parseListItem(obj: JsonObject): EntryInfo? {
-        val ref = obj["ref"]?.jsonPrimitive?.content ?: return null
-        val title = obj["title"]?.jsonPrimitive?.content ?: ref
-        val typeRaw = obj["type"]?.jsonPrimitive?.content ?: obj["kind"]?.jsonPrimitive?.content
-        val cover = obj["cover"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            ?: obj["coverUrl"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-        val ud = obj["userData"]?.takeIf { it !is JsonNull }?.jsonObject
-        return EntryInfo(
-            ref = ref,
-            title = title,
-            type = typeRaw ?: "Unknown",
-            cover = cover,
-            userData = ud?.let {
-                EntryUserData(
-                    positionMs = it["positionMs"]?.takeIf { field -> field !is JsonNull }
-                        ?.jsonPrimitive?.content?.toLongOrNull(),
-                    isFavorite = it["isFavorite"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                    played = it["played"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                )
-            },
-            originalTitle = obj["originalTitle"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            genres = obj["genres"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            communityRating = obj["communityRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toFloatOrNull(),
-            studios = obj["studios"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            actors = obj["actors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            directors = obj["directors"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            areas = obj["areas"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            languages = obj["languages"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content },
-            etag = obj["etag"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            indexNumber = obj["indexNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            overview = obj["overview"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            childCount = obj["childCount"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            parentRef = obj["parentRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            seriesRef = obj["seriesRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            seasonNumber = obj["seasonNumber"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            logo = obj["logo"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            backdrop = obj["backdrop"]?.takeIf { it !is JsonNull }?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-            bitrate = obj["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            year = obj["year"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            durationMs = obj["durationMs"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
-            width = obj["width"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            height = obj["height"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            officialRating = obj["officialRating"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            quality = obj["quality"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            filename = obj["filename"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            sources = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
-                ?.mapNotNull { el -> parseSource(el.jsonObject).takeIf { it.url.isNotEmpty() } },
-        )
-    }
-
     private fun parsePlaybackSources(itemRef: String, obj: JsonObject): List<PlaybackSource> {
         val sourcesEl = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
         val sources = if (sourcesEl != null) {
-            sourcesEl.map { parseSource(it.jsonObject) }
+            sourcesEl.map { EntryInfoCodec.parseSource(it.jsonObject) }
         } else {
             // Backward compat: legacy flat format with url/headers at top level
             val urlSpecObj = obj["urlSpec"]?.takeIf { it !is JsonNull }?.jsonObject
@@ -343,34 +306,5 @@ class JsClient(
         if (ctxEl != null && ctxEl !is JsonNull) providerCtxs[itemRef] = ctxEl.toString()
 
         return sources
-    }
-
-    private fun parseSource(obj: JsonObject): PlaybackSource {
-        val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: ""
-        val headers = obj["headers"]?.takeIf { it !is JsonNull }?.jsonObject
-            ?.mapValues { e -> e.value.jsonPrimitive.content } ?: emptyMap()
-        val mimeType = obj["mimeType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-        val subtitleTracks = obj["subtitleTracks"]?.jsonArray?.mapNotNull { s ->
-            val so = s.jsonObject
-            val trackId = so["trackId"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            SubtitleTrack(
-                trackId = trackId,
-                label = so["label"]?.jsonPrimitive?.content ?: trackId,
-                language = so["language"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-                isDefault = so["isDefault"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                isForced = so["isForced"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
-                externalRef = so["externalRef"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content,
-            )
-        } ?: emptyList()
-        val mediaCodecs = obj["mediaCodecs"]?.takeIf { it !is JsonNull }?.jsonArray?.mapNotNull { s ->
-            val so = s.jsonObject
-            val codec = so["codec"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content ?: return@mapNotNull null
-            MediaCodecInfo(
-                codec = codec,
-                bitDepth = so["bitDepth"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-                bitrate = so["bitrate"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull(),
-            )
-        } ?: emptyList()
-        return PlaybackSource(url = url, headers = headers, mimeType = mimeType, subtitleTracks = subtitleTracks, mediaCodecs = mediaCodecs)
     }
 }

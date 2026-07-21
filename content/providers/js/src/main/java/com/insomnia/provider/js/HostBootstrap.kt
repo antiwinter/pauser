@@ -30,6 +30,7 @@ internal object HostBootstrap {
     timer:  ns('timer'),
     dns:    ns('dns'),
     relay:  ns('relay'),
+    notification: ns('notification'),
   };
   globalThis.console = {
     log: function() {

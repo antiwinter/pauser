@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import timber.log.Timber
@@ -22,10 +23,11 @@ import timber.log.Timber
 class QuickJsEngine(
     private val hostApis: HostApis,
     private val httpClient: OkHttpClient,
+    notificationDispatcher: suspend (method: String, result: JsonObject?) -> Unit,
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val jarLoader   = JarLoader(hostApis.sandboxRoot, httpClient)
-    private val engineHostApis = EngineHostApis(httpClient, jarLoader)
+    private val engineHostApis = EngineHostApis(httpClient, jarLoader, notificationDispatcher)
 
     /** Single input queue. UNLIMITED so trySend from invokeHostFunction never blocks. */
     private val taskChannel = Channel<EngineTask>(Channel.UNLIMITED)
@@ -180,6 +182,7 @@ class QuickJsEngine(
             "dns"    -> engineHostApis.handleDns(name, argsJson)
             "relay"  -> engineHostApis.handleRelay(name, argsJson)
             "web"    -> engineHostApis.handleWeb(name, argsJson)
+            "notification" -> engineHostApis.handleNotification(name, argsJson)
             // Shared stateless handlers
             "http"   -> hostApis.handleHttp(name, argsJson, httpClient)
             "crypto" -> hostApis.handleCrypto(name, argsJson)

@@ -56,7 +56,7 @@ abstract class EndpointClient {
     open var protocol: String = ""
     open val progressIntervalMs: Long = 10_000L
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
-    internal var entryEmitter: EntryEmitter? = null
+    var entryEmitter: EntryEmitter? = null
     abstract suspend fun listEntry(
         location: String?,
         startIndex: Int,
