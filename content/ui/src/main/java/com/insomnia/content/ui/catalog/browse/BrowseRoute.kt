@@ -62,6 +62,11 @@ fun BrowseRoute(
                     coroutineScope.launch {
                         val searchSpecs = viewModel.buildSearchQuerySpec(term, scope)
                         if (searchSpecs.isNotEmpty()) {
+                            // Replace an existing search route instead of stacking,
+                            // so Back from the new search returns to the prior screen.
+                            if (initialSpecs.any { it.options.searchTerm != null }) {
+                                nav.popBackStack()
+                            }
                             nav.navigate(Routes.browse(searchSpecs))
                         }
                     }
