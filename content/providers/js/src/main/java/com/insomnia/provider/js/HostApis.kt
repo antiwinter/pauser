@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.delay
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import timber.log.Timber
 import okhttp3.OkHttpClient
@@ -59,7 +60,12 @@ class HostApis(
     @Serializable private data class JarRegisterLoaderArgs(val handle: String, val instanceHandle: String)
     @Serializable private data class JarAdoptParentArgs(val childKey: String, val parentKey: String)
 
-    suspend fun handleHttp(name: String, argsJson: String, client: OkHttpClient): String? {
+    suspend fun handleHttp(
+        name: String,
+        argsJson: String,
+        client: OkHttpClient,
+        tracker: MutableSet<Call>? = null,
+    ): String? {
         val method = when (name) {
             "get"  -> "GET"
             "post" -> "POST"
@@ -67,10 +73,15 @@ class HostApis(
         }
         val args = json.decodeFromString<HttpRequestArgs>(argsJson)
         val bodyStr = if (method == "POST") args.body else null
-        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client)
+        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client, tracker)
     }
 
-    fun handleHttpSync(name: String, argsJson: String, client: OkHttpClient): String? {
+    fun handleHttpSync(
+        name: String,
+        argsJson: String,
+        client: OkHttpClient,
+        tracker: MutableSet<Call>? = null,
+    ): String? {
         val method = when (name) {
             "get"  -> "GET"
             "post" -> "POST"
@@ -78,7 +89,7 @@ class HostApis(
         }
         val args = json.decodeFromString<HttpRequestArgs>(argsJson)
         val bodyStr = if (method == "POST") args.body else null
-        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client)
+        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client, tracker)
     }
 
     private fun executeHttp(
@@ -88,6 +99,7 @@ class HostApis(
         bodyStr: String?,
         contentType: String?,
         client: OkHttpClient,
+        tracker: MutableSet<Call>?,
     ): String {
         val requestBuilder = Request.Builder().url(encodeIdnUrl(url))
         headers.forEach { (k, v) -> requestBuilder.header(k, v) }
@@ -100,10 +112,15 @@ class HostApis(
         } else null
 
         requestBuilder.method(method, body)
-        val response = client.newCall(requestBuilder.build()).execute()
-        response.use { resp ->
-            val respBody = resp.body?.string() ?: ""
-            return json.encodeToString(HttpResponseDto(resp.code, respBody, resp.headers.toMap()))
+        val call = client.newCall(requestBuilder.build())
+        if (tracker != null) tracker.add(call)
+        return try {
+            call.execute().use { resp ->
+                val respBody = resp.body?.string() ?: ""
+                json.encodeToString(HttpResponseDto(resp.code, respBody, resp.headers.toMap()))
+            }
+        } finally {
+            tracker?.remove(call)
         }
     }
     fun handleFs(name: String, argsJson: String): String? {

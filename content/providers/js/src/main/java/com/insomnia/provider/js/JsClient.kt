@@ -17,7 +17,10 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
@@ -176,6 +179,7 @@ class JsClient(
         options: QueryOptions,
     ): EntryList {
         ensureReady()
+        engine.abortInFlightHttp()
         val args = buildJsonObject {
             put("location", if (location.isNullOrEmpty()) JsonNull else JsonPrimitive(location))
             put("startIndex", startIndex)

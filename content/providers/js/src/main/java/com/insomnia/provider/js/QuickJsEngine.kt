@@ -36,6 +36,15 @@ class QuickJsEngine(
 
     private val keyGen = AtomicLong(1L)
 
+    /** In-flight OkHttp calls issued by this engine's sync/async http host handlers.
+     *  [abortInFlightHttp] cancels them so a stalled [callMethod] (e.g. a long search)
+     *  unblocks the single-threaded engine for the next call. */
+    private val inFlightHttp = ConcurrentHashMap.newKeySet<okhttp3.Call>()
+
+    fun abortInFlightHttp() {
+        inFlightHttp.forEach { runCatching { it.cancel() } }
+    }
+
     private sealed class EngineTask {
         data class CallMethod(val method: String, val args: String, val key: Long) : EngineTask()
         data class SettleHost(val hostKey: Long, val result: String?, val isError: Boolean) : EngineTask()
@@ -184,7 +193,7 @@ class QuickJsEngine(
             "web"    -> engineHostApis.handleWeb(name, argsJson)
             "notification" -> engineHostApis.handleNotification(name, argsJson)
             // Shared stateless handlers
-            "http"   -> hostApis.handleHttp(name, argsJson, httpClient)
+            "http"   -> hostApis.handleHttp(name, argsJson, httpClient, inFlightHttp)
             "crypto" -> hostApis.handleCrypto(name, argsJson)
             "jar"    -> hostApis.handleJar(name, argsJson, jarLoader)
             "fs"     -> hostApis.handleFs(name, argsJson)
@@ -197,7 +206,7 @@ class QuickJsEngine(
     @Keep
     fun invokeHostFunctionSync(namespace: String, name: String, argsJson: String): String? =
         when (namespace) {
-            "http" -> hostApis.handleHttpSync(name, argsJson, httpClient)
+            "http" -> hostApis.handleHttpSync(name, argsJson, httpClient, inFlightHttp)
             else   -> throw IllegalArgumentException("No sync handler for namespace: $namespace")
         }
 
