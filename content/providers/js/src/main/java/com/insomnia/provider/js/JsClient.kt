@@ -12,13 +12,12 @@ import com.insomnia.player.PlatformInfoData
 import com.insomnia.core.form.contract.QrResult
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
@@ -43,6 +42,19 @@ class JsClient(
 ) : EndpointClient() {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true; encodeDefaults = true }
+
+    // TS-mirrored response DTOs for test/getQr/pollQr — see AGENTS.md.
+    @Serializable private data class TestResponse(
+        val success: Boolean = false,
+        val fields: Map<String, String> = emptyMap(),
+        val error: String? = null,
+    )
+    @Serializable private data class QrReadyResponse(val token: String, val qrData: String)
+    @Serializable private data class PollQrResponse(
+        val status: String,
+        val fields: Map<String, String> = emptyMap(),
+        val error: String? = null,
+    )
 
     private lateinit var engine: QuickJsEngine
     private var initialized = false
@@ -72,16 +84,9 @@ class JsClient(
             val resultJson = engine.callMethod("test", """{"credentials":$credsJson}""")
                 ?: return EndpointValidationResult.Error("Validation returned null")
 
-            val obj = json.parseToJsonElement(resultJson).jsonObject
-            val success = obj["success"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-            if (success) {
-                val fieldsEl = obj["fields"] ?: return EndpointValidationResult.Error("Missing fields in validation response")
-                val fieldsObj = fieldsEl.jsonObject
-                val fields = fieldsObj.mapValues { (_, v) -> v.jsonPrimitive.content }
-                EndpointValidationResult.Success(fields = fields)
-            } else {
-                EndpointValidationResult.Error(obj["error"]?.jsonPrimitive?.content ?: "Validation failed")
-            }
+            val r = json.decodeFromString<TestResponse>(resultJson)
+            if (r.success) EndpointValidationResult.Success(fields = r.fields)
+            else EndpointValidationResult.Error(r.error ?: "Validation failed")
         } catch (e: Exception) {
             EndpointValidationResult.Error(e.message ?: "JS validation error")
         }
@@ -94,10 +99,8 @@ class JsClient(
             val resultJson = withEngine { engine ->
                 engine.callMethod("getQr", "{}")
             } ?: return null
-            val obj = json.parseToJsonElement(resultJson).jsonObject
-            val token  = obj["token"]?.jsonPrimitive?.content ?: return null
-            val qrData = obj["qrData"]?.jsonPrimitive?.content ?: return null
-            QrResult.QrReady(token = token, qrData = qrData)
+            val r = json.decodeFromString<QrReadyResponse>(resultJson)
+            QrResult.QrReady(token = r.token, qrData = r.qrData)
         } catch (_: Exception) {
             null
         }
@@ -105,6 +108,8 @@ class JsClient(
 
     override suspend fun pollQr(token: String): QrResult {
         return try {
+            // Benchmark-style providers encode the confirmed fields as a JSON object
+            // inside the token itself — short-circuit without a second JS invocation.
             val tokenEl = runCatching { json.parseToJsonElement(token) }.getOrNull()
             if (tokenEl is JsonObject) {
                 return QrResult.Confirmed(tokenEl.mapValues { (_, v) -> v.jsonPrimitive.content })
@@ -113,18 +118,13 @@ class JsClient(
             val resultJson = withEngine { engine ->
                 engine.callMethod("pollQr", args)
             } ?: return QrResult.Error("null response")
-            val obj = json.parseToJsonElement(resultJson).jsonObject
-            when (obj["status"]?.jsonPrimitive?.content) {
-                "confirmed" -> {
-                    val fields = obj["fields"]?.jsonObject
-                        ?.mapValues { (_, v) -> v.jsonPrimitive.content }
-                        ?: emptyMap()
-                    QrResult.Confirmed(fields)
-                }
+            val r = json.decodeFromString<PollQrResponse>(resultJson)
+            when (r.status) {
+                "confirmed" -> QrResult.Confirmed(r.fields)
                 "scanning"  -> QrResult.Scanning
                 "scanned"   -> QrResult.Scanned
                 "expired"   -> QrResult.Expired
-                else        -> QrResult.Error(obj["error"]?.jsonPrimitive?.content ?: "unknown status")
+                else        -> QrResult.Error(r.error ?: "unknown status")
             }
         } catch (e: Exception) {
             QrResult.Error(e.message ?: "pollQr error")
