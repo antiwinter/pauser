@@ -7,7 +7,6 @@ import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.epcache.CachingEndpointClient
-import com.insomnia.content.ui.catalog.ArtUrlInjector
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -153,20 +152,19 @@ class BrowseViewModel : ViewModel() {
             runCatching {
                 query.client.listEntry(query.spec.location, startIndex, limit, query.spec.options)
                     .collect { emission ->
-                        val injected = ArtUrlInjector.apply(emission.items, query.client.protocol, query.spec.endpointId)
-
                         // Merge: replace matching items, keep others, append new
                         val current = _queries.value[queryIndex]
                         val existingMap = current.items.associateBy { it.ref }
-                        val updatedMap = existingMap + injected.associateBy { it.ref }
+                        val updatedMap = existingMap + emission.items.associateBy { it.ref }
                         val newItems = updatedMap.values.toList()
 
                         // Replace in list
                         val queries = _queries.value.toMutableList()
+                        val pageIndex = if (offset == null) startIndex / PAGE_SIZE else current.currentPageIndex
                         queries[queryIndex] = current.copy(
                             items = newItems,
                             totalCount = emission.totalCount ?: newItems.size,
-                            currentPageIndex = startIndex / PAGE_SIZE,
+                            currentPageIndex = pageIndex,
                         )
                         _queries.value = queries
 

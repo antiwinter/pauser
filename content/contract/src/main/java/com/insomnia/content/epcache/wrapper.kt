@@ -9,6 +9,7 @@ import com.insomnia.content.contract.EndpointClient
 import com.insomnia.content.contract.EndpointValidationResult
 import com.insomnia.content.contract.FileRelay
 import com.insomnia.content.contract.QueryOptions
+import com.insomnia.content.contract.SERVER_PORT
 import com.insomnia.content.contract.SortField
 import com.insomnia.content.contract.SortOrder
 import com.insomnia.content.contract.UserDataMerge
@@ -20,6 +21,7 @@ import com.insomnia.proxy.contract.ProxyClient
 import com.insomnia.storage.EntryStateKey
 import com.insomnia.storage.EntryStateStore
 import com.insomnia.storage.StorageBindingsHolder
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -46,6 +48,7 @@ import coil3.ImageLoader
  */
 class CachingEndpointClient(
     private val delegate: EndpointClient,
+    private val useGenart: Boolean,
 ) {
 
     private val inheritableKeys = setOf(
@@ -260,7 +263,14 @@ class CachingEndpointClient(
     private suspend fun mergeEntry(info: EntryInfo, store: EntryStateStore): EntryInfo {
         val local = store.get(endpointId, info.ref)
         val userData = UserDataMerge.merge(info.userData, local)
-        return if (userData != info.userData) info.copy(userData = userData) else info
+        val withArt = if (useGenart && info.cover == null) {
+            info.copy(cover = 
+                // bump version with :genart
+                "http://localhost:$SERVER_PORT/genart/cover/v1/" +
+                Uri.encode(endpointId) + "/" + Uri.encode(info.ref)
+            )
+        } else info
+        return if (userData != withArt.userData) withArt.copy(userData = userData) else withArt
     }
 
     private fun evictStreamRefs(itemRef: String) {

@@ -34,8 +34,8 @@ class EndpointClientRegistry(
     override suspend fun getOrCreate(endpointId: String): CachingEndpointClient? = mutex.withLock {
         clients[endpointId] ?: run {
             val entity = endpointDao.getByEndpointId(endpointId) ?: return@withLock null
-            val client = buildClient(entity) ?: return@withLock null
-            val wrapped = CachingEndpointClient(client)
+            val (client, useGenart) = buildClient(entity) ?: return@withLock null
+            val wrapped = CachingEndpointClient(client, useGenart)
             clients[endpointId] = wrapped
             wrapped
         }
@@ -43,17 +43,18 @@ class EndpointClientRegistry(
 
     override suspend fun registerHandle(endpointId: String, entity: EndpointEntity): CachingEndpointClient? =
         mutex.withLock {
-            val client = buildClient(entity) ?: return@withLock null
-            val wrapped = CachingEndpointClient(client)
+            val (client, useGenart) = buildClient(entity) ?: return@withLock null
+            val wrapped = CachingEndpointClient(client, useGenart)
             clients[endpointId] = wrapped
             wrapped
         }
 
     override suspend fun update(endpointId: String, entity: EndpointEntity): Unit = mutex.withLock {
         EndpointCache.clearForEndpoint(endpointId)
-        val client = buildClient(entity)
-        if (client != null) {
-            val wrapped = CachingEndpointClient(client)
+        val built = buildClient(entity)
+        if (built != null) {
+            val (client, useGenart) = built
+            val wrapped = CachingEndpointClient(client, useGenart)
             clients[endpointId] = wrapped
         } else {
             clients.remove(endpointId)
@@ -68,8 +69,8 @@ class EndpointClientRegistry(
     suspend fun populateEager(entities: List<EndpointEntity>): Unit = mutex.withLock {
         for (entity in entities) {
             if (!clients.containsKey(entity.endpointId)) {
-                val client = buildClient(entity) ?: continue
-                val wrapped = CachingEndpointClient(client)
+                val (client, useGenart) = buildClient(entity) ?: continue
+                val wrapped = CachingEndpointClient(client, useGenart)
                 clients[entity.endpointId] = wrapped
             }
         }
@@ -107,7 +108,7 @@ class EndpointClientRegistry(
         clients.keys.toList()
     }
 
-    private suspend fun buildClient(entity: EndpointEntity): EndpointClient? {
+    private suspend fun buildClient(entity: EndpointEntity): Pair<EndpointClient, Boolean>? {
         val provider = runCatching { providerRegistry.provider(entity.protocol) }.getOrNull()
             ?: return null
         val values = runCatching {
@@ -129,6 +130,6 @@ class EndpointClientRegistry(
         client.endpointId = entity.endpointId
         client.protocol = entity.protocol
 
-        return client
+        return client to !provider.providesArt
     }
 }
