@@ -3,7 +3,6 @@ package com.insomnia.provider.js
 import com.insomnia.content.contract.EntryEmission
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.EntryList
-import com.insomnia.player.PlaybackSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -12,15 +11,15 @@ import kotlinx.serialization.json.jsonObject
 
 /**
  * Decodes the JSON JS providers return into contract types ([EntryInfo], [EntryList],
- * [EntryEmission], [PlaybackSource]). All four are [kotlinx.serialization.Serializable]
- * and the TS types mirror the Kotlin field names exactly, so decoding is plain
+ * [EntryEmission]). All three are [kotlinx.serialization.Serializable] and the TS
+ * types mirror the Kotlin field names exactly, so decoding is plain
  * [decodeFromJsonElement] with no hand-mirrored field mapping.
  *
  * Strict by design: a malformed element in a list is dropped (returns null,
- * filtered by the caller's `mapNotNull`); a malformed standalone source throws,
- * surfacing the provider bug instead of silently producing an empty-url source.
+ * filtered by the caller's `mapNotNull`); a malformed standalone entry throws,
+ * surfacing the provider bug instead of silently producing a half-built entry.
  *
- * [sanitize] drops PlaybackSources with empty urls from each entry's `sources` —
+ * [sanitize] drops playback sources with empty urls from each entry's `sources` —
  * the one piece of real post-decode logic.
  */
 internal object EntryInfoCodec {
@@ -50,9 +49,6 @@ internal object EntryInfoCodec {
     fun parseEntry(obj: JsonObject): EntryInfo? = runCatching {
         sanitize(json.decodeFromJsonElement<EntryInfo>(obj))
     }.getOrNull()
-
-    fun parseSource(obj: JsonObject): PlaybackSource =
-        json.decodeFromJsonElement<PlaybackSource>(obj)
 
     private fun sanitize(info: EntryInfo): EntryInfo {
         val srcs = info.sources ?: return info

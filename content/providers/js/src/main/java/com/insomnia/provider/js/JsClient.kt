@@ -18,10 +18,12 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -57,6 +59,10 @@ class JsClient(
         val status: String,
         val fields: Map<String, String> = emptyMap(),
         val error: String? = null,
+    )
+    @Serializable private data class PlaybackSourcesResponse(
+        val sources: List<PlaybackSource> = emptyList(),
+        val ctx: JsonElement? = null,
     )
 
     private lateinit var engine: QuickJsEngine
@@ -256,40 +262,14 @@ class JsClient(
             put("startMs", startMs)
         }
         val resultJson = engine.callMethod("getPlaybackSources", args.toString())
-            ?: engine.callMethod("getPlaybackSpec", args.toString())
             ?: error("getPlaybackSources returned null")
         val resultEl = json.parseToJsonElement(resultJson)
-        val obj = if (resultEl is kotlinx.serialization.json.JsonArray) {
-            buildJsonObject { put("sources", resultEl) }
-        } else {
-            resultEl.jsonObject
+        val response = when (resultEl) {
+            is JsonArray  -> PlaybackSourcesResponse(sources = json.decodeFromJsonElement(resultEl))
+            is JsonObject -> json.decodeFromJsonElement(resultEl)
+            else          -> error("getPlaybackSources: unexpected JSON shape")
         }
-        return parsePlaybackSources(itemRef, obj)
-    }
-
-    private fun parsePlaybackSources(itemRef: String, obj: JsonObject): List<PlaybackSource> {
-        val sourcesEl = obj["sources"]?.takeIf { it !is JsonNull }?.jsonArray
-        val sources = if (sourcesEl != null) {
-            sourcesEl.map { EntryInfoCodec.parseSource(it.jsonObject) }
-        } else {
-            // Backward compat: legacy flat format with url/headers at top level
-            val urlSpecObj = obj["urlSpec"]?.takeIf { it !is JsonNull }?.jsonObject
-            val url = obj["url"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                ?: urlSpecObj?.get("url")?.jsonPrimitive?.content
-                ?: error("JS provider returned null URL")
-            val headers = obj["headers"]?.takeIf { it !is JsonNull }?.jsonObject
-                ?.mapValues { e -> e.value.jsonPrimitive.content }
-                ?: urlSpecObj?.get("headers")?.takeIf { it !is JsonNull }?.jsonObject
-                    ?.mapValues { e -> e.value.jsonPrimitive.content }
-                ?: emptyMap()
-            val mimeType = obj["mimeType"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                ?: urlSpecObj?.get("mimeType")?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-            listOf(PlaybackSource(url = url, headers = headers, mimeType = mimeType))
-        }
-
-        val ctxEl = obj["ctx"] ?: obj["hooksCtx"]
-        if (ctxEl != null && ctxEl !is JsonNull) providerCtxs[itemRef] = ctxEl.toString()
-
-        return sources
+        response.ctx?.let { providerCtxs[itemRef] = it.toString() }
+        return response.sources
     }
 }
