@@ -129,6 +129,7 @@ class EndpointClientRegistry(
             .build()
         client.endpointId = entity.endpointId
         client.protocol = entity.protocol
+        client.displayName = entity.displayName
 
         return client to !provider.providesArt
     }

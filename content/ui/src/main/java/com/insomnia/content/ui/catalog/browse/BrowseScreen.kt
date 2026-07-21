@@ -118,9 +118,9 @@ fun BrowseScreen(
                             .padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        val pathLabel = result.spec.options.searchTerm?.let { term ->
-                            "Search: \"$term\""
-                        } ?: result.spec.location?.takeIf { it.isNotEmpty() }?.let { loc ->
+                        val pathLabel = if (result.spec.options.searchTerm != null) {
+                            result.client.displayName
+                        } else result.spec.location?.takeIf { it.isNotEmpty() }?.let { loc ->
                             loc.substringAfterLast('/')
                         } ?: "Root"
                         

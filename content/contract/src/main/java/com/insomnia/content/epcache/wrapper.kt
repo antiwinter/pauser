@@ -61,6 +61,7 @@ class CachingEndpointClient(
 
     val endpointId: String get() = delegate.endpointId
     val protocol: String get() = delegate.protocol
+    val displayName: String get() = delegate.displayName
     val imageLoader: ImageLoader? get() = delegate.imageLoader
     val proxyClient: ProxyClient get() = delegate.proxyClient
     val progressIntervalMs: Long get() = delegate.progressIntervalMs

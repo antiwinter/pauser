@@ -56,6 +56,7 @@ abstract class EndpointClient {
     open var proxyClient: ProxyClient = WrappedProxyClient(null)
     open var endpointId: String = ""
     open var protocol: String = ""
+    open var displayName: String = ""
     open val progressIntervalMs: Long = 10_000L
     open suspend fun test(): EndpointValidationResult = EndpointValidationResult.Success(emptyMap())
     var entryEmitter: EntryEmitter? = null
