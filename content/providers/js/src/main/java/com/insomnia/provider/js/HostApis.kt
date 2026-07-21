@@ -1,15 +1,14 @@
 package com.insomnia.provider.js
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import kotlinx.coroutines.delay
 import okhttp3.MediaType.Companion.toMediaType
 import timber.log.Timber
@@ -30,39 +29,71 @@ class HostApis(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    @Serializable private data class HttpRequestArgs(
+        val url: String,
+        val headers: Map<String, String> = emptyMap(),
+        val body: String? = null,
+        val contentType: String? = null,
+    )
+
+    @Serializable private data class HttpResponseDto(
+        val status: Int,
+        val body: String,
+        val headers: Map<String, String>,
+    )
+
+    @Serializable private data class JarSource(val url: String? = null, val path: String? = null, val buffer: String? = null)
+    @Serializable private data class JarLoadArgs(val source: JarSource)
+
+    @Serializable private data class JarReflectArgs(
+        val handle: String,
+        val cls: String,
+        val method: String,
+        val instance: String? = null,
+        val args: List<JsonElement> = emptyList(),
+        val factoryCls: String? = null,
+        val factoryMethod: String? = null,
+    )
+
+    @Serializable private data class JarHandleArgs(val handle: String, val cls: String)
+    @Serializable private data class JarRegisterLoaderArgs(val handle: String, val instanceHandle: String)
+    @Serializable private data class JarAdoptParentArgs(val childKey: String, val parentKey: String)
+
     suspend fun handleHttp(name: String, argsJson: String, client: OkHttpClient): String? {
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        return when (name) {
-            "get"  -> executeHttp(args, "GET",  null, client)
-            "post" -> executeHttp(args, "POST", args["body"]?.jsonPrimitive?.content, client)
+        val method = when (name) {
+            "get"  -> "GET"
+            "post" -> "POST"
             else   -> throw IllegalArgumentException("Unknown http method: $name")
         }
+        val args = json.decodeFromString<HttpRequestArgs>(argsJson)
+        val bodyStr = if (method == "POST") args.body else null
+        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client)
     }
 
     fun handleHttpSync(name: String, argsJson: String, client: OkHttpClient): String? {
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        return when (name) {
-            "get"  -> executeHttp(args, "GET",  null, client)
-            "post" -> executeHttp(args, "POST", args["body"]?.jsonPrimitive?.content, client)
+        val method = when (name) {
+            "get"  -> "GET"
+            "post" -> "POST"
             else   -> throw IllegalArgumentException("Unknown http sync method: $name")
         }
+        val args = json.decodeFromString<HttpRequestArgs>(argsJson)
+        val bodyStr = if (method == "POST") args.body else null
+        return executeHttp(args.url, args.headers, method, bodyStr, args.contentType, client)
     }
 
     private fun executeHttp(
-        args: JsonObject,
+        url: String,
+        headers: Map<String, String>,
         method: String,
         bodyStr: String?,
+        contentType: String?,
         client: OkHttpClient,
     ): String {
-        val rawUrl = args["url"]?.jsonPrimitive?.content ?: error("http.$method: missing url")
-        val url    = encodeIdnUrl(rawUrl)
-        val hdrs   = args["headers"]?.jsonObject ?: JsonObject(emptyMap())
-
-        val requestBuilder = Request.Builder().url(url)
-        hdrs.forEach { (k, v) -> requestBuilder.header(k, v.jsonPrimitive.content) }
+        val requestBuilder = Request.Builder().url(encodeIdnUrl(url))
+        headers.forEach { (k, v) -> requestBuilder.header(k, v) }
 
         val body = if (bodyStr != null) {
-            val ct = args["contentType"]?.jsonPrimitive?.content ?: "application/json"
+            val ct = contentType ?: "application/json"
             bodyStr.toRequestBody(ct.toMediaType())
         } else if (method == "POST") {
             "".toRequestBody("application/json".toMediaType())
@@ -72,14 +103,7 @@ class HostApis(
         val response = client.newCall(requestBuilder.build()).execute()
         response.use { resp ->
             val respBody = resp.body?.string() ?: ""
-            val respHeaders = buildJsonObject {
-                resp.headers.forEach { (k, v) -> put(k, v) }
-            }
-            return buildJsonObject {
-                put("status", resp.code)
-                put("body", respBody)
-                put("headers", respHeaders)
-            }.toString()
+            return json.encodeToString(HttpResponseDto(resp.code, respBody, resp.headers.toMap()))
         }
     }
     fun handleFs(name: String, argsJson: String): String? {
@@ -190,58 +214,44 @@ class HostApis(
         }
     }
 
-    fun handleJar(name: String, argsJson: String, jarLoader: JarLoader): String? {
-        val parsed = json.parseToJsonElement(argsJson)
-        val args = if (parsed is JsonNull) JsonObject(emptyMap()) else parsed.jsonObject
-        return when (name) {
-            "load" -> {
-                val source = args["source"]?.jsonObject
-                    ?: throw IllegalArgumentException("host.jar.load: missing 'source' object")
-                // Handle returned to JS for use in loadClass/reflect/registerLoader.
-                JsonPrimitive(jarLoader.load(parseLoadSource(source))).toString()
+    fun handleJar(name: String, argsJson: String, jarLoader: JarLoader): String? = when (name) {
+        "load" -> {
+            val source = json.decodeFromString<JarLoadArgs>(argsJson).source
+            // Handle returned to JS for use in loadClass/reflect/registerLoader.
+            val loadSource = when {
+                source.url != null    -> LoadSource.Url(source.url)
+                source.path != null    -> LoadSource.Path(source.path)
+                source.buffer != null  -> LoadSource.Buffer(source.buffer)
+                else -> throw IllegalArgumentException("host.jar.load: source must declare one of {url, path, buffer}")
             }
-            "reflect" -> {
-                val handle        = args["handle"]!!.jsonPrimitive.content
-                val cls           = args["cls"]!!.jsonPrimitive.content
-                val method        = args["method"]!!.jsonPrimitive.content
-                val instance      = args["instance"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                val rawArgs       = args["args"]?.takeIf { it !is JsonNull }?.jsonArray ?: JsonArray(emptyList())
-                val factoryCls    = args["factoryCls"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                val factoryMethod = args["factoryMethod"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                jarLoader.reflect(handle, cls, method, instance, rawArgs, factoryCls, factoryMethod)
-            }
-            "loadClass" -> {
-                val handle = args["handle"]!!.jsonPrimitive.content
-                val cls    = args["cls"]!!.jsonPrimitive.content
-                jarLoader.loadClass(handle, cls)
-                "true"
-            }
-            "registerLoader" -> {
-                val handle        = args["handle"]!!.jsonPrimitive.content
-                val instanceHandle = args["instanceHandle"]!!.jsonPrimitive.content
-                jarLoader.registerLoader(handle, instanceHandle)
-                "true"
-            }
-            "adoptParent" -> {
-                val childKey  = args["childKey"]!!.jsonPrimitive.content
-                val parentKey = args["parentKey"]!!.jsonPrimitive.content
-                jarLoader.adoptParent(childKey, parentKey)
-                "true"
-            }
-            "clearInstances" -> {
-                jarLoader.clearInstances()
-                "true"
-            }
-            else -> throw IllegalArgumentException("Unknown jar method: $name")
+            JsonPrimitive(jarLoader.load(loadSource)).toString()
         }
+        "reflect" -> {
+            val a = json.decodeFromString<JarReflectArgs>(argsJson)
+            jarLoader.reflect(a.handle, a.cls, a.method, a.instance, JsonArray(a.args), a.factoryCls, a.factoryMethod)
+        }
+        "loadClass" -> {
+            val a = json.decodeFromString<JarHandleArgs>(argsJson)
+            jarLoader.loadClass(a.handle, a.cls)
+            "true"
+        }
+        "registerLoader" -> {
+            val a = json.decodeFromString<JarRegisterLoaderArgs>(argsJson)
+            jarLoader.registerLoader(a.handle, a.instanceHandle)
+            "true"
+        }
+        "adoptParent" -> {
+            val a = json.decodeFromString<JarAdoptParentArgs>(argsJson)
+            jarLoader.adoptParent(a.childKey, a.parentKey)
+            "true"
+        }
+        "clearInstances" -> {
+            jarLoader.clearInstances()
+            "true"
+        }
+        else -> throw IllegalArgumentException("Unknown jar method: $name")
     }
 
-    private fun parseLoadSource(source: JsonObject): LoadSource = when {
-        source["url"] is JsonPrimitive -> LoadSource.Url(source["url"]!!.jsonPrimitive.content)
-        source["path"] is JsonPrimitive -> LoadSource.Path(source["path"]!!.jsonPrimitive.content)
-        source["buffer"] is JsonPrimitive -> LoadSource.Buffer(source["buffer"]!!.jsonPrimitive.content)
-        else -> throw IllegalArgumentException("host.jar.load: source must declare one of {url, path, buffer}")
-    }
 }
 
 private fun encodeIdnUrl(url: String): String = try {

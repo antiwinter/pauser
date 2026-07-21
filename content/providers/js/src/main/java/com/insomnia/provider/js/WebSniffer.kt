@@ -11,12 +11,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.Serializable
 import timber.log.Timber
 
 /**
  * Result of a successful sniff: the matched resource URL and the request headers
- * the WebView attached to it.
+ * the WebView attached to it. Doubles as the `host.web.detect` JSON response shape.
  */
+@Serializable
 data class SniffMatch(val url: String, val headers: Map<String, String>)
 
 /**

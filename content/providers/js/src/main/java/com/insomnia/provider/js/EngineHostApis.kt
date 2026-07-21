@@ -3,14 +3,12 @@ package com.insomnia.provider.js
 import com.insomnia.content.contract.SERVER_PORT
 import com.insomnia.content.contract.StreamRelayRegistry
 import com.insomnia.proxy.contract.HostRemapDns
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 
 /** Engine-scoped `host.*` namespaces (`dns`, `relay`, `web`, `notification`); backed by per-endpoint state. */
@@ -22,34 +20,37 @@ class EngineHostApis(
     private val json = Json { ignoreUnknownKeys = true }
     private val webSniffer = WebSniffer()
 
+    @Serializable private data class RelayRegisterArgs(val cls: String, val method: String, val token: String)
+    @Serializable private data class RelayRegisterResult(val token: String, val baseUrl: String)
+
+    @Serializable private data class WebDetectArgs(
+        val url: String,
+        val headers: Map<String, String> = emptyMap(),
+        val regex: List<String>,
+        val exclude: List<String> = emptyList(),
+        val script: List<String> = emptyList(),
+        val timeoutMs: Long = 15_000L,
+    )
+
     /** `host.dns.remap({from, to})` */
     fun handleDns(name: String, argsJson: String): String {
         if (name != "remap") throw IllegalArgumentException("Unknown dns method: $name")
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        val from = args["from"]?.jsonPrimitive?.content ?: error("dns.remap: missing from")
-        val to = args["to"]?.jsonPrimitive?.content ?: error("dns.remap: missing to")
+        val args = json.parseToJsonElement(argsJson).let { if (it is JsonObject) it else JsonObject(emptyMap()) }
+        val from = args["from"]?.let { it.jsonPrimitive.content } ?: error("dns.remap: missing from")
+        val to = args["to"]?.let { it.jsonPrimitive.content } ?: error("dns.remap: missing to")
         (httpClient.dns as? HostRemapDns)?.remap(from, to)
         return "true"
     }
 
     fun handleRelay(name: String, argsJson: String): String {
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        when (name) {
-            "register" -> {
-                val cls = args["cls"]?.jsonPrimitive?.content ?: error("relay.register: missing cls")
-                val method = args["method"]?.jsonPrimitive?.content ?: error("relay.register: missing method")
-                val token = args["token"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.content
-                    ?: error("relay.register: missing token")
-                // JarStreamRelayRecipe.get is process-wide per (cls, method), so re-register
-                // from a re-evaluated JS bundle returns the same instance.
-                StreamRelayRegistry.register(token, JarStreamRelayRecipe.get(jarLoader, cls, method))
-                return buildJsonObject {
-                    put("token", token)
-                    put("baseUrl", "http://127.0.0.1:${SERVER_PORT}/relay/$token")
-                }.toString()
-            }
-            else -> throw IllegalArgumentException("Unknown relay method: $name")
-        }
+        if (name != "register") throw IllegalArgumentException("Unknown relay method: $name")
+        val args = json.decodeFromString<RelayRegisterArgs>(argsJson)
+        // JarStreamRelayRecipe.get is process-wide per (cls, method), so re-register
+        // from a re-evaluated JS bundle returns the same instance.
+        StreamRelayRegistry.register(args.token, JarStreamRelayRecipe.get(jarLoader, args.cls, args.method))
+        return json.encodeToString(
+            RelayRegisterResult(args.token, "http://127.0.0.1:${SERVER_PORT}/relay/${args.token}")
+        )
     }
 
     /**
@@ -59,10 +60,9 @@ class EngineHostApis(
      */
     suspend fun handleNotification(name: String, argsJson: String): String? {
         if (name != "send") throw IllegalArgumentException("Unknown notification method: $name")
-        val parsed = json.parseToJsonElement(argsJson)
-        val args = if (parsed is JsonNull) JsonObject(emptyMap()) else parsed.jsonObject
+        val args = json.parseToJsonElement(argsJson).let { if (it is JsonObject) it else JsonObject(emptyMap()) }
         val method = args["method"]?.jsonPrimitive?.content ?: error("notification.send: missing method")
-        val result = args["result"]?.takeIf { it !is JsonNull }?.jsonObject
+        val result = args["result"]?.let { if (it is JsonObject) it else null }
         notificationDispatcher(method, result)
         return null
     }
@@ -70,23 +70,10 @@ class EngineHostApis(
     /** `host.web.detect({url, headers?, regex, exclude?, script?, timeoutMs?})` */
     suspend fun handleWeb(name: String, argsJson: String): String? {
         if (name != "detect") throw IllegalArgumentException("Unknown web method: $name")
-        val args = json.parseToJsonElement(argsJson).jsonObject
-        val url = args["url"]?.jsonPrimitive?.content ?: error("web.detect: missing url")
-        val headers = args["headers"]?.jsonObject?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
-        val regex = args["regex"]?.jsonArray?.map { it.jsonPrimitive.content }
-            ?: error("web.detect: missing regex")
-        val exclude = args["exclude"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
-        val script = args["script"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
-        val timeoutMs = args["timeoutMs"]?.jsonPrimitive?.content?.toLongOrNull() ?: 15_000L
-
-        val match = webSniffer.detect(url, headers, regex, exclude, script, timeoutMs)
+        val args = json.decodeFromString<WebDetectArgs>(argsJson)
+        val match = webSniffer.detect(args.url, args.headers, args.regex, args.exclude, args.script, args.timeoutMs)
             ?: return null
-        return buildJsonObject {
-            put("url", match.url)
-            put("headers", buildJsonObject {
-                for ((k, v) in match.headers) put(k, v)
-            })
-        }.toString()
+        return json.encodeToString(match)
     }
 }
 

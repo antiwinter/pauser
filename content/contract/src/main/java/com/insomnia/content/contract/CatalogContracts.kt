@@ -50,11 +50,13 @@ data class EntryInfo(
     val sources: List<PlaybackSource>? = null,
 )
 
+@Serializable
 data class EntryList(
     val items: List<EntryInfo>,
     val totalCount: Int,
 )
 
+@Serializable
 data class QueryOptions(
     val sortBy: SortField? = null,
     val sortOrder: SortOrder = SortOrder.Ascending,

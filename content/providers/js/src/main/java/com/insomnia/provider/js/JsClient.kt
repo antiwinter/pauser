@@ -15,10 +15,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -49,19 +51,14 @@ class JsClient(
 
     /**
      * Dispatches `host.notification.send` payloads by [method]. Currently handles
-     * `emit-entries` — forwards a progressive batch to the wrapper-supplied
-     * [entryEmitter]. No-op when no emitter is attached (non-progressive caller).
+     * `emit-entries` — decodes the result into an [com.insomnia.content.contract.EntryEmission]
+     * and forwards it to the wrapper-supplied [entryEmitter]. No-op when no emitter
+     * is attached (non-progressive caller).
      */
     private val notificationDispatcher: suspend (String, JsonObject?) -> Unit = { method, result ->
         when (method) {
-            "emit-entries" -> {
-                val items = result?.get("data")?.takeIf { it !is JsonNull }?.jsonArray
-                    ?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList()
-                val totalCount = result?.get("totalCount")
-                    ?.takeIf { it !is JsonNull }?.jsonPrimitive?.content?.toIntOrNull()
-                val isComplete = result?.get("isComplete")?.takeIf { it !is JsonNull }
-                    ?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-                entryEmitter?.emit(items, totalCount, isComplete)
+            "emit-entries" -> EntryInfoCodec.parseEmission(result)?.let { e ->
+                entryEmitter?.emit(e.items, e.totalCount, e.isComplete)
             }
         }
     }
@@ -179,43 +176,30 @@ class JsClient(
         options: QueryOptions,
     ): EntryList {
         ensureReady()
-        val normalizedLocation = if (location.isNullOrEmpty()) null else location
         val args = buildJsonObject {
-            if (normalizedLocation != null) put("location", normalizedLocation) else put("location", JsonNull)
+            put("location", if (location.isNullOrEmpty()) JsonNull else JsonPrimitive(location))
             put("startIndex", startIndex)
             put("limit", limit)
-            put("options", buildJsonObject {
-                options.sortBy?.let { put("sortBy", it.name) }
-                put("sortOrder", options.sortOrder.name)
-                put("recursive", options.recursive)
-                options.filterByType?.let { put("filterByType", it) }
-                options.searchTerm?.let { put("searchTerm", it) }
-            })
+            put("options", json.encodeToJsonElement(options))
         }
-        val argsStr = args.toString()
-        val resultJson = engine.callMethod("listEntry", argsStr)
+        val resultJson = engine.callMethod("listEntry", args.toString())
             ?: return EntryList(emptyList(), 0)
         val obj = json.parseToJsonElement(resultJson).jsonObject
-        val items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList()
-        val totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-        return EntryList(items = items, totalCount = totalCount)
+        return EntryInfoCodec.parseEntryList(obj) ?: EntryList(emptyList(), 0)
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {
         ensureReady()
         val args = buildJsonObject {
-            put("itemRefs", kotlinx.serialization.json.JsonArray(itemRefs.map { JsonPrimitive(it) }))
+            put("itemRefs", JsonArray(itemRefs.map { JsonPrimitive(it) }))
         }
         val resultJson = engine.callMethod("getEntries", args.toString())
             ?: return EntryList(emptyList(), 0)
-        val obj = json.parseToJsonElement(resultJson)
-        return if (obj is kotlinx.serialization.json.JsonObject) {
-            EntryList(
-                items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList(),
-                totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-            )
+        val el = json.parseToJsonElement(resultJson)
+        return if (el is JsonObject) {
+            EntryInfoCodec.parseEntryList(el) ?: EntryList(emptyList(), 0)
         } else {
-            val items = obj.jsonArray.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) }
+            val items = EntryInfoCodec.parseEntryArray(el.jsonArray)
             EntryList(items = items, totalCount = items.size)
         }
     }
@@ -240,10 +224,7 @@ class JsClient(
         val resultJson = engine.callMethod("getTaggedEntries", args.toString())
             ?: return EntryList(emptyList(), 0)
         val obj = json.parseToJsonElement(resultJson).jsonObject
-        return EntryList(
-            items = obj["items"]?.jsonArray?.mapNotNull { EntryInfoCodec.parseEntry(it.jsonObject) } ?: emptyList(),
-            totalCount = obj["totalCount"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
-        )
+        return EntryInfoCodec.parseEntryList(obj) ?: EntryList(emptyList(), 0)
     }
 
     override suspend fun updateEntryState(itemRef: String, key: String, value: String?) {

@@ -183,7 +183,7 @@ async function searchAllSites(
       await host.notification.send({
         method: 'emit-entries',
         message: 'partial',
-        result: { data: items, isComplete: false },
+        result: { items, isComplete: false },
       });
     }
   }));

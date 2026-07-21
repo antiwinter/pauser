@@ -7,10 +7,6 @@ import com.insomnia.core.form.contract.FormFieldSpec
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import com.insomnia.proxy.contract.WrappedProxyClient
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * An [InsomniaProvider] backed by a JavaScript bundle running inside QuickJS.

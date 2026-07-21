@@ -1,6 +1,7 @@
 package com.insomnia.content.contract
 
 import com.insomnia.player.PlaybackSource
+import kotlinx.serialization.Serializable
 import com.insomnia.core.form.contract.FormFieldSpec
 import com.insomnia.core.form.contract.QrResult
 import com.insomnia.proxy.contract.ProxyClient
@@ -23,6 +24,7 @@ interface ProviderStream {
 
 // --- Progressive entry emission ---
 
+@Serializable
 data class EntryEmission(
     val items: List<EntryInfo>,
     val totalCount: Int?,
