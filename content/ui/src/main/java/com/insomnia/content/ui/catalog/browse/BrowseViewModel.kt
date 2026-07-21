@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class QuerySpec(
     val endpointId: String,
     val location: String?,
