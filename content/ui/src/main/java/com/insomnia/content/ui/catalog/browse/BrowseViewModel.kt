@@ -117,8 +117,10 @@ class BrowseViewModel : ViewModel() {
         val queryIndex = _focusedQueryIndex.value.coerceIn(0, queries.size - 1)
         val entryIndex = _focusedEntryIndex.value
 
-        // Re-fetch single focused entry
-        fetch(queryIndex, offset = entryIndex, limit = 1)
+        // take advantage of the epcache mechanism
+        // align to page boundary so we get a cache hit
+        val pageStart = (entryIndex / PAGE_SIZE) * PAGE_SIZE
+        fetch(queryIndex, offset = pageStart)
     }
     fun loadMore() {
         if (_loading.value) return
