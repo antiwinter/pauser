@@ -78,8 +78,13 @@ class JsClient(
      */
     private val notificationDispatcher: suspend (String, JsonObject?) -> Unit = { method, result ->
         when (method) {
-            "emit-entries" -> EntryInfoCodec.parseEmission(result)?.let { e ->
-                entryEmitter?.emit(e.items, e.totalCount, e.isComplete)
+            "emit-entries" -> {
+                val e = EntryInfoCodec.parseEmission(result)
+                if (e != null) {
+                    val emitter = entryEmitter
+                    Timber.tag("progressive-trace").d("emit-entries items=${e.items.size} total=${e.totalCount} isComplete=${e.isComplete} emitterAttached=${emitter != null}")
+                    emitter?.emit(e.items, e.totalCount, e.isComplete)
+                }
             }
         }
     }
@@ -186,6 +191,9 @@ class JsClient(
     ): EntryList {
         ensureReady()
         engine.abortInFlightHttp()
+        val isSearch = options.searchTerm != null
+        Timber.tag("progressive-trace").d("listEntry start search=$isSearch emitterAttached=${entryEmitter != null}")
+        val started = System.nanoTime()
         val args = buildJsonObject {
             put("location", if (location.isNullOrEmpty()) JsonNull else JsonPrimitive(location))
             put("startIndex", startIndex)
@@ -193,9 +201,14 @@ class JsClient(
             put("options", json.encodeToJsonElement(options))
         }
         val resultJson = engine.callMethod("listEntry", args.toString())
-            ?: return EntryList(emptyList(), 0)
+            ?: run {
+                Timber.tag("progressive-trace").w("listEntry returned null after ${java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)}ms")
+                return EntryList(emptyList(), 0)
+            }
         val obj = json.parseToJsonElement(resultJson).jsonObject
-        return EntryInfoCodec.parseEntryList(obj) ?: EntryList(emptyList(), 0)
+        val list = EntryInfoCodec.parseEntryList(obj) ?: EntryList(emptyList(), 0)
+        Timber.tag("progressive-trace").d("listEntry done search=$isSearch items=${list.items.size} total=${list.totalCount} ms=${java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)}")
+        return list
     }
 
     override suspend fun getEntries(itemRefs: List<String>): EntryList {

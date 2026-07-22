@@ -22,6 +22,7 @@ import com.insomnia.storage.EntryStateKey
 import com.insomnia.storage.EntryStateStore
 import com.insomnia.storage.StorageBindingsHolder
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -201,20 +202,23 @@ class CachingEndpointClient(
         methodName: String,
         vararg params: Any?,
         fetch: suspend () -> EntryList,
-    ): Flow<EntryEmission> = flow {
+    ): Flow<EntryEmission> = kotlinx.coroutines.flow.channelFlow {
         val key = EndpointCache.buildCacheKey(methodName, endpointId, *params)
 
         // Cache hit: single immediate emission
         val cached = EndpointCache.get(key)
         if (cached != null) {
             val merged = mergeEntryList(cached)
-            emit(EntryEmission(merged.items, merged.totalCount, isComplete = true))
-            return@flow
+            Log.d("progressive-trace", "progressiveFlow cache hit items=${merged.items.size}")
+            send(EntryEmission(merged.items, merged.totalCount, isComplete = true))
+            return@channelFlow
         }
 
-        // Cache miss: fetch via provider, collecting emissions
-        // Use `coroutineScope` so we can launch both the fetch and the collector concurrently
-        // while keeping `emit` calls on the FlowCollector's context.
+        Log.d("progressive-trace", "progressiveFlow cache miss, attaching emitter")
+        // Cache miss: fetch via provider, collecting emissions concurrently.
+        // channelFlow lets the launched collector safely forward emissions
+        // (plain `flow { }` + `launch { collect { emit } }` trips the
+        // "emission from another coroutine" invariant).
         kotlinx.coroutines.coroutineScope {
             val emitter = ChannelEntryEmitter()
             delegate.entryEmitter = emitter
@@ -222,12 +226,13 @@ class CachingEndpointClient(
             val deferredResult = async(Dispatchers.IO) { fetch() }
 
             try {
-                // Collect provider emissions in a separate coroutine so we can
-                // await the fetch result, then close the channel to unblock the collector.
                 var emittedComplete = false
+                var emissionCount = 0
                 val collectorJob = launch {
                     emitter.asFlow().collect { emission ->
-                        emit(mergeEmission(emission))
+                        emissionCount++
+                        Log.d("progressive-trace", "progressiveFlow forwarding emission #$emissionCount items=${emission.items.size} isComplete=${emission.isComplete}")
+                        send(mergeEmission(emission))
                         if (emission.isComplete) emittedComplete = true
                     }
                 }
@@ -238,10 +243,10 @@ class CachingEndpointClient(
 
                 EndpointCache.put(key, endpointId, result)
 
-                // If provider didn't emit its own completion, emit the final result
+                Log.d("progressive-trace", "progressiveFlow fetch done providerEmissions=$emissionCount emittedComplete=$emittedComplete resultItems=${result.items.size}")
                 if (!emittedComplete) {
                     val merged = mergeEntryList(result)
-                    emit(EntryEmission(merged.items, merged.totalCount, isComplete = true))
+                    send(EntryEmission(merged.items, merged.totalCount, isComplete = true))
                 }
             } finally {
                 emitter.close()
@@ -285,6 +290,7 @@ private class ChannelEntryEmitter : EntryEmitter {
     private val channel = Channel<EntryEmission>(Channel.BUFFERED)
 
     override suspend fun emit(items: List<EntryInfo>, totalCount: Int?, isComplete: Boolean) {
+        Log.d("progressive-trace", "ChannelEntryEmitter.emit items=${items.size} total=$totalCount isComplete=$isComplete")
         channel.send(EntryEmission(items, totalCount, isComplete))
     }
 

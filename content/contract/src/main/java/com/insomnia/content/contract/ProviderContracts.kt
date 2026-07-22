@@ -27,7 +27,7 @@ interface ProviderStream {
 @Serializable
 data class EntryEmission(
     val items: List<EntryInfo>,
-    val totalCount: Int?,
+    val totalCount: Int? = null,
     val isComplete: Boolean = false,
 )
 

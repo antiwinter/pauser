@@ -156,6 +156,7 @@ class BrowseViewModel : ViewModel() {
             runCatching {
                 query.client.listEntry(query.spec.location, startIndex, limit, query.spec.options)
                     .collect { emission ->
+                        Timber.tag("progressive-trace").d("vm collect emission items=${emission.items.size} total=${emission.totalCount} isComplete=${emission.isComplete} endpoint=${query.spec.endpointId}")
                         // Merge: replace matching items, keep others, append new
                         val current = _queries.value[queryIndex]
                         val existingMap = current.items.associateBy { it.ref }
@@ -173,7 +174,7 @@ class BrowseViewModel : ViewModel() {
                         _queries.value = queries
 
                         if (emission.isComplete) {
-                            Timber.d("listEntry complete endpoint=${query.spec.endpointId} location=${query.spec.location} offset=$startIndex limit=$limit: ${emission.items.size}/${emission.totalCount}")
+                            Timber.tag("progressive-trace").d("listEntry complete endpoint=${query.spec.endpointId} location=${query.spec.location} offset=$startIndex limit=$limit: ${emission.items.size}/${emission.totalCount}")
                         }
                     }
             }.onSuccess {
