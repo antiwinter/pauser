@@ -28,9 +28,9 @@
 - [x] detail screen entering rules
 - [ ] right most alphabet quick jump
 - [ ] recent
-- [ ] merge browse/search, use filter to distinguish
+- [x] merge browse/search, use filter to distinguish
 - [ ] merge filename/type detector with mimedetector
-- [ ] progressive search, don't wait for full result, show partial result
+- [x] progressive search, don't wait for full result, show partial result
 
 ## js providers
 - [x] remove sidecar meta
@@ -42,9 +42,9 @@
 - [ ] common.js
 
 ### Jar loader
-- [ ] move download&verify to js side
-- [ ] bandwidthmeter -> sr
-- [ ] smb -> sr
+- [x] move download&verify to js side
+- [-] bandwidthmeter -> sr
+- [x] smb -> sr
 - [ ] preserve buffer -> sr
 
 ## Player
@@ -70,9 +70,9 @@
 - [x] overlay control logic is verbose and messy and too stateful
 - [ ] next episode
 - [ ] sprite
-- [ ] proxied buffering
+- [-] proxied buffering
 - [ ] keep 1min played buffer
-- [ ] live surface
+- [x] live surface
 - [ ] external subtitle preload, system lang candidates, original lang reference line
 
 ## Roadmap
