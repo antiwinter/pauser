@@ -5,13 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,7 +24,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.insomnia.player.PlayerSurfaceController
+import com.insomnia.player.ui.BufferingChip
 import com.insomnia.player.ui.InfoOverlay
+import com.insomnia.player.ui.LoadingOverlay
 import com.insomnia.player.ui.MenuOverlay
 import com.insomnia.player.ui.PlaybackControllerBar
 import com.insomnia.player.ui.PlaybackHostEffects
@@ -36,7 +34,6 @@ import com.insomnia.player.manager.subtitle.CCOverlay
 import com.insomnia.player.ui.rememberInfoOverlayState
 import com.insomnia.player.ui.rememberMenuOverlayState
 import com.insomnia.player.engine.rememberPlaybackSurface
-import com.insomnia.core.theme.ScrimMedium
 import kotlinx.coroutines.delay
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
@@ -50,47 +47,15 @@ fun TvPlayerSurface(
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
     val specValue = spec ?: run {
-        PlayerLoadingOverlay(onBack = onBack)
+        LoadingOverlay(onBack = onBack)
         return
     }
 
-    TvPlayerSurfaceContent(
-        controller = controller,
-        spec = specValue,
-        onBack = onBack,
-    )
-}
-
-@Composable
-private fun PlayerLoadingOverlay(onBack: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Loading spec...",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
-    BackHandler { onBack() }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
-@Composable
-private fun TvPlayerSurfaceContent(
-    controller: PlayerSurfaceController,
-    spec: com.insomnia.player.PlaybackSpec,
-    onBack: () -> Unit,
-) {
     val itemListInfo by controller.itemListInfoFlow.collectAsState()
     val hasNextVideo = itemListInfo?.let { it.current + 1 < it.names.size } ?: false
     val displayInfo by controller.displayInfoFlow.collectAsState()
-    val session = controller.playbackSession
     val surface = rememberPlaybackSurface(
-        spec = spec,
+        spec = specValue,
         session = session,
     )
     PlaybackHostEffects(surface.exo)
@@ -152,10 +117,10 @@ private fun TvPlayerSurfaceContent(
     )
 
     val infoOverlay = rememberInfoOverlayState(
-        instanceKey = spec.sources[spec.state.sourceIndex].url,
+        instanceKey = specValue.sources[specValue.state.sourceIndex].url,
         displayInfo = displayInfo,
         session = session,
-        spec = spec,
+        spec = specValue,
         bandwidthMbps = surface.bandwidthMbps,
     )
 
@@ -235,21 +200,10 @@ private fun TvPlayerSurfaceContent(
             )
         }
 
-        AnimatedVisibility(
+        BufferingChip(
             visible = isBuffering,
-            enter = fadeIn(),
-            exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
-        ) {
-            Text(
-                text = "buffering...",
-                modifier = Modifier
-                    .background(ScrimMedium, shape = RoundedCornerShape(8.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
+        )
 
         AnimatedVisibility(
             visible = controllerState != 0 && hasNextVideo,

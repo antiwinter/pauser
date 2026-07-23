@@ -28,6 +28,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.insomnia.player.PlayerSurfaceController
 import com.insomnia.player.engine.rememberPlaybackSurface
+import com.insomnia.player.ui.LoadingOverlay
 import com.insomnia.player.ui.PlaybackControllerBar
 import com.insomnia.player.ui.PlaybackHostEffects
 import kotlinx.coroutines.delay
@@ -43,7 +44,10 @@ fun PadPlayerSurface(
 ) {
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
-    val specValue = spec ?: return
+    val specValue = spec ?: run {
+        LoadingOverlay(onBack = onBack)
+        return
+    }
 
     PadPlayerSurfaceContent(
         controller = controller,

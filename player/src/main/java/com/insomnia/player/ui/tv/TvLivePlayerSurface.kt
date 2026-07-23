@@ -2,16 +2,6 @@ package com.insomnia.player.ui.tv
 
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -19,15 +9,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import com.insomnia.core.theme.ScrimMedium
 import com.insomnia.player.PlayerSurfaceController
+import com.insomnia.player.ui.BufferingChip
 import com.insomnia.player.ui.InfoOverlay
+import com.insomnia.player.ui.LoadingOverlay
 import com.insomnia.player.ui.PlaybackHostEffects
 import com.insomnia.player.ui.rememberInfoOverlayState
 import com.insomnia.player.engine.rememberPlaybackSurface
@@ -45,45 +37,14 @@ fun TvLivePlayerSurface(
     val session = controller.playbackSession
     val spec by session.currentSpecFlow.collectAsState()
     val specValue = spec ?: run {
-        LivePlayerLoadingOverlay(onBack = onBack)
+        LoadingOverlay(onBack = onBack)
         return
     }
-    TvLivePlayerSurfaceContent(
-        controller = controller,
-        spec = specValue,
-        onBack = onBack,
-    )
-}
 
-@Composable
-private fun LivePlayerLoadingOverlay(onBack: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Loading channel…",
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-    }
-    BackHandler { onBack() }
-}
-
-@OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
-@Composable
-private fun TvLivePlayerSurfaceContent(
-    controller: PlayerSurfaceController,
-    spec: com.insomnia.player.PlaybackSpec,
-    onBack: () -> Unit,
-) {
     val displayInfo by controller.displayInfoFlow.collectAsState()
     val itemListInfo by controller.itemListInfoFlow.collectAsState()
     val sourceManager by controller.sourceManagerFlow.collectAsState()
-    val session = controller.playbackSession
-    val surface = rememberPlaybackSurface(spec = spec, session = session)
+    val surface = rememberPlaybackSurface(spec = specValue, session = session)
     PlaybackHostEffects(surface.exo)
 
     val exo = surface.exo
@@ -100,10 +61,10 @@ private fun TvLivePlayerSurfaceContent(
     }
 
     val infoOverlay = rememberInfoOverlayState(
-        instanceKey = spec.sources[spec.state.sourceIndex].url,
+        instanceKey = specValue.sources[specValue.state.sourceIndex].url,
         displayInfo = displayInfo,
         session = session,
-        spec = spec,
+        spec = specValue,
         bandwidthMbps = surface.bandwidthMbps,
     )
 
@@ -185,21 +146,10 @@ private fun TvLivePlayerSurfaceContent(
             },
         )
 
-        AnimatedVisibility(
+        BufferingChip(
             visible = isBuffering,
-            enter = fadeIn(),
-            exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center),
-        ) {
-            Text(
-                text = "buffering...",
-                modifier = Modifier
-                    .background(ScrimMedium, shape = RoundedCornerShape(8.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
+        )
 
         InfoOverlay(infoOverlay)
         ChannelListOverlay(channelList, onSelect = { controller.requestSwitchItem(it) })
