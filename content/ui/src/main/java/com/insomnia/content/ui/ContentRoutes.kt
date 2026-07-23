@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.insomnia.content.ui.catalog.browse.BrowseRoute
 import com.insomnia.content.ui.catalog.browse.BrowseViewModel
+import com.insomnia.content.ui.catalog.browse.QuerySpec
 import com.insomnia.content.ui.catalog.NavSharedViewModel
 import com.insomnia.content.ui.catalog.player.PlayerController
 import com.insomnia.content.ui.catalog.detail.DetailRoute
@@ -65,7 +66,7 @@ fun NavGraphBuilder.contentRoutes(
             onPollQr = if (hasQr) { token ->
                 qrClientRef[0]?.pollQr(token) ?: QrResult.Error("no client")
             } else null,
-            onDone = { nav.popBackStack(Routes.HOME, inclusive = false) },
+            onDone = { nav.popBackStack() },
             onDelete = if (!isAdd) {
                 { EndpointConfigRepository.removeEndpoint(endpointId) }
             } else null,
@@ -74,12 +75,16 @@ fun NavGraphBuilder.contentRoutes(
     composable(
         Routes.BROWSE,
         listOf(
-            navArgument("querySpecJson") { type = NavType.StringType },
+            navArgument("querySpecJson") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
     ) { backStackEntry ->
-        val querySpecJson = backStackEntry.arguments!!.getString("querySpecJson")!!
-        val queries = decodeQuerySpecList(querySpecJson) 
-            ?: listOf(decodeQuerySpec(querySpecJson) ?: error("Failed to decode QuerySpec from: $querySpecJson"))
+        val querySpecJson = backStackEntry.arguments?.getString("querySpecJson")
+        val queries: List<QuerySpec> = if (querySpecJson.isNullOrEmpty()) {
+            emptyList()
+        } else {
+            decodeQuerySpecList(querySpecJson)
+                ?: listOf(decodeQuerySpec(querySpecJson) ?: error("Failed to decode QuerySpec from: $querySpecJson"))
+        }
 
         val browseVm: BrowseViewModel = viewModel(
             factory = BrowseViewModel.factory(),

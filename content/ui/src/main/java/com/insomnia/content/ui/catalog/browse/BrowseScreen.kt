@@ -16,9 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextAlign
@@ -45,7 +43,6 @@ fun BrowseScreen(
     titleLang: TitleLang,
     initialFocusRef: String? = null,
     onLoadMore: () -> Unit,
-    onSearch: (term: String, scope: SearchScope) -> Unit,
     onItemFocused: (queryIndex: Int, itemIndex: Int) -> Unit = { _, _ -> },
     onNavigateToPath: (QuerySpec) -> Unit,
     onOpenBrowseLocation: (endpointId: String, EntryInfo) -> Unit,
@@ -78,19 +75,11 @@ fun BrowseScreen(
         }
     }
 
-    var searchModalOpen by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 40.dp, vertical = 32.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Button(onClick = { searchModalOpen = true }) { Text("Search") }
-        }
         error?.let { Text("Error: $it") }
         if (error == null) {
             when {
@@ -123,8 +112,8 @@ fun BrowseScreen(
                         } else result.spec.location?.takeIf { it.isNotEmpty() }?.let { loc ->
                             loc.substringAfterLast('/')
                         } ?: "Root"
-                        
-                        Button(onClick = { 
+
+                        Button(onClick = {
                             onNavigateToPath(result.spec)
                         }) {
                             Text(pathLabel)
@@ -182,15 +171,5 @@ fun BrowseScreen(
                 }
             }
         }
-    }
-
-    if (searchModalOpen) {
-        SearchModal(
-            onDismiss = { searchModalOpen = false },
-            onConfirm = { term, scope ->
-                searchModalOpen = false
-                onSearch(term, scope)
-            },
-        )
     }
 }

@@ -61,8 +61,30 @@ class EntryStateStore(private val db: InsomniaDatabase) {
         dao.updateAudioTrack(key.endpointId, key.itemRef, trackId, System.currentTimeMillis())
     }
 
+    suspend fun upsertRecentMeta(
+        key: EntryStateKey,
+        title: String?,
+        type: String?,
+        cover: String?,
+        etag: String?,
+    ) {
+        ensureRow(key)
+        dao.updateRecentMeta(
+            key.endpointId,
+            key.itemRef,
+            title,
+            type,
+            cover,
+            etag,
+            System.currentTimeMillis(),
+        )
+    }
+
     fun observeForEndpoint(endpointId: String): Flow<List<EntryStateEntity>> =
         dao.observeForEndpoint(endpointId)
+
+    suspend fun queryRecentForEndpoint(endpointId: String, limit: Int): List<EntryStateEntity> =
+        dao.queryRecentForEndpoint(endpointId, limit)
 
     fun observeAllFavorites(): Flow<List<EntryStateEntity>> =
         dao.observeAllFavorites()

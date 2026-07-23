@@ -15,6 +15,9 @@ interface EndpointDao {
     @Query("SELECT * FROM endpoints ORDER BY createdAtEpochMs ASC")
     fun observeAll(): Flow<List<EndpointEntity>>
 
+    @Query("SELECT * FROM endpoints ORDER BY createdAtEpochMs ASC")
+    suspend fun getAll(): List<EndpointEntity>
+
     @Query("SELECT * FROM endpoints WHERE endpointId = :endpointId LIMIT 1")
     suspend fun getByEndpointId(endpointId: String): EndpointEntity?
 
@@ -80,6 +83,15 @@ interface EntryStateDao {
 
     @Query("UPDATE media_state SET selectedAudioTrackId = :id, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
     suspend fun updateAudioTrack(endpointId: String, itemRef: String, id: String?, now: Long)
+
+    @Query("UPDATE media_state SET title = :title, type = :type, cover = :cover, etag = :etag, updatedAtEpochMs = :now WHERE endpointId = :endpointId AND itemRef = :itemRef")
+    suspend fun updateRecentMeta(endpointId: String, itemRef: String, title: String?, type: String?, cover: String?, etag: String?, now: Long)
+
+    @Query("SELECT * FROM media_state ORDER BY updatedAtEpochMs DESC LIMIT :limit")
+    suspend fun queryRecent(limit: Int): List<EntryStateEntity>
+
+    @Query("SELECT * FROM media_state WHERE endpointId = :endpointId ORDER BY updatedAtEpochMs DESC LIMIT :limit")
+    suspend fun queryRecentForEndpoint(endpointId: String, limit: Int): List<EntryStateEntity>
 
     @Query("DELETE FROM media_state WHERE endpointId = :endpointId")
     suspend fun deleteByEndpoint(endpointId: String)

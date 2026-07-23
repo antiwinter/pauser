@@ -1,18 +1,19 @@
 package com.insomnia.content.ui.catalog.browse
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.insomnia.content.contract.QueryOptions
-import com.insomnia.content.contract.EntryInfo
+import com.insomnia.content.ui.Header
 import com.insomnia.content.ui.Routes
 import com.insomnia.storage.StorageBindingsHolder
 import com.insomnia.storage.TitleLang
@@ -46,59 +47,57 @@ fun BrowseRoute(
         viewModel.refresh()
     }
 
+    Column(modifier = Modifier.fillMaxSize()) {
+        Header(nav = nav)
 
-    when {
-        queries.isEmpty() -> Text("No results")
-        else -> {
-            val coroutineScope = rememberCoroutineScope()
-            BrowseScreen(
-                results = queries,
-                loading = loading,
-                error = error,
-                titleLang = titleLang,
-                initialFocusRef = restoreFocusRef,
-                onLoadMore = { viewModel.loadMore() },
-                onSearch = { term, scope ->
-                    coroutineScope.launch {
-                        val searchSpecs = viewModel.buildSearchQuerySpec(term, scope)
-                        if (searchSpecs.isNotEmpty()) {
-                            // Replace an existing search route instead of stacking,
-                            // so Back from the new search returns to the prior screen.
-                            if (initialSpecs.any { it.options.searchTerm != null }) {
-                                nav.popBackStack()
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            when {
+                queries.isEmpty() -> Text("No results")
+                else -> {
+                    BrowseScreen(
+                        results = queries,
+                        loading = loading,
+                        error = error,
+                        titleLang = titleLang,
+                        initialFocusRef = restoreFocusRef,
+                        onLoadMore = { viewModel.loadMore() },
+                        onItemFocused = { queryIndex, itemIndex -> viewModel.setLastFocusedItem(queryIndex, itemIndex) },
+                        onNavigateToPath = { spec ->
+                            // On the multi-endpoint recent view, clicking a section header
+                            // drills into a single-endpoint recent view (no PAGE_SIZE cap).
+                            val newSpecs = if (spec.location == RECENT_ROOT_LOCATION) {
+                                recentSingleSpec(spec.endpointId)
+                            } else {
+                                listOf(spec)
                             }
-                            nav.navigate(Routes.browse(searchSpecs))
-                        }
-                    }
-                },
-                onItemFocused = { queryIndex, itemIndex -> viewModel.setLastFocusedItem(queryIndex, itemIndex) },
-                onNavigateToPath = { spec ->
-                    nav.navigate(Routes.browse(listOf(spec)))
-                },
-                onOpenBrowseLocation = { endpointId, folderEntry ->
-                    val spec = QuerySpec(endpointId, folderEntry.ref, QueryOptions())
-                    nav.navigate(Routes.browse(listOf(spec)))
-                },
-                onOpenDetail = { endpointId, item ->
-                    sharedVm.cache(item)
-                    nav.navigate(Routes.detail(endpointId, item))
-                },
-                onOpenLivePlayer = { endpointId, item ->
-                    sharedVm.cache(item)
-                    nav.navigate(Routes.livePlayer(endpointId, item))
-                },
-                onOpenPlayer = { endpointId, entry ->
-                    val itemClient = queries.firstOrNull { it.spec.endpointId == endpointId }?.client
-                        ?: throw IllegalStateException("No client for endpoint $endpointId")
-                    playerController.setClient(itemClient)
-                    val startMs = if (entry.type == "LiveChannel") 0L else null
-                    playerController.prepare(entry, startMs)
-                    playerController.play()
-                },
-                onOpenAudioUnsupported = { endpointId, raw ->
-                    nav.navigate(Routes.AUDIO_UNSUPPORTED)
-                },
-            )
+                            nav.navigate(Routes.browse(newSpecs))
+                        },
+                        onOpenBrowseLocation = { endpointId, folderEntry ->
+                            val spec = QuerySpec(endpointId, folderEntry.ref, QueryOptions())
+                            nav.navigate(Routes.browse(listOf(spec)))
+                        },
+                        onOpenDetail = { endpointId, item ->
+                            sharedVm.cache(item)
+                            nav.navigate(Routes.detail(endpointId, item))
+                        },
+                        onOpenLivePlayer = { endpointId, item ->
+                            sharedVm.cache(item)
+                            nav.navigate(Routes.livePlayer(endpointId, item))
+                        },
+                        onOpenPlayer = { endpointId, entry ->
+                            val itemClient = queries.firstOrNull { it.spec.endpointId == endpointId }?.client
+                                ?: throw IllegalStateException("No client for endpoint $endpointId")
+                            playerController.setClient(itemClient)
+                            val startMs = if (entry.type == "LiveChannel") 0L else null
+                            playerController.prepare(entry, startMs)
+                            playerController.play()
+                        },
+                        onOpenAudioUnsupported = { endpointId, raw ->
+                            nav.navigate(Routes.AUDIO_UNSUPPORTED)
+                        },
+                    )
+                }
+            }
         }
     }
 }

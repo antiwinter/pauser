@@ -9,7 +9,7 @@ import androidx.room.RoomDatabase
         EntryStateEntity::class,
         ProxyEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false,
 )
 abstract class InsomniaDatabase : RoomDatabase() {

@@ -26,9 +26,8 @@ fun EntryInfo.toJson(): String = navJson.encodeToString(this)
 // interprets %xx escapes — it leaves '+' literal. URLEncoder.encode would
 // emit '+' for spaces, so use Uri.encode (which emits %20) to round-trip.
 object Routes {
-    const val HOME = "home"
     const val ADD_ENDPOINT = "add_endpoint"
-    const val BROWSE = "browse/{querySpecJson}"
+    const val BROWSE = "browse?querySpecJson={querySpecJson}"
     const val DETAIL = "detail/{endpointId}/{ref}"
     const val LIVE_PLAYER = "live_player/{endpointId}/{ref}"
     const val IMAGE_VIEWER = "image_viewer/{endpointId}/{itemRef}"
@@ -36,7 +35,7 @@ object Routes {
     const val PROVIDER_EDIT = "provider_edit/{protocol}?endpointId={endpointId}"
     const val SETTINGS = "settings"
     fun browse(specs: List<QuerySpec>) =
-        "browse/${Uri.encode(specs.toJson())}"
+        "browse?querySpecJson=${Uri.encode(specs.toJson())}"
 
     fun providerEdit(protocol: String, endpointId: String? = null) =
         if (endpointId != null) "provider_edit/$protocol?endpointId=${Uri.encode(endpointId)}"

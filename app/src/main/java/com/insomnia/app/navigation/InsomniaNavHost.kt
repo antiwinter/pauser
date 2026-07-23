@@ -13,11 +13,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.insomnia.app.ui.home.AddEndpointRoute
-import com.insomnia.app.ui.home.HomeRoute
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.ui.catalog.browse.QuerySpec
+import com.insomnia.content.ui.catalog.browse.recentMultiSpec
 import com.insomnia.content.ui.Routes
 import com.insomnia.content.ui.catalog.NavSharedViewModel
 import com.insomnia.content.ui.catalog.player.PlayerController
@@ -49,8 +49,10 @@ fun InsomniaNavHost() {
     LaunchedEffect(nav) {
         for (cmd in AppCommandBridge.commands) {
             when (cmd) {
-                AppCommand.Home -> nav.navigate(Routes.HOME) {
-                    popUpTo(Routes.HOME) { inclusive = true }
+                AppCommand.Home -> {
+                    nav.navigate(Routes.browse(recentMultiSpec())) {
+                        popUpTo(nav.graph.startDestinationId) { inclusive = false }
+                    }
                 }
                 is AppCommand.Browse -> {
                     browseEndpoint(cmd.endpointId, cmd.location ?: "")
@@ -88,19 +90,7 @@ fun InsomniaNavHost() {
                 .fillMaxSize()
                 .then(if (isShown) Modifier.onPreviewKeyEvent { true } else Modifier),
         ) {
-            NavHost(navController = nav, startDestination = Routes.HOME) {
-            composable(Routes.HOME) {
-                HomeRoute(
-                    onAddEndpoint = { nav.navigate(Routes.ADD_ENDPOINT) },
-                    onOpenBrowse = { _, endpointId ->
-                        browseEndpoint(endpointId)
-                    },
-                    onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-                    onEditProvider = { pt, sid -> nav.navigate(Routes.providerEdit(pt, sid)) },
-                    onEditProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyEdit(pt, id)) },
-                    onCtrlProxy = { pt, id -> nav.navigate(ProxyRoutes.proxyCtrl(pt, id)) },
-                )
-            }
+            NavHost(navController = nav, startDestination = "browse") {
             composable(Routes.ADD_ENDPOINT) {
                 AddEndpointRoute(
                     onSelectProvider = { pt ->
@@ -114,7 +104,7 @@ fun InsomniaNavHost() {
             contentRoutes(nav, sharedVm, playerController)
             proxyRoutes(nav)
             composable(Routes.SETTINGS) {
-                SettingsScreen(onBack = { nav.popBackStack() })
+                SettingsScreen(nav = nav)
             }
         }
         }

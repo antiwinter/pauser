@@ -39,5 +39,9 @@ data class EntryStateEntity(
     val selectedSubtitleTrackId: String? = null,
     /** Last-chosen audio track ID for this item; null = auto selection. */
     val selectedAudioTrackId: String? = null,
+    /** Cached cover URL; populated by remote recent fetches so local recents can render before playback. */
+    val cover: String? = null,
+    /** Cached etag from the remote provider; allows invalidation. */
+    val etag: String? = null,
     val updatedAtEpochMs: Long,
 )

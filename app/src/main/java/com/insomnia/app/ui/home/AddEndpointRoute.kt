@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.insomnia.app.InsomniaApplication
-import com.insomnia.proxy.contract.ProxyProviderRegistryHolder
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -20,11 +19,10 @@ import androidx.tv.material3.Text
 @Composable
 fun AddEndpointRoute(
     onSelectProvider: (String) -> Unit,
-    onSelectProxy: (String) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onSelectProxy: (String) -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as InsomniaApplication
     val providers by app.providerRegistry.providersFlow.collectAsState()
-    val proxyProviders = app.proxyProviderRegistry.allProxies()
 
     Column(
         modifier = Modifier.fillMaxSize().padding(48.dp),
@@ -34,11 +32,6 @@ fun AddEndpointRoute(
         providers.forEach { provider ->
             Button(onClick = { onSelectProvider(provider.protocol) }) {
                 Text("Add ${provider.protocol}")
-            }
-        }
-        proxyProviders.forEach { proxyProvider ->
-            Button(onClick = { onSelectProxy(proxyProvider.proxyType) }) {
-                Text("Add ${proxyProvider.proxyType} proxy")
             }
         }
     }

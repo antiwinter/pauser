@@ -3,10 +3,13 @@ package com.insomnia.content.ui.catalog.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.insomnia.content.contract.EndpointClientAccess
 import com.insomnia.content.contract.EndpointClientRegistryHolder
 import com.insomnia.content.contract.EntryInfo
 import com.insomnia.content.contract.QueryOptions
 import com.insomnia.content.epcache.CachingEndpointClient
+import com.insomnia.content.epcache.RecentPerEndpoint
+import com.insomnia.content.epcache.recentFlow
 import coil3.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,10 +70,49 @@ class BrowseViewModel : ViewModel() {
     fun initialize(specs: List<QuerySpec>) {
         if (_queries.value.isNotEmpty()) return
         if (specs.isEmpty()) return
-        
+
         viewModelScope.launch {
             try {
                 val registry = EndpointClientRegistryHolder.get()
+
+                // Sentinel: every spec carries RECENT_ROOT_LOCATION → resolve via the
+                // progressive recent feed. The aggregator emits a local snapshot first
+                // (so the UI can render immediately) and then a fresh snapshot each time
+                // an endpoint's remote call lands.
+                if (specs.all { it.location == RECENT_ROOT_LOCATION }) {
+                    val isMulti = specs.size > 1
+                    val perEndpointLimit = if (isMulti) PAGE_SIZE else Int.MAX_VALUE
+                    // Seed empty placeholder states so the section headers render before
+                    // the first emission arrives. Specs whose client cannot be built are
+                    // dropped here and will remain dropped as the feed progresses.
+                    _queries.value = withContext(Dispatchers.IO) {
+                        specs.mapNotNull { spec ->
+                            val client = registry.getOrCreate(spec.endpointId)
+                                ?: return@mapNotNull null
+                            QueryState(
+                                spec = spec,
+                                items = emptyList(),
+                                totalCount = 0,
+                                client = client,
+                                currentPageIndex = 0,
+                            )
+                        }
+                    }
+                    _loading.value = true
+                    runCatching {
+                        recentFlow(perEndpointLimit = perEndpointLimit).collect { snapshot ->
+                            applyRecentSnapshot(specs, snapshot, registry)
+                        }
+                    }.onSuccess {
+                        _loading.value = false
+                    }.onFailure { e ->
+                        Timber.e(e, "recent feed failed")
+                        _error.value = e.message ?: "Recent feed failed"
+                        _loading.value = false
+                    }
+                    return@launch
+                }
+
                 val states = withContext(Dispatchers.IO) {
                     specs.mapNotNull { spec ->
                         val client = registry.getOrCreate(spec.endpointId) ?: return@mapNotNull null
@@ -84,7 +126,7 @@ class BrowseViewModel : ViewModel() {
                     }
                 }
                 _queries.value = states
-                
+
                 // Fetch first page for all queries
                 states.forEachIndexed { index, _ ->
                     fetch(index, offset = 0)
@@ -95,22 +137,27 @@ class BrowseViewModel : ViewModel() {
             }
         }
     }
-    suspend fun buildSearchQuerySpec(term: String, scope: SearchScope): List<QuerySpec> {
-        return when (scope) {
-            SearchScope.Global -> {
-                val registry = EndpointClientRegistryHolder.get()
-                val allIds = withContext(Dispatchers.IO) { registry.allEndpointIds() }
-                allIds.map { QuerySpec(it, null, QueryOptions(searchTerm = term, recursive = true)) }
-            }
-            SearchScope.Current -> {
-                val firstQuery = _queries.value.firstOrNull()
-                if (firstQuery != null) {
-                    listOf(QuerySpec(firstQuery.spec.endpointId, null, QueryOptions(searchTerm = term, recursive = true)))
-                } else {
-                    emptyList()
-                }
+
+    private suspend fun applyRecentSnapshot(
+        specs: List<QuerySpec>,
+        snapshot: List<RecentPerEndpoint>,
+        registry: EndpointClientAccess,
+    ) {
+        val byEp = snapshot.associateBy { it.endpointId }
+        val states = withContext(Dispatchers.IO) {
+            specs.mapNotNull { spec ->
+                val rpe = byEp[spec.endpointId] ?: return@mapNotNull null
+                val client = registry.getOrCreate(spec.endpointId) ?: return@mapNotNull null
+                QueryState(
+                    spec = spec,
+                    items = rpe.items,
+                    totalCount = rpe.items.size,
+                    client = client,
+                    currentPageIndex = 0,
+                )
             }
         }
+        _queries.value = states
     }
     fun refresh() {
         val queries = _queries.value
@@ -136,6 +183,8 @@ class BrowseViewModel : ViewModel() {
         val query = queries.first()
         // Search results are loaded in one page
         if (query.spec.options.searchTerm != null) return
+        // Recent view: single snapshot, no pagination
+        if (query.spec.location == RECENT_ROOT_LOCATION) return
 
         // Auto next page
         fetch(0)
