@@ -142,8 +142,8 @@ async function callList(runner, location, startIndex = 0, limit = 20) {
 
 async function callSearch(runner, query) {
   const r = parseJsonResult(
-    await runner.callMethod('search', { scopeLocation: '', query }),
-    'search',
+    await runner.callMethod('listEntry', { location: null, startIndex: 0, limit: 100, options: { searchTerm: query } }),
+    'listEntry(search)',
   );
   return Array.isArray(r) ? r : (r?.items ?? []);
 }
@@ -352,10 +352,7 @@ export async function runProviderChecks(out, { bundle, bundlePath, runner, ffpro
       });
 
       await out.step(`type ${type}: search returns results`, async () => {
-        const r = parseJsonResult(
-          await mockRunner.callMethod('search', { scopeLocation: '', query: 'test' }),
-          'search',
-        );
+        const r = await callSearch(mockRunner, 'test');
         assertArray(r, 'search result');
         assert(r.length >= 1, 'expected at least 1 search result');
         return `${r.length} result(s)`;
@@ -388,7 +385,7 @@ export async function runProviderChecks(out, { bundle, bundlePath, runner, ffpro
     }
   }
 
-  for (const type of [4, 9, 10]) {
+  for (const type of [3, 4, 9, 10]) {
     const mocks = {
       [CONFIG_URL]: makeDrpyConfig(type),
       [SPIDER_URL]: DRPY_SPIDER,
@@ -423,10 +420,7 @@ export async function runProviderChecks(out, { bundle, bundlePath, runner, ffpro
       });
 
       await out.step(`type ${type}: search returns results`, async () => {
-        const r = parseJsonResult(
-          await mockRunner.callMethod('search', { scopeLocation: '', query: 'test' }),
-          'search',
-        );
+        const r = await callSearch(mockRunner, 'test');
         assertArray(r, 'search result');
         assert(r.length >= 1, 'expected at least 1 search result');
         return `${r.length} result(s)`;

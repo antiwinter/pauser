@@ -76,6 +76,10 @@ interface SpiderObject {
 
 const spiders = new Map<string, SpiderObject>();
 
+function isJsSpiderApi(api: string): boolean {
+  return api.includes('.js');
+}
+
 // ── Spider lifecycle ──────────────────────────────────────────────────────────
 
 async function loadSpider(api: string, ext: string, siteKey: string): Promise<SpiderObject> {
@@ -138,7 +142,7 @@ function withDrpyLock<T>(siteKey: string, fn: () => Promise<T>): Promise<T> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Creates a drpy2/drpy3 JS spider — types 4/9/10
+ * Creates a drpy2/drpy3 JS spider — types 3(.js), 4, 9, 10
  * These are JavaScript files that are eval'd and implement the Spider interface
  */
 function createDrpySpider(api: string, ext: string, siteKey: string): CatVodSpider {
@@ -207,7 +211,8 @@ export function resetSpiders(): void {
 
 export default {
   name: 'drpy',
-  type: [4, 9, 10],
+  type: [3, 4, 9, 10],
+  canHandle: (site: SiteEntry) => isJsSpiderApi(site.api),
   createSpider: (site: SiteEntry) =>
     createDrpySpider(site.api, siteExt(site), site.key),
 };

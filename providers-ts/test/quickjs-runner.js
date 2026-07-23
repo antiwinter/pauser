@@ -25,6 +25,7 @@ const HOST_BOOTSTRAP_JS = `
     timer:    ns('timer'),
     dns:      ns('dns'),
     relay:    ns('relay'),
+    notification: ns('notification'),
     web:      ns('web'),
   };
   if (typeof atob === 'undefined') {

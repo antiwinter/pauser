@@ -39,6 +39,26 @@ const CATVOD_INIT         = 'com.github.catvod.spider.Init';
 const CATVOD_DEX_NATIVE   = 'com.github.catvod.spider.DexNative';
 const CATVOD_INIT_ORIGIN  = 'com.github.catvod.spider.InitOrigin';
 
+export class FatalSpiderInitError extends Error {
+  readonly siteKey: string;
+  readonly api: string;
+  readonly ext: string;
+  readonly disableReason: string;
+
+  constructor(siteKey: string, api: string, ext: string, disableReason: string) {
+    super(disableReason);
+    this.name = 'FatalSpiderInitError';
+    this.siteKey = siteKey;
+    this.api = api;
+    this.ext = ext;
+    this.disableReason = disableReason;
+  }
+}
+
+function isPermanentReflectError(message: string): boolean {
+  return /Cannot load class /i.test(message) || /No method '/i.test(message);
+}
+
 /** Returns the primary handle for the loaded JAR. Callers thread the handle through every
  *  subsequent loadClass / reflect / registerLoader call — Kotlin identifies the loader by
  *  handle, not by URL, so warming the cache from a {path} source and looking up by URL
@@ -157,7 +177,20 @@ async function loadSpider(
   if (cached) return cached;
 
   const cls = spiderClass(api);
-  const spiderInstance = await host.jar.reflect({ handle, cls, method: 'newInstance', args: [] });
+  const failSite = (reason: string): never => {
+    throw new FatalSpiderInitError(siteKey, api, ext, `${cls}: ${reason}`);
+  };
+
+  let spiderInstance: string;
+  try {
+    spiderInstance = await host.jar.reflect({ handle, cls, method: 'newInstance', args: [] });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (isPermanentReflectError(message)) {
+      failSite(`missing spider class via newInstance: ${message}`);
+    }
+    throw e;
+  }
   if (cls.endsWith('Guard')) {
     // Guard init(ctx, ext) populates the wrapped spider via Init.getSpider; without it
     // homeContent returns {"class":[]}. A failure on homeContent means the wrapped
@@ -165,9 +198,13 @@ async function loadSpider(
     await host.jar.reflect({ handle, cls, method: 'init', instance: spiderInstance, args: [ext] }).catch(() => undefined);
     try {
       await host.jar.reflect({ handle, cls, method: 'homeContent', instance: spiderInstance, args: [false] });
-    } catch {
+    } catch (e) {
       spiderHandles.delete(siteKey);
-      throw new Error(`loadSpider: ${cls} init failed`);
+      const message = e instanceof Error ? e.message : String(e);
+      if (isPermanentReflectError(message)) {
+        failSite(`guard init failed before homeContent: ${message}`);
+      }
+      throw e;
     }
   } else {
     await host.jar.reflect({ handle, cls, method: 'init', instance: spiderInstance, args: [ext] }).catch(() => undefined);
@@ -244,9 +281,9 @@ function createJarSpider(
       const handle = await getHandle();
       const instance = await getSpiderInstance();
       const raw = await host.jar.reflect({
-        handle, cls, method: 'playerContent',
-        instance, args: [flag, epUrl, vipFlags ?? []],
-      });
+          handle, cls, method: 'playerContent',
+          instance, args: [flag, epUrl, vipFlags ?? []],
+        });
       const data = normalizePlay(parseReflectResult(raw) as CatVodPlayResult);
       if (data) {
         data.url = rewriteProxyUrl(data.url);
@@ -272,6 +309,10 @@ let jarConfig: { url: string; md5?: string } | null = null;
 let jarInitialized = false;
 let jarFailed = false;
 
+function isJarSpiderApi(api: string): boolean {
+  return api.startsWith('csp_');
+}
+
 async function init(config: { spider?: string }): Promise<void> {
   if (jarInitialized) return;
   jarInitialized = true;
@@ -289,8 +330,8 @@ async function init(config: { spider?: string }): Promise<void> {
   }
 }
 
-function canHandle(): boolean {
-  return !jarFailed;
+function canHandle(site: SiteEntry): boolean {
+  return !jarFailed && isJarSpiderApi(site.api);
 }
 
 export default {

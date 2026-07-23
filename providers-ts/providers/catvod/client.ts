@@ -60,10 +60,16 @@ export async function listEntry(
   limit: number,
   options?: import("../../utils/types.js").QueryOptions,
 ): Promise<EntryList> {
- const searchTerm = options?.searchTerm?.trim();
-  if (searchTerm) {
+  let term = options?.searchTerm?.trim();
+  if (!term && location) {
+    const ref = decodeRef(location);
+    if (ref.type === 'vod' && ref.id.startsWith('msearch:')) {
+      term = ref.id.split('###')[1] ?? '';
+    }
+  }
+  if (term) {
     // spider ignores limit, may return more than requested
-    const all = await searchAllSites(state, searchTerm);
+    const all = await searchAllSites(state, term);
     return { items: all, totalCount: all.length };
   }
 
@@ -89,14 +95,6 @@ export async function listEntry(
   }
 
   if (ref.type === "vod") {
-    // msearch: vod_ids are Douban-side placeholders whose real resolution is a
-    // cross-site search by title (mirrors fongmi's detailEmpty → search fallback).
-    if (ref.id.startsWith('msearch:')) {
-      const title = ref.id.split('###')[1] ?? '';
-      if (!title) return { items: [], totalCount: 0 };
-      const results = await searchAllSites(state, title);
-      return { items: results, totalCount: results.length };
-    }
     const detailResult = await spider.detail([ref.id]);
     const detail = detailResult.list?.[0];
     if (!detail) return { items: [], totalCount: 0 };
@@ -148,12 +146,14 @@ async function searchOneSite(key: string, q: string): Promise<EntryInfo[]> {
     const spider = getSpider(key);
     if (!spider.search) return [];
     const result = await withTimeout(
-      spider.search(q, 1),
+      spider.search!(q, 1),
       SEARCH_SITE_TIMEOUT_MS,
       { list: [], total: 0 } as CatVodCategoryResult,
     );
     return vodListToEntries(result.list ?? [], key, '', result.total).items;
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 async function searchAllSites(
@@ -167,6 +167,8 @@ async function searchAllSites(
   for (const [key, entry] of Object.entries(config.sites)) {
     if (entry.type !== 'site') continue;
     const site = entry as SiteEntry;
+    if (site.disabled) continue;
+    if (!canHandleSite(key)) continue;
     if (site.searchable === 0) continue;
     keys.push(key);
   }
@@ -286,8 +288,8 @@ async function listRoot(): Promise<EntryList> {
   const unavailable: SiteEntry[] = [];
 
   for (const [key, entry] of Object.entries(config.sites)) {
-    if (canHandleSite(key)) {
-      available.push([entry, key]);
+    if (!(entry.type === 'site' && entry.disabled) && canHandleSite(key)) {
+      available.push([entry as SiteEntry | LiveEntry, key]);
     } else if (entry.type === 'site') {
       unavailable.push(entry as SiteEntry);
     }

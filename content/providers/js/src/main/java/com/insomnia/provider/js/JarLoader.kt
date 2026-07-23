@@ -176,7 +176,7 @@ class JarLoader(
             m.invoke(instance, *jvmArgs)
         } catch (e: java.lang.reflect.InvocationTargetException) {
             val cause = e.cause ?: e
-            throw cause
+            throw RuntimeException("$cls.$method: ${cause.message ?: cause.javaClass.simpleName}", cause)
         }
 
         return when (result) {

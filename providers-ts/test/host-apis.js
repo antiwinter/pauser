@@ -68,6 +68,8 @@ export class HostApis {
         return JSON.stringify({ token: args?.token ?? '', baseUrl: `http://localhost/${args?.token ?? ''}` });
       case 'web':
         throw new Error(`host.web.${name} is not available in the test harness`);
+      case 'notification':
+        return JSON.stringify({ ok: true });
       default:
         throw new Error(`Unknown host namespace: ${namespace}`);
     }

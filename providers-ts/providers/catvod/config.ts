@@ -11,6 +11,7 @@ export interface SiteEntry {
   key:           string;
   name:          string;
   siteType:      number;    // 0/1/2 = CMS, 3 = JAR, 4/9/10 = drpy2
+  disabled?:     string;
   api:           string;
   ext?:          string | Record<string, unknown>;
   searchable?:   0 | 1;
