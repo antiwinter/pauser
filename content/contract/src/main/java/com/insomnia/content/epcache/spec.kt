@@ -107,7 +107,7 @@ internal suspend fun scanSidecarSubtitles(
         val url = streamUrl(delegate.endpointId, sibling.ref)
         SubtitleTrack(
             trackId = sibling.ref,
-            label = sibling.filename ?: sibling.ref,
+            label = sibling.filename,
             language = null,
             isDefault = false,
             isForced = false,

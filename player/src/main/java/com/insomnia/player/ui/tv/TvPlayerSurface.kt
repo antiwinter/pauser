@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.insomnia.player.PlayerSurfaceController
 import com.insomnia.player.ui.BufferingChip
@@ -38,7 +37,7 @@ import kotlinx.coroutines.delay
 
 private const val TV_SURFACE_CONTROLLER_AUTO_HIDE_MS = 5_000L
 
-@OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun TvPlayerSurface(
     controller: PlayerSurfaceController,

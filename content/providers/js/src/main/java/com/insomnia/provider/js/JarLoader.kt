@@ -211,7 +211,6 @@ class JarLoader(
             } catch (e: java.lang.reflect.InvocationTargetException) {
                 null // spider threw (e.g. upstream unreachable) — try next loader
             } catch (_: Throwable) { null } ?: continue
-            @Suppress("UNCHECKED_CAST")
             val arr = result as? Array<Any?> ?: continue
             val status = (arr.getOrNull(0) as? Int) ?: 200
             val mime = arr.getOrNull(1) as? String
@@ -364,11 +363,11 @@ class JarLoader(
         return when {
             type == String::class.java ->
                 p?.content ?: el.toString()
-            type == Boolean::class.javaPrimitiveType || type == java.lang.Boolean::class.java ->
+            type == Boolean::class.java ->
                 p?.booleanOrNull ?: false
-            type == Int::class.javaPrimitiveType || type == Integer::class.java ->
+            type == Int::class.java ->
                 p?.content?.toIntOrNull() ?: 0
-            type == Long::class.javaPrimitiveType || type == java.lang.Long::class.java ->
+            type == Long::class.java ->
                 p?.content?.toLongOrNull() ?: 0L
             type.isAssignableFrom(java.util.ArrayList::class.java) ->
                 (el as? JsonArray)

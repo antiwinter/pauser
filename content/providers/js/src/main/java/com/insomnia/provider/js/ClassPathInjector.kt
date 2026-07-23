@@ -74,7 +74,7 @@ object ClassPathInjector {
                     ?: return@synchronized
 
                 val merged = java.lang.reflect.Array.newInstance(
-                    bootstrapElements.javaClass.componentType,
+                    bootstrapElements.javaClass.componentType!!,
                     bootstrapElements.size + appElements.size
                 )
                 System.arraycopy(bootstrapElements, 0, merged, 0, bootstrapElements.size)

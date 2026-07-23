@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.insomnia.player.PlayerSurfaceController
 import com.insomnia.player.ui.BufferingChip
@@ -28,7 +27,7 @@ import com.insomnia.player.engine.rememberPlaybackSurface
  * Live-stream player surface. No controller bar, no pause/seek — up/down switch channels,
  * left/right switch sources, center toggles the info overlay, MENU opens the channel list.
  */
-@OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun TvLivePlayerSurface(
     controller: PlayerSurfaceController,
